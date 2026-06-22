@@ -107,12 +107,7 @@ struct LicenseView: View {
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
-        Link(destination: LicenseConfig.checkoutURL) {
-            Label("Get Pro", systemImage: "cart")
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.regular)
-        .tint(.proGold)
+        purchaseButton(title: "Get Pro")
     }
 
     @ViewBuilder
@@ -129,12 +124,41 @@ struct LicenseView: View {
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
-        Link(destination: LicenseConfig.checkoutURL) {
-            Label("Buy Pro", systemImage: "cart")
+        purchaseButton(title: "Buy Pro")
+    }
+
+    // MARK: - Purchase button
+
+    /// Renders the purchase CTA. When `ProConfig.purchaseEnabled` is true, a Link
+    /// opens the checkout URL. While the store is pending approval, the Link is
+    /// replaced with a disabled button (no URL — checkout stays unreachable) plus
+    /// a "coming soon" note.
+    @ViewBuilder
+    private func purchaseButton(title: String) -> some View {
+        if ProConfig.purchaseEnabled {
+            Link(destination: LicenseConfig.checkoutURL) {
+                Label(title, systemImage: "cart")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
+            .tint(.proGold)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    // No-op: purchases are unavailable while the store is pending approval.
+                } label: {
+                    Label(title, systemImage: "cart")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+                .tint(.proGold)
+                .disabled(true)
+
+                Text(ProConfig.purchaseComingSoonNote)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.regular)
-        .tint(.proGold)
     }
 
     // MARK: - Activate card

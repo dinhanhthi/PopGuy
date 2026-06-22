@@ -302,7 +302,7 @@ struct SettingsView: View {
                 case .appearance:  AppearanceView(settings: settings)
                 case .ignoredApps: AppsView(settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
                 case .license:     LicenseView(licenseGate: licenseGate)
-                case .about:       AboutView()
+                case .about:       AboutView(updater: updater)
                 }
             }
             .id(section)

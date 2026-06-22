@@ -8,6 +8,8 @@ import SwiftUI
 
 struct AboutView: View {
 
+    @ObservedObject var updater: UpdaterController
+
     // MARK: - Bundle metadata
 
     private var version: String {
@@ -34,6 +36,7 @@ struct AboutView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
                 headerCard
+                updatesCard
                 linksCard
             }
             .padding(SettingsMetrics.pagePadding)
@@ -74,6 +77,39 @@ struct AboutView: View {
         Self.makeVersionLine(version: version, build: build, releaseDate: releaseDate)
     }
 
+    // MARK: - Updates card
+
+    private var updatesCard: some View {
+        SettingsCard(title: "Updates") {
+            VStack(alignment: .leading, spacing: SettingsMetrics.contentSpacing) {
+                Toggle("Automatically check for updates", isOn: $updater.automaticallyChecksForUpdates)
+                    .toggleStyle(.checkbox)
+
+                HStack(spacing: 8) {
+                    Button("Check for Updates\u{2026}") {
+                        updater.checkForUpdates()
+                    }
+                    .disabled(!updater.canCheckForUpdates)
+
+                    if updater.updateAvailable {
+                        Label(
+                            updater.pendingVersion.map { "Update available — v\($0)" } ?? "Update available",
+                            systemImage: "arrow.down.circle.fill"
+                        )
+                        .font(.callout)
+                        .foregroundStyle(.tint)
+                    } else {
+                        Text("You're on the latest version.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
     // MARK: - Links card
 
     private var linksCard: some View {
@@ -111,6 +147,6 @@ struct AboutView: View {
 // MARK: - Preview
 
 #Preview {
-    AboutView()
+    AboutView(updater: UpdaterController())
         .frame(width: 580, height: 400)
 }

@@ -109,6 +109,16 @@ nonisolated enum ProConfig {
 
     // MARK: Purchase
 
+    /// Master switch for the in-app purchase / "Get Pro" path.
+    /// `false` while the Lemon Squeezy store is pending approval — every purchase
+    /// button is disabled and shows `purchaseComingSoonNote` instead of opening
+    /// checkout. Flip to `true` once the store is live.
+    static let purchaseEnabled = false
+
+    /// Short note shown next to disabled purchase buttons while
+    /// `purchaseEnabled` is `false`. English only (UI copy).
+    static let purchaseComingSoonNote = "Pro purchases are coming soon."
+
     /// Lemon Squeezy product checkout URL (public buy link).
     static let checkoutURL = URL(string: "https://dinhanhthi.lemonsqueezy.com/checkout/buy/d2dd34c0-d3c7-4be8-9b17-b3f2cbf6c5f8")!
 }

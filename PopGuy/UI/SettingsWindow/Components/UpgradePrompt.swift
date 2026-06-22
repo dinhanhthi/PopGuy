@@ -42,12 +42,18 @@ struct UpgradePromptView: View {
 
             Spacer(minLength: 0)
 
-            Button("Get Pro") {
-                onUpgrade()
+            if ProConfig.purchaseEnabled {
+                Button("Get Pro") {
+                    onUpgrade()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(.proGold)
+            } else {
+                Text("Coming soon")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .tint(.proGold)
         }
         .padding(SettingsMetrics.cardPadding)
         .background(

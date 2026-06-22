@@ -126,10 +126,19 @@ struct OnboardingView: View {
                         title: "Welcome to PopGuy",
                         subtitle: "Free to use with limits on custom actions, history, and active toolbar slots. Upgrade to Pro for unlimited."
                     )
-                    Button("Get Pro\u{2026}") {
-                        onGetPro()
+                    if ProConfig.purchaseEnabled {
+                        Button("Get Pro\u{2026}") {
+                            onGetPro()
+                        }
+                        .buttonStyle(.bordered)
+                    } else {
+                        Button("Get Pro\u{2026}") {}
+                            .buttonStyle(.bordered)
+                            .disabled(true)
+                        Text(ProConfig.purchaseComingSoonNote)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.bordered)
                     Spacer()
                 }
             }

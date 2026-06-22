@@ -40,6 +40,13 @@ struct TrialExpiryWarningView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
+            if !ProConfig.purchaseEnabled {
+                Text(ProConfig.purchaseComingSoonNote)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+
             HStack {
                 Button("Continue on Free") {
                     onContinue()
@@ -54,6 +61,7 @@ struct TrialExpiryWarningView: View {
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
                 .tint(.proGold)
+                .disabled(!ProConfig.purchaseEnabled)
             }
         }
         .padding(28)
