@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- PARTIAL Info.plist — intentionally coexists with GENERATE_INFOPLIST_FILE=YES.
+	     Xcode merges this file into the auto-generated Info.plist at build time because
+	     both GENERATE_INFOPLIST_FILE=YES and INFOPLIST_FILE=PopGuy/Info.plist are set on
+	     the app target. This file carries the Sparkle keys only. Do NOT delete it or
+	     SUFeedURL and SUPublicEDKey will silently vanish from the app bundle. -->
+	<key>NSAppleEventsUsageDescription</key>
+	<string>PopGuy runs the AppleScript actions you create and reads the address of the current browser tab so it can skip websites you have chosen to ignore.</string>
+	<!-- UTImportedTypeDeclarations: declares the popclipext bundle type so Finder
+	     can associate .popclipext packages with PopGuy. -->
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.popguy.popclipext</string>
+			<key>UTTypeDescription</key>
+			<string>PopClip Extension</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>com.apple.package</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>popclipext</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+	<!-- CFBundleDocumentTypes: registers popclipext and json as openable document types. -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>PopClip Extension</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.popguy.popclipext</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>JSON Document</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.json</string>
+			</array>
+		</dict>
+	</array>
+	<key>SUFeedURL</key>
+	<string>https://dinhanhthi.github.io/PopGuy/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>7Jsrv7O43J6OLST/qSja1aUb/8qOnAGLYGvEwVdpHAI=</string>
+	<!-- Default automatic update checks to ON and suppress Sparkle's first-run
+	     "check automatically?" prompt. The user can toggle this off in Settings;
+	     Sparkle persists the choice in NSUserDefaults automatically. -->
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>PGReleaseDate</key>
+	<string>2026-06-22</string>
+</dict>
+</plist>

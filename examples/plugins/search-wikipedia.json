@@ -1,0 +1,16 @@
+[
+  {
+    "id": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+    "title": "Wikipedia",
+    "actionDescription": "Search Wikipedia for the selected text",
+    "icon": { "type": "sfSymbol", "value": "book.fill" },
+    "type": "openURL",
+    "systemPrompt": "",
+    "providerKind": "anthropic",
+    "model": "",
+    "isEnabled": true,
+    "scriptSource": "https://en.wikipedia.org/w/index.php?search={text}",
+    "afterRun": "closeToolbar",
+    "appliesWhenRegex": ""
+  }
+]

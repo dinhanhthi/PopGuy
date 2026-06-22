@@ -1,0 +1,38 @@
+name: Deploy appcast
+
+# Publishes ONLY appcast.xml to GitHub Pages (https://dinhanhthi.github.io/PopGuy/appcast.xml).
+# The rest of the repo (docs/, source) is never published — the job copies just the one
+# file into the Pages artifact. Requires Settings → Pages → Source = "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths: ['appcast.xml']      # only redeploy when the feed changes
+  workflow_dispatch:            # allow manual re-run
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage ONLY appcast.xml
+        run: |
+          mkdir -p _site
+          cp appcast.xml _site/appcast.xml
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

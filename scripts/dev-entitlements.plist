@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  DEV-ONLY entitlements for scripts/sign-and-share.sh (self-signed test builds).
+
+  A self-signed certificate has NO Team ID. Under Hardened Runtime, library
+  validation only lets a process load libraries that share its Team ID (or are
+  Apple platform binaries). Because the embedded Sparkle.framework and the main
+  executable both lack a Team ID, the loader rejects the framework with
+  "different Team IDs" and the app aborts on launch.
+
+  disable-library-validation lifts that restriction for the dev path only.
+  The official Developer ID + notarized release gets a real Team ID shared by
+  the app and Sparkle, so it MUST NOT use this entitlement — never add it to the
+  Xcode project's build settings. See docs/DEV_DISTRIBUTION.md.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>

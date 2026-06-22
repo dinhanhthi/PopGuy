@@ -1,0 +1,16 @@
+[
+  {
+    "id": "B2C3D4E5-F6A7-8901-BCDE-F12345678901",
+    "title": "Reveal in Finder",
+    "actionDescription": "Reveals the selected path in Finder",
+    "icon": { "type": "sfSymbol", "value": "folder" },
+    "type": "shellScript",
+    "systemPrompt": "",
+    "providerKind": "anthropic",
+    "model": "",
+    "isEnabled": true,
+    "scriptSource": "open -R \"$POPGUY_TEXT\"",
+    "afterRun": "closeToolbar",
+    "appliesWhenRegex": "^(/|~|file://)"
+  }
+]
