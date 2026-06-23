@@ -1,0 +1,4 @@
+# design-sync (claude.ai/design) — local-only working state
+.ds-sync/
+.design-sync/
+ds-bundle/
