@@ -35,7 +35,7 @@ jobs:
       url: ${{ steps.pages.outputs.page_url }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Pin the toolchain to Xcode 26 and fail loudly if it is unavailable.
       # Required to compile the Icon Composer `.icon` app icon (see runs-on note).
@@ -232,13 +232,13 @@ jobs:
       - name: Stage appcast for Pages
         run: mkdir -p _site && cp appcast.xml _site/appcast.xml
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: _site
 
       - name: Deploy to Pages
         id: pages
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
       - name: Commit appcast to main
         run: |
