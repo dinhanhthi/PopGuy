@@ -168,18 +168,19 @@ jobs:
           mkdir sparkle-bin
           tar -xf sparkle.tar.xz -C sparkle-bin
 
-      - name: Import Sparkle private key
-        run: |
-          printf '%s' "${{ secrets.SPARKLE_PRIVATE_KEY }}" > sparkle_key.txt
-          ./sparkle-bin/bin/generate_keys -f sparkle_key.txt
-          rm sparkle_key.txt
-
       - name: Generate appcast
+        # Pass the EdDSA key via stdin (--ed-key-file -) instead of importing it
+        # into the keychain: generate_appcast reads the signing key from the
+        # keychain by default, which blocks on an authorization prompt that a
+        # headless runner can never answer (hangs to the 6h job timeout).
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           mkdir -p build/appcast-archives
           cp "build/export/PopGuy-$VERSION.zip" build/appcast-archives/
           cp "build/export/PopGuy-$VERSION.md" build/appcast-archives/
-          ./sparkle-bin/bin/generate_appcast build/appcast-archives/ \
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | ./sparkle-bin/bin/generate_appcast build/appcast-archives/ \
+            --ed-key-file - \
             --download-url-prefix \
             "https://github.com/dinhanhthi/PopGuy/releases/download/v$VERSION/"
           cp build/appcast-archives/appcast.xml appcast.xml
