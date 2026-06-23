@@ -13,6 +13,12 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [0.1.2] - 2026-06-23
+
+### Fixed
+
+- App icon showed blank in the Settings window and the update dialogs after updating; release builds now compile the app icon correctly.
+
 ## [0.1.1] - 2026-06-23
 
 ### Added
