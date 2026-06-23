@@ -1,10 +1,12 @@
 name: Release
 
 # Trigger: push a tag matching v0.1.0, v1.2.3, etc.
-# Flow: build → sign → notarize → staple → GitHub Release → commit appcast to main.
-# Pages deployment is NOT done here: committing appcast.xml to main triggers the
-# separate deploy-appcast.yml workflow, which owns Pages. Deploying here too would
-# double-publish and the github-pages environment rejects tag refs anyway.
+# Flow: build → sign → notarize → staple → GitHub Release → appcast → Pages.
+# Pages is deployed HERE, inside the tag run, so the GitHub Release and the live
+# appcast URL update together in one run. We do NOT rely on the appcast commit to
+# trigger deploy-appcast.yml: a push made with GITHUB_TOKEN cannot trigger another
+# workflow, so that hand-off silently never fires. The github-pages environment
+# must allow tag refs (deployment-branch-policy name "v*", type "tag").
 on:
   push:
     tags:
@@ -12,10 +14,19 @@ on:
 
 permissions:
   contents: write   # create releases + push appcast commit
+  pages: write      # deploy to GitHub Pages
+  id-token: write   # Pages OIDC token
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
   release:
     runs-on: macos-15
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -184,6 +195,17 @@ jobs:
             --download-url-prefix \
             "https://github.com/dinhanhthi/PopGuy/releases/download/v$VERSION/"
           cp build/appcast-archives/appcast.xml appcast.xml
+
+      - name: Stage appcast for Pages
+        run: mkdir -p _site && cp appcast.xml _site/appcast.xml
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to Pages
+        id: pages
+        uses: actions/deploy-pages@v4
 
       - name: Commit appcast to main
         run: |
