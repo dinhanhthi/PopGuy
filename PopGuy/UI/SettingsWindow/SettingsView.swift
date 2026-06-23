@@ -130,6 +130,7 @@ struct SettingsView: View {
                 List(selection: $selectedSection) {
                     ForEach(SettingsSection.allCases) { section in
                         Label(section.title, systemImage: section.systemImage)
+                            .padding(.vertical, SettingsMetrics.sidebarItemVerticalPadding)
                             .tag(section)
                     }
                 }

@@ -28,6 +28,8 @@ enum SettingsMetrics {
     static let contentSpacing: CGFloat = 10
     /// Outer padding of a tab's scrollable page.
     static let pagePadding: CGFloat = 20
+    /// Extra vertical breathing room between Settings sidebar items.
+    static let sidebarItemVerticalPadding: CGFloat = 4
     /// Uniform icon-content box for the Actions toolbar icon buttons (export,
     /// import, plugin import). Normalises differently-sized SF Symbols to the same
     /// button size; the narrow width tightens horizontal padding, the taller height
