@@ -1,0 +1,171 @@
+name: Release
+
+# Trigger: push a tag matching v0.1.0, v1.2.3, etc.
+# Flow: build → sign → notarize → staple → GitHub Release → appcast → Pages
+on:
+  push:
+    tags:
+      - 'v[0-9]*.[0-9]*.[0-9]*'
+
+permissions:
+  contents: write   # create releases + push appcast commit
+  pages: write      # deploy to GitHub Pages
+  id-token: write   # Pages OIDC token
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: macos-15
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract and validate version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' || \
+            { echo "ERROR: Tag must be vX.Y.Z, got: $VERSION"; exit 1; }
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      # ── Signing ──────────────────────────────────────────────────────────
+      - name: Import Developer ID certificate
+        env:
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          KP=$(openssl rand -base64 32)
+          echo "KEYCHAIN_PASSWORD=$KP" >> $GITHUB_ENV
+          security create-keychain -p "$KP" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KP" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          echo "$DEVELOPER_ID_P12" | base64 --decode > cert.p12
+          security import cert.p12 -k build.keychain \
+            -P "$DEVELOPER_ID_P12_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: -s -k "$KP" build.keychain
+          rm cert.p12
+
+      - name: Create ExportOptions.plist
+        run: |
+          cat > ExportOptions.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>            <string>developer-id</string>
+              <key>signingStyle</key>      <string>manual</string>
+              <key>teamID</key>            <string>86H6CNLN4C</string>
+          </dict>
+          </plist>
+          EOF
+
+      # ── Build ─────────────────────────────────────────────────────────────
+      - name: Archive
+        run: |
+          xcodebuild -project PopGuy.xcodeproj -scheme PopGuy \
+            -configuration Release \
+            -archivePath build/PopGuy.xcarchive archive
+
+      - name: Export (Developer ID signed)
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/PopGuy.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/export
+
+      # ── Notarize ──────────────────────────────────────────────────────────
+      - name: Zip for notarization (throwaway)
+        working-directory: build/export
+        run: ditto -c -k --keepParent PopGuy.app "PopGuy-$VERSION.zip"
+
+      - name: Notarize
+        run: |
+          xcrun notarytool submit \
+            "build/export/PopGuy-$VERSION.zip" \
+            --apple-id "${{ secrets.NOTARYTOOL_APPLE_ID }}" \
+            --password "${{ secrets.NOTARYTOOL_PASSWORD }}" \
+            --team-id "${{ secrets.NOTARYTOOL_TEAM_ID }}" \
+            --wait
+
+      - name: Staple and re-zip (final)
+        working-directory: build/export
+        run: |
+          xcrun stapler staple PopGuy.app
+          ditto -c -k --keepParent PopGuy.app "PopGuy-$VERSION.zip"
+
+      - name: Verify notarization
+        run: spctl -a -vv -t exec build/export/PopGuy.app
+
+      # ── GitHub Release ────────────────────────────────────────────────────
+      - name: Extract changelog section
+        run: |
+          awk "/^## \[$VERSION\]/{found=1; next} found && /^## \[/{exit} found{print}" \
+            CHANGELOG.md > "build/export/PopGuy-$VERSION.md"
+          [ -s "build/export/PopGuy-$VERSION.md" ] || \
+            { echo "ERROR: No ## [$VERSION] section in CHANGELOG.md"; exit 1; }
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v$VERSION" \
+            "build/export/PopGuy-$VERSION.zip" \
+            --title "PopGuy $VERSION" \
+            --notes-file "build/export/PopGuy-$VERSION.md"
+
+      # ── Appcast ───────────────────────────────────────────────────────────
+      - name: Download Sparkle tools (v2.9.3)
+        run: |
+          curl -fsSL \
+            "https://github.com/sparkle-project/Sparkle/releases/download/2.9.3/Sparkle-2.9.3.tar.xz" \
+            -o sparkle.tar.xz
+          mkdir sparkle-bin
+          tar -xf sparkle.tar.xz -C sparkle-bin
+
+      - name: Import Sparkle private key
+        run: |
+          printf '%s' "${{ secrets.SPARKLE_PRIVATE_KEY }}" > sparkle_key.txt
+          ./sparkle-bin/bin/generate_keys -f sparkle_key.txt
+          rm sparkle_key.txt
+
+      - name: Generate appcast
+        run: |
+          mkdir -p build/appcast-archives
+          cp "build/export/PopGuy-$VERSION.zip" build/appcast-archives/
+          cp "build/export/PopGuy-$VERSION.md" build/appcast-archives/
+          ./sparkle-bin/bin/generate_appcast build/appcast-archives/ \
+            --download-url-prefix \
+            "https://github.com/dinhanhthi/PopGuy/releases/download/v$VERSION/"
+          cp build/appcast-archives/appcast.xml appcast.xml
+
+      - name: Deploy appcast to GitHub Pages
+        run: mkdir -p _site && cp appcast.xml _site/appcast.xml
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to Pages
+        id: pages
+        uses: actions/deploy-pages@v4
+
+      - name: Commit appcast to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "release: appcast v$VERSION"
+          git push origin HEAD:main
+
+      # ── Cleanup ───────────────────────────────────────────────────────────
+      - name: Delete signing keychain
+        if: always()
+        run: security delete-keychain build.keychain 2>/dev/null || true

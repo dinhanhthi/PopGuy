@@ -47,7 +47,6 @@ ExportOptions.plist
 
 ## Local-only — kept out of the public repo (maintainer notes, AI tooling)
 docs/
-CHANGELOG.md
 CLAUDE.md
 AGENTS.md
 .claude/
