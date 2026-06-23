@@ -13,6 +13,12 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [0.1.1] - 2026-06-23
+
+### Added
+
+- DMG download alongside the existing zip archive.
+
 ## [0.1.0] - 2026-06-22
 
 ### Added
