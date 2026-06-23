@@ -147,6 +147,8 @@ nonisolated enum GoogleCloudTTSProvider: TTSProvider {
         text: String,
         voice: String,
         languageCode: String,
+        speed: Double?,
+        pitch: Double?,
         config: TTSProviderConfig,
         apiKey: String
     ) throws -> URLRequest {
@@ -157,10 +159,21 @@ nonisolated enum GoogleCloudTTSProvider: TTSProvider {
             apiKey: apiKey
         )
 
+        // audioConfig: Google supports speakingRate (0.25–4.0) and pitch
+        // (-20.0…+20.0 semitones). Only emit the keys when a value is provided so
+        // the provider default applies otherwise.
+        var audioConfig: [String: Any] = ["audioEncoding": "MP3"]
+        if let speed {
+            audioConfig["speakingRate"] = min(max(speed, 0.25), 4.0)
+        }
+        if let pitch {
+            audioConfig["pitch"] = GoogleCloudTTSProvider.semitones(forPitchMultiplier: pitch)
+        }
+
         let bodyObject: [String: Any] = [
             "input":       ["text": text],
             "voice":       ["languageCode": languageCode, "name": voice],
-            "audioConfig": ["audioEncoding": "MP3"]
+            "audioConfig": audioConfig
         ]
 
         let bodyData: Data
@@ -243,5 +256,18 @@ nonisolated enum GoogleCloudTTSProvider: TTSProvider {
             throw TTSProviderError.encoding
         }
         return url
+    }
+
+    /// Maps PopGuy's AVFoundation-style pitch multiplier (0.5–2.0, 1.0 = default)
+    /// onto Google Cloud TTS's pitch range (-20.0…+20.0 semitones, 0.0 = default).
+    /// A multiplier < 1.0 lowers pitch (negative semitones); > 1.0 raises it.
+    /// 1.0 maps to 0.0. Uses a log2 mapping so each octave doubles the multiplier,
+    /// consistent with how perceived pitch maps to frequency ratios.
+    nonisolated static func semitones(forPitchMultiplier multiplier: Double) -> Double {
+        let clamped = min(max(multiplier, 0.5), 2.0)
+        let semitones = 12.0 * log2(clamped)
+        // Clamp to Google's documented [-20, +20] range and round to 1 decimal.
+        let bounded = min(max(semitones, -20.0), 20.0)
+        return (bounded * 10).rounded() / 10
     }
 }

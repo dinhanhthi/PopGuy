@@ -146,6 +146,8 @@ nonisolated enum AzureTTSProvider: TTSProvider {
         text: String,
         voice: String,
         languageCode: String,
+        speed: Double?,
+        pitch: Double?,
         config: TTSProviderConfig,
         apiKey: String
     ) throws -> URLRequest {
@@ -154,7 +156,13 @@ nonisolated enum AzureTTSProvider: TTSProvider {
 
         let url = try buildSynthesisURL(region: region)
 
-        let ssml = buildSSML(text: text, voice: voice, languageCode: languageCode)
+        let ssml = buildSSML(
+            text: text,
+            voice: voice,
+            languageCode: languageCode,
+            speed: speed,
+            pitch: pitch
+        )
 
         guard let bodyData = ssml.data(using: .utf8) else {
             throw TTSProviderError.encoding
@@ -226,11 +234,59 @@ nonisolated enum AzureTTSProvider: TTSProvider {
 
     /// Returns a minimal SSML document for the given text, voice, and language code.
     ///
+    /// When `speed` and/or `pitch` are non-nil, the text is wrapped in a
+    /// `<prosody>` element. Azure SSML `rate` accepts a multiplier (e.g.
+    /// "1.5") or percentage; we use the numeric form matching the cloud speed
+    /// scale (0.25–4.0, 1.0 = default). `pitch` accepts relative semitones
+    /// (e.g. "+2st") or absolute Hz; we use the relative semitone form derived
+    /// from PopGuy's pitch multiplier (1.0 = +0st).
     /// The user text is XML-escaped before insertion. Escaping order: `&` first (to
     /// avoid double-escaping), then `<`, `>`, `"`, `'`.
-    private static func buildSSML(text: String, voice: String, languageCode: String) -> String {
+    private static func buildSSML(
+        text: String,
+        voice: String,
+        languageCode: String,
+        speed: Double?,
+        pitch: Double?
+    ) -> String {
         let escaped = xmlEscape(text)
-        return "<speak version='1.0' xml:lang='\(languageCode)'><voice name='\(voice)'>\(escaped)</voice></speak>"
+        let inner: String
+        if speed == nil && pitch == nil {
+            inner = escaped
+        } else {
+            var attrs = ""
+            if let speed {
+                attrs += " rate='\(formatRate(speed))'"
+            }
+            if let pitch {
+                attrs += " pitch='\(AzureTTSProvider.semitoneString(forPitchMultiplier: pitch))'"
+            }
+            inner = "<prosody\(attrs)>\(escaped)</prosody>"
+        }
+        return "<speak version='1.0' xml:lang='\(languageCode)'><voice name='\(voice)'>\(inner)</voice></speak>"
+    }
+
+    /// Formats the cloud speed value for Azure SSML `rate`. 1.0 is emitted as
+    /// "+0%" so Azure treats it as default; otherwise a relative percentage is
+    /// derived from the multiplier (e.g. 1.5 → "+50%", 0.5 → "-50%").
+    private static func formatRate(_ speed: Double) -> String {
+        let clamped = min(max(speed, 0.25), 4.0)
+        let percent = (clamped - 1.0) * 100
+        let rounded = (percent * 10).rounded() / 10
+        let sign = rounded >= 0 ? "+" : ""
+        return "\(sign)\(rounded)%"
+    }
+
+    /// Maps PopGuy's AVFoundation-style pitch multiplier (0.5–2.0, 1.0 = default)
+    /// onto Azure SSML's relative semitone notation (e.g. "+2st", "-3st").
+    /// Uses a log2 mapping so each octave doubles the multiplier, matching how
+    /// perceived pitch maps to frequency ratios. 1.0 → "+0st".
+    nonisolated static func semitoneString(forPitchMultiplier multiplier: Double) -> String {
+        let clamped = min(max(multiplier, 0.5), 2.0)
+        let semitones = 12.0 * log2(clamped)
+        let rounded = (semitones * 10).rounded() / 10
+        let sign = rounded >= 0 ? "+" : ""
+        return "\(sign)\(rounded)st"
     }
 
     /// XML-escapes untrusted user text for safe insertion into an SSML document.

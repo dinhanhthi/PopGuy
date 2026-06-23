@@ -9,9 +9,10 @@
 // macOS 14.0+; PopGuy targets macOS 13.0+.
 //
 // Routing:
-//   - Single word + accent supports dictionary + dictionaryAudioEnabled → try
-//     Free Dictionary API; fall back to selected engine when the API returns false.
-//   - Everything else (phrase, French, dictionary disabled) → selected engine.
+//   - Built-in/custom Speak → selected engine directly, so speed, voice, and cloud
+//     selection always take effect.
+//   - Dictionary Listen → source-native audio first, then optional Free Dictionary
+//     API audio, then selected engine fallback.
 //
 // Engine selection:
 //   - .system → local AVSpeechSynthesizer (TTSEngine).
@@ -138,9 +139,9 @@ final class SpeakCoordinator: ObservableObject {
     ///
     /// - If `text` trims to empty, the call is a no-op.
     /// - If already speaking, the current playback is stopped first.
-    /// - Routing: single-word + dictionary-capable accent + enabled →
-    ///   dictionary lookup first; on miss → `speakWithSelectedEngine`. Everything
-    ///   else → `speakWithSelectedEngine`.
+    /// - Routing: always use the selected speech engine. Dictionary/source-native
+    ///   audio is reserved for `speakDictionary(...)` so Speak's engine, voice,
+    ///   and speed controls are never silently bypassed.
     /// - `ttsConfig`: passed to the cloud engine; the default value keeps all
     ///   existing call sites compiling. Phase 3 callers pass the real per-provider
     ///   config from SettingsStore.
@@ -168,28 +169,7 @@ final class SpeakCoordinator: ObservableObject {
         replaySource = nil
         canReplay = false
 
-        if settings.dictionaryAudioEnabled,
-           accent.usesDictionary,
-           let variant = accent.dictionaryVariant,
-           Self.isSingleWord(trimmed) {
-            // Async path: dictionary lookup → selected-engine fallback.
-            let capturedTrimmed = trimmed
-            dictionaryTask = Task { @MainActor [weak self] in
-                guard let self else { return }
-                let played = await dictionary.speak(word: capturedTrimmed, variant: variant)
-                // Cancellation check: if stop() or a newer speak() cancelled this
-                // Task before we reached here, don't start a stale fallback.
-                guard !Task.isCancelled else { return }
-                if played {
-                    replaySource = .dictionaryWord
-                    canReplay = true
-                } else {
-                    speakWithSelectedEngine(capturedTrimmed, accent: accent, settings: settings, ttsConfig: ttsConfig)
-                }
-            }
-        } else {
-            speakWithSelectedEngine(trimmed, accent: accent, settings: settings, ttsConfig: ttsConfig)
-        }
+        speakWithSelectedEngine(trimmed, accent: accent, settings: settings, ttsConfig: ttsConfig)
     }
 
     /// Speak a dictionary headword, preferring a source-native audio URL when
@@ -230,7 +210,21 @@ final class SpeakCoordinator: ObservableObject {
                 return
             }
             guard !Task.isCancelled else { return }
-            speak(capturedTrimmed, accent: accent, settings: settings, ttsConfig: ttsConfig)
+            if settings.dictionaryAudioEnabled,
+               accent.usesDictionary,
+               let variant = accent.dictionaryVariant,
+               Self.isSingleWord(capturedTrimmed) {
+                let played = await dictionary.speak(word: capturedTrimmed, variant: variant)
+                guard !Task.isCancelled else { return }
+                if played {
+                    replaySource = .dictionaryWord
+                    canReplay = true
+                } else {
+                    speakWithSelectedEngine(capturedTrimmed, accent: accent, settings: settings, ttsConfig: ttsConfig)
+                }
+            } else {
+                speakWithSelectedEngine(capturedTrimmed, accent: accent, settings: settings, ttsConfig: ttsConfig)
+            }
         }
     }
 
@@ -394,6 +388,8 @@ final class SpeakCoordinator: ObservableObject {
                     languageCode: capturedAccent.bcp47,
                     provider: capturedProvider,
                     config: capturedConfig,
+                    speed: Self.cloudSpeechSpeed(forSystemRate: capturedSettings.rate),
+                    pitch: Double(capturedSettings.pitch),
                     apiKey: capturedKey
                 )
                 guard !Task.isCancelled else { return }
@@ -446,6 +442,37 @@ final class SpeakCoordinator: ObservableObject {
         let allowed: CharacterSet = CharacterSet.letters
             .union(CharacterSet(charactersIn: "-'"))
         return text.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
+
+    /// Maps PopGuy's system-speech rate scale onto the cloud speech speed scale.
+    ///
+    /// The mapping is linear, centred on the system default rate
+    /// (`AVSpeechUtteranceDefaultSpeechRate`) which maps to the cloud default
+    /// speed 1.0. Slider level 1 (min rate) → 0.6, level 5 (default) → 1.0
+    /// (normal), level 10 (max rate) → 1.5. The narrow 0.6–1.5 range keeps
+    /// every level natural-sounding on all supported providers (OpenAI,
+    /// Google, Azure) — wider ranges produce unnaturally fast or distorted
+    /// speech at the extremes.
+    ///
+    /// All arithmetic is done in `Double` (not `Float`) so the result has no
+    /// `Float`→`Double` widening artifacts that can exceed OpenAI's
+    /// 16-decimal-place validation limit on `gpt-4o-mini-tts`; the result is
+    /// rounded to 3 decimal places for safety.
+    nonisolated static func cloudSpeechSpeed(forSystemRate rate: Float) -> Double {
+        let minimumRate = Double(AVSpeechUtteranceMinimumSpeechRate)
+        let defaultRate = Double(AVSpeechUtteranceDefaultSpeechRate)
+        let maximumRate = Double(AVSpeechUtteranceMaximumSpeechRate)
+        let clamped = min(max(Double(rate), minimumRate), maximumRate)
+
+        let speed: Double
+        if clamped <= defaultRate {
+            let progress = (clamped - minimumRate) / max(defaultRate - minimumRate, .ulpOfOne)
+            speed = 0.6 + progress * 0.4
+        } else {
+            let progress = (clamped - defaultRate) / max(maximumRate - defaultRate, .ulpOfOne)
+            speed = 1.0 + progress * 0.5
+        }
+        return (speed * 1000).rounded() / 1000
     }
 
     /// Maps a `TTSProviderKind` to the corresponding `TTSProvider` type.

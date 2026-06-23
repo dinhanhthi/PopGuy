@@ -64,6 +64,24 @@ nonisolated enum SpeakEngineSelection: Sendable, Codable, Equatable, Hashable, I
         }
     }
 
+    /// Whether the selected engine accepts a speech-speed override. The system
+    /// voice always supports it; cloud engines defer to the provider's capability.
+    nonisolated var supportsSpeed: Bool {
+        switch self {
+        case .system:       return true
+        case .cloud(let k): return k.supportsSpeed
+        }
+    }
+
+    /// Whether the selected engine accepts a pitch override. The system voice
+    /// always supports it; cloud engines defer to the provider's capability.
+    nonisolated var supportsPitch: Bool {
+        switch self {
+        case .system:       return true
+        case .cloud(let k): return k.supportsPitch
+        }
+    }
+
     // MARK: Available selections
 
     /// All selections the engine picker should show: system first, then every

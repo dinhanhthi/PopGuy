@@ -34,6 +34,8 @@ protocol CloudSpeaking: AnyObject {
         languageCode: String,
         provider: any TTSProvider.Type,
         config: TTSProviderConfig,
+        speed: Double?,
+        pitch: Double?,
         apiKey: String
     ) async -> Bool
     func stop()
@@ -96,6 +98,8 @@ final class CloudTTSEngine: NSObject, CloudSpeaking {
         languageCode: String,
         provider: any TTSProvider.Type,
         config: TTSProviderConfig,
+        speed: Double?,
+        pitch: Double?,
         apiKey: String
     ) async -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -113,6 +117,8 @@ final class CloudTTSEngine: NSObject, CloudSpeaking {
                 text: trimmed,
                 voice: voice,
                 languageCode: languageCode,
+                speed: speed,
+                pitch: pitch,
                 config: config,
                 apiKey: apiKey
             )

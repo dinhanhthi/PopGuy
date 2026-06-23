@@ -1315,7 +1315,21 @@ struct VoiceTestButton: View {
         }
         .buttonStyle(.borderless)
         .controlSize(.small)
-        .help("Preview this voice")
+        .help(
+            coordinator.didFallBackToSystem && isActive
+                ? "Cloud voice unavailable — the System voice is being used instead."
+                : "Preview this voice"
+        )
+        .overlay(alignment: .topTrailing) {
+            if coordinator.didFallBackToSystem && isActive {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 7))
+                    .foregroundStyle(.orange)
+                    .offset(x: 6, y: -6)
+                    .help("Cloud voice unavailable — the System voice is being used instead.")
+                    .accessibilityLabel("Cloud voice unavailable, using System voice")
+            }
+        }
     }
 
     private func play() {

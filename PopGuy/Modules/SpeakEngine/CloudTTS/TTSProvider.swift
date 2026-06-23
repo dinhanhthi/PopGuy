@@ -90,6 +90,13 @@ nonisolated protocol TTSProvider: Sendable {
     ///   - voice: The voice identifier to use (already resolved by `resolveTTSVoice`).
     ///   - languageCode: BCP-47 language tag forwarded to providers that need it in
     ///     the request body (Google, Azure).
+    ///   - speed: Optional speech-speed override on the provider's native scale
+    ///     (nil → provider default). Conformers should clamp to their supported
+    ///     range; OpenAI uses 0.25–4.0 (1.0 = default).
+    ///   - pitch: Optional pitch override as an AVFoundation-style multiplier
+    ///     (0.5–2.0, 1.0 = default). Providers that don't support pitch (e.g.
+    ///     OpenAI) accept and ignore the parameter; locale-bound providers
+    ///     (Google, Azure) map it onto their native pitch representation.
     ///   - config: Per-provider configuration (model override, region, etc.).
     ///   - apiKey: The API key retrieved from the Keychain.
     /// - Returns: A fully-formed `URLRequest`.
@@ -100,6 +107,8 @@ nonisolated protocol TTSProvider: Sendable {
         text: String,
         voice: String,
         languageCode: String,
+        speed: Double?,
+        pitch: Double?,
         config: TTSProviderConfig,
         apiKey: String
     ) throws -> URLRequest
@@ -139,6 +148,26 @@ nonisolated protocol TTSProvider: Sendable {
 nonisolated extension TTSProvider {
     /// Default: language selection is meaningful. Multilingual providers override.
     static var usesLanguageSelection: Bool { true }
+
+    /// Backward-compatible convenience for call sites/tests that do not need a
+    /// provider-specific speech speed override.
+    static func makeSynthesisRequest(
+        text: String,
+        voice: String,
+        languageCode: String,
+        config: TTSProviderConfig,
+        apiKey: String
+    ) throws -> URLRequest {
+        try makeSynthesisRequest(
+            text: text,
+            voice: voice,
+            languageCode: languageCode,
+            speed: nil,
+            pitch: nil,
+            config: config,
+            apiKey: apiKey
+        )
+    }
 }
 
 // MARK: - resolveTTSVoice

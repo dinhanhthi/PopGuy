@@ -50,6 +50,8 @@ nonisolated enum OpenAITTSProvider: TTSProvider {
         text: String,
         voice: String,
         languageCode: String,
+        speed: Double?,
+        pitch: Double?,
         config: TTSProviderConfig,
         apiKey: String
     ) throws -> URLRequest {
@@ -57,12 +59,22 @@ nonisolated enum OpenAITTSProvider: TTSProvider {
 
         let model = config.model ?? TTSProviderKind.openAITTS.defaultModel ?? "gpt-4o-mini-tts"
 
-        let bodyObject: [String: String] = [
+        var bodyObject: [String: Any] = [
             "model":           model,
             "input":           text,
             "voice":           voice,
             "response_format": "mp3"
         ]
+        if let speed {
+            let clamped = min(max(speed, 0.25), 4.0)
+            // Encode as a Decimal built from a 3-decimal formatted string so
+            // JSONSerialization emits a short, exact decimal (e.g. "0.572")
+            // instead of a Double's full-precision expansion (e.g.
+            // "0.57199999999999995") which exceeds OpenAI's 16-decimal-place
+            // validation limit on gpt-4o-mini-tts.
+            let formatted = String(format: "%.3f", clamped)
+            bodyObject["speed"] = Decimal(string: formatted) ?? Decimal(clamped)
+        }
 
         let bodyData: Data
         do {

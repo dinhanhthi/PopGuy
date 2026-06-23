@@ -31,6 +31,10 @@ final class SpyCloud: CloudSpeaking {
     /// Number of times `speak(...)` (the network path) was invoked. Replay tests
     /// assert this does NOT increase when replaying cached audio.
     private(set) var speakCallCount = 0
+    /// Last speed forwarded to the cloud provider.
+    private(set) var lastSpeed: Double?
+    /// Last pitch forwarded to the cloud provider.
+    private(set) var lastPitch: Double?
     /// Number of times `replayCached()` was invoked.
     private(set) var replayCallCount = 0
 
@@ -43,10 +47,14 @@ final class SpyCloud: CloudSpeaking {
         languageCode: String,
         provider: any TTSProvider.Type,
         config: TTSProviderConfig,
+        speed: Double?,
+        pitch: Double?,
         apiKey: String
     ) async -> Bool {
         speakCallCount += 1
         lastSpokenText = text
+        lastSpeed = speed
+        lastPitch = pitch
         if speakResult {
             isSpeaking = true
             onSpeakingChange?(true)
@@ -88,6 +96,8 @@ final class SpyTTS: LocalTTSSpeaking {
     private(set) var isSpeaking: Bool = false
     var onSpeakingChange: ((Bool) -> Void)?
     private(set) var lastSpokenText: String?
+    private(set) var lastRate: Float?
+    private(set) var lastPitch: Float?
     let autoStart: Bool
 
     init(autoStart: Bool = true) {
@@ -96,6 +106,8 @@ final class SpyTTS: LocalTTSSpeaking {
 
     func speak(_ text: String, voice: AVSpeechSynthesisVoice?, rate: Float, pitch: Float) {
         lastSpokenText = text
+        lastRate = rate
+        lastPitch = pitch
         if autoStart {
             isSpeaking = true
             onSpeakingChange?(true)
@@ -631,6 +643,26 @@ struct SpeakEngineTests {
             #expect(cloudEngine.isSpeaking == false)
         }
 
+        @Test(".system engine: English single word still reaches local TTS when dictionary audio is enabled")
+        @MainActor
+        func systemEnglishWordDoesNotUseDictionaryAudio() async {
+            let spyTTS = SpyTTS()
+            let spyDictionary = SpyDictionaryAudio(speakResult: true)
+            let keychain = KeychainManager(serviceName: "dinh.thi.PopGuy.Tests.\(UUID().uuidString)")
+            let coordinator = SpeakCoordinator(tts: spyTTS, dictionary: spyDictionary, keychain: keychain)
+
+            var settings = SpeakSettings.default
+            settings.selectedEngine = .system
+            settings.dictionaryAudioEnabled = true
+            settings.rate = AVSpeechUtteranceMinimumSpeechRate
+
+            coordinator.speak("hello", accent: .usEnglish, settings: settings)
+
+            #expect(spyDictionary.speakRequests.isEmpty)
+            #expect(spyTTS.lastSpokenText == "hello")
+            #expect(spyTTS.lastRate == AVSpeechUtteranceMinimumSpeechRate)
+        }
+
         // MARK: .cloud with no API key → local fallback
 
         @Test(".cloud(.openAITTS) with no key stored: text falls back to local TTS")
@@ -892,6 +924,47 @@ struct SpeakEngineTests {
             #expect(coordinator.didFallBackToSystem == false)
             #expect(spyTTS.lastSpokenText == nil)
         }
+
+        @Test(".cloud engine: English single word skips dictionary audio and forwards speech speed and pitch")
+        @MainActor
+        func cloudEnglishWordSkipsDictionaryAndForwardsSpeed() async {
+            let spyTTS = SpyTTS(autoStart: true)
+            let spyCloud = SpyCloud(speakResult: true)
+            let spyDictionary = SpyDictionaryAudio(speakResult: true)
+            let serviceName = "dinh.thi.PopGuy.Tests.\(UUID().uuidString)"
+            let keychain = KeychainManager(serviceName: serviceName)
+            keychain.setKey("fake-api-key", account: TTSProviderKind.openAITTS.keychainAccount)
+            defer { keychain.deleteKey(account: TTSProviderKind.openAITTS.keychainAccount) }
+
+            let coordinator = SpeakCoordinator(
+                tts: spyTTS,
+                dictionary: spyDictionary,
+                cloud: spyCloud,
+                keychain: keychain
+            )
+
+            var settings = SpeakSettings.default
+            settings.selectedEngine = .cloud(.openAITTS)
+            settings.dictionaryAudioEnabled = true
+            settings.rate = AVSpeechUtteranceMaximumSpeechRate
+            settings.pitch = 1.5
+
+            coordinator.speak("hello", accent: .usEnglish, settings: settings)
+
+            var attempts = 0
+            while spyCloud.speakCallCount == 0 && attempts < 50 {
+                await Task.yield()
+                attempts += 1
+            }
+
+            #expect(spyDictionary.speakRequests.isEmpty)
+            #expect(spyCloud.lastSpokenText == "hello")
+            // Max system rate (slider level 10) maps to cloud speed 1.5 via
+            // the linear 0.6-1.5 mapping centred on the default rate.
+            #expect(spyCloud.lastSpeed == 1.5)
+            #expect(spyCloud.lastPitch == 1.5)
+            #expect(spyTTS.lastSpokenText == nil)
+        }
     }
 
     // MARK: - didFallBackToSystem persist/reset invariants (FIX 3)
@@ -1130,6 +1203,57 @@ struct SpeakEngineTests {
             #expect(spyDictionary.playedURLs.isEmpty)
             #expect(spyDictionary.speakRequests.isEmpty)
             #expect(spyTTS.isSpeaking == false)
+        }
+    }
+
+    // MARK: - cloudSpeechSpeed geometric mapping
+
+    @Suite("cloudSpeechSpeed geometric mapping")
+    struct CloudSpeechSpeedMappingTests {
+
+        @Test("default system rate maps to cloud speed 1.0 (level 5 = normal)")
+        func defaultRateMapsToCloudOne() {
+            let speed = SpeakCoordinator.cloudSpeechSpeed(forSystemRate: AVSpeechUtteranceDefaultSpeechRate)
+            #expect(speed == 1.0)
+        }
+
+        @Test("max system rate maps to 1.5 (level 10, fast end of the 0.6-1.5 range)")
+        func maxRateMapsToCloudFastEnd() {
+            let speed = SpeakCoordinator.cloudSpeechSpeed(forSystemRate: AVSpeechUtteranceMaximumSpeechRate)
+            #expect(speed == 1.5)
+        }
+
+        @Test("min system rate maps to 0.6 (level 1, slow end of the 0.6-1.5 range)")
+        func minRateMapsToCloudSlowEnd() {
+            let speed = SpeakCoordinator.cloudSpeechSpeed(forSystemRate: AVSpeechUtteranceMinimumSpeechRate)
+            #expect(speed == 0.6)
+        }
+
+        @Test("level 6 (slightly above default) maps to 1.1, a gentle step above 1.0")
+        func levelSixMapsToGentleStep() {
+            // Level 6 = speakSpeedDefault + 1/5 * (max - default) = 0.5 + 0.1 = 0.6
+            let rate: Float = AVSpeechUtteranceDefaultSpeechRate + (AVSpeechUtteranceMaximumSpeechRate - AVSpeechUtteranceDefaultSpeechRate) / 5
+            let speed = SpeakCoordinator.cloudSpeechSpeed(forSystemRate: rate)
+            #expect(speed == 1.1)
+        }
+
+        @Test("mapping is monotonic non-decreasing across the full slider range")
+        func mappingIsMonotonic() {
+            var prev: Double = 0
+            for level in 1...10 {
+                let minR = AVSpeechUtteranceMinimumSpeechRate
+                let defR = AVSpeechUtteranceDefaultSpeechRate
+                let maxR = AVSpeechUtteranceMaximumSpeechRate
+                let rate: Float
+                if level <= 5 {
+                    rate = minR + Float(level - 1) / 4 * (defR - minR)
+                } else {
+                    rate = defR + Float(level - 5) / 5 * (maxR - defR)
+                }
+                let speed = SpeakCoordinator.cloudSpeechSpeed(forSystemRate: rate)
+                #expect(speed >= prev, "level \(level) speed \(speed) < prev \(prev)")
+                prev = speed
+            }
         }
     }
 }

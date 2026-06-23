@@ -2123,21 +2123,6 @@ private struct SpeakCardView: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Dictionary audio toggle
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle("Use dictionary audio for single words", isOn: Binding(
-                    get: { settings.speakSettings.dictionaryAudioEnabled },
-                    set: { newValue in
-                        var s = settings.speakSettings
-                        s.dictionaryAudioEnabled = newValue
-                        settings.speakSettings = s
-                    }
-                ))
-                Text("Plays a real human recording for single English words (US/UK); falls back to the system voice for phrases, French, or when offline.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             // System voice picker
             VStack(alignment: .leading, spacing: 4) {
                 LabeledContent("System voice") {
@@ -2201,9 +2186,16 @@ private struct SpeakCardView: View {
                     in: 1...10,
                     step: 1
                 )
-                Text("How fast the system voice speaks. Lower is slower — useful for hearing each sound clearly. Does not affect dictionary recordings.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .disabled(!engineBinding.wrappedValue.supportsSpeed)
+                if engineBinding.wrappedValue.supportsSpeed {
+                    Text("How fast synthesized speech plays. Lower is slower — useful for hearing each sound clearly.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("The selected engine doesn't support a speed override; speech plays at the provider's default rate.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             // Pitch slider
@@ -2227,9 +2219,16 @@ private struct SpeakCardView: View {
                     in: 1...10,
                     step: 1
                 )
-                Text("The system voice's pitch. 1.0 is its natural tone; higher sounds brighter, lower sounds deeper. Does not affect dictionary recordings.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .disabled(!engineBinding.wrappedValue.supportsPitch)
+                if engineBinding.wrappedValue.supportsPitch {
+                    Text("The system voice's pitch. 1.0 is its natural tone; higher sounds brighter, lower sounds deeper.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("The selected engine doesn't support a pitch override; speech plays at the provider's natural pitch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             // Preview — shares the card coordinator so voice tests and preview
@@ -2353,15 +2352,33 @@ private struct SpeakPreviewRow: View {
 // MARK: - Speak slider helpers (file scope — shared by SpeakCardView and CustomSpeechFields)
 
 private let speakSpeedMin = AVSpeechUtteranceMinimumSpeechRate
+private let speakSpeedDefault = AVSpeechUtteranceDefaultSpeechRate
 private let speakSpeedMax = AVSpeechUtteranceMaximumSpeechRate
 
+/// Maps slider level 1...10 to a system `AVSpeechUtterance` rate. Level 5 is
+/// pinned to `AVSpeechUtteranceDefaultSpeechRate` so the slider's midpoint is
+/// the natural speaking rate. Below 5 the rate scales linearly to
+/// `AVSpeechUtteranceMinimumSpeechRate`; above 5 it scales linearly to
+/// `AVSpeechUtteranceMaximumSpeechRate`.
 private func speakRate(forLevel level: Int) -> Float {
-    speakSpeedMin + Float(level - 1) / 9 * (speakSpeedMax - speakSpeedMin)
+    let l = min(max(level, 1), 10)
+    if l <= 5 {
+        return speakSpeedMin + Float(l - 1) / 4 * (speakSpeedDefault - speakSpeedMin)
+    } else {
+        return speakSpeedDefault + Float(l - 5) / 5 * (speakSpeedMax - speakSpeedDefault)
+    }
 }
 
+/// Inverse of `speakRate(forLevel:)`: maps a system rate back to slider level
+/// 1...10, rounding to the nearest level.
 private func speakLevel(forRate rate: Float) -> Int {
-    let raw = Int((((rate - speakSpeedMin) / (speakSpeedMax - speakSpeedMin)) * 9).rounded()) + 1
-    return min(max(raw, 1), 10)
+    let raw: Float
+    if rate <= speakSpeedDefault {
+        raw = ((rate - speakSpeedMin) / (speakSpeedDefault - speakSpeedMin)) * 4 + 1
+    } else {
+        raw = ((rate - speakSpeedDefault) / (speakSpeedMax - speakSpeedDefault)) * 5 + 5
+    }
+    return min(max(Int(raw.rounded()), 1), 10)
 }
 
 private func speakPitch(forLevel level: Int) -> Float {
@@ -2619,9 +2636,16 @@ private struct CustomSpeechFields: View {
                     in: 1...10,
                     step: 1
                 )
-                Text("How fast the system voice speaks.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .disabled(!engineBinding.wrappedValue.supportsSpeed)
+                if engineBinding.wrappedValue.supportsSpeed {
+                    Text("How fast the system voice speaks.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("The selected engine doesn't support a speed override; speech plays at the provider's default rate.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             // Pitch slider.
@@ -2641,9 +2665,16 @@ private struct CustomSpeechFields: View {
                     in: 1...10,
                     step: 1
                 )
-                Text("The system voice's pitch. 1.0 is its natural tone; higher sounds brighter, lower sounds deeper.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .disabled(!engineBinding.wrappedValue.supportsPitch)
+                if engineBinding.wrappedValue.supportsPitch {
+                    Text("The system voice's pitch. 1.0 is its natural tone; higher sounds brighter, lower sounds deeper.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("The selected engine doesn't support a pitch override; speech plays at the provider's natural pitch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             // Preview row.
@@ -2901,9 +2932,16 @@ struct DraftSpeechFields: View {
                     in: 1...10,
                     step: 1
                 )
-                Text("How fast the system voice speaks.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .disabled(!engineBinding.wrappedValue.supportsSpeed)
+                if engineBinding.wrappedValue.supportsSpeed {
+                    Text("How fast the system voice speaks.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("The selected engine doesn't support a speed override; speech plays at the provider's default rate.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             // Pitch slider.
@@ -2923,9 +2961,16 @@ struct DraftSpeechFields: View {
                     in: 1...10,
                     step: 1
                 )
-                Text("The system voice's pitch. 1.0 is its natural tone; higher sounds brighter, lower sounds deeper.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .disabled(!engineBinding.wrappedValue.supportsPitch)
+                if engineBinding.wrappedValue.supportsPitch {
+                    Text("The system voice's pitch. 1.0 is its natural tone; higher sounds brighter, lower sounds deeper.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("The selected engine doesn't support a pitch override; speech plays at the provider's natural pitch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             // Preview row.

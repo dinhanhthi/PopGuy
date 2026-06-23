@@ -149,4 +149,25 @@ extension TTSProviderKind {
         case .azureTTS:       return false
         }
     }
+
+    /// Whether this provider's TTS API accepts a speech-speed override.
+    /// All implemented cloud providers support speed; the system voice always
+    /// supports it via `AVSpeechUtterance.rate`.
+    nonisolated var supportsSpeed: Bool {
+        switch self {
+        case .openAITTS, .googleCloudTTS, .azureTTS: return true
+        }
+    }
+
+    /// Whether this provider's TTS API accepts a pitch override.
+    /// OpenAI's TTS API has no pitch parameter; Google and Azure expose pitch
+    /// via `audioConfig.pitch` (semitones) and SSML `<prosody pitch>` respectively.
+    /// The system voice always supports pitch via `AVSpeechUtterance.pitchMultiplier`.
+    nonisolated var supportsPitch: Bool {
+        switch self {
+        case .openAITTS:      return false
+        case .googleCloudTTS: return true
+        case .azureTTS:       return true
+        }
+    }
 }

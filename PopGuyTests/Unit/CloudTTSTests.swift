@@ -154,6 +154,30 @@ struct CloudTTSTests {
         #expect(TTSProviderKind.googleCloudTTS.usesRegion == false)
     }
 
+    @Test("all implemented providers support speed")
+    func allProvidersSupportSpeed() {
+        for kind in TTSProviderKind.implemented {
+            #expect(kind.supportsSpeed == true, "\(kind.rawValue) should support speed")
+        }
+    }
+
+    @Test("only google and azure support pitch; openAI does not")
+    func pitchSupportMatrix() {
+        #expect(TTSProviderKind.openAITTS.supportsPitch == false)
+        #expect(TTSProviderKind.googleCloudTTS.supportsPitch == true)
+        #expect(TTSProviderKind.azureTTS.supportsPitch == true)
+    }
+
+    @Test("SpeakEngineSelection.supportsSpeed/supportsPitch reflect the provider")
+    func engineSelectionCapabilityRouting() {
+        #expect(SpeakEngineSelection.system.supportsSpeed == true)
+        #expect(SpeakEngineSelection.system.supportsPitch == true)
+        #expect(SpeakEngineSelection.cloud(.openAITTS).supportsSpeed == true)
+        #expect(SpeakEngineSelection.cloud(.openAITTS).supportsPitch == false)
+        #expect(SpeakEngineSelection.cloud(.googleCloudTTS).supportsPitch == true)
+        #expect(SpeakEngineSelection.cloud(.azureTTS).supportsPitch == true)
+    }
+
     @Test("all providers have non-nil apiKeyURL")
     func allProvidersHaveAPIKeyURL() {
         for kind in TTSProviderKind.allCases {
@@ -447,6 +471,66 @@ struct OpenAITTSProviderTests {
         let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: String]
         let body = try #require(json)
         #expect(body["model"] == "tts-1-hd")
+    }
+
+    @Test("makeSynthesisRequest includes speed when provided, encoded as a short decimal")
+    func synthesisRequestIncludesSpeed() throws {
+        let req = try OpenAITTSProvider.makeSynthesisRequest(
+            text: "Hi",
+            voice: "alloy",
+            languageCode: "en-US",
+            speed: 1.75,
+            pitch: nil,
+            config: .default,
+            apiKey: "sk-test"
+        )
+        let bodyData = try #require(req.httpBody)
+        // Verify the raw JSON body contains a short decimal literal (no
+        // full-precision Double expansion like 1.7500000000000002 that would
+        // exceed OpenAI's 16-decimal-place validation limit on gpt-4o-mini-tts).
+        let rawBody = try #require(String(data: bodyData, encoding: .utf8))
+        #expect(rawBody.contains("\"speed\":1.75"))
+        // Also verify it round-trips to 1.75 via JSONSerialization.
+        let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
+        let body = try #require(json)
+        let speedValue = (body["speed"] as? NSNumber)?.doubleValue
+        #expect(speedValue == 1.75)
+    }
+
+    @Test("makeSynthesisRequest encodes a 3-decimal speed without full-precision expansion")
+    func synthesisRequestSpeedIsShortDecimal() throws {
+        // 0.572 as a Double expands to 0.57199999999999995 under full-precision
+        // JSONSerialization; the provider must emit "0.572" instead.
+        let req = try OpenAITTSProvider.makeSynthesisRequest(
+            text: "Hi",
+            voice: "alloy",
+            languageCode: "en-US",
+            speed: 0.572,
+            pitch: nil,
+            config: .default,
+            apiKey: "sk-test"
+        )
+        let bodyData = try #require(req.httpBody)
+        let rawBody = try #require(String(data: bodyData, encoding: .utf8))
+        #expect(rawBody.contains("\"speed\":0.572"))
+        #expect(!rawBody.contains("0.5719999999999999"))
+    }
+
+    @Test("makeSynthesisRequest omits speed when nil so the provider default applies")
+    func synthesisRequestOmitsSpeedWhenNil() throws {
+        let req = try OpenAITTSProvider.makeSynthesisRequest(
+            text: "Hi",
+            voice: "alloy",
+            languageCode: "en-US",
+            speed: nil,
+            pitch: nil,
+            config: .default,
+            apiKey: "sk-test"
+        )
+        let bodyData = try #require(req.httpBody)
+        let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
+        let body = try #require(json)
+        #expect(body["speed"] == nil)
     }
 
     @Test("makeSynthesisRequest falls back to TTSProviderKind.openAITTS.defaultModel when config.model is nil")
@@ -767,6 +851,56 @@ struct GoogleCloudTTSProviderTests {
         #expect(audioConfig["audioEncoding"] as? String == "MP3")
     }
 
+    @Test("makeSynthesisRequest includes speakingRate and pitch in audioConfig when provided")
+    func synthesisRequestIncludesSpeedAndPitch() throws {
+        let req = try GoogleCloudTTSProvider.makeSynthesisRequest(
+            text: "Hi",
+            voice: "en-US-Neural2-C",
+            languageCode: "en-US",
+            speed: 1.5,
+            pitch: 2.0,
+            config: .default,
+            apiKey: "test-key"
+        )
+        let bodyData = try #require(req.httpBody)
+        let json = try #require(
+            JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
+        )
+        let audioConfig = try #require(json["audioConfig"] as? [String: Any])
+        #expect(audioConfig["speakingRate"] as? Double == 1.5)
+        // pitch multiplier 2.0 → +12.0 semitones (one octave up).
+        #expect(audioConfig["pitch"] as? Double == 12.0)
+    }
+
+    @Test("makeSynthesisRequest omits speakingRate and pitch when nil")
+    func synthesisRequestOmitsSpeedAndPitchWhenNil() throws {
+        let req = try GoogleCloudTTSProvider.makeSynthesisRequest(
+            text: "Hi",
+            voice: "en-US-Neural2-C",
+            languageCode: "en-US",
+            speed: nil,
+            pitch: nil,
+            config: .default,
+            apiKey: "test-key"
+        )
+        let bodyData = try #require(req.httpBody)
+        let json = try #require(
+            JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
+        )
+        let audioConfig = try #require(json["audioConfig"] as? [String: Any])
+        #expect(audioConfig["speakingRate"] == nil)
+        #expect(audioConfig["pitch"] == nil)
+    }
+
+    @Test("semitones(forPitchMultiplier:) maps 1.0 to 0.0 and clamps to [-20, 20]")
+    func semitoneMapping() {
+        #expect(GoogleCloudTTSProvider.semitones(forPitchMultiplier: 1.0) == 0.0)
+        #expect(GoogleCloudTTSProvider.semitones(forPitchMultiplier: 2.0) == 12.0)
+        #expect(GoogleCloudTTSProvider.semitones(forPitchMultiplier: 0.5) == -12.0)
+        #expect(GoogleCloudTTSProvider.semitones(forPitchMultiplier: 4.0) == 20.0)
+        #expect(GoogleCloudTTSProvider.semitones(forPitchMultiplier: 0.25) == -20.0)
+    }
+
     @Test("makeSynthesisRequest voice.languageCode matches the passed languageCode")
     func synthesisRequestVoiceLanguageCodeMatchesParam() throws {
         for langCode in ["en-US", "fr-FR", "de-DE", "es-ES"] {
@@ -1029,6 +1163,51 @@ struct AzureTTSProviderTests {
 
         #expect(body.contains("fr-FR-DeniseNeural"))
         #expect(body.contains("fr-FR"))
+    }
+
+    @Test("makeSynthesisRequest wraps text in prosody with rate and pitch when provided")
+    func synthesisRequestSSMLIncludesProsodyRateAndPitch() throws {
+        let config = TTSProviderConfig(region: "eastus")
+        let req = try AzureTTSProvider.makeSynthesisRequest(
+            text: "Hello",
+            voice: "en-US-JennyNeural",
+            languageCode: "en-US",
+            speed: 1.5,
+            pitch: 2.0,
+            config: config,
+            apiKey: "k"
+        )
+        let bodyData = try #require(req.httpBody)
+        let body = try #require(String(data: bodyData, encoding: .utf8))
+        // Speed 1.5 → +50% rate; pitch 2.0 → +12.0st.
+        #expect(body.contains("<prosody"))
+        #expect(body.contains("rate='+50%'"))
+        #expect(body.contains("pitch='+12.0st'"))
+        #expect(body.contains("Hello</prosody>"))
+    }
+
+    @Test("makeSynthesisRequest omits prosody when speed and pitch are nil")
+    func synthesisRequestSSMLOmitsProsodyWhenNil() throws {
+        let config = TTSProviderConfig(region: "eastus")
+        let req = try AzureTTSProvider.makeSynthesisRequest(
+            text: "Hello",
+            voice: "en-US-JennyNeural",
+            languageCode: "en-US",
+            speed: nil,
+            pitch: nil,
+            config: config,
+            apiKey: "k"
+        )
+        let bodyData = try #require(req.httpBody)
+        let body = try #require(String(data: bodyData, encoding: .utf8))
+        #expect(!body.contains("<prosody"))
+    }
+
+    @Test("semitoneString(forPitchMultiplier:) maps 1.0 to +0st and clamps to a 2-octave range")
+    func semitoneStringMapping() {
+        #expect(AzureTTSProvider.semitoneString(forPitchMultiplier: 1.0) == "+0.0st")
+        #expect(AzureTTSProvider.semitoneString(forPitchMultiplier: 2.0) == "+12.0st")
+        #expect(AzureTTSProvider.semitoneString(forPitchMultiplier: 0.5) == "-12.0st")
     }
 
     @Test("makeSynthesisRequest SSML body contains plain text when no special characters")
