@@ -104,6 +104,49 @@ jobs:
       - name: Verify notarization
         run: spctl -a -vv -t exec build/export/PopGuy.app
 
+      # ── DMG (manual-download asset) ───────────────────────────────────────
+      # The .zip stays for Sparkle auto-update (the appcast points at it), but a
+      # raw .zip breaks when end users extract it with a third-party unarchiver
+      # that pollutes Sparkle.framework's root with ._* AppleDouble files,
+      # breaking the code seal → Gatekeeper rejects with a malware warning.
+      # A DMG is drag-to-install: Finder copies the bundle verbatim, so the seal
+      # always survives. Build it from the already-stapled app so the app dragged
+      # out of the DMG is itself notarized + stapled (works offline).
+      - name: Build DMG
+        working-directory: build/export
+        run: |
+          rm -rf dmg-stage && mkdir dmg-stage
+          cp -R PopGuy.app dmg-stage/
+          ln -s /Applications dmg-stage/Applications
+          hdiutil create -volname "PopGuy" -srcfolder dmg-stage \
+            -ov -format UDZO "PopGuy-$VERSION.dmg"
+
+      - name: Sign DMG
+        working-directory: build/export
+        # A DMG is a container, not an executable: --timestamp yes, no hardened runtime.
+        run: |
+          codesign --force --timestamp \
+            --sign "Developer ID Application" "PopGuy-$VERSION.dmg"
+
+      - name: Notarize DMG
+        working-directory: build/export
+        run: |
+          xcrun notarytool submit "PopGuy-$VERSION.dmg" \
+            --apple-id "${{ secrets.NOTARYTOOL_APPLE_ID }}" \
+            --password "${{ secrets.NOTARYTOOL_PASSWORD }}" \
+            --team-id "${{ secrets.NOTARYTOOL_TEAM_ID }}" \
+            --wait
+
+      - name: Staple DMG
+        working-directory: build/export
+        run: xcrun stapler staple "PopGuy-$VERSION.dmg"
+
+      - name: Verify DMG
+        working-directory: build/export
+        run: |
+          spctl -a -t open --context context:primary-signature -v "PopGuy-$VERSION.dmg"
+          xcrun stapler validate "PopGuy-$VERSION.dmg"
+
       # ── GitHub Release ────────────────────────────────────────────────────
       - name: Extract changelog section
         run: |
@@ -117,6 +160,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "v$VERSION" \
+            "build/export/PopGuy-$VERSION.dmg" \
             "build/export/PopGuy-$VERSION.zip" \
             --title "PopGuy $VERSION" \
             --notes-file "build/export/PopGuy-$VERSION.md"
