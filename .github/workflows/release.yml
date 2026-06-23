@@ -23,13 +23,30 @@ concurrency:
 
 jobs:
   release:
-    runs-on: macos-15
+    # macos-26 ships Xcode 26 by default. Xcode 26 is REQUIRED to compile the
+    # Icon Composer `.icon` app icon (PopGuy/logo.icon). Older toolchains
+    # (Xcode 16, the default on macos-15) silently copy logo.icon as a raw
+    # resource and ship an app with NO app icon — blank in Finder, the Settings
+    # window, and Sparkle's update dialogs (menubar/toolbar are unaffected;
+    # they are ordinary imagesets). Do NOT downgrade this runner.
+    runs-on: macos-26
     environment:
       name: github-pages
       url: ${{ steps.pages.outputs.page_url }}
 
     steps:
       - uses: actions/checkout@v4
+
+      # Pin the toolchain to Xcode 26 and fail loudly if it is unavailable.
+      # Required to compile the Icon Composer `.icon` app icon (see runs-on note).
+      - name: Select Xcode 26
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          [ -n "$XC" ] || XC=/Applications/Xcode.app
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+          xcodebuild -version | grep -qE '^Xcode 26' \
+            || { echo "ERROR: Xcode 26 is required to compile the .icon app icon"; exit 1; }
 
       - name: Extract and validate version from tag
         run: |
@@ -85,6 +102,22 @@ jobs:
             -archivePath build/PopGuy.xcarchive \
             -exportOptionsPlist ExportOptions.plist \
             -exportPath build/export
+
+      # Guard against shipping a blank-icon build (the v0.1.1 regression): if the
+      # Icon Composer `.icon` did not compile, actool ships the raw logo.icon
+      # folder instead of an app icon. Catch it here, before notarization.
+      - name: Verify app icon compiled
+        working-directory: build/export
+        run: |
+          APP=PopGuy.app
+          test -f "$APP/Contents/Resources/logo.icns" \
+            || { echo "ERROR: logo.icns missing — the .icon app icon did not compile"; exit 1; }
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIconName" "$APP/Contents/Info.plist" \
+            || { echo "ERROR: CFBundleIconName missing from Info.plist"; exit 1; }
+          if [ -e "$APP/Contents/Resources/logo.icon" ]; then
+            echo "ERROR: raw logo.icon copied unprocessed into Resources"; exit 1
+          fi
+          echo "App icon compiled OK"
 
       # ── Notarize ──────────────────────────────────────────────────────────
       - name: Zip for notarization (throwaway)
