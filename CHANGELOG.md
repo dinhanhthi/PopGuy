@@ -13,6 +13,24 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [0.3.0] - 2026-06-24
+
+### Added
+
+- New toolbar layout system: choose which actions sit on the main toolbar row and which tuck into a "More" overflow menu.
+- Interactive toolbar layout editor in Settings — drag actions between the toolbar row and the More menu.
+- A Toolbar toggle on each action card in the Actions tab to pin it to the main row.
+- The toolbar can now hold up to 11 actions.
+
+### Changed
+
+- Dropdown menus across Settings (Actions filter, History filter, plugin import, toolbar More) now share one consistent style.
+- Hover tooltips dismiss on click so they no longer linger over dropdowns.
+
+### Fixed
+
+- Disabled overflow actions no longer count against the toolbar capacity limits, so an enabled action can always move into a non-full More menu.
+
 ## [0.2.1] - 2026-06-24
 
 ### Fixed

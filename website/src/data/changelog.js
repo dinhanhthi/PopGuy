@@ -1,9 +1,21 @@
 export const releases = [
   {
+    version: "0.3.0",
+    date: "June 2026",
+    title: "Customizable toolbar layout.",
+    latest: true,
+    items: [
+      "Main row plus a More overflow menu",
+      "Drag-and-drop toolbar layout editor",
+      "Pin actions to the toolbar per action",
+      "Up to 11 toolbar actions",
+      "Unified dropdown menu styling"
+    ]
+  },
+  {
     version: "0.2.1",
     date: "June 2026",
     title: "Update dialog fixes.",
-    latest: true,
     items: [
       "Cleaner Check for Updates dialog",
       "Correct release date in About"
