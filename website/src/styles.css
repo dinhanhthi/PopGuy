@@ -1779,6 +1779,37 @@ input:focus-visible {
   color: var(--blue);
 }
 
+.docs-code {
+  margin: 18px 0 0;
+  padding: 20px 22px;
+  overflow-x: auto;
+  border: 1px solid #26384e;
+  border-radius: 10px;
+  background: #0f1b2b;
+  color: #dce8f7;
+  font-family: var(--mono, "SF Mono", "Fira Code", "Cascadia Code", monospace);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.docs-code code {
+  font-family: inherit;
+  background: none;
+  color: inherit;
+  padding: 0;
+}
+
+.docs-steps a {
+  margin: 1px 0 0;
+  color: var(--blue);
+  font-size: 0.91rem;
+  text-decoration: none;
+}
+
+.docs-steps a:hover {
+  text-decoration: underline;
+}
+
 .code-block {
   position: relative;
   overflow: hidden;

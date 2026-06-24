@@ -22,7 +22,7 @@ describe("website routes", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the docs sidebar with the four main sections", () => {
+  it("renders the docs sidebar with the six main sections", () => {
     render(
       <MemoryRouter initialEntries={["/docs"]}>
         <AppRoutes />
@@ -38,7 +38,9 @@ describe("website routes", () => {
       "Installation",
       "Privacy",
       "Action Types",
-      "Create an Action"
+      "Create an Action",
+      "Create a Plugin",
+      "PopClip Extensions"
     ]);
   });
 
