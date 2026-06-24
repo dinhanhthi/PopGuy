@@ -13,6 +13,13 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [0.2.1] - 2026-06-24
+
+### Fixed
+
+- "Check for Updates" no longer renders the GitHub releases web page inside the update window; the dialog now shows a compact update prompt. The "Version History" button still opens the full release history in your browser.
+- The About tab now shows the correct release date for each build.
+
 ## [0.2.0] - 2026-06-24
 
 ### Added

@@ -1,9 +1,18 @@
 export const releases = [
   {
+    version: "0.2.1",
+    date: "June 2026",
+    title: "Update dialog fixes.",
+    latest: true,
+    items: [
+      "Cleaner Check for Updates dialog",
+      "Correct release date in About"
+    ]
+  },
+  {
     version: "0.2.0",
     date: "June 2026",
     title: "More control, smoother Speak.",
-    latest: true,
     items: [
       "General settings tab",
       "Master on/off switch in the menu bar",
