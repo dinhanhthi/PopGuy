@@ -9,6 +9,7 @@
 // finishWith seeds editedResult, reset/update clear it, beginEditing/endEditing toggle isEditing.
 
 import ApplicationServices
+import AppKit
 import Testing
 @testable import PopGuy
 
@@ -249,6 +250,26 @@ struct ToolbarViewModelEditBufferTests {
         vm.update(text: "new text", sourceElement: ref, screenRect: nil, sourceBundleID: nil)
         #expect(vm.editedResult == "")
         #expect(vm.isEditing == false)
+    }
+}
+
+// MARK: - Toolbar error message rendering
+
+@Suite("Toolbar error message text")
+@MainActor
+struct ToolbarErrorMessageTextTests {
+
+    @Test("error message label is selectable so users can copy it")
+    func errorMessageLabelIsSelectable() {
+        let label = SelectableToolbarErrorText.makeLabel(
+            message: "Provider failed with HTTP 401",
+            font: .systemFont(ofSize: 11),
+            textColor: .systemRed
+        )
+
+        #expect(label.isSelectable == true)
+        #expect(label.isEditable == false)
+        #expect(label.stringValue == "Provider failed with HTTP 401")
     }
 }
 

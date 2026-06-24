@@ -202,6 +202,12 @@ struct ToolbarView: View {
         .system(size: NSFont.preferredFont(forTextStyle: style).pointSize * zoom)
     }
 
+    /// AppKit font matching `chromeFont(_:)`, used where AppKit-backed text is
+    /// needed for native selection inside the floating panel.
+    private func chromeNSFont(_ style: NSFont.TextStyle) -> NSFont {
+        NSFont.systemFont(ofSize: NSFont.preferredFont(forTextStyle: style).pointSize * zoom)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             actionBar
@@ -653,11 +659,13 @@ struct ToolbarView: View {
                 Image(systemName: "exclamationmark.triangle")
                     .font(chromeFont(.caption1))
                     .foregroundStyle(.red)
-                Text(message)
-                    .font(chromeFont(.caption1))
-                    .foregroundStyle(.red)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                SelectableToolbarErrorText(
+                    message: message,
+                    font: chromeNSFont(.caption1),
+                    textColor: .systemRed
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
             }
             .padding(resultPadding)
             .frame(width: resultWidth, alignment: .leading)
@@ -1477,6 +1485,74 @@ private struct ToolbarUtilityButton: View {
         .animation(ToolbarMetrics.hoverAnimation, value: isHovered)
         .onHover { isHovered = $0 }
         .toolbarTooltip(tooltip, controlRadius: controlRadius)
+    }
+}
+
+// MARK: - SelectableToolbarErrorText
+
+/// Native selectable label for toolbar error messages. SwiftUI `Text` selection
+/// can be unreliable in a non-activating floating panel, while NSTextField's
+/// selectable label behavior gives users the standard copy affordance.
+struct SelectableToolbarErrorText: NSViewRepresentable {
+    let message: String
+    let font: NSFont
+    let textColor: NSColor
+
+    func makeNSView(context: Context) -> NSTextField {
+        Self.makeLabel(message: message, font: font, textColor: textColor)
+    }
+
+    func updateNSView(_ label: NSTextField, context: Context) {
+        label.stringValue = message
+        label.font = font
+        label.textColor = textColor
+        label.invalidateIntrinsicContentSize()
+    }
+
+    @MainActor
+    static func makeLabel(message: String, font: NSFont, textColor: NSColor) -> NSTextField {
+        let label = WrappingSelectableToolbarErrorLabel(labelWithString: message)
+        label.font = font
+        label.textColor = textColor
+        label.backgroundColor = .clear
+        label.drawsBackground = false
+        label.isBordered = false
+        label.isBezeled = false
+        label.isEditable = false
+        label.isSelectable = true
+        label.lineBreakMode = .byWordWrapping
+        label.usesSingleLineMode = false
+        label.cell?.wraps = true
+        label.cell?.isScrollable = false
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        label.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return label
+    }
+}
+
+private final class WrappingSelectableToolbarErrorLabel: NSTextField {
+    override var intrinsicContentSize: NSSize {
+        guard bounds.width > 0, let cell else {
+            return super.intrinsicContentSize
+        }
+
+        let measured = cell.cellSize(
+            forBounds: NSRect(
+                x: 0,
+                y: 0,
+                width: bounds.width,
+                height: .greatestFiniteMagnitude
+            )
+        )
+        return NSSize(width: NSView.noIntrinsicMetric, height: ceil(measured.height))
+    }
+
+    override func layout() {
+        super.layout()
+        if preferredMaxLayoutWidth != bounds.width {
+            preferredMaxLayoutWidth = bounds.width
+            invalidateIntrinsicContentSize()
+        }
     }
 }
 
