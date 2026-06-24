@@ -437,35 +437,26 @@ private struct SettingsFooter: View {
     var body: some View {
         VStack(spacing: 0) {
             Divider()
-            VStack(spacing: 4) {
-                HStack(spacing: 8) {
-                    Toggle("Automatically check for updates", isOn: $updater.automaticallyChecksForUpdates)
-                        .toggleStyle(.checkbox)
+            HStack(spacing: 8) {
+                Text(versionLabel)
+                    .foregroundStyle(.secondary)
 
-                    Spacer(minLength: 0)
-
-                    Button("Check for Updates") {
-                        updater.checkForUpdates()
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!updater.canCheckForUpdates)
+                Button("Check for Updates") {
+                    updater.checkForUpdates()
                 }
+                .buttonStyle(.plain)
+                .disabled(!updater.canCheckForUpdates)
 
-                HStack(spacing: 8) {
-                    Text(versionLabel)
-                        .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
 
-                    Spacer(minLength: 0)
+                Link("Anh-Thi DINH", destination: Self.authorURL)
 
-                    Link("Anh-Thi DINH", destination: Self.authorURL)
+                Text("·").foregroundStyle(.secondary)
 
-                    Text("·").foregroundStyle(.secondary)
-
-                    Link(destination: Self.githubURL) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left.forwardslash.chevron.right")
-                            Text("GitHub")
-                        }
+                Link(destination: Self.githubURL) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        Text("GitHub")
                     }
                 }
             }
