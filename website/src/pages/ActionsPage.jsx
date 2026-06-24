@@ -156,6 +156,7 @@ export function ActionsPage() {
               <article key={preset.id} className="library-card">
                 <preset.icon aria-hidden="true" />
                 <span className="library-name">{preset.name}</span>
+                <span className="library-description">{preset.description}</span>
                 <span className="library-type-badge">{preset.type}</span>
               </article>
             ))

@@ -86,4 +86,25 @@ describe("website routes", () => {
       screen.getAllByText("0.3.0").length
     ).toBeGreaterThanOrEqual(1);
   });
+
+  it("shows short descriptions for Action Library cards and modal rows", () => {
+    render(
+      <MemoryRouter initialEntries={["/actions"]}>
+        <AppRoutes />
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.getByText("Search the selection with Google.")
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /View all 93/ }));
+
+    const modal = screen.getByRole("dialog", {
+      name: "Action Library — all presets"
+    });
+    expect(
+      within(modal).getByText("Open the selected place in Apple Maps.")
+    ).toBeInTheDocument();
+  });
 });

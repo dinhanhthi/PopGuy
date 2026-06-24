@@ -56,7 +56,10 @@ export function ActionLibraryModal({ open, onClose }) {
                   {presets.map((preset) => (
                     <li className="library-preset-row" key={preset.id}>
                       <preset.icon aria-hidden="true" />
-                      <span className="library-preset-name">{preset.name}</span>
+                      <span className="library-preset-copy">
+                        <span className="library-preset-name">{preset.name}</span>
+                        <span className="library-description">{preset.description}</span>
+                      </span>
                       <span className="library-type-badge">{preset.type}</span>
                     </li>
                   ))}

@@ -1,16 +1,21 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { ProviderLogo } from "../components/ProviderLogos";
+import { ProviderLogo, providerLogos } from "../components/ProviderLogos";
 
 describe("ProviderLogo", () => {
-  it("renders a textOnly brand with name and sub, no svg", () => {
-    const { container } = render(
-      <ProviderLogo name="GLM" textOnly sub="z.ai" />
-    );
+  it("renders GLM with a logo instead of the z.ai text fallback", () => {
+    const glm = providerLogos.find((provider) => provider.name === "GLM");
+    const { container } = render(<ProviderLogo {...glm} />);
 
     expect(screen.getByText("GLM")).toBeInTheDocument();
-    expect(screen.getByText("z.ai")).toBeInTheDocument();
-    expect(container.querySelector("svg")).toBeNull();
+    expect(screen.queryByText("z.ai")).not.toBeInTheDocument();
+    expect(container.querySelector("svg")).not.toBeNull();
+  });
+
+  it("uses the real OpenAI logo path", () => {
+    const openAI = providerLogos.find((provider) => provider.name === "OpenAI");
+
+    expect(openAI.icon.path).toContain("M22.2819 9.8211");
   });
 
   it("renders an svg logo for non-textOnly providers", () => {

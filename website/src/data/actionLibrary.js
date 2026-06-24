@@ -52,7 +52,7 @@ export const libraryCategories = [
   { id: "apps", name: "Apps", icon: LayoutGrid }
 ];
 
-export const libraryPresets = [
+const libraryPresetDefinitions = [
   // Search Engines (12)
   { id: "search.google", name: "Search Google", type: "Open URL", category: "search", icon: Search },
   { id: "search.bing", name: "Search Bing", type: "Open URL", category: "search", icon: Search },
@@ -163,8 +163,78 @@ export const libraryPresets = [
   { id: "apps.facetime", name: "FaceTime", type: "Open URL", category: "apps", icon: Video }
 ];
 
+const textDescriptions = {
+  "text.uppercase": "Convert the selection to uppercase.",
+  "text.lowercase": "Convert the selection to lowercase.",
+  "text.titlecase": "Convert the selection to title case.",
+  "text.capitalize": "Capitalize every selected word.",
+  "text.sentencecase": "Convert the selection to sentence case.",
+  "text.slugify": "Turn the selection into a URL slug.",
+  "text.hyphenate": "Replace spaces in the selection with hyphens.",
+  "text.underscore": "Replace spaces in the selection with underscores.",
+  "text.removespaces": "Remove spaces from the selection.",
+  "text.joinlines": "Join selected lines into one line.",
+  "text.sortlines": "Sort selected lines alphabetically.",
+  "text.reverselineorder": "Reverse the order of selected lines.",
+  "text.shufflelines": "Shuffle selected lines into random order.",
+  "text.alternatingcase": "Apply alternating uppercase and lowercase.",
+  "text.rot13": "Encode or decode the selection with ROT13.",
+  "text.reversestring": "Reverse the selected characters."
+};
+
+const devDescriptions = {
+  "dev.base64encode": "Encode the selection as Base64.",
+  "dev.base64decode": "Decode Base64 text from the selection.",
+  "dev.urlencode": "Percent-encode the selection for URLs.",
+  "dev.urldecode": "Decode percent-encoded URL text.",
+  "dev.htmlencode": "Escape the selection for HTML.",
+  "dev.htmldecode": "Decode HTML entities in the selection.",
+  "dev.sha256": "Generate a SHA-256 hash of the selection.",
+  "dev.md5": "Generate an MD5 hash of the selection.",
+  "dev.unixtimetodate": "Convert a Unix timestamp to a date.",
+  "dev.datetounixtime": "Convert a date to a Unix timestamp.",
+  "dev.jsonprettyprint": "Format selected JSON for readability.",
+  "dev.wordcount": "Count words in the selection.",
+  "dev.charactercount": "Count characters in the selection.",
+  "dev.linecount": "Count selected lines.",
+  "dev.calculate": "Calculate the selected expression."
+};
+
+function describeLibraryPreset(preset) {
+  if (preset.id in textDescriptions) {
+    return textDescriptions[preset.id];
+  }
+  if (preset.id in devDescriptions) {
+    return devDescriptions[preset.id];
+  }
+  if (preset.category === "search") {
+    return `Search the selection with ${preset.name.replace("Search ", "")}.`;
+  }
+  if (preset.category === "websites") {
+    return `Look up the selection on ${preset.name}.`;
+  }
+  if (preset.category === "maps") {
+    return `Open the selected place in ${preset.name}.`;
+  }
+  if (preset.category === "ai") {
+    return `Send the selection to ${preset.name}.`;
+  }
+  if (preset.category === "translate") {
+    return `Translate the selection with ${preset.name}.`;
+  }
+  if (preset.category === "apps") {
+    return `Send the selection to ${preset.name}.`;
+  }
+  return `Run ${preset.name} on the selection.`;
+}
+
+export const libraryPresets = libraryPresetDefinitions.map((preset) => ({
+  ...preset,
+  description: describeLibraryPreset(preset)
+}));
+
 export const libraryStats = {
-  total: 93,
-  categories: 8,
+  total: libraryPresets.length,
+  categories: libraryCategories.length,
   local: "100% local"
 };
