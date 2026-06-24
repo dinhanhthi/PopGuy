@@ -89,6 +89,16 @@ jobs:
           </plist>
           EOF
 
+      # Stamp the real release day into the bundle. PGReleaseDate is a manual
+      # Info.plist key (not derived from build settings like the version/build
+      # numbers), so without this it goes stale every release and the About tab
+      # shows the previous version's date. Edit happens before Archive so the
+      # value is baked into the built app; the edit is ephemeral (never committed).
+      - name: Stamp release date into Info.plist
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :PGReleaseDate $(date -u +%Y-%m-%d)" PopGuy/Info.plist
+          /usr/libexec/PlistBuddy -c "Print :PGReleaseDate" PopGuy/Info.plist
+
       # ── Build ─────────────────────────────────────────────────────────────
       - name: Archive
         run: |
@@ -222,21 +232,38 @@ jobs:
         run: |
           mkdir -p build/appcast-archives
           cp "build/export/PopGuy-$VERSION.zip" build/appcast-archives/
-          cp "build/export/PopGuy-$VERSION.md" build/appcast-archives/
+          # Do NOT copy the .md into the archives folder: that makes generate_appcast
+          # emit a <sparkle:releaseNotesLink>, which Sparkle renders EMBEDDED inside the
+          # update dialog. We embed the notes inline instead (see below).
           printf '%s' "$SPARKLE_PRIVATE_KEY" | ./sparkle-bin/bin/generate_appcast build/appcast-archives/ \
             --ed-key-file - \
             --full-release-notes-url "https://github.com/dinhanhthi/PopGuy/releases" \
             --download-url-prefix \
             "https://github.com/dinhanhthi/PopGuy/releases/download/v$VERSION/"
           cp build/appcast-archives/appcast.xml appcast.xml
-          # The per-version release-notes .md is never hosted on Pages (only appcast.xml
-          # is deployed), so generate_appcast's releaseNotesLink would 404. Point both the
-          # in-dialog notes (releaseNotesLink) and the "Version History" button
-          # (fullReleaseNotesLink, set above) at the GitHub releases page instead.
-          # macOS (BSD) sed: -i REQUIRES a backup-suffix arg; '' means no backup.
-          # Plain `sed -i 's|...|' file` makes BSD sed treat the script as the
-          # suffix and `file` as the script (fails: "command a expects ...").
-          sed -i '' 's|<sparkle:releaseNotesLink>[^<]*</sparkle:releaseNotesLink>|<sparkle:releaseNotesLink>https://github.com/dinhanhthi/PopGuy/releases</sparkle:releaseNotesLink>|' appcast.xml
+          # Embed the changelog inline as markdown shown INSIDE the update dialog.
+          # We intentionally avoid <sparkle:releaseNotesLink>: that link is rendered
+          # embedded in the dialog, so pointing it at a web page (e.g. the GitHub
+          # releases page) makes the whole page render inside the modal. An inline
+          # <description sparkle:format="markdown"> is self-contained (no hosting,
+          # never 404s; Sparkle >= 2.9 / macOS 12+ renders markdown). The "Version
+          # History" button uses fullReleaseNotesLink (above) → GitHub releases page,
+          # which opens in the browser.
+          python3 - "$VERSION" <<'PY'
+          import sys
+          version = sys.argv[1]
+          notes = open(f"build/export/PopGuy-{version}.md").read().strip()
+          with open("appcast.xml") as f:
+              xml = f.read()
+          desc = (
+              '            <description sparkle:format="markdown"><![CDATA[\n'
+              f"{notes}\n"
+              "]]></description>\n        </item>"
+          )
+          xml = xml.replace("        </item>", desc, 1)
+          with open("appcast.xml", "w") as f:
+              f.write(xml)
+          PY
 
       - name: Stage appcast for Pages
         run: mkdir -p _site && cp appcast.xml _site/appcast.xml
