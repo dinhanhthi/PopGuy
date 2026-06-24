@@ -9,7 +9,6 @@
             <sparkle:version>8</sparkle:version>
             <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <sparkle:releaseNotesLink>https://github.com/dinhanhthi/PopGuy/releases</sparkle:releaseNotesLink>
             <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v0.2.0/PopGuy-0.2.0.zip" length="7534130" type="application/octet-stream" sparkle:edSignature="ssVessUspBU8dj3Au3Mx5iyIVWDOEpO8hpbgEviXaSOcbOkCGh/27sWuCUfyQOZMSVsVhpeUL90GPBPlZH+yBg=="/>
         </item>
     </channel>
