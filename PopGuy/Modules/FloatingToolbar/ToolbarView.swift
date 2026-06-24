@@ -171,8 +171,7 @@ struct ToolbarView: View {
     /// Gates the destructive "ignore this app" action behind user confirmation.
     @State private var isShowingIgnoreConfirmation = false
 
-    /// Drives the overflow (burger) action menu popover.
-    @State private var isBurgerOpen = false
+    /// Overflow (burger) menu — native inline Menu (same pattern as Settings filters).
 
     @FocusState private var promptFieldFocused: Bool
 
@@ -547,32 +546,90 @@ struct ToolbarView: View {
         }
     }
 
-    /// Overflow (burger) menu button and popover listing extra actions.
+    /// Overflow (burger) menu button listing extra actions.
     private var burgerButton: some View {
-        Button {
-            isBurgerOpen.toggle()
-        } label: {
+        SettingsInlineMenu {
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: NSFont.preferredFont(forTextStyle: .callout).pointSize * zoom, weight: .medium))
                 .frame(width: metrics.controlHeight, height: metrics.controlHeight)
+        } menuContent: {
+            ForEach(viewModel.overflowActions, id: \.self) { id in
+                overflowMenuItem(for: id)
+            }
         }
         .buttonStyle(ToolbarControlStyle(controlRadius: metrics.controlRadius))
         .toolbarTooltip("More actions", controlRadius: metrics.controlRadius)
-        .popover(isPresented: $isBurgerOpen, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: metrics.groupSpacing) {
-                ForEach(viewModel.overflowActions, id: \.self) { id in
-                    actionControl(for: id, forceLabeled: true)
+    }
+
+    @ViewBuilder
+    private func overflowMenuItem(for id: ActionIdentifier) -> some View {
+        Button {
+            triggerOverflowAction(for: id)
+        } label: {
+            overflowMenuLabel(for: id)
+        }
+        .disabled(overflowMenuItemDisabled(for: id))
+    }
+
+    @ViewBuilder
+    private func overflowMenuLabel(for id: ActionIdentifier) -> some View {
+        let (title, symbol) = overflowMenuTitleAndSymbol(for: id)
+        Label(title, systemImage: symbol)
+    }
+
+    private func overflowMenuTitleAndSymbol(for id: ActionIdentifier) -> (String, String) {
+        switch id {
+        case .builtin(.improve):   return ("Improve", "wand.and.stars")
+        case .builtin(.shorten):   return ("Shorten", "text.badge.minus")
+        case .builtin(.proofread): return ("Proofread", "checkmark.bubble")
+        case .builtin(.prompt):    return ("Prompt", "bubble.and.pencil")
+        case .builtin(.translate): return ("Translate", "character.bubble")
+        case .speak:
+            let title = viewModel.speakPhase == .idle ? "Speak" : "Stop"
+            let symbol = viewModel.speakPhase == .playing ? "stop.fill" : "speaker.wave.2"
+            return (title, symbol)
+        case .dictionary:          return ("Look up", "character.book.closed")
+        case .custom(let uuid):
+            if let action = viewModel.customActions.first(where: { $0.id == uuid }) {
+                if action.type == .speech {
+                    let title = viewModel.speakPhase == .idle ? action.title : "Stop"
+                    return (title, "speaker.wave.2")
                 }
+                return (action.title, "sparkles")
             }
-            .padding(metrics.cardPadding * 2)
-            .onChange(of: viewModel.actionState) { state in
-                if case .running = state { isBurgerOpen = false }
+            return ("Custom", "sparkles")
+        }
+    }
+
+    private func overflowMenuItemDisabled(for id: ActionIdentifier) -> Bool {
+        switch id {
+        case .speak:
+            return false
+        case .custom(let uuid):
+            if let action = viewModel.customActions.first(where: { $0.id == uuid }),
+               action.type == .speech {
+                return false
             }
-            .onChange(of: viewModel.speakPhase) { phase in
-                if phase != .idle { isBurgerOpen = false }
-            }
-            .onChange(of: viewModel.isPromptInputActive) { active in
-                if active { isBurgerOpen = false }
+            return isActionRunning
+        default:
+            return isActionRunning
+        }
+    }
+
+    private func triggerOverflowAction(for id: ActionIdentifier) {
+        switch id {
+        case .builtin(.improve):   viewModel.triggerImprove()
+        case .builtin(.shorten):   viewModel.triggerShorten()
+        case .builtin(.proofread): viewModel.triggerProofread()
+        case .builtin(.prompt):
+            viewModel.triggerPromptInput()
+            onActivatePromptInput()
+        case .builtin(.translate): viewModel.triggerTranslate()
+        case .dictionary:          viewModel.triggerDictionary()
+        case .speak:                viewModel.triggerSpeak(accent: nil)
+        case .custom(let uuid):
+            if let action = viewModel.customActions.first(where: { $0.id == uuid }) {
+                viewModel.triggerCustomAction(action)
             }
         }
     }
@@ -1368,6 +1425,7 @@ private struct ToolbarTooltipModifier: ViewModifier {
     @State private var isHovered = false
     @State private var showTooltip = false
     @State private var hoverTask: Task<Void, Never>?
+    @State private var clickMonitor: Any?
 
     @ViewBuilder
     func body(content: Content) -> some View {
@@ -1379,6 +1437,7 @@ private struct ToolbarTooltipModifier: ViewModifier {
                 .onHover { hovering in
                     isHovered = hovering
                     if hovering {
+                        installClickMonitor()
                         hoverTask?.cancel()
                         hoverTask = Task { @MainActor in
                             try? await Task.sleep(nanoseconds: ToolbarMetrics.tooltipDelay)
@@ -1386,11 +1445,10 @@ private struct ToolbarTooltipModifier: ViewModifier {
                             if isHovered { showTooltip = true }
                         }
                     } else {
-                        hoverTask?.cancel()
-                        hoverTask = nil
-                        showTooltip = false
+                        teardown()
                     }
                 }
+                .onDisappear { teardown() }
                 .overlay(alignment: .bottomTrailing) {
                     if showTooltip {
                         Text(text)
@@ -1409,6 +1467,31 @@ private struct ToolbarTooltipModifier: ViewModifier {
                     }
                 }
                 .animation(ToolbarMetrics.hoverAnimation, value: showTooltip)
+        }
+    }
+
+    /// Hide the tooltip on any mouse-down (e.g. clicking the More button to open
+    /// its menu). The monitor returns the event unmodified so the button action
+    /// is unaffected; the tooltip stays hidden until the pointer re-enters.
+    private func installClickMonitor() {
+        guard clickMonitor == nil else { return }
+        clickMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { event in
+            hoverTask?.cancel()
+            hoverTask = nil
+            showTooltip = false
+            return event
+        }
+    }
+
+    private func teardown() {
+        hoverTask?.cancel()
+        hoverTask = nil
+        showTooltip = false
+        if let clickMonitor {
+            NSEvent.removeMonitor(clickMonitor)
+            self.clickMonitor = nil
         }
     }
 }

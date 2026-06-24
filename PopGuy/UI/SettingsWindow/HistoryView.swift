@@ -185,38 +185,12 @@ struct HistoryView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                // Custom Menu (not a native Picker) so its label is built the
-                // same way as the search box — identical vertical padding and
-                // rounded-rect background — guaranteeing both controls share the
-                // exact same height. A native .menu Picker renders as a fixed-
-                // height NSPopUpButton bezel that can't be matched to the box.
-                Menu {
-                    Picker("", selection: $actionFilter) {
-                        Text("All actions").tag(String?.none)
-                        ForEach(availableActions, id: \.self) { name in
-                            Text(name).tag(String?.some(name))
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.inline)
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(actionFilter ?? "All actions")
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.leading, 10)
-                    .padding(.trailing, 8)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.primary.opacity(0.05))
-                    )
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
+                SettingsInlinePickerMenu(
+                    selection: $actionFilter,
+                    displayTitle: actionFilter ?? "All actions",
+                    options: [(.none, "All actions")]
+                        + availableActions.map { (Optional.some($0), $0) }
+                )
             }
 
             if !searchAllowed {

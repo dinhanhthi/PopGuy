@@ -29,6 +29,7 @@ private struct HoverTooltipModifier: ViewModifier {
     @State private var isHovered = false
     @State private var hoverTask: Task<Void, Never>?
     @State private var anchorView: NSView?
+    @State private var clickMonitor: Any?
 
     @ViewBuilder
     func body(content: Content) -> some View {
@@ -39,6 +40,7 @@ private struct HoverTooltipModifier: ViewModifier {
                 .onHover { hovering in
                     isHovered = hovering
                     if hovering {
+                        installClickMonitor()
                         hoverTask?.cancel()
                         hoverTask = Task { @MainActor in
                             try? await Task.sleep(nanoseconds: Self.delay)
@@ -48,20 +50,42 @@ private struct HoverTooltipModifier: ViewModifier {
                             }
                         }
                     } else {
-                        hoverTask?.cancel()
-                        hoverTask = nil
-                        HoverTooltipPanelPresenter.shared.hide(anchor: anchorView)
+                        teardown()
                     }
                 }
                 .background {
                     HoverTooltipAnchorView { anchorView = $0 }
                 }
                 .onDisappear {
-                    hoverTask?.cancel()
-                    hoverTask = nil
-                    HoverTooltipPanelPresenter.shared.hide(anchor: anchorView)
+                    teardown()
                 }
         }
+    }
+
+    /// Hide the tooltip on any mouse-down (e.g. clicking the button to open its
+    /// dropdown). The monitor returns the event unmodified so the button/menu
+    /// action is unaffected. While the pointer stays over the control no new
+    /// `onHover` fires, so the tooltip stays hidden until the pointer re-enters.
+    private func installClickMonitor() {
+        guard clickMonitor == nil else { return }
+        clickMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { event in
+            hoverTask?.cancel()
+            hoverTask = nil
+            HoverTooltipPanelPresenter.shared.hide(anchor: anchorView)
+            return event
+        }
+    }
+
+    private func teardown() {
+        hoverTask?.cancel()
+        hoverTask = nil
+        if let clickMonitor {
+            NSEvent.removeMonitor(clickMonitor)
+            self.clickMonitor = nil
+        }
+        HoverTooltipPanelPresenter.shared.hide(anchor: anchorView)
     }
 }
 

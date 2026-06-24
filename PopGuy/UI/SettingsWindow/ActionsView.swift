@@ -113,8 +113,7 @@ struct ActionsView: View {
     /// The pending import result; non-nil drives the consent sheet via `.sheet(item:)`.
     @State private var pendingConsent: PluginImportResult?
 
-    /// Drives the small popover offering the two plugin-import sources.
-    @State private var showPluginImportOptions = false
+    /// Drives the plugin-import source menu (Choose file / Paste snippet).
 
     /// Controls presentation of the Paste Snippet sheet.
     @State private var showSnippetSheet = false
@@ -181,7 +180,7 @@ struct ActionsView: View {
                             Image(systemName: "square.and.arrow.up")
                                 .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(ToolbarIconButtonStyle())
                         .disabled(settings.customActions.isEmpty)
                         .hoverTooltip("Export custom actions")
 
@@ -191,7 +190,7 @@ struct ActionsView: View {
                             Image(systemName: "square.and.arrow.down")
                                 .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(ToolbarIconButtonStyle())
                         .hoverTooltip("Import custom actions")
                     } else {
                         Button {
@@ -203,7 +202,7 @@ struct ActionsView: View {
                             }
                             .frame(height: SettingsMetrics.toolbarIconHeight)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(ToolbarIconButtonStyle())
                         .hoverTooltip("Export custom actions — Pro feature")
 
                         Button {
@@ -215,46 +214,30 @@ struct ActionsView: View {
                             }
                             .frame(height: SettingsMetrics.toolbarIconHeight)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(ToolbarIconButtonStyle())
                         .hoverTooltip("Import custom actions — Pro feature")
                     }
 
                     // Import Plugin — available to all users (free + Pro)
                     let pluginImportAllowed = licenseGate.entitlements.pluginImportAllowed
                     if pluginImportAllowed {
-                        // Plain bordered button (identical metrics to Import/Export);
-                        // the two sources are offered in a popover so the trigger
-                        // height matches the sibling buttons exactly.
-                        Button {
-                            showPluginImportOptions = true
-                        } label: {
+                        SettingsInlineMenu(borderedToolbarTrigger: true) {
                             Image(systemName: "puzzlepiece.extension")
                                 .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                        }
-                        .buttonStyle(.bordered)
-                        .hoverTooltip("Import plugin")
-                        .popover(isPresented: $showPluginImportOptions, arrowEdge: .bottom) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Button {
-                                    showPluginImportOptions = false
-                                    importPluginFromFile()
-                                } label: {
-                                    Label("Choose file\u{2026}", systemImage: "folder")
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                Button {
-                                    showPluginImportOptions = false
-                                    snippetText = ""
-                                    showSnippetSheet = true
-                                } label: {
-                                    Label("Paste snippet\u{2026}", systemImage: "doc.on.clipboard")
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
+                        } menuContent: {
+                            Button {
+                                importPluginFromFile()
+                            } label: {
+                                Label("Choose file\u{2026}", systemImage: "folder")
                             }
-                            .buttonStyle(.plain)
-                            .padding(8)
-                            .frame(minWidth: 170)
+                            Button {
+                                snippetText = ""
+                                showSnippetSheet = true
+                            } label: {
+                                Label("Paste snippet\u{2026}", systemImage: "doc.on.clipboard")
+                            }
                         }
+                        .hoverTooltip("Import plugin")
                     } else {
                         Button {
                             onUpgrade()
@@ -265,7 +248,7 @@ struct ActionsView: View {
                             }
                             .frame(height: SettingsMetrics.toolbarIconHeight)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(ToolbarIconButtonStyle())
                         .hoverTooltip("Import plugin — Pro feature")
                     }
 
@@ -279,7 +262,7 @@ struct ActionsView: View {
                         Image(systemName: "books.vertical")
                             .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(ToolbarIconButtonStyle())
                     .hoverTooltip("Browse Action Library")
                 }
 
@@ -309,33 +292,12 @@ struct ActionsView: View {
                             .fill(Color.primary.opacity(0.05))
                     )
 
-                    Menu {
-                        Picker("", selection: $typeFilter) {
-                            ForEach(ActionTypeFilter.allCases) { filter in
-                                Text(filter.displayName).tag(filter)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.inline)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(typeFilter.displayName)
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.leading, 10)
-                        .padding(.trailing, 8)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(Color.primary.opacity(0.05))
-                        )
-                    }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-                    .hoverTooltip("Filter actions by type")
+                    SettingsInlinePickerMenu(
+                        selection: $typeFilter,
+                        displayTitle: typeFilter.displayName,
+                        options: ActionTypeFilter.allCases.map { ($0, $0.displayName) },
+                        tooltip: "Filter actions by type"
+                    )
                 }
 
                 if atCustomActionLimit {
