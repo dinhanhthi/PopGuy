@@ -116,6 +116,7 @@ final class SettingsStore: ObservableObject {
         static let ignoredAppBundleIDs        = "settings.ignoredAppBundleIDs"
         static let ignoredDomains             = "settings.ignoredDomains"
         static let ignoredDomainsEnabled      = "settings.ignoredDomainsEnabled"
+        static let popGuyEnabled              = "settings.popGuyEnabled"
         static let triggerOnSelect            = "settings.triggerOnSelect"
         static let triggerDoubleClick         = "settings.triggerDoubleClick"
         static let doubleClickAssignedAction  = "settings.doubleClickAssignedAction"
@@ -297,6 +298,14 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(ignoredDomainsEnabled, forKey: Keys.ignoredDomainsEnabled) }
     }
 
+    /// Master kill switch (default: true). When false, every trigger — text
+    /// selection, double-click, the Cmd+C+C chord (and its replacement shortcut),
+    /// and custom-action hotkeys — is suppressed and PopGuy stays idle until
+    /// re-enabled.
+    @Published var popGuyEnabled: Bool {
+        didSet { defaults.set(popGuyEnabled, forKey: Keys.popGuyEnabled) }
+    }
+
     /// Whether to trigger the popup on text selection (default: false).
     @Published var triggerOnSelectEnabled: Bool {
         didSet { defaults.set(triggerOnSelectEnabled, forKey: Keys.triggerOnSelect) }
@@ -452,6 +461,7 @@ final class SettingsStore: ObservableObject {
         ignoredAppBundleIDs      = Self.load([String].self, key: Keys.ignoredAppBundleIDs, from: defaults) ?? []
         ignoredDomains           = Self.load([String].self, key: Keys.ignoredDomains, from: defaults) ?? []
         ignoredDomainsEnabled    = defaults.object(forKey: Keys.ignoredDomainsEnabled) as? Bool ?? false
+        popGuyEnabled            = defaults.object(forKey: Keys.popGuyEnabled) as? Bool ?? true
         triggerOnSelectEnabled   = defaults.object(forKey: Keys.triggerOnSelect) as? Bool ?? false
         triggerDoubleClickEnabled = defaults.object(forKey: Keys.triggerDoubleClick) as? Bool ?? false
         doubleClickAssignedAction = Self.load(ActionIdentifier.self, key: Keys.doubleClickAssignedAction, from: defaults)

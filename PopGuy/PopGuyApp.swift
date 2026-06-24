@@ -92,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     /// Combine subscription — refreshes the status icon and menu when update availability changes.
     private var updaterCancellable: AnyCancellable?
+    private var popGuyEnabledCancellable: AnyCancellable?
 
     // MARK: - Onboarding
 
@@ -173,6 +174,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // Task { @MainActor } provides actor isolation; only the badge needs
         // immediate refresh — the menu items are rebuilt lazily on open.
         updaterCancellable = updater.$updateAvailable
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    self?.refreshStatusIcon()
+                }
+            }
+
+        // Dim the menu-bar icon when the master switch turns PopGuy off.
+        popGuyEnabledCancellable = settingsStore.$popGuyEnabled
+            .dropFirst()
             .sink { [weak self] _ in
                 Task { @MainActor in
                     self?.refreshStatusIcon()
@@ -389,12 +399,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 // large image/file clipboard pays a main-thread copy per ⌘C. Kept
                 // simple deliberately — revisit with a size guard only if it bites.
                 guard let self,
+                      self.settingsStore.popGuyEnabled,
                       self.settingsStore.triggerChordEnabled,
                       self.settingsStore.chordReplacementShortcut == nil else { return nil }
                 return PasteboardSnapshot.capture(from: .general)
             },
             onChord: { [weak self] preChordClipboard in
                 guard let self, let controller = self.toolbarController else { return }
+                guard self.settingsStore.popGuyEnabled else { return }
                 guard self.settingsStore.triggerChordEnabled else { return }
                 guard self.settingsStore.chordReplacementShortcut == nil else { return }
                 controller.showToolbarForCurrentSelection(preChordClipboard: preChordClipboard)
@@ -444,6 +456,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             let id = binding.actionID
             actionMap[id] = { [weak controller, weak self] in
                 guard let controller, let self else { return }
+                guard self.settingsStore.popGuyEnabled else { return }
                 controller.triggerAction(for: id, customActions: self.settingsStore.customActions)
             }
         }
@@ -456,7 +469,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             hkm.register(
                 shortcut: replacementShortcut,
                 for: AppDelegate.chordReplacementActionID
-            ) { [weak controller] in
+            ) { [weak controller, weak self] in
+                guard self?.settingsStore.popGuyEnabled == true else { return }
                 controller?.showToolbarForCurrentSelection()
             }
         }
@@ -505,15 +519,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     /// Refreshes the status-bar button image to reflect current update-available state.
     /// Called on first build and whenever update availability changes.
     private func refreshStatusIcon() {
-        statusItem?.button?.image = statusBarImage(updateAvailable: updater.updateAvailable)
+        statusItem?.button?.image = statusBarImage(
+            updateAvailable: updater.updateAvailable,
+            enabled: settingsStore.popGuyEnabled
+        )
     }
 
     /// Builds the status-bar icon. When an update is available, composites a
     /// small accent-colored badge dot onto a copy of the base icon so the tint
-    /// remains visible (the composed image is not a template image).
-    private func statusBarImage(updateAvailable: Bool) -> NSImage? {
+    /// remains visible (the composed image is not a template image). When PopGuy
+    /// is disabled, the icon is dimmed (grayscale, reduced opacity) to signal the
+    /// idle state.
+    private func statusBarImage(updateAvailable: Bool, enabled: Bool) -> NSImage? {
         guard let base = NSImage(named: "MenuBarIcon") else { return nil }
         let size = NSSize(width: 18, height: 18)
+
+        if !enabled {
+            // Render the template glyph as fixed gray at low opacity so the
+            // menu-bar icon reads as "off" rather than auto-tinting to full color.
+            let dimmed = NSImage(size: size, flipped: false) { rect in
+                base.draw(
+                    in: rect,
+                    from: .zero,
+                    operation: .sourceOver,
+                    fraction: 0.7
+                )
+                NSColor.secondaryLabelColor.withAlphaComponent(0.6).set()
+                rect.fill(using: .sourceAtop)
+                return true
+            }
+            dimmed.isTemplate = false
+            dimmed.accessibilityDescription = "PopGuy \u{2014} disabled"
+            return dimmed
+        }
 
         if !updateAvailable {
             guard let plain = base.copy() as? NSImage else { return base }
@@ -581,22 +619,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         menu.addItem(.separator())
 
-        // Trigger toggles — quick on/off without opening Settings.
-        menu.addItem(
-            makeStatusTriggerMenuItem(
-                .textSelection,
-                isOn: settingsStore.triggerOnSelectEnabled,
-                action: #selector(toggleTriggerOnSelect)
-            )
+        // Master kill switch — disables every automatic trigger at once.
+        let popGuyEnabled = settingsStore.popGuyEnabled
+        let disableItem = NSMenuItem(
+            title: popGuyEnabled ? "Disable PopGuy" : "Enable PopGuy",
+            action: #selector(togglePopGuyEnabled),
+            keyEquivalent: ""
         )
+        disableItem.image = NSImage(
+            systemSymbolName: popGuyEnabled ? "pause.circle" : "play.circle",
+            accessibilityDescription: nil
+        )
+        menu.addItem(disableItem)
 
-        menu.addItem(
-            makeStatusTriggerMenuItem(
-                .doubleClick,
-                isOn: settingsStore.triggerDoubleClickEnabled,
-                action: #selector(toggleTriggerDoubleClick)
-            )
+        menu.addItem(.separator())
+
+        // Trigger toggles — quick on/off without opening Settings. Greyed out
+        // while the master switch is off.
+        let selectItem = makeStatusTriggerMenuItem(
+            .textSelection,
+            isOn: settingsStore.triggerOnSelectEnabled,
+            action: #selector(toggleTriggerOnSelect)
         )
+        selectItem.isEnabled = popGuyEnabled
+        menu.addItem(selectItem)
+
+        let doubleClickItem = makeStatusTriggerMenuItem(
+            .doubleClick,
+            isOn: settingsStore.triggerDoubleClickEnabled,
+            action: #selector(toggleTriggerDoubleClick)
+        )
+        doubleClickItem.isEnabled = popGuyEnabled
+        menu.addItem(doubleClickItem)
 
         menu.addItem(.separator())
 
@@ -640,14 +694,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             keyEquivalent: ""
         )
         checkItem.isEnabled = updater.canCheckForUpdates
+        checkItem.image = NSImage(
+            systemSymbolName: "arrow.triangle.2.circlepath",
+            accessibilityDescription: nil
+        )
         menu.addItem(checkItem)
-
-        // Version / build number — informational, always disabled.
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
-        let versionItem = NSMenuItem(title: formatVersionLabel(version: version, build: build), action: nil, keyEquivalent: "")
-        versionItem.isEnabled = false
-        menu.addItem(versionItem)
 
         // Pro / activation status.
         if licenseGate.entitlements.isPro {
@@ -671,6 +722,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         ))
+    }
+
+    @objc private func togglePopGuyEnabled() {
+        settingsStore.popGuyEnabled.toggle()
     }
 
     @objc private func toggleTriggerOnSelect() {

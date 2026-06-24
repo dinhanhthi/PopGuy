@@ -396,6 +396,8 @@ final class ToolbarController {
         pipelineTask = Task { @MainActor [weak self] in
             guard let self else { return }
             for await event in self.pipeline.events {
+                // Master kill switch: suppress every automatic trigger when off.
+                guard self.settings.popGuyEnabled else { continue }
                 // Trigger gate: text-select path only — not the chord.
                 // Double-click trigger active (a double-click selects a single word):
                 // run its assigned default action directly — reusing the captured
