@@ -135,6 +135,7 @@ final class SettingsStore: ObservableObject {
         static let historyEnabled             = "settings.historyEnabled"
         static let historyStoreFullText       = "settings.historyStoreFullText"
         static let actionOrder                = "settings.actionOrder"
+        static let principalActionIDs         = "settings.principalActionIDs"
         static let actCount                   = "settings.actCount"
     }
 
@@ -389,6 +390,13 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(actCount, forKey: Keys.actCount) }
     }
 
+    /// Action identifiers assigned to the principal (inline) toolbar row.
+    /// Overflow actions are enabled identifiers not in this set. Persisted via
+    /// `didSet` on mutation; `didSet` does NOT fire on init assignment.
+    @Published private(set) var principalActionIDs: Set<ActionIdentifier> {
+        didSet { save(principalActionIDs, key: Keys.principalActionIDs) }
+    }
+
     // MARK: - Init
 
     /// Create a SettingsStore backed by the given UserDefaults instance.
@@ -483,21 +491,51 @@ final class SettingsStore: ObservableObject {
         toolbarZoom = defaults.string(forKey: Keys.toolbarZoom).flatMap(ToolbarZoom.init(rawValue:)) ?? .x1
         zoomIncludesFontSize = defaults.object(forKey: Keys.zoomIncludesFontSize) == nil ? true : defaults.bool(forKey: Keys.zoomIncludesFontSize)
         actCount = defaults.object(forKey: Keys.actCount) as? Int ?? 0
-        // Reconcile actionOrder last — reads `loadedCustomActions` to build the canonical
-        // set, so all stored properties must be initialized before this line.
+        // Reconcile actionOrder and principal partition using locals only — `self`
+        // is not fully initialized until both assignments below complete.
         let rawOrder = Self.load([ActionIdentifier].self, key: Keys.actionOrder, from: defaults)
-        actionOrder = Self.reconcileOrder(persisted: rawOrder, customActions: loadedCustomActions)
+        let reconciledOrder = Self.reconcileOrder(persisted: rawOrder, customActions: loadedCustomActions)
+
+        let rawPrincipal = Self.load(Set<ActionIdentifier>.self, key: Keys.principalActionIDs, from: defaults)
+        let resolvedPrincipal: Set<ActionIdentifier>
+        if let rawPrincipal, !rawPrincipal.isEmpty {
+            resolvedPrincipal = Self.reconcilePrincipal(persisted: rawPrincipal, actionOrder: reconciledOrder)
+        } else {
+            let impEnabled = defaults.object(forKey: Keys.improveEnabled) as? Bool ?? true
+            let shEnabled = defaults.object(forKey: Keys.shortenEnabled) as? Bool ?? true
+            let prEnabled = defaults.object(forKey: Keys.proofreadEnabled) as? Bool ?? true
+            let pmEnabled = defaults.object(forKey: Keys.promptEnabled) as? Bool ?? false
+            let trEnabled = defaults.object(forKey: Keys.translateEnabled) as? Bool ?? true
+            let spEnabled = defaults.object(forKey: Keys.speakEnabled) as? Bool ?? true
+            let dictConfig = Self.load(DictionaryConfig.self, key: Keys.dictionaryConfig, from: defaults) ?? .default
+            let enabled = Self.enabledIdentifiers(
+                in: reconciledOrder,
+                improveEnabled: impEnabled,
+                shortenEnabled: shEnabled,
+                proofreadEnabled: prEnabled,
+                promptEnabled: pmEnabled,
+                translateEnabled: trEnabled,
+                speakEnabled: spEnabled,
+                dictionaryEnabled: dictConfig.isEnabled,
+                customActions: loadedCustomActions
+            )
+            let migrated = Set(enabled.prefix(ProConfig.maxPrincipalActions))
+            resolvedPrincipal = Self.reconcilePrincipal(persisted: migrated, actionOrder: reconciledOrder)
+        }
+
+        actionOrder = reconciledOrder
+        principalActionIDs = resolvedPrincipal
+        // Persist first-launch / upgrade migration (`didSet` does not run on init).
+        if rawPrincipal == nil || rawPrincipal?.isEmpty == true {
+            save(principalActionIDs, key: Keys.principalActionIDs)
+        }
     }
 
     // MARK: - Toolbar action cap
 
-    /// Maximum number of actions the floating toolbar can display at once.
-    ///
-    /// There are now 6 built-in actions (Improve, Shorten, Proofread, Translate,
-    /// Speak, Prompt); a cap of 7 leaves room for at least one enabled custom action
-    /// alongside all built-ins and avoids an over-cap state for users upgrading
-    /// from the 5-built-in era.
-    static let maxToolbarActions = 7
+    /// Maximum number of enabled actions that may be active on the toolbar at once
+    /// (principal row + burger menu combined).
+    static let maxToolbarActions = ProConfig.maxPrincipalActions + ProConfig.maxBurgerActions
 
     /// Canonical default order for the six built-in actions.
     /// Custom actions are appended after these in `customActions` array order.
@@ -615,8 +653,9 @@ final class SettingsStore: ObservableObject {
         customActions.removeAll { $0.id == id }
         // Also remove any shortcut binding for this action.
         shortcutBindings.removeAll { $0.actionID == .custom(id) }
-        // Remove from the unified action order.
+        // Remove from the unified action order and principal partition.
         actionOrder.removeAll { $0 == .custom(id) }
+        principalActionIDs.remove(.custom(id))
     }
 
     /// Move custom actions at the given source offsets to the destination offset.
@@ -777,6 +816,107 @@ final class SettingsStore: ObservableObject {
     /// The ordered identifiers of all enabled actions.
     var enabledOrderedIdentifiers: [ActionIdentifier] {
         actionOrder.filter { isEnabled($0) }
+    }
+
+    /// Returns whether `id` is assigned to the principal (inline) toolbar row.
+    func isPrincipal(_ id: ActionIdentifier) -> Bool {
+        principalActionIDs.contains(id)
+    }
+
+    /// Enabled actions shown inline on the toolbar, in `actionOrder`.
+    var principalOrderedIdentifiers: [ActionIdentifier] {
+        enabledOrderedIdentifiers.filter { isPrincipal($0) }
+    }
+
+    /// Enabled actions assigned to the burger overflow menu, in `actionOrder`.
+    var overflowOrderedIdentifiers: [ActionIdentifier] {
+        enabledOrderedIdentifiers.filter { !isPrincipal($0) }
+    }
+
+    /// Count of enabled principal-row actions.
+    var principalActionCount: Int {
+        principalOrderedIdentifiers.count
+    }
+
+    /// Count of enabled burger-menu actions.
+    var overflowActionCount: Int {
+        overflowOrderedIdentifiers.count
+    }
+
+    /// Assign or remove `id` from the principal toolbar row.
+    ///
+    /// Caps apply only when the action is enabled: moving an enabled action into
+    /// a zone that is already at its cap is rejected. Disabled actions may
+    /// switch zones freely.
+    ///
+    /// - Returns: `true` when the membership changed or was already in the requested state;
+    ///   `false` when rejected by a zone cap.
+    @discardableResult
+    func setPrincipal(_ id: ActionIdentifier, _ value: Bool) -> Bool {
+        let currentlyPrincipal = principalActionIDs.contains(id)
+        guard value != currentlyPrincipal else { return true }
+
+        if value {
+            if principalActionIDs.count >= ProConfig.maxPrincipalActions {
+                return false
+            }
+            principalActionIDs.insert(id)
+        } else {
+            let overflowCount = actionOrder.filter { !principalActionIDs.contains($0) }.count
+            if overflowCount >= ProConfig.maxBurgerActions {
+                return false
+            }
+            principalActionIDs.remove(id)
+        }
+        return true
+    }
+
+    /// Reconcile a persisted principal set against the current `actionOrder`.
+    ///
+    /// Drops stale identifiers, trims to `ProConfig.maxPrincipalActions` by
+    /// `actionOrder`, and leaves actions not in the set in the burger zone.
+    private static func reconcilePrincipal(
+        persisted: Set<ActionIdentifier>,
+        actionOrder: [ActionIdentifier]
+    ) -> Set<ActionIdentifier> {
+        var ordered = actionOrder.filter { persisted.contains($0) }
+        if ordered.count > ProConfig.maxPrincipalActions {
+            ordered = Array(ordered.prefix(ProConfig.maxPrincipalActions))
+        }
+        var principalSet = Set(ordered)
+        var burger = actionOrder.filter { !principalSet.contains($0) }
+        while burger.count > ProConfig.maxBurgerActions,
+              principalSet.count < ProConfig.maxPrincipalActions {
+            let promote = burger.removeFirst()
+            principalSet.insert(promote)
+        }
+        return principalSet
+    }
+
+    /// Enabled identifiers in `actionOrder` order — static for init migration.
+    private static func enabledIdentifiers(
+        in actionOrder: [ActionIdentifier],
+        improveEnabled: Bool,
+        shortenEnabled: Bool,
+        proofreadEnabled: Bool,
+        promptEnabled: Bool,
+        translateEnabled: Bool,
+        speakEnabled: Bool,
+        dictionaryEnabled: Bool,
+        customActions: [CustomAction]
+    ) -> [ActionIdentifier] {
+        actionOrder.filter { id in
+            switch id {
+            case .builtin(.improve):   return improveEnabled
+            case .builtin(.shorten):   return shortenEnabled
+            case .builtin(.proofread): return proofreadEnabled
+            case .builtin(.prompt):    return promptEnabled
+            case .builtin(.translate): return translateEnabled
+            case .speak:               return speakEnabled
+            case .dictionary:          return dictionaryEnabled
+            case .custom(let uuid):    return customActions.first { $0.id == uuid }?.isEnabled ?? false
+            }
+        }
     }
 
     // MARK: - Private helpers

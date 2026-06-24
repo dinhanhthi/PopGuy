@@ -447,9 +447,10 @@ struct SettingsStoreTests {
 
     // MARK: - Toolbar action cap
 
-    @Test("maxToolbarActions is 7")
-    func maxToolbarActionsIs7() {
-        #expect(SettingsStore.maxToolbarActions == 7)
+    @Test("maxToolbarActions is 11 (6 principal + 5 burger)")
+    func maxToolbarActionsIs11() {
+        #expect(SettingsStore.maxToolbarActions == 11)
+        #expect(SettingsStore.maxToolbarActions == ProConfig.maxPrincipalActions + ProConfig.maxBurgerActions)
     }
 
     @Test("enabledToolbarActionCount counts enabled built-ins and custom actions")
@@ -492,20 +493,31 @@ struct SettingsStoreTests {
         defer { removeSuite(name) }
 
         let store = SettingsStore(defaults: suite)
-        // All 6 built-ins enabled (default 5 + enable Prompt) = count 6 (under cap=7).
+        // All 6 built-ins enabled (default 5 + enable Prompt) = count 6 (under cap=11).
         store.promptEnabled = true
-        // Adding one enabled custom: count goes 6→7 = cap; NOT clamped.
+        // Adding one enabled custom: count goes 6→7, still under cap.
         let firstResult = store.addCustomAction(CustomAction(
             title: "Custom1",
             systemPrompt: "Do something",
             isEnabled: true
         ))
         #expect(!firstResult)
+        #expect(store.enabledToolbarActionCount == 7)
+
+        // Fill remaining slots to cap=11.
+        while store.enabledToolbarActionCount < SettingsStore.maxToolbarActions {
+            let filler = CustomAction(
+                title: "Filler \(store.enabledToolbarActionCount)",
+                systemPrompt: "p",
+                isEnabled: true
+            )
+            _ = store.addCustomAction(filler)
+        }
         #expect(store.enabledToolbarActionCount == SettingsStore.maxToolbarActions)
 
-        // Now at cap (7). Adding a second enabled custom clamps it.
+        // Now at cap. Adding another enabled custom clamps it.
         let secondResult = store.addCustomAction(CustomAction(
-            title: "Custom2",
+            title: "CustomOverflow",
             systemPrompt: "Do something else",
             isEnabled: true
         ))
@@ -520,19 +532,22 @@ struct SettingsStoreTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        // All 6 built-ins enabled (default 5 + Prompt) = count 6. Add one enabled custom to reach cap=7.
+        // All 6 built-ins enabled (default 5 + Prompt) = count 6. Add enabled customs to reach cap=11.
         let store = SettingsStore(defaults: suite)
         store.promptEnabled = true
         #expect(store.enabledToolbarActionCount == 6)
-        let _ = store.addCustomAction(CustomAction(title: "A", systemPrompt: "p", isEnabled: true))
-        #expect(store.enabledToolbarActionCount == 7) // now at cap
+        while store.enabledToolbarActionCount < SettingsStore.maxToolbarActions {
+            let filler = CustomAction(title: "Filler \(store.enabledToolbarActionCount)", systemPrompt: "p", isEnabled: true)
+            _ = store.addCustomAction(filler)
+        }
+        #expect(store.enabledToolbarActionCount == SettingsStore.maxToolbarActions)
 
         // Adding another enabled action at cap should clamp it to disabled.
+        let countBeforeOverflow = store.customActions.count
         let clamped = store.addCustomAction(CustomAction(title: "B", systemPrompt: "p2", isEnabled: true))
         #expect(clamped)
-        #expect(store.enabledToolbarActionCount == 7)
-        // The second action was persisted but with isEnabled = false.
-        #expect(store.customActions.count == 2)
+        #expect(store.enabledToolbarActionCount == SettingsStore.maxToolbarActions)
+        #expect(store.customActions.count == countBeforeOverflow + 1)
         #expect(store.customActions.last?.isEnabled == false)
     }
 
@@ -571,23 +586,26 @@ struct SettingsStoreTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        // Fill to cap=7: 6 built-ins (default 5 + Prompt) + 1 enabled custom.
+        // Fill to cap=11: 6 built-ins (default 5 + Prompt) + enabled customs.
         let store = SettingsStore(defaults: suite)
         store.promptEnabled = true
         #expect(store.enabledToolbarActionCount == 6)
-        let _ = store.addCustomAction(CustomAction(title: "A", systemPrompt: "p1", isEnabled: true))
-        #expect(store.enabledToolbarActionCount == 7)
+        while store.enabledToolbarActionCount < SettingsStore.maxToolbarActions {
+            let filler = CustomAction(title: "Filler \(store.enabledToolbarActionCount)", systemPrompt: "p1", isEnabled: true)
+            _ = store.addCustomAction(filler)
+        }
+        #expect(store.enabledToolbarActionCount == SettingsStore.maxToolbarActions)
 
-        // Add a second, disabled custom action.
+        // Add a disabled custom action.
         var disabled = CustomAction(title: "B", systemPrompt: "p", isEnabled: false)
         let _ = store.addCustomAction(disabled)
-        #expect(store.enabledToolbarActionCount == 7) // still at cap
+        #expect(store.enabledToolbarActionCount == SettingsStore.maxToolbarActions)
 
         // Flip the disabled custom to enabled — at cap, should clamp.
         disabled.isEnabled = true
         let clamped = store.updateCustomAction(disabled)
         #expect(clamped)
-        #expect(store.enabledToolbarActionCount == 7)
+        #expect(store.enabledToolbarActionCount == SettingsStore.maxToolbarActions)
         #expect(store.customActions.first(where: { $0.id == disabled.id })?.isEnabled == false)
     }
 
@@ -617,21 +635,27 @@ struct SettingsStoreTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        // Fill to cap=7: 6 built-ins (default 5 + Prompt) + 1 enabled custom.
+        // Fill to cap=11: 6 built-ins (default 5 + Prompt) + enabled customs.
         let store = SettingsStore(defaults: suite)
         store.promptEnabled = true
-        let action = CustomAction(title: "A", systemPrompt: "old", isEnabled: true)
-        let _ = store.addCustomAction(action)
-        #expect(store.enabledToolbarActionCount == 7)
+        var action = CustomAction(title: "A", systemPrompt: "old", isEnabled: true)
+        while store.enabledToolbarActionCount < SettingsStore.maxToolbarActions {
+            if store.enabledToolbarActionCount == SettingsStore.maxToolbarActions - 1 {
+                _ = store.addCustomAction(action)
+            } else {
+                let filler = CustomAction(title: "Filler \(store.enabledToolbarActionCount)", systemPrompt: "p", isEnabled: true)
+                _ = store.addCustomAction(filler)
+            }
+        }
+        #expect(store.enabledToolbarActionCount == SettingsStore.maxToolbarActions)
 
         // Edit a non-enable field (systemPrompt) — must not disable it.
-        var updated = action
-        updated.systemPrompt = "new"
-        let clamped = store.updateCustomAction(updated)
+        action.systemPrompt = "new"
+        let clamped = store.updateCustomAction(action)
         #expect(!clamped)
         #expect(store.customActions.first(where: { $0.id == action.id })?.isEnabled == true)
         #expect(store.customActions.first(where: { $0.id == action.id })?.systemPrompt == "new")
-        #expect(store.enabledToolbarActionCount == 7)
+        #expect(store.enabledToolbarActionCount == SettingsStore.maxToolbarActions)
     }
 
     @Test("updateCustomAction disabling is never blocked")
@@ -869,11 +893,13 @@ struct SettingsStoreTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        // Reach cap=7: all 6 built-ins enabled, plus one enabled custom.
+        // Reach cap=11: all 6 built-ins enabled, plus enabled customs.
         let store1 = SettingsStore(defaults: suite)
         store1.promptEnabled = true
-        let first = CustomAction(title: "First", systemPrompt: "p1", isEnabled: true)
-        store1.addCustomAction(first)
+        while store1.enabledToolbarActionCount < SettingsStore.maxToolbarActions {
+            let filler = CustomAction(title: "Filler \(store1.enabledToolbarActionCount)", systemPrompt: "p", isEnabled: true)
+            _ = store1.addCustomAction(filler)
+        }
         #expect(store1.enabledToolbarActionCount == SettingsStore.maxToolbarActions)
 
         // Add an enabled custom at cap — triggers the clamp branch.
@@ -882,7 +908,7 @@ struct SettingsStoreTests {
         #expect(clamped)
 
         // The clamped action must appear in actionOrder even though isEnabled was flipped to false.
-        let expectedOrder = SettingsStore.defaultBuiltinOrder + [.custom(first.id), .custom(extra.id)]
+        let expectedOrder = SettingsStore.defaultBuiltinOrder + store1.customActions.map { .custom($0.id) }
         #expect(store1.actionOrder == expectedOrder)
 
         // Verify the order persists across a reload.

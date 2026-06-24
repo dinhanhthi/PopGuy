@@ -44,6 +44,17 @@ nonisolated enum ProConfig {
     /// stay free to flip, but the floating toolbar surfaces only this many.
     static let freeMaxActiveActions = 5
 
+    // MARK: Toolbar layout caps (universal — not tier-gated)
+
+    /// Max actions shown inline on the floating toolbar (outside the burger menu).
+    /// Universal hard cap for Free and Pro. Distinct from `freeMaxActiveActions`,
+    /// which limits how many actions a free user actually sees at runtime.
+    static let maxPrincipalActions = 6
+
+    /// Max actions inside the burger overflow menu.
+    /// Universal hard cap for Free and Pro.
+    static let maxBurgerActions = 5
+
     // MARK: Feature flags (global kill switches — false = hidden for everyone)
 
     /// Master switch for assigning a default action to the double-click trigger.
