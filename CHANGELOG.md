@@ -13,6 +13,27 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [0.2.0] - 2026-06-24
+
+### Added
+
+- General tab in Settings with options to enable/disable PopGuy, launch at login, hide the Dock icon, and configure toolbar-closing behavior.
+- Master on/off switch in the menu bar to disable PopGuy globally without quitting.
+- Per-action checkboxes in the plugin import dialog, with a Select All option.
+- Error messages in the toolbar are now selectable text.
+
+### Changed
+
+- Settings sidebar item spacing increased for readability.
+- Footer layout simplified.
+
+### Fixed
+
+- Cloud-unavailable warning now shown when a configured cloud provider cannot be reached; broken `.help()` tooltips removed.
+- Google Chirp3-HD voices now work correctly.
+- Speed and pitch settings now take effect for cloud TTS providers.
+- Release notes links in the updater now point correctly to the GitHub releases page.
+
 ## [0.1.2] - 2026-06-23
 
 ### Fixed

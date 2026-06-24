@@ -1,9 +1,22 @@
 export const releases = [
   {
+    version: "0.2.0",
+    date: "June 2026",
+    title: "More control, smoother Speak.",
+    latest: true,
+    items: [
+      "General settings tab",
+      "Master on/off switch in the menu bar",
+      "Per-action checkboxes when importing plugins",
+      "Selectable error messages in toolbar",
+      "Google Chirp3-HD voices fixed",
+      "Speed and pitch for cloud TTS providers"
+    ]
+  },
+  {
     version: "0.1.1",
     date: "June 2026",
     title: "Easier installs.",
-    latest: true,
     items: [
       "DMG download option"
     ]
