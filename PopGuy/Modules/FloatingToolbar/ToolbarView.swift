@@ -171,6 +171,9 @@ struct ToolbarView: View {
     /// Gates the destructive "ignore this app" action behind user confirmation.
     @State private var isShowingIgnoreConfirmation = false
 
+    /// Drives the overflow (burger) action menu popover.
+    @State private var isBurgerOpen = false
+
     @FocusState private var promptFieldFocused: Bool
 
     /// Measured width of the action bar. The card's width is driven by this row
@@ -299,6 +302,13 @@ struct ToolbarView: View {
                 actionControl(for: id)
             }
 
+            if viewModel.hasOverflow {
+                if !viewModel.orderedActions.isEmpty {
+                    toolbarDivider
+                }
+                burgerButton
+            }
+
             // Push the utility group (Ignore this App, Settings) to the trailing
             // edge, leaving a clear gap between it and the action buttons. Under
             // the root `.fixedSize()` this Spacer only has slack to expand because
@@ -359,7 +369,8 @@ struct ToolbarView: View {
 
     /// Renders the appropriate control for a given action identifier.
     @ViewBuilder
-    private func actionControl(for id: ActionIdentifier) -> some View {
+    private func actionControl(for id: ActionIdentifier, forceLabeled: Bool = false) -> some View {
+        let compact = forceLabeled ? false : viewModel.compactActions
         switch id {
         case .builtin(.improve):
             ToolbarActionButton(
@@ -367,7 +378,7 @@ struct ToolbarView: View {
                 label: "Improve",
                 isRunning: isRunning(.improve),
                 isDisabled: isActionRunning,
-                compact: viewModel.compactActions,
+                compact: compact,
                 zoom: zoom,
                 controlHeight: metrics.controlHeight,
                 controlRadius: metrics.controlRadius,
@@ -379,7 +390,7 @@ struct ToolbarView: View {
                 label: "Shorten",
                 isRunning: isRunning(.shorten),
                 isDisabled: isActionRunning,
-                compact: viewModel.compactActions,
+                compact: compact,
                 zoom: zoom,
                 controlHeight: metrics.controlHeight,
                 controlRadius: metrics.controlRadius,
@@ -391,7 +402,7 @@ struct ToolbarView: View {
                 label: "Proofread",
                 isRunning: isRunning(.proofread),
                 isDisabled: isActionRunning,
-                compact: viewModel.compactActions,
+                compact: compact,
                 zoom: zoom,
                 controlHeight: metrics.controlHeight,
                 controlRadius: metrics.controlRadius,
@@ -403,7 +414,7 @@ struct ToolbarView: View {
                 label: "Prompt",
                 isRunning: isRunning(.prompt),
                 isDisabled: isActionRunning,
-                compact: viewModel.compactActions,
+                compact: compact,
                 zoom: zoom,
                 controlHeight: metrics.controlHeight,
                 controlRadius: metrics.controlRadius,
@@ -422,7 +433,7 @@ struct ToolbarView: View {
                     label: "Translate",
                     isRunning: isRunning(.translate),
                     isDisabled: isActionRunning,
-                    compact: viewModel.compactActions,
+                    compact: compact,
                     zoom: zoom,
                     controlHeight: metrics.controlHeight,
                     controlRadius: metrics.controlRadius,
@@ -446,7 +457,7 @@ struct ToolbarView: View {
                     // Block while any action runs — including this lookup itself — so a
                     // repeated click can't cancel and restart the in-flight lookup.
                     isDisabled: isActionRunning,
-                    compact: viewModel.compactActions,
+                    compact: compact,
                     zoom: zoom,
                     controlHeight: metrics.controlHeight,
                     controlRadius: metrics.controlRadius,
@@ -474,7 +485,7 @@ struct ToolbarView: View {
                     label: viewModel.speakPhase == .idle ? "Speak" : "Stop",
                     isRunning: viewModel.speakPhase == .loading,
                     isDisabled: false,
-                    compact: viewModel.compactActions,
+                    compact: compact,
                     zoom: zoom,
                     controlHeight: metrics.controlHeight,
                     controlRadius: metrics.controlRadius,
@@ -504,7 +515,7 @@ struct ToolbarView: View {
                         label: viewModel.speakPhase == .idle ? action.title : "Stop",
                         isRunning: viewModel.speakPhase == .loading,
                         isDisabled: false,
-                        compact: viewModel.compactActions,
+                        compact: compact,
                         zoom: zoom,
                         controlHeight: metrics.controlHeight,
                         controlRadius: metrics.controlRadius,
@@ -523,7 +534,7 @@ struct ToolbarView: View {
                         label: action.title,
                         isRunning: isActionRunning && viewModel.activeCustomActionID == action.id,
                         isDisabled: isActionRunning,
-                        compact: viewModel.compactActions,
+                        compact: compact,
                         zoom: zoom,
                         controlHeight: metrics.controlHeight,
                         controlRadius: metrics.controlRadius,
@@ -532,6 +543,36 @@ struct ToolbarView: View {
                 }
             } else {
                 EmptyView()
+            }
+        }
+    }
+
+    /// Overflow (burger) menu button and popover listing extra actions.
+    private var burgerButton: some View {
+        Button {
+            isBurgerOpen.toggle()
+        } label: {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: NSFont.preferredFont(forTextStyle: .callout).pointSize * zoom, weight: .medium))
+                .frame(width: metrics.controlHeight, height: metrics.controlHeight)
+        }
+        .buttonStyle(ToolbarControlStyle(controlRadius: metrics.controlRadius))
+        .toolbarTooltip("More actions", controlRadius: metrics.controlRadius)
+        .popover(isPresented: $isBurgerOpen, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: metrics.groupSpacing) {
+                ForEach(viewModel.overflowActions, id: \.self) { id in
+                    actionControl(for: id, forceLabeled: true)
+                }
+            }
+            .padding(metrics.cardPadding * 2)
+            .onChange(of: viewModel.actionState) { state in
+                if case .running = state { isBurgerOpen = false }
+            }
+            .onChange(of: viewModel.speakPhase) { phase in
+                if phase != .idle { isBurgerOpen = false }
+            }
+            .onChange(of: viewModel.isPromptInputActive) { active in
+                if active { isBurgerOpen = false }
             }
         }
     }

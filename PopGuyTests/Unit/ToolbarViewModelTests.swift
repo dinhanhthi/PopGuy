@@ -2,8 +2,8 @@
 // PopGuyTests
 //
 // Unit tests for ToolbarViewModel.compactActions threshold logic.
-// Verifies that the flag is false below 4 enabled action buttons and
-// true at 4+, and that utility buttons (Ignore / Settings) never count.
+// Verifies that the flag is false below 4 inline controls (principal actions
+// plus the burger button when present) and true at 4+.
 //
 // Also covers edit-buffer invariants introduced in the editable-toolbar-result phase:
 // finishWith seeds editedResult, reset/update clear it, beginEditing/endEditing toggle isEditing.
@@ -19,183 +19,72 @@ struct ToolbarViewModelTests {
 
     // MARK: - compactActions threshold
 
-    @Test("compactActions is false with 0 enabled actions")
+    @Test("compactActions is false with no principal or overflow actions")
     func zeroActions() {
         let vm = ToolbarViewModel()
-        vm.improveEnabled = false
-        vm.shortenEnabled = false
-        vm.proofreadEnabled = false
-        vm.translateEnabled = false
-        vm.speakEnabled = false
+        vm.orderedActions = []
+        vm.overflowActions = []
         #expect(vm.compactActions == false)
     }
 
-    @Test("compactActions is false with 1 enabled action")
+    @Test("compactActions is false with 1 principal action")
     func oneAction() {
         let vm = ToolbarViewModel()
-        vm.improveEnabled = true
-        vm.shortenEnabled = false
-        vm.proofreadEnabled = false
-        vm.translateEnabled = false
-        vm.speakEnabled = false
+        vm.orderedActions = [.builtin(.improve)]
         #expect(vm.compactActions == false)
     }
 
-    @Test("compactActions is false with 2 enabled actions")
+    @Test("compactActions is false with 2 principal actions")
     func twoActions() {
         let vm = ToolbarViewModel()
-        vm.improveEnabled = true
-        vm.shortenEnabled = true
-        vm.proofreadEnabled = false
-        vm.translateEnabled = false
-        vm.speakEnabled = false
+        vm.orderedActions = [.builtin(.improve), .builtin(.shorten)]
         #expect(vm.compactActions == false)
     }
 
-    @Test("compactActions is false with exactly 3 enabled built-in actions")
-    func threeBuiltIns() {
+    @Test("compactActions is false with exactly 3 principal actions")
+    func threePrincipal() {
         let vm = ToolbarViewModel()
-        vm.improveEnabled = true
-        vm.shortenEnabled = true
-        vm.proofreadEnabled = true
-        vm.translateEnabled = false
-        vm.speakEnabled = false
+        vm.orderedActions = [.builtin(.improve), .builtin(.shorten), .builtin(.proofread)]
         #expect(vm.compactActions == false)
     }
 
-    @Test("compactActions is true with all 4 built-in actions enabled")
-    func allFourBuiltIns() {
+    @Test("compactActions is true with 4 principal actions")
+    func fourPrincipal() {
         let vm = ToolbarViewModel()
-        vm.improveEnabled = true
-        vm.shortenEnabled = true
-        vm.proofreadEnabled = true
-        vm.translateEnabled = true
-        vm.speakEnabled = false
+        vm.orderedActions = [
+            .builtin(.improve), .builtin(.shorten), .builtin(.proofread), .builtin(.translate),
+        ]
         #expect(vm.compactActions == true)
     }
 
-    @Test("compactActions is false when 2 built-ins + 1 custom action (total 3)")
-    func twoBuiltInsPlusOneCustom() {
+    @Test("compactActions is true with 3 principal actions and a burger menu")
+    func threePrincipalPlusBurger() {
         let vm = ToolbarViewModel()
-        vm.improveEnabled = true
-        vm.shortenEnabled = true
-        vm.proofreadEnabled = false
-        vm.translateEnabled = false
-        vm.speakEnabled = false
-        let custom = CustomAction(
-            title: "Summarize",
-            icon: .sfSymbol("sparkles"),
-            systemPrompt: "Summarize this.",
-            providerKind: .anthropic,
-            model: "claude-sonnet-4-6",
-            isEnabled: true
-        )
-        vm.customActions = [custom]
-        #expect(vm.compactActions == false)
-    }
-
-    @Test("compactActions is true when 2 built-ins + 2 custom actions (total 4)")
-    func twoBuiltInsPlusTwoCustom() {
-        let vm = ToolbarViewModel()
-        vm.improveEnabled = true
-        vm.shortenEnabled = true
-        vm.proofreadEnabled = false
-        vm.translateEnabled = false
-        vm.speakEnabled = false
-        vm.customActions = (1...2).map { i in
-            CustomAction(
-                title: "Custom \(i)",
-                icon: .sfSymbol("sparkles"),
-                systemPrompt: "Do \(i).",
-                providerKind: .anthropic,
-                model: "claude-sonnet-4-6",
-                isEnabled: true
-            )
-        }
+        vm.orderedActions = [.builtin(.improve), .builtin(.shorten), .builtin(.proofread)]
+        vm.overflowActions = [.builtin(.translate)]
         #expect(vm.compactActions == true)
     }
 
-    @Test("compactActions is false when 0 built-ins + 3 custom actions")
-    func threeCustomOnly() {
+    @Test("compactActions is false with 2 principal actions and a burger menu (3 inline)")
+    func twoPrincipalPlusBurger() {
         let vm = ToolbarViewModel()
-        vm.improveEnabled = false
-        vm.shortenEnabled = false
-        vm.proofreadEnabled = false
-        vm.translateEnabled = false
-        vm.speakEnabled = false
-        vm.customActions = (1...3).map { i in
-            CustomAction(
-                title: "Custom \(i)",
-                icon: .sfSymbol("sparkles"),
-                systemPrompt: "Do \(i).",
-                providerKind: .anthropic,
-                model: "claude-sonnet-4-6",
-                isEnabled: true
-            )
-        }
+        vm.orderedActions = [.builtin(.improve), .builtin(.shorten)]
+        vm.overflowActions = [.builtin(.proofread), .builtin(.translate)]
         #expect(vm.compactActions == false)
     }
 
-    @Test("compactActions is true when 0 built-ins + 4 custom actions")
-    func fourCustomOnly() {
+    @Test("hasOverflow is false when overflowActions is empty")
+    func hasOverflowFalse() {
         let vm = ToolbarViewModel()
-        vm.improveEnabled = false
-        vm.shortenEnabled = false
-        vm.proofreadEnabled = false
-        vm.translateEnabled = false
-        vm.speakEnabled = false
-        vm.customActions = (1...4).map { i in
-            CustomAction(
-                title: "Custom \(i)",
-                icon: .sfSymbol("sparkles"),
-                systemPrompt: "Do \(i).",
-                providerKind: .anthropic,
-                model: "claude-sonnet-4-6",
-                isEnabled: true
-            )
-        }
-        #expect(vm.compactActions == true)
+        vm.overflowActions = []
+        #expect(vm.hasOverflow == false)
     }
 
-    @Test("compactActions is false when 1 built-in + 1 custom action (total 2)")
-    func oneBuiltInPlusOneCustom() {
+    @Test("hasOverflow is true when overflowActions is non-empty")
+    func hasOverflowTrue() {
         let vm = ToolbarViewModel()
-        vm.improveEnabled = true
-        vm.shortenEnabled = false
-        vm.proofreadEnabled = false
-        vm.translateEnabled = false
-        vm.speakEnabled = false
-        let custom = CustomAction(
-            title: "Summarize",
-            icon: .sfSymbol("sparkles"),
-            systemPrompt: "Summarize this.",
-            providerKind: .anthropic,
-            model: "claude-sonnet-4-6",
-            isEnabled: true
-        )
-        vm.customActions = [custom]
-        #expect(vm.compactActions == false)
-    }
-
-    @Test("compactActions is false when 0 built-ins + 2 custom actions (boundary symmetry)")
-    func zeroBuiltInsTwoCustom() {
-        let vm = ToolbarViewModel()
-        vm.improveEnabled = false
-        vm.shortenEnabled = false
-        vm.proofreadEnabled = false
-        vm.translateEnabled = false
-        vm.speakEnabled = false
-        vm.customActions = (1...2).map { i in
-            CustomAction(
-                title: "Custom \(i)",
-                icon: .sfSymbol("sparkles"),
-                systemPrompt: "Do \(i).",
-                providerKind: .anthropic,
-                model: "claude-sonnet-4-6",
-                isEnabled: true
-            )
-        }
-        #expect(vm.compactActions == false)
+        vm.overflowActions = [.builtin(.translate)]
+        #expect(vm.hasOverflow == true)
     }
 }
 

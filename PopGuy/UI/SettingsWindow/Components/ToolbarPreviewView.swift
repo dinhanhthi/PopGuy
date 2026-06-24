@@ -8,8 +8,8 @@
 // The view model is seeded fresh on every body evaluation — acceptable here
 // because .allowsHitTesting(false) means no interactive state is preserved.
 //
-// Overflow: the bar can exceed the panel width (up to 7 actions + utility buttons).
-// A horizontal ScrollView with a GeometryReader-bound minWidth centers when the
+// Overflow: the bar can exceed the panel width (up to 6 principal actions,
+// optional burger menu, plus utility buttons). A horizontal ScrollView with a GeometryReader-bound minWidth centers when the
 // bar fits and scrolls horizontally when it overflows.
 //
 // Isolation: @MainActor — implicitly via SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor.
@@ -55,7 +55,8 @@ struct ToolbarPreviewView: View {
         } else {
             viewModel.ttsConfig = .default
         }
-        viewModel.orderedActions = settings.enabledOrderedIdentifiers
+        viewModel.orderedActions = settings.principalOrderedIdentifiers
+        viewModel.overflowActions = settings.overflowOrderedIdentifiers
 
         // The preview renders the toolbar at its real on-screen size, so the
         // backdrop and optical-centering nudge scale with the configured zoom

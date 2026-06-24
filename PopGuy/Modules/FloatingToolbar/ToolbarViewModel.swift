@@ -273,6 +273,12 @@ final class ToolbarViewModel: ObservableObject {
     /// customActions array below.
     @Published var orderedActions: [ActionIdentifier] = []
 
+    /// Enabled overflow actions shown in the burger menu.
+    @Published var overflowActions: [ActionIdentifier] = []
+
+    /// True when at least one action is assigned to the burger overflow menu.
+    var hasOverflow: Bool { !overflowActions.isEmpty }
+
     /// Enabled custom actions to show alongside the built-in buttons.
     /// Set by ToolbarController on each presentation from SettingsStore.
     @Published var customActions: [CustomAction] = []
@@ -321,14 +327,12 @@ final class ToolbarViewModel: ObservableObject {
 
     // MARK: Compact mode
 
-    /// True when 4 or more action buttons are visible.
-    ///
-    /// Utility buttons (Ignore / Settings) are excluded from the count.
+    /// True when 4 or more inline controls are visible (principal actions plus the
+    /// burger button when present). Utility buttons are excluded.
     /// When compact, action buttons render icon-only with a hover tooltip.
     var compactActions: Bool {
-        let builtInCount = [improveEnabled, shortenEnabled, proofreadEnabled, translateEnabled, speakEnabled, promptEnabled, dictionaryEnabled]
-            .filter { $0 }.count
-        return builtInCount + customActions.count >= 4
+        let inlineCount = orderedActions.count + (hasOverflow ? 1 : 0)
+        return inlineCount >= 4
     }
 
     // MARK: Edit-buffer computed helpers

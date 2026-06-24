@@ -605,17 +605,48 @@ final class ToolbarController {
         // appliesWhenRegex visibility check so dividers and compactActions counts
         // reflect only the actions that are actually rendered.
         let visibleCustomIDs = Set(viewModel.customActions.map(\.id))
-        viewModel.orderedActions = Array(
-            settings.enabledOrderedIdentifiers
-                .prefix(licenseGate.entitlements.maxActiveActions)
-                .filter { id in
-                    if case .custom(let uuid) = id { return visibleCustomIDs.contains(uuid) }
-                    return true
-                }
+        func filterVisible(_ ids: [ActionIdentifier]) -> [ActionIdentifier] {
+            ids.filter { id in
+                if case .custom(let uuid) = id { return visibleCustomIDs.contains(uuid) }
+                return true
+            }
+        }
+        let principalIDs = filterVisible(settings.principalOrderedIdentifiers)
+        let overflowIDs = filterVisible(settings.overflowOrderedIdentifiers)
+        let allocated = Self.allocate(
+            principal: principalIDs,
+            overflow: overflowIDs,
+            isPro: licenseGate.entitlements.isPro,
+            freeMaxActive: licenseGate.entitlements.maxActiveActions,
+            maxPrincipal: ProConfig.maxPrincipalActions,
+            maxBurger: ProConfig.maxBurgerActions
         )
+        viewModel.orderedActions = allocated.principal
+        viewModel.overflowActions = allocated.overflow
 
         // If already showing, reposition; otherwise show fresh.
         show(for: event)
+    }
+
+    /// Apply universal zone caps and the free-tier display budget.
+    nonisolated static func allocate(
+        principal: [ActionIdentifier],
+        overflow: [ActionIdentifier],
+        isPro: Bool,
+        freeMaxActive: Int,
+        maxPrincipal: Int,
+        maxBurger: Int
+    ) -> (principal: [ActionIdentifier], overflow: [ActionIdentifier]) {
+        if isPro {
+            return (
+                Array(principal.prefix(maxPrincipal)),
+                Array(overflow.prefix(maxBurger))
+            )
+        }
+        let cappedPrincipal = Array(principal.prefix(min(maxPrincipal, freeMaxActive)))
+        let remaining = max(0, freeMaxActive - cappedPrincipal.count)
+        let cappedOverflow = Array(overflow.prefix(min(maxBurger, remaining)))
+        return (cappedPrincipal, cappedOverflow)
     }
 
     // MARK: - Show / Hide
