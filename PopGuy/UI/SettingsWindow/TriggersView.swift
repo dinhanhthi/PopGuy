@@ -121,15 +121,6 @@ struct TriggersView: View {
                 }
             }
 
-            // MARK: Closing the toolbar
-            Section(header: Text("Closing the Toolbar")) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Confirm before closing a finished result", isOn: $settings.confirmCloseAfterResult)
-                    Text("When on, clicking outside or pressing Escape after a result is ready asks for confirmation, so you don't dismiss it by accident.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
         }
         .formStyle(.grouped)
         .onDisappear {

@@ -6,11 +6,13 @@
 //   1. Welcome — what PopGuy does.
 //   2. Accessibility permission — reuses AccessibilityPermission from Phase 1.
 //   3. Provider setup hint — opens the Settings window.
-//   4. Feature tour — brief description of core gestures.
+//   4. Start at login — optional SMAppService registration.
+//   5. Feature tour — brief description of core gestures.
 //
 // Isolation: @MainActor — all UI.
 // Plain static text only; no untrusted external content is rendered here.
 
+import ServiceManagement
 import SwiftUI
 
 // MARK: - OnboardingView
@@ -35,7 +37,10 @@ struct OnboardingView: View {
 
     @State private var page: Int = 0
 
-    private let pageCount = 4
+    @State private var launchAtLogin = false
+    @State private var loginItemError: String? = nil
+
+    private let pageCount = 5
 
     var body: some View {
         VStack(spacing: 0) {
@@ -45,6 +50,7 @@ struct OnboardingView: View {
                 case 0: welcomePage
                 case 1: accessibilityPage
                 case 2: providerPage
+                case 3: loginPage
                 default: tourPage
                 }
             }
@@ -192,6 +198,58 @@ struct OnboardingView: View {
             .buttonStyle(.bordered)
 
             Spacer()
+        }
+    }
+
+    private var loginPage: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            OnboardingHeader(
+                systemImage: "arrow.up.right.square",
+                title: "Start at Login",
+                subtitle: "PopGuy can launch automatically every time you log in so it's always ready."
+            )
+
+            Toggle("Launch PopGuy at login", isOn: $launchAtLogin)
+                .onChange(of: launchAtLogin) { newValue in
+                    applyOnboardingLoginItem(newValue)
+                }
+                .font(.subheadline)
+
+            if let error = loginItemError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            Text("You can change this later in Settings → General.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .onAppear {
+            let status = SMAppService.mainApp.status
+            launchAtLogin = status == .enabled || status == .requiresApproval
+        }
+    }
+
+    private func applyOnboardingLoginItem(_ enable: Bool) {
+        let status = SMAppService.mainApp.status
+        let isActive = status == .enabled || status == .requiresApproval
+        guard isActive != enable else { return }
+        loginItemError = nil
+        do {
+            if enable {
+                try SMAppService.mainApp.register()
+                if SMAppService.mainApp.status == .requiresApproval {
+                    loginItemError = "Pending approval — open Login Items in System Settings to allow it."
+                }
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            launchAtLogin = !enable
+            loginItemError = "Could not \(enable ? "enable" : "disable") launch at login: \(error.localizedDescription)"
         }
     }
 

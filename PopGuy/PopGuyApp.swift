@@ -93,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     /// Combine subscription — refreshes the status icon and menu when update availability changes.
     private var updaterCancellable: AnyCancellable?
     private var popGuyEnabledCancellable: AnyCancellable?
+    private var showDockIconCancellable: AnyCancellable?
 
     // MARK: - Onboarding
 
@@ -186,6 +187,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             .sink { [weak self] _ in
                 Task { @MainActor in
                     self?.refreshStatusIcon()
+                }
+            }
+
+        showDockIconCancellable = settingsStore.$showDockIconWithSettings
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    self?.applyDockPolicy()
                 }
             }
 
@@ -314,6 +323,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         if window === trialExpiryWindow {
             trialExpiryWindow = nil
+        }
+        if window === settingsWindow {
+            NSApp.setActivationPolicy(.accessory)
         }
     }
 
@@ -494,6 +506,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         axPermission.refresh()
         rebuildMenuItems(in: menu)
         startPipelineIfTrusted()
+    }
+
+    // MARK: - Dock icon policy
+
+    /// Applies the correct activation policy based on the showDockIconWithSettings
+    /// setting and whether the Settings window is currently visible.
+    private func applyDockPolicy() {
+        guard let window = settingsWindow, window.isVisible else { return }
+        let policy: NSApplication.ActivationPolicy = settingsStore.showDockIconWithSettings ? .regular : .accessory
+        NSApp.setActivationPolicy(policy)
     }
 
     // MARK: - Menu
@@ -794,9 +816,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             window.titleVisibility = .hidden
             window.setContentSize(NSSize(width: 760, height: 520))
             window.center()
+            window.delegate = self
+            window.isReleasedWhenClosed = false
             settingsWindow = window
         }
         settingsWindow?.makeKeyAndOrderFront(nil)
+        if settingsStore.showDockIconWithSettings {
+            NSApp.setActivationPolicy(.regular)
+        }
         NSApp.activate(ignoringOtherApps: true)
     }
 }

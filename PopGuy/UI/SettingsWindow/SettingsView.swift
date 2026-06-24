@@ -31,7 +31,7 @@ import UniformTypeIdentifiers
 /// the window already exists and is being re-shown.
 @MainActor
 final class SettingsNavigator: ObservableObject {
-    @Published var section: SettingsSection = .providers
+    @Published var section: SettingsSection = .general
 
     /// When non-nil, ActionsView will trigger a plugin import flow for this URL.
     /// Set by AppDelegate when a .popclipext or .json file is opened via Finder
@@ -41,6 +41,7 @@ final class SettingsNavigator: ObservableObject {
 
 /// The selectable sections of the Settings window sidebar.
 enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
+    case general
     case providers
     case actions
     case history
@@ -54,6 +55,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
+        case .general:     return "General"
         case .providers:   return "Providers"
         case .actions:     return "Actions"
         case .history:     return "History"
@@ -67,6 +69,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
 
     var systemImage: String {
         switch self {
+        case .general:     return "gearshape"
         case .providers:   return "key"
         case .actions:     return "wand.and.stars"
         case .history:     return "clock.arrow.circlepath"
@@ -94,7 +97,7 @@ struct SettingsView: View {
     /// instead keeps the highlight instant, and the navigator is updated from
     /// `.onChange` (which runs after the update pass). Synced both ways so
     /// external navigation (e.g. opening Settings on a specific tab) still works.
-    @State private var selectedSection: SettingsSection? = nil
+    @State private var selectedSection: SettingsSection? = .general
 
     /// When non-nil, the Add/Edit Action panel slides in from the right edge
     /// over the whole window. Lifted here (not in ActionsView) so the panel can
@@ -139,7 +142,7 @@ struct SettingsView: View {
                 // Push genuine user selections to the navigator AFTER the update
                 // pass (deselection falls back to Providers).
                 .onChange(of: selectedSection) { newValue in
-                    let resolved = newValue ?? .providers
+                    let resolved = newValue ?? .general
                     if navigator.section != resolved { navigator.section = resolved }
                 }
                 // Sync external navigation back into the list highlight.
@@ -286,7 +289,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func detailView(for section: SettingsSection?) -> some View {
-        let section = section ?? .providers
+        let section = section ?? .general
         // Each tab gets a fixed header pinned to the top; its own ScrollView /
         // Form scrolls in the area below the header divider.
         let navigateToLicense = { navigator.section = .license }
@@ -296,6 +299,7 @@ struct SettingsView: View {
             // `.id(section)` makes every switch a fresh instance — see the type doc.
             DeferredSectionContent {
                 switch section {
+                case .general:     GeneralView(settings: settings)
                 case .providers:   APIKeysTab(settings: settings, keychain: keychain)
                 case .actions:     ActionsView(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, navigator: navigator, editingAction: $editingAction, showingLibrary: $showingLibrary)
                 case .history:     HistoryView(history: history, settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)

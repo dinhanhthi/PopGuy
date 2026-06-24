@@ -123,6 +123,7 @@ final class SettingsStore: ObservableObject {
         static let triggerChord               = "settings.triggerChord"
         static let chordReplacementShortcut   = "settings.chordReplacementShortcut"
         static let confirmCloseAfterResult    = "settings.confirmCloseAfterResult"
+        static let showDockIconWithSettings   = "settings.showDockIconWithSettings"
         static let resultFontSize             = "settings.resultFontSize"
         static let preserveFormatting         = "settings.preserveFormatting"
         static let toolbarZoom                = "settings.toolbarZoom"
@@ -354,6 +355,12 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(confirmCloseAfterResult, forKey: Keys.confirmCloseAfterResult) }
     }
 
+    /// When true, a Dock icon is shown while the Settings window is open in addition
+    /// to the normal menu-bar presence (default: false).
+    @Published var showDockIconWithSettings: Bool {
+        didSet { defaults.set(showDockIconWithSettings, forKey: Keys.showDockIconWithSettings) }
+    }
+
     /// Font size for the result body shown in the floating toolbar (default: .normal).
     @Published var resultFontSize: ResultFontSize {
         didSet { defaults.set(resultFontSize.rawValue, forKey: Keys.resultFontSize) }
@@ -470,6 +477,7 @@ final class SettingsStore: ObservableObject {
         historyStoreFullText     = defaults.object(forKey: Keys.historyStoreFullText)  as? Bool ?? true
         chordReplacementShortcut = Self.load(KeyboardShortcut.self, key: Keys.chordReplacementShortcut, from: defaults)
         confirmCloseAfterResult  = defaults.object(forKey: Keys.confirmCloseAfterResult) as? Bool ?? true
+        showDockIconWithSettings = defaults.object(forKey: Keys.showDockIconWithSettings) as? Bool ?? true
         resultFontSize = defaults.string(forKey: Keys.resultFontSize).flatMap(ResultFontSize.init(rawValue:)) ?? .normal
         preserveFormatting = defaults.bool(forKey: Keys.preserveFormatting)
         toolbarZoom = defaults.string(forKey: Keys.toolbarZoom).flatMap(ToolbarZoom.init(rawValue:)) ?? .x1
