@@ -8,7 +8,6 @@
 
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 // MARK: - Drag payload
 
