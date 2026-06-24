@@ -1,25 +1,35 @@
 // ToolbarLayoutEditorView.swift
 // PopGuy — UI/SettingsWindow/Components
 //
-// Interactive drag-and-drop editor for principal vs burger toolbar layout.
-// Replaces the read-only ToolbarPreviewView at the top of the Actions tab.
+// Interactive drag-and-drop editor for the principal toolbar row.
+// Overflow (More menu) chips are read-only; use the Toolbar checkbox on
+// action cards to move items in or out of More.
 //
 // Isolation: @MainActor — implicitly via SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor.
 
 import AppKit
 import SwiftUI
 
-// MARK: - Drag payload
+// MARK: - Drag session
 
-private enum LayoutDragPayload {
-    static func encode(_ id: ActionIdentifier) -> String? {
-        guard let data = try? JSONEncoder().encode(id) else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
+private struct ToolbarDragSession: Equatable {
+    var id: ActionIdentifier
+    var targetPrincipal: Bool
+    var targetIndex: Int
+    var translation: CGSize = .zero
+}
 
-    static func decode(_ string: String) -> ActionIdentifier? {
-        guard let data = string.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(ActionIdentifier.self, from: data)
+// MARK: - Frame preferences
+
+private struct LayoutRowFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+}
+
+private struct LayoutChipFramesKey: PreferenceKey {
+    static var defaultValue: [ActionIdentifier: CGRect] = [:]
+    static func reduce(value: inout [ActionIdentifier: CGRect], nextValue: () -> [ActionIdentifier: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
     }
 }
 
@@ -28,9 +38,19 @@ private enum LayoutDragPayload {
 struct ToolbarLayoutEditorView: View {
     @ObservedObject var settings: SettingsStore
 
-    @State private var draggingID: ActionIdentifier?
-    @State private var isBurgerOpen = false
+    @State private var dragSession: ToolbarDragSession?
     @State private var rejectionMessage: String?
+
+    @State private var principalRowFrame: CGRect = .zero
+    @State private var overflowRowFrame: CGRect = .zero
+    @State private var burgerFrame: CGRect = .zero
+    @State private var principalChipFrames: [ActionIdentifier: CGRect] = [:]
+
+    private let chipSize: CGFloat = 28
+    private let chipIconSize: CGFloat = 12
+    private let logoSize: CGFloat = 26
+    private let chipSpacing: CGFloat = 5
+    private let dragAnimation = Animation.interactiveSpring(response: 0.28, dampingFraction: 0.86)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -38,16 +58,18 @@ struct ToolbarLayoutEditorView: View {
                 Image("ToolbarLogo")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 28, height: 28)
+                    .frame(width: logoSize, height: logoSize)
                     .accessibilityHidden(true)
 
-                principalRow
+                principalChipStrip
 
-                burgerControl
+                if showsOverflowSection {
+                    burgerDivider
+                    burgerMarker
+                    overflowChipStrip
+                }
 
                 Spacer(minLength: 8)
-
-                capacityHints
             }
 
             if let rejectionMessage {
@@ -64,165 +86,277 @@ struct ToolbarLayoutEditorView: View {
                 .fill(Color(white: 0.12))
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .coordinateSpace(name: "layoutEditor")
     }
 
-    // MARK: Principal row
+    // MARK: Zones
 
-    private var principalRow: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(settings.principalOrderedIdentifiers.enumerated()), id: \.element) { index, id in
-                layoutChip(for: id, isDragging: draggingID == id)
-                    .dropDestination(for: String.self) { items, _ in
-                        handleDrop(items, principal: true, atIndex: index)
-                    }
-            }
+    private var showsOverflowSection: Bool {
+        !settings.overflowOrderedIdentifiers.isEmpty
+            || dragSession?.targetPrincipal == false
+    }
 
-            if settings.principalOrderedIdentifiers.isEmpty {
-                dropPlaceholder(label: "Drop actions here")
-                    .dropDestination(for: String.self) { items, _ in
-                        handleDrop(items, principal: true, atIndex: 0)
-                    }
+    private var displayPrincipalIDs: [ActionIdentifier] {
+        guard let session = dragSession else {
+            return settings.principalOrderedIdentifiers
+        }
+        if session.targetPrincipal {
+            return Self.previewOrder(
+                settings.principalOrderedIdentifiers,
+                dragging: session.id,
+                at: session.targetIndex
+            )
+        }
+        return settings.principalOrderedIdentifiers.filter { $0 != session.id }
+    }
+
+    private var displayOverflowIDs: [ActionIdentifier] {
+        let actual = settings.overflowOrderedIdentifiers
+        guard let session = dragSession, !session.targetPrincipal else { return actual }
+        var preview = actual.filter { $0 != session.id }
+        if !preview.contains(session.id) {
+            preview.append(session.id)
+        }
+        return preview
+    }
+
+    private static func previewOrder(
+        _ ids: [ActionIdentifier],
+        dragging: ActionIdentifier,
+        at index: Int
+    ) -> [ActionIdentifier] {
+        var result = ids.filter { $0 != dragging }
+        let clamped = min(max(0, index), result.count)
+        result.insert(dragging, at: clamped)
+        return result
+    }
+
+    // MARK: Principal strip
+
+    private var principalChipStrip: some View {
+        HStack(spacing: chipSpacing) {
+            if displayPrincipalIDs.isEmpty, dragSession == nil {
+                emptyPrincipalSlot
             } else {
-                Color.clear
-                    .frame(width: 12, height: 32)
-                    .contentShape(Rectangle())
-                    .dropDestination(for: String.self) { items, _ in
-                        handleDrop(items, principal: true, atIndex: settings.principalOrderedIdentifiers.count)
-                    }
+                ForEach(displayPrincipalIDs, id: \.self) { id in
+                    draggableChip(for: id, isDragged: dragSession?.id == id)
+                        .background(chipFrameReader(for: id))
+                }
             }
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 2)
+        .animation(dragAnimation, value: displayPrincipalIDs)
+        .background(rowFrameReader())
+        .onPreferenceChange(LayoutRowFrameKey.self) { principalRowFrame = $0 }
+        .onPreferenceChange(LayoutChipFramesKey.self) { principalChipFrames = $0 }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
         )
     }
 
-    // MARK: Burger control
+    // MARK: Overflow strip (read-only)
 
-    private var burgerControl: some View {
-        Button {
-            isBurgerOpen.toggle()
-        } label: {
-            ZStack {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 14, weight: .medium))
-                    .frame(width: 32, height: 32)
-
-                if draggingID != nil && settings.overflowOrderedIdentifiers.isEmpty {
-                    Text("Drop")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .offset(y: 14)
-                }
+    private var overflowChipStrip: some View {
+        HStack(spacing: chipSpacing) {
+            ForEach(displayOverflowIDs, id: \.self) { id in
+                staticChip(for: id)
             }
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(.primary)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.white.opacity(draggingID != nil ? 0.18 : 0.10))
-        )
-        .hoverTooltip("More menu — drag actions here")
-        .dropDestination(for: String.self) { items, _ in
-            if !isBurgerOpen { isBurgerOpen = true }
-            return handleDrop(items, principal: false, atIndex: settings.overflowOrderedIdentifiers.count)
-        }
-        .popover(isPresented: $isBurgerOpen, arrowEdge: .bottom) {
-            burgerPopoverContent
+        .animation(dragAnimation, value: displayOverflowIDs)
+        .background(rowFrameReader())
+        .onPreferenceChange(LayoutRowFrameKey.self) { overflowRowFrame = $0 }
+    }
+
+    private var burgerDivider: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.15))
+            .frame(width: 1, height: chipSize - 4)
+    }
+
+    private var burgerMarker: some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.system(size: chipIconSize, weight: .medium))
+            .frame(width: chipSize, height: chipSize)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.white.opacity(dragSession?.targetPrincipal == false ? 0.18 : 0.10))
+            )
+            .hoverTooltip("More menu")
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(
+                        key: LayoutRowFrameKey.self,
+                        value: geo.frame(in: .named("layoutEditor"))
+                    )
+                }
+            )
+            .onPreferenceChange(LayoutRowFrameKey.self) { burgerFrame = $0 }
+    }
+
+    private var emptyPrincipalSlot: some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .strokeBorder(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            .frame(width: chipSize, height: chipSize)
+    }
+
+    private func rowFrameReader() -> some View {
+        GeometryReader { geo in
+            Color.clear.preference(
+                key: LayoutRowFrameKey.self,
+                value: geo.frame(in: .named("layoutEditor"))
+            )
         }
     }
 
-    private var burgerPopoverContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("More menu")
-                .font(.headline)
-
-            if settings.overflowOrderedIdentifiers.isEmpty {
-                dropPlaceholder(label: "No overflow actions yet")
-                    .dropDestination(for: String.self) { items, _ in
-                        handleDrop(items, principal: false, atIndex: 0)
-                    }
-            } else {
-                ForEach(Array(settings.overflowOrderedIdentifiers.enumerated()), id: \.element) { index, id in
-                    layoutChip(for: id, isDragging: draggingID == id)
-                        .dropDestination(for: String.self) { items, _ in
-                            handleDrop(items, principal: false, atIndex: index)
-                        }
-                }
-
-                Color.clear
-                    .frame(height: 8)
-                    .contentShape(Rectangle())
-                    .dropDestination(for: String.self) { items, _ in
-                        handleDrop(items, principal: false, atIndex: settings.overflowOrderedIdentifiers.count)
-                    }
-            }
+    private func chipFrameReader(for id: ActionIdentifier) -> some View {
+        GeometryReader { geo in
+            Color.clear.preference(
+                key: LayoutChipFramesKey.self,
+                value: [id: geo.frame(in: .named("layoutEditor"))]
+            )
         }
-        .padding(16)
-        .frame(minWidth: 220)
-    }
-
-    private var capacityHints: some View {
-        VStack(alignment: .trailing, spacing: 2) {
-            Text("\(settings.principalActionCount)/\(ProConfig.maxPrincipalActions) toolbar")
-            Text("\(settings.overflowActionCount)/\(ProConfig.maxBurgerActions) More")
-        }
-        .font(.caption2)
-        .foregroundStyle(.secondary)
     }
 
     // MARK: Chips
 
     @ViewBuilder
-    private func layoutChip(for id: ActionIdentifier, isDragging: Bool) -> some View {
-        HStack(spacing: 6) {
-            chipIcon(for: id)
-                .frame(width: 16, height: 16)
-            Text(chipLabel(for: id))
-                .font(.callout)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.white.opacity(isDragging ? 0.22 : 0.12))
-        )
-        .opacity(isDragging ? 0.55 : 1)
-        .hoverTooltip(chipLabel(for: id))
-        .onDrag {
-            draggingID = id
-            let token = LayoutDragPayload.encode(id) ?? ""
-            return NSItemProvider(object: token as NSString)
-        }
+    private func draggableChip(for id: ActionIdentifier, isDragged: Bool) -> some View {
+        chipContent(for: id)
+            .scaleEffect(isDragged ? 1.06 : 1)
+            .shadow(color: .black.opacity(isDragged ? 0.35 : 0), radius: isDragged ? 6 : 0, y: 2)
+            .offset(isDragged ? (dragSession?.translation ?? .zero) : .zero)
+            .zIndex(isDragged ? 1 : 0)
+            .background(chipBackground(isDragged: isDragged))
+            .hoverTooltip(chipLabel(for: id))
+            .contentShape(Rectangle())
+            .gesture(principalDragGesture(for: id))
     }
 
-    private func dropPlaceholder(label: String) -> some View {
-        Text(label)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .frame(minWidth: 80, minHeight: 32)
-            .padding(.horizontal, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+    @ViewBuilder
+    private func staticChip(for id: ActionIdentifier) -> some View {
+        chipContent(for: id)
+            .background(chipBackground(isDragged: false))
+            .hoverTooltip(chipLabel(for: id))
+    }
+
+    @ViewBuilder
+    private func chipContent(for id: ActionIdentifier) -> some View {
+        chipIcon(for: id)
+            .font(.system(size: chipIconSize, weight: .medium))
+            .frame(width: chipSize, height: chipSize)
+    }
+
+    private func chipBackground(isDragged: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(Color.white.opacity(isDragged ? 0.22 : 0.12))
+    }
+
+    private func principalDragGesture(for id: ActionIdentifier) -> some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .named("layoutEditor"))
+            .onChanged { value in
+                if dragSession == nil {
+                    let startIndex = settings.principalOrderedIdentifiers.firstIndex(of: id) ?? 0
+                    dragSession = ToolbarDragSession(
+                        id: id,
+                        targetPrincipal: true,
+                        targetIndex: startIndex,
+                        translation: value.translation
+                    )
+                }
+                updateDragSession(value)
+            }
+            .onEnded { value in
+                updateDragSession(value)
+                commitDragSession()
+            }
+    }
+
+    // MARK: Drag logic
+
+    private func updateDragSession(_ value: DragGesture.Value) {
+        guard var session = dragSession else { return }
+
+        let location = value.location
+        let targetPrincipal = resolveTargetPrincipal(at: location, session: session)
+        let targetIndex: Int
+        if targetPrincipal {
+            targetIndex = insertionIndex(
+                at: location.x,
+                orderedIDs: displayPrincipalIDs,
+                frames: principalChipFrames,
+                dragging: session.id
             )
+        } else {
+            targetIndex = settings.overflowOrderedIdentifiers.count
+        }
+
+        let changed = session.targetPrincipal != targetPrincipal
+            || session.targetIndex != targetIndex
+            || session.translation != value.translation
+
+        session.targetPrincipal = targetPrincipal
+        session.targetIndex = targetIndex
+        session.translation = value.translation
+
+        if changed, session.targetPrincipal != targetPrincipal || session.targetIndex != targetIndex {
+            withAnimation(dragAnimation) {
+                dragSession = session
+            }
+        } else {
+            dragSession = session
+        }
     }
 
-    // MARK: Drop handling
-
-    private func handleDrop(_ items: [String], principal: Bool, atIndex: Int) -> Bool {
-        defer { draggingID = nil }
-        guard let token = items.first, let id = LayoutDragPayload.decode(token) else { return false }
-
-        if settings.moveAction(id, toZone: principal, atIndex: atIndex) {
-            rejectionMessage = nil
+    private func resolveTargetPrincipal(at location: CGPoint, session: ToolbarDragSession) -> Bool {
+        // More zone (burger + overflow chips) takes priority over the principal row.
+        if showsOverflowSection, burgerFrame.width > 0, location.x >= burgerFrame.minX - 6 {
+            return false
+        }
+        if overflowRowFrame.contains(location) || burgerFrame.contains(location) {
+            return false
+        }
+        if principalRowFrame.contains(location) {
             return true
         }
+        return session.targetPrincipal
+    }
 
-        rejectionMessage = principal
+    private func insertionIndex(
+        at pointerX: CGFloat,
+        orderedIDs: [ActionIdentifier],
+        frames: [ActionIdentifier: CGRect],
+        dragging: ActionIdentifier
+    ) -> Int {
+        let order = orderedIDs.filter { $0 != dragging }
+        guard !order.isEmpty else { return 0 }
+
+        for (offset, id) in order.enumerated() {
+            guard let frame = frames[id] else { continue }
+            if pointerX < frame.midX { return offset }
+        }
+        return order.count
+    }
+
+    private func commitDragSession() {
+        guard let session = dragSession else { return }
+
+        let wasPrincipal = settings.isPrincipal(session.id)
+        let sourceIndex = settings.principalOrderedIdentifiers.firstIndex(of: session.id) ?? 0
+        let unchanged = session.targetPrincipal == wasPrincipal
+            && (session.targetPrincipal ? session.targetIndex == sourceIndex : true)
+
+        defer { dragSession = nil }
+
+        guard !unchanged else { return }
+
+        if settings.moveAction(session.id, toZone: session.targetPrincipal, atIndex: session.targetIndex) {
+            rejectionMessage = nil
+            return
+        }
+
+        rejectionMessage = session.targetPrincipal
             ? "Toolbar row is full (\(ProConfig.maxPrincipalActions)/\(ProConfig.maxPrincipalActions)). Free a slot first."
             : "More menu is full (\(ProConfig.maxBurgerActions)/\(ProConfig.maxBurgerActions)). Free a slot first."
 
@@ -230,7 +364,6 @@ struct ToolbarLayoutEditorView: View {
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             if rejectionMessage != nil { rejectionMessage = nil }
         }
-        return false
     }
 
     // MARK: Action metadata
@@ -268,7 +401,7 @@ struct ToolbarLayoutEditorView: View {
             Image(systemName: "character.book.closed")
         case .custom(let uuid):
             if let action = settings.customActions.first(where: { $0.id == uuid }) {
-                ActionIconView(icon: action.icon, font: .caption)
+                ActionIconView(icon: action.icon, font: .system(size: chipIconSize))
             } else {
                 Image(systemName: "sparkles")
             }
