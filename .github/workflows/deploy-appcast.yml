@@ -31,7 +31,7 @@ jobs:
         run: |
           mkdir -p _site
           cp appcast.xml _site/appcast.xml
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
       - id: deployment
