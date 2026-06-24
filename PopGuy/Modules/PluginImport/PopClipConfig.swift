@@ -36,14 +36,14 @@ nonisolated private struct SkipDecodable: Decodable {
         // Consume the element without retaining any data.
         if (try? decoder.unkeyedContainer()) != nil { return }
         if (try? decoder.container(keyedBy: DynamicKey.self)) != nil { return }
-        var single = try decoder.singleValueContainer()
+        let single = try decoder.singleValueContainer()
         // Try the most permissive scalar type — Bool subsumes most primitives via
         // singleValueContainer, but String or Int may match where Bool does not.
         if (try? single.decode(String.self)) != nil { return }
         if (try? single.decode(Bool.self)) != nil { return }
         if (try? single.decode(Int.self)) != nil { return }
         if (try? single.decode(Double.self)) != nil { return }
-        _ = try? single.decodeNil()
+        _ = single.decodeNil()
     }
 }
 
