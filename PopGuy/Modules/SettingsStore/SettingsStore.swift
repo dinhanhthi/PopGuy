@@ -871,6 +871,45 @@ final class SettingsStore: ObservableObject {
         return true
     }
 
+    /// Atomically move an action to a toolbar zone at a position among that zone's
+    /// enabled members (principal row or burger menu).
+    ///
+    /// Enforces the same zone caps as `setPrincipal`. Reorders `actionOrder` so
+    /// enabled members of the target zone appear at `atIndex` relative to each other.
+    ///
+    /// - Returns: `false` when the zone cap would be exceeded; `true` on success.
+    @discardableResult
+    func moveAction(_ id: ActionIdentifier, toZone principal: Bool, atIndex: Int) -> Bool {
+        if isPrincipal(id) != principal {
+            guard setPrincipal(id, principal) else { return false }
+        }
+
+        guard actionOrder.contains(id) else { return false }
+        guard isEnabled(id) else { return true }
+
+        let zoneMembers = actionOrder.filter {
+            principalActionIDs.contains($0) == principal && isEnabled($0)
+        }
+
+        var reordered = zoneMembers.filter { $0 != id }
+        let clamped = min(max(0, atIndex), reordered.count)
+        reordered.insert(id, at: clamped)
+
+        var reorderedIter = reordered.makeIterator()
+        var newOrder: [ActionIdentifier] = []
+        for item in actionOrder {
+            if principalActionIDs.contains(item) == principal && isEnabled(item) {
+                if let next = reorderedIter.next() {
+                    newOrder.append(next)
+                }
+            } else {
+                newOrder.append(item)
+            }
+        }
+        actionOrder = newOrder
+        return true
+    }
+
     /// Reconcile a persisted principal set against the current `actionOrder`.
     ///
     /// Drops stale identifiers, trims to `ProConfig.maxPrincipalActions` by

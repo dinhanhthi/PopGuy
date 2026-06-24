@@ -149,7 +149,7 @@ struct ActionsView: View {
             // MARK: Fixed header (toolbar preview + Add Custom Action row)
             VStack(spacing: SettingsMetrics.cardSpacing) {
 
-                ToolbarPreviewView(settings: settings)
+                ToolbarLayoutEditorView(settings: settings)
 
                 // MARK: Add Custom Action button
                 let atCustomActionLimit = !licenseGate.entitlements.isPro
