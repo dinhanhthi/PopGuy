@@ -233,7 +233,10 @@ jobs:
           # is deployed), so generate_appcast's releaseNotesLink would 404. Point both the
           # in-dialog notes (releaseNotesLink) and the "Version History" button
           # (fullReleaseNotesLink, set above) at the GitHub releases page instead.
-          sed -i 's|<sparkle:releaseNotesLink>[^<]*</sparkle:releaseNotesLink>|<sparkle:releaseNotesLink>https://github.com/dinhanhthi/PopGuy/releases</sparkle:releaseNotesLink>|' appcast.xml
+          # macOS (BSD) sed: -i REQUIRES a backup-suffix arg; '' means no backup.
+          # Plain `sed -i 's|...|' file` makes BSD sed treat the script as the
+          # suffix and `file` as the script (fails: "command a expects ...").
+          sed -i '' 's|<sparkle:releaseNotesLink>[^<]*</sparkle:releaseNotesLink>|<sparkle:releaseNotesLink>https://github.com/dinhanhthi/PopGuy/releases</sparkle:releaseNotesLink>|' appcast.xml
 
       - name: Stage appcast for Pages
         run: mkdir -p _site && cp appcast.xml _site/appcast.xml
