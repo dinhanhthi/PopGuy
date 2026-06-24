@@ -3,14 +3,14 @@
     <channel>
         <title>PopGuy</title>
         <item>
-            <title>0.1.2</title>
-            <pubDate>Tue, 23 Jun 2026 13:28:18 +0000</pubDate>
-            <sparkle:version>7</sparkle:version>
-            <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
+            <title>0.2.0</title>
+            <pubDate>Wed, 24 Jun 2026 09:57:00 +0000</pubDate>
+            <sparkle:fullReleaseNotesLink>https://github.com/dinhanhthi/PopGuy/releases</sparkle:fullReleaseNotesLink>
+            <sparkle:version>8</sparkle:version>
+            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <sparkle:releaseNotesLink>https://github.com/dinhanhthi/PopGuy/releases</sparkle:releaseNotesLink>
-            <sparkle:fullReleaseNotesLink>https://github.com/dinhanhthi/PopGuy/releases</sparkle:fullReleaseNotesLink>
-            <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v0.1.2/PopGuy-0.1.2.zip" length="7483503" type="application/octet-stream" sparkle:edSignature="6zA1/BoXIW7T9BPH/MURhIjZLiBpxKzUNmPVW+9JSXjUIRs4b8+T89FWEQJglz80fZqErZSE2B/roYFgJVMuDQ=="/>
+            <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v0.2.0/PopGuy-0.2.0.zip" length="7534130" type="application/octet-stream" sparkle:edSignature="ssVessUspBU8dj3Au3Mx5iyIVWDOEpO8hpbgEviXaSOcbOkCGh/27sWuCUfyQOZMSVsVhpeUL90GPBPlZH+yBg=="/>
         </item>
     </channel>
 </rss>
