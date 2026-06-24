@@ -1,13 +1,12 @@
 import {
   ArrowRight,
+  BookOpen,
   Check,
   CheckCircle2,
   Clock3,
   Command,
   KeyRound,
-  MousePointer2,
   ShieldCheck,
-  Sparkles,
   Volume2,
   WandSparkles
 } from "lucide-react";
@@ -42,24 +41,33 @@ const features = [
     icon: Volume2,
     title: "Speech",
     text: "Hear selected text."
+  },
+  {
+    icon: BookOpen,
+    title: "Dictionary",
+    text: "Look up any word."
   }
 ];
 
 const freeFeatures = [
   "Built-in actions",
-  "5 custom actions",
-  "20 recent results",
-  "5 ignored apps",
+  "8 custom actions",
+  "35 recent results",
+  "8 ignored apps",
+  "5 active toolbar actions",
   "System speech",
-  "Every supported provider"
+  "Every supported provider",
+  "Plugin import"
 ];
 
 const proFeatures = [
-  "Unlimited actions",
-  "500 searchable results",
+  "Unlimited custom actions",
+  "Unlimited history",
   "Unlimited ignored apps",
   "Cloud voices",
-  "Import and export"
+  "Import and export",
+  "History search",
+  "Double-click action"
 ];
 
 export function HomePage() {
@@ -87,34 +95,6 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="how-it-works section-blue">
-        <div className="shell">
-          <div className="section-heading centered">
-            <h2>How it works</h2>
-          </div>
-          <div className="steps">
-            <article>
-              <span className="step-number">1</span>
-              <MousePointer2 aria-hidden="true" />
-              <h3>Select</h3>
-              <p>Highlight text.</p>
-            </article>
-            <article>
-              <span className="step-number">2</span>
-              <img src="/popguy-logo.png" alt="" />
-              <h3>Choose</h3>
-              <p>Pick an action.</p>
-            </article>
-            <article>
-              <span className="step-number">3</span>
-              <Sparkles aria-hidden="true" />
-              <h3>Use</h3>
-              <p>Copy or replace.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
       <section className="providers section-blue">
         <div className="shell providers-inner">
           <div>
@@ -130,6 +110,9 @@ export function HomePage() {
               <ProviderLogo key={provider.name} {...provider} />
             ))}
           </div>
+          <p className="provider-cli-note">
+            Claude CLI, Codex CLI, and Gemini CLI use your subscription — no API key.
+          </p>
         </div>
       </section>
 

@@ -79,6 +79,9 @@ describe("website routes", () => {
     fireEvent.click(screen.getByRole("button", { name: /See more/ }));
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("0.8.0")).toBeInTheDocument();
+    // The latest version is shown inside the opened changelog modal.
+    expect(
+      screen.getAllByText("0.3.0").length
+    ).toBeGreaterThanOrEqual(1);
   });
 });

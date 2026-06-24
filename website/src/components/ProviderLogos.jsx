@@ -3,8 +3,8 @@ import {
   siDeepl,
   siGooglegemini,
   siGoogletranslate,
-  siLmstudio,
-  siOllama
+  siOllama,
+  siOpenrouter
 } from "simple-icons";
 
 const openAI = {
@@ -17,13 +17,23 @@ export const providerLogos = [
   { name: "OpenAI", icon: openAI },
   { name: "Anthropic", icon: siAnthropic },
   { name: "Gemini", icon: siGooglegemini },
-  { name: "Ollama", icon: siOllama },
-  { name: "LM Studio", icon: siLmstudio },
+  { name: "Ollama & LM Studio", icon: siOllama },
   { name: "DeepL", icon: siDeepl },
-  { name: "Google Translate", icon: siGoogletranslate }
+  { name: "Google Translate", icon: siGoogletranslate },
+  { name: "GLM", textOnly: true, sub: "z.ai" },
+  { name: "OpenRouter", icon: siOpenrouter }
 ];
 
-export function ProviderLogo({ name, icon }) {
+export function ProviderLogo({ name, icon, textOnly, sub }) {
+  if (textOnly) {
+    return (
+      <div className="provider-brand provider-brand-text">
+        <span className="provider-text-name">{name}</span>
+        {sub ? <span className="provider-text-sub">{sub}</span> : null}
+      </div>
+    );
+  }
+
   return (
     <div className="provider-brand">
       <svg
