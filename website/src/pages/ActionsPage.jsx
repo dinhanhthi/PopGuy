@@ -1,16 +1,25 @@
+import { useState } from "react";
 import {
   Apple,
-  Bot,
+  ArrowRight,
   BookOpen,
-  Globe,
+  Bot,
+  Languages,
   Link2,
+  ListMinus,
+  MessageSquareCheck,
   Settings2,
   Share2,
+  ShieldCheck,
+  SquarePen,
   Terminal,
-  Volume2
+  Volume2,
+  WandSparkles
 } from "lucide-react";
 import { ButtonLink } from "../components/ButtonLink";
-import { DOWNLOAD_URL } from "../constants";
+import { ActionLibraryModal } from "../components/ActionLibraryModal";
+import { DOWNLOAD_URL, GITHUB_URL } from "../constants";
+import { libraryCategories, libraryPresets, libraryStats } from "../data/actionLibrary";
 
 const actionTypes = [
   {
@@ -19,19 +28,19 @@ const actionTypes = [
     text: "Send text to any AI model with your prompt."
   },
   {
-    icon: Globe,
+    icon: Languages,
     name: "Translate",
-    text: "DeepL or Google Translate."
+    text: "DeepL, Google Translate, or any AI provider."
   },
   {
     icon: Volume2,
     name: "Speech",
-    text: "Hear the selection aloud."
+    text: "Hear the selection aloud — system or cloud voices."
   },
   {
     icon: BookOpen,
     name: "Dictionary",
-    text: "Look up words."
+    text: "Look up words — macOS built-in, Free Dictionary API, and more."
   },
   {
     icon: Link2,
@@ -56,12 +65,13 @@ const actionTypes = [
 ];
 
 const builtIn = [
-  { name: "Improve", text: "Rewrite for clarity." },
-  { name: "Shorten", text: "Cut the fluff." },
-  { name: "Proofread", text: "Fix grammar." },
-  { name: "Translate", text: "Any language." },
-  { name: "Prompt", text: "Ask anything." },
-  { name: "Speak", text: "Read aloud." }
+  { icon: WandSparkles, name: "Improve", text: "Rewrite for clarity and flow." },
+  { icon: ListMinus, name: "Shorten", text: "Cut the fluff, keep the meaning." },
+  { icon: MessageSquareCheck, name: "Proofread", text: "Fix grammar and spelling." },
+  { icon: Languages, name: "Translate", text: "Any language, any provider." },
+  { icon: SquarePen, name: "Prompt", text: "Ask anything with your own prompt." },
+  { icon: Volume2, name: "Speak", text: "Read the selection aloud." },
+  { icon: BookOpen, name: "Look up", text: "Look up the selection." }
 ];
 
 const afterRunOptions = [
@@ -72,7 +82,16 @@ const afterRunOptions = [
   "Show as popup"
 ];
 
+const curatedLibrary = libraryCategories.map((category) => ({
+  category,
+  presets: libraryPresets
+    .filter((preset) => preset.category === category.id)
+    .slice(0, 3)
+}));
+
 export function ActionsPage() {
+  const [libraryModalOpen, setLibraryModalOpen] = useState(false);
+
   return (
     <main>
       <section className="page-hero actions-hero shell">
@@ -108,13 +127,48 @@ export function ActionsPage() {
             <p>Ready to use. No setup.</p>
           </div>
           <div className="builtin-grid">
-            {builtIn.map(({ name, text }) => (
+            {builtIn.map(({ icon: Icon, name, text }) => (
               <article key={name} className="builtin-card">
+                <Icon aria-hidden="true" />
                 <h3>{name}</h3>
                 <p>{text}</p>
               </article>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="shell section-pad">
+        <div className="section-heading centered">
+          <h2>Action Library</h2>
+          <p>{libraryStats.total} ready-to-install actions. Browse, install, done.</p>
+        </div>
+        <div className="library-stats">
+          <span><strong>{libraryStats.total}</strong> actions</span>
+          <span aria-hidden="true">·</span>
+          <span><strong>{libraryStats.categories}</strong> categories</span>
+          <span aria-hidden="true">·</span>
+          <span>{libraryStats.local}</span>
+        </div>
+        <div className="library-grid">
+          {curatedLibrary.map(({ category, presets }) =>
+            presets.map((preset) => (
+              <article key={preset.id} className="library-card">
+                <preset.icon aria-hidden="true" />
+                <span className="library-name">{preset.name}</span>
+                <span className="library-type-badge">{preset.type}</span>
+              </article>
+            ))
+          )}
+        </div>
+        <div className="library-cta">
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => setLibraryModalOpen(true)}
+          >
+            View all {libraryStats.total} <ArrowRight size={16} />
+          </button>
         </div>
       </section>
 
@@ -172,19 +226,28 @@ export function ActionsPage() {
         </div>
       </section>
 
-      <section className="shell">
-        <div className="download-section">
-          <img src="/popguy-logo.png" alt="" />
-          <div>
-            <h2>Start in a minute.</h2>
-            <div className="inline-actions">
-              <ButtonLink href={DOWNLOAD_URL} icon="download">
-                Download for macOS
-              </ButtonLink>
-            </div>
+      <section className="download-section shell">
+        <img src="/popguy-logo.png" alt="" />
+        <div>
+          <h2>Get PopGuy.</h2>
+          <div className="inline-actions">
+            <ButtonLink href={DOWNLOAD_URL} icon="download">
+              Download for macOS
+            </ButtonLink>
+            <ButtonLink href={GITHUB_URL} icon="github" variant="secondary">
+              View on GitHub
+            </ButtonLink>
+          </div>
+          <div className="download-trust">
+            <span><ShieldCheck size={15} /> macOS 13+</span>
           </div>
         </div>
       </section>
+
+      <ActionLibraryModal
+        open={libraryModalOpen}
+        onClose={() => setLibraryModalOpen(false)}
+      />
     </main>
   );
 }
