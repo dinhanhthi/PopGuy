@@ -82,22 +82,14 @@ struct ActionsView: View {
     /// Drives the "toolbar action limit reached" alert.
     @State private var showLimitAlert = false
 
+    /// Drives the "toolbar layout zone full" alert when principal/burger caps block a move.
+    @State private var showPrincipalLimitAlert = false
+
     /// Filters the action list by type. `.all` shows every action.
     @State private var typeFilter: ActionTypeFilter = .all
 
     /// Free-text search query matched against action titles.
     @State private var searchQuery = ""
-
-    /// The action currently being dragged by its grip handle. Set when a drag
-    /// begins; used to compute which edge of the hovered card gets the
-    /// insertion line.
-    @State private var draggingID: ActionIdentifier?
-
-    /// Card the insertion line is currently drawn on during a drag.
-    @State private var dropTargetID: ActionIdentifier?
-
-    /// Whether the insertion line sits below (true) or above (false) `dropTargetID`.
-    @State private var dropBelow = false
 
     /// Drives the import error alert.
     @State private var importError: String? = nil
@@ -174,7 +166,7 @@ struct ActionsView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(atCustomActionLimit)
 
-                    Text("\(settings.enabledToolbarActionCount)/\(settings.totalToolbarActionCount) active")
+                    Text("\(settings.principalActionCount)/\(ProConfig.maxPrincipalActions) toolbar · \(settings.overflowActionCount)/\(ProConfig.maxBurgerActions) More")
                         .font(.body)
                         .foregroundStyle(.secondary)
 
@@ -361,31 +353,7 @@ struct ActionsView: View {
             ScrollView {
                 VStack(spacing: SettingsMetrics.cardSpacing) {
                     ForEach(filteredActionOrder, id: \.self) { id in
-                        card(for: id, draggingID: $draggingID)
-                            // Jupyter-style insertion line: drawn in the 16pt gap
-                            // on the edge the dragged card will land at.
-                            .overlay(alignment: dropBelow ? .bottom : .top) {
-                                if dropTargetID == id {
-                                    Capsule()
-                                        .fill(Color.accentColor)
-                                        .frame(height: 3)
-                                        .padding(.horizontal, 4)
-                                        .offset(y: dropBelow ? 8 : -8)
-                                }
-                            }
-                            .dropDestination(for: String.self) { _, _ in
-                                guard let dragged = draggingID else { return false }
-                                reorder(dragged, onto: id)
-                                draggingID = nil
-                                return true
-                            } isTargeted: { targeted in
-                                if targeted, let below = dropEdgeBelow(target: id) {
-                                    dropTargetID = id
-                                    dropBelow = below
-                                } else if dropTargetID == id {
-                                    dropTargetID = nil
-                                }
-                            }
+                        card(for: id)
                     }
                 }
                 .padding(.horizontal, SettingsMetrics.pagePadding)
@@ -395,7 +363,12 @@ struct ActionsView: View {
         .alert("Toolbar Limit Reached", isPresented: $showLimitAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("PopGuy shows at most \(SettingsStore.maxToolbarActions) actions on the toolbar. Turn off another action first.")
+            Text("PopGuy supports at most \(SettingsStore.maxToolbarActions) enabled actions (\(ProConfig.maxPrincipalActions) on the toolbar and \(ProConfig.maxBurgerActions) in the More menu). Turn off another action first.")
+        }
+        .alert("Toolbar Layout Full", isPresented: $showPrincipalLimitAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The toolbar row holds up to \(ProConfig.maxPrincipalActions) actions and the More menu holds up to \(ProConfig.maxBurgerActions). Free a slot in that zone before moving this action.")
         }
         .alert("Import Failed", isPresented: $showImportError) {
             Button("OK", role: .cancel) {}
@@ -765,34 +738,23 @@ struct ActionsView: View {
         }
     }
 
-    // MARK: - Drag-and-drop reorder
+    // MARK: - Principal / enable bindings
 
-    /// Move the `dragged` action so it lands at the `target` card's position.
-    /// Uses SwiftUI `.onMove` insertion semantics: dropping onto a card below
-    /// inserts after it, onto a card above inserts before it.
-    private func reorder(_ dragged: ActionIdentifier, onto target: ActionIdentifier) {
-        guard dragged != target,
-              let from = settings.actionOrder.firstIndex(of: dragged),
-              let to = settings.actionOrder.firstIndex(of: target) else { return }
-        let destination = to > from ? to + 1 : to
-        settings.moveAction(fromOffsets: IndexSet(integer: from), toOffset: destination)
-    }
-
-    /// Edge of the hovered `target` card where the dragged card will land:
-    /// `true` = below (dragging down), `false` = above (dragging up). Returns
-    /// `nil` when hovering the dragged card itself (no line shown).
-    private func dropEdgeBelow(target: ActionIdentifier) -> Bool? {
-        guard let dragged = draggingID,
-              let from = settings.actionOrder.firstIndex(of: dragged),
-              let to = settings.actionOrder.firstIndex(of: target),
-              from != to else { return nil }
-        return to > from
+    private func principalBinding(for id: ActionIdentifier) -> Binding<Bool> {
+        Binding(
+            get: { settings.isPrincipal(id) },
+            set: { newValue in
+                if !settings.setPrincipal(id, newValue) {
+                    showPrincipalLimitAlert = true
+                }
+            }
+        )
     }
 
     // MARK: - Ordered card dispatcher
 
     @ViewBuilder
-    private func card(for id: ActionIdentifier, draggingID: Binding<ActionIdentifier?>) -> some View {
+    private func card(for id: ActionIdentifier) -> some View {
         switch id {
         case .builtin(.improve):
             aiActionCard(
@@ -801,10 +763,9 @@ struct ActionsView: View {
                 title: "Improve",
                 subtitle: "Fix grammar and improve clarity while preserving the original meaning and tone.",
                 enabled: guardedEnableBinding(for: $settings.improveEnabled),
+                isPrincipal: principalBinding(for: id),
                 config: $settings.improveConfig,
-                showsTone: true,
-                dragID: id,
-                draggingID: draggingID
+                showsTone: true
             )
 
         case .builtin(.shorten):
@@ -814,10 +775,9 @@ struct ActionsView: View {
                 title: "Shorten",
                 subtitle: "Make the selected text more concise and simpler without losing the main ideas.",
                 enabled: guardedEnableBinding(for: $settings.shortenEnabled),
+                isPrincipal: principalBinding(for: id),
                 config: $settings.shortenConfig,
-                showsTone: true,
-                dragID: id,
-                draggingID: draggingID
+                showsTone: true
             )
 
         case .builtin(.proofread):
@@ -827,9 +787,8 @@ struct ActionsView: View {
                 title: "Proofread",
                 subtitle: "Fix spelling, grammar, and punctuation without changing the meaning or tone.",
                 enabled: guardedEnableBinding(for: $settings.proofreadEnabled),
-                config: $settings.proofreadConfig,
-                dragID: id,
-                draggingID: draggingID
+                isPrincipal: principalBinding(for: id),
+                config: $settings.proofreadConfig
             )
 
         case .builtin(.prompt):
@@ -839,18 +798,14 @@ struct ActionsView: View {
                 title: "Prompt",
                 subtitle: "Type a one-off prompt for the selected text. Use {{text}} to place the selection; it's added automatically if omitted.",
                 enabled: guardedEnableBinding(for: $settings.promptEnabled),
+                isPrincipal: principalBinding(for: id),
                 config: $settings.promptConfig,
                 showsTone: false,
-                showsPrompt: false,
-                dragID: id,
-                draggingID: draggingID
+                showsPrompt: false
             )
 
         case .builtin(.translate):
-            translateCard(
-                dragID: id,
-                draggingID: draggingID
-            )
+            translateCard(isPrincipal: principalBinding(for: id))
 
         case .speak:
             SpeakCardView(
@@ -859,9 +814,8 @@ struct ActionsView: View {
                 licenseGate: licenseGate,
                 onUpgrade: onUpgrade,
                 enabled: guardedEnableBinding(for: $settings.speakEnabled),
-                recordingID: $recordingID,
-                dragID: id,
-                draggingID: draggingID
+                isPrincipal: principalBinding(for: id),
+                recordingID: $recordingID
             )
 
         case .dictionary:
@@ -870,16 +824,14 @@ struct ActionsView: View {
                 licenseGate: licenseGate,
                 onUpgrade: onUpgrade,
                 enabled: guardedEnableBinding(for: $settings.dictionaryConfig.isEnabled),
-                draggingID: draggingID,
-                dragID: id
+                isPrincipal: principalBinding(for: id)
             )
 
         case .custom(let uuid):
             if let action = settings.customActions.first(where: { $0.id == uuid }) {
                 customActionCard(
                     action: action,
-                    dragID: id,
-                    draggingID: draggingID
+                    isPrincipal: principalBinding(for: id)
                 )
             }
         }
@@ -927,17 +879,15 @@ struct ActionsView: View {
 
     @ViewBuilder
     private func translateCard(
-        dragID: ActionIdentifier,
-        draggingID: Binding<ActionIdentifier?>
+        isPrincipal: Binding<Bool>
     ) -> some View {
         ActionCard(
             icon: .sfSymbol("character.bubble"),
             title: "Translate",
             subtitle: "Translate the selected text into your chosen language.",
             enabled: guardedEnableBinding(for: $settings.translateEnabled),
-            isBuiltin: true,
-            dragID: dragID,
-            draggingID: draggingID
+            isPrincipal: isPrincipal,
+            isBuiltin: true
         ) {
             // Provider picker (all 5 providers).
             // Reconstruct via init (id/provider/model are immutable) but
@@ -1060,20 +1010,18 @@ struct ActionsView: View {
         title: String,
         subtitle: String,
         enabled: Binding<Bool>,
+        isPrincipal: Binding<Bool>,
         config: Binding<ActionConfig>,
         showsTone: Bool = false,
-        showsPrompt: Bool = true,
-        dragID: ActionIdentifier,
-        draggingID: Binding<ActionIdentifier?>
+        showsPrompt: Bool = true
     ) -> some View {
         ActionCard(
             icon: .sfSymbol(icon),
             title: title,
             subtitle: subtitle,
             enabled: enabled,
-            isBuiltin: true,
-            dragID: dragID,
-            draggingID: draggingID
+            isPrincipal: isPrincipal,
+            isBuiltin: true
         ) {
             // Provider picker (AI-only)
             ProviderPicker(
@@ -1159,8 +1107,7 @@ struct ActionsView: View {
     @ViewBuilder
     private func customActionCard(
         action: CustomAction,
-        dragID: ActionIdentifier,
-        draggingID: Binding<ActionIdentifier?>
+        isPrincipal: Binding<Bool>
     ) -> some View {
         let id = action.id
         let rawEnabledBinding = Binding(
@@ -1176,10 +1123,9 @@ struct ActionsView: View {
             title: action.title.isEmpty ? "(untitled)" : action.title,
             subtitle: action.actionDescription,
             enabled: guardedEnableBinding(for: rawEnabledBinding),
+            isPrincipal: isPrincipal,
             isBuiltin: false,
             isFromPlugin: action.isFromPlugin,
-            dragID: dragID,
-            draggingID: draggingID,
             onEdit: {
                 if let current = settings.customActions.first(where: { $0.id == id }) {
                     withAnimation(.easeInOut(duration: 0.28)) {
@@ -1526,7 +1472,7 @@ private struct FromPluginBadge: View {
 /// A card container for a single action's settings.
 ///
 /// In-card header: icon badge + title (with optional Built-in badge) on the
-/// left; a drag handle for reordering + enabled toggle on the right. Body: the
+/// left; principal checkbox + enabled toggle on the right. Body: the
 /// caller-supplied content rows below the header divider.
 private struct ActionCard<Content: View>: View {
 
@@ -1535,15 +1481,11 @@ private struct ActionCard<Content: View>: View {
     /// Optional description shown under the title.
     var subtitle: String? = nil
     @Binding var enabled: Bool
+    @Binding var isPrincipal: Bool
     /// When true, a "Built-in" badge appears next to the title.
     var isBuiltin: Bool = false
     /// When true (and not built-in), a "From plugin" badge appears next to the title.
     var isFromPlugin: Bool = false
-    /// Identifier of this card, set as `draggingID` when its grip starts a drag.
-    var dragID: ActionIdentifier? = nil
-    /// Shared drag state — set when this card's grip begins dragging so sibling
-    /// cards can compute the insertion-line edge.
-    var draggingID: Binding<ActionIdentifier?>? = nil
     /// When non-nil, an Edit icon button appears in the header accessory.
     var onEdit: (() -> Void)? = nil
     /// When non-nil, a Delete icon button (with confirmation) appears in the header accessory.
@@ -1594,21 +1536,13 @@ private struct ActionCard<Content: View>: View {
                         }
                     }
 
-                    // Drag handle — grab here to reorder the card by dragging.
-                    // Uses .onDrag (not .draggable) so the drag start can record
-                    // which card is moving, driving the insertion-line edge.
-                    if let dragID {
-                        Image(systemName: "arrow.up.arrow.down")
+                    Toggle(isOn: $isPrincipal) {
+                        Text("Toolbar")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
-                            .onDrag {
-                                draggingID?.wrappedValue = dragID
-                                return NSItemProvider(object: "popguy.card" as NSString)
-                            } preview: {
-                                ActionIconView(icon: icon, font: .system(size: 14, weight: .medium))
-                                    .padding(6)
-                            }
-                            .hoverTooltip("Drag to reorder")
                     }
+                    .toggleStyle(.checkbox)
+                    .hoverTooltip("Show in the main toolbar (off = in the More menu)")
 
                     // Enable toggle
                     Toggle("", isOn: $enabled)
@@ -1639,8 +1573,7 @@ private struct DictionaryCardView: View {
     @ObservedObject var licenseGate: LicenseGate
     var onUpgrade: () -> Void = {}
     @Binding var enabled: Bool
-    @Binding var draggingID: ActionIdentifier?
-    var dragID: ActionIdentifier? = nil
+    @Binding var isPrincipal: Bool
 
     var body: some View {
         ActionCard(
@@ -1648,9 +1581,8 @@ private struct DictionaryCardView: View {
             title: "Look up",
             subtitle: "Look up definitions, phonetics, and examples across every dictionary provider.",
             enabled: $enabled,
-            isBuiltin: true,
-            dragID: dragID,
-            draggingID: $draggingID
+            isPrincipal: $isPrincipal,
+            isBuiltin: true
         ) {
             DictionaryConfigFields(
                 config: $settings.dictionaryConfig,
@@ -1828,10 +1760,8 @@ private struct SpeakCardView: View {
     @ObservedObject var licenseGate: LicenseGate
     var onUpgrade: () -> Void = {}
     @Binding var enabled: Bool
+    @Binding var isPrincipal: Bool
     @Binding var recordingID: ActionIdentifier?
-    @Binding var draggingID: ActionIdentifier?
-
-    var dragID: ActionIdentifier? = nil
 
     @StateObject private var coordinator: SpeakCoordinator
     @State private var activeVoicePreviewID: String?
@@ -1848,17 +1778,15 @@ private struct SpeakCardView: View {
         licenseGate: LicenseGate,
         onUpgrade: @escaping () -> Void = {},
         enabled: Binding<Bool>,
-        recordingID: Binding<ActionIdentifier?>,
-        dragID: ActionIdentifier? = nil,
-        draggingID: Binding<ActionIdentifier?>
+        isPrincipal: Binding<Bool>,
+        recordingID: Binding<ActionIdentifier?>
     ) {
         self.settings = settings
         self.licenseGate = licenseGate
         self.onUpgrade = onUpgrade
         self._enabled = enabled
+        self._isPrincipal = isPrincipal
         self._recordingID = recordingID
-        self._draggingID = draggingID
-        self.dragID = dragID
         _coordinator = StateObject(wrappedValue: SpeakCoordinator(keychain: keychain))
         _selectedVoiceLanguage = State(initialValue: settings.speakSettings.defaultAccent)
     }
@@ -1873,9 +1801,8 @@ private struct SpeakCardView: View {
             title: "Speak",
             subtitle: "Read the selected text aloud using the system speech synthesiser.",
             enabled: $enabled,
-            isBuiltin: true,
-            dragID: dragID,
-            draggingID: $draggingID
+            isPrincipal: $isPrincipal,
+            isBuiltin: true
         ) {
             VStack(alignment: .leading, spacing: 16) {
 

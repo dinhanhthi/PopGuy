@@ -283,7 +283,7 @@ struct SettingsView: View {
         .alert("Toolbar Limit Reached", isPresented: $showSaveLimitAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("PopGuy shows at most \(SettingsStore.maxToolbarActions) actions on the toolbar. Turn off another action first.")
+            Text("PopGuy supports at most \(SettingsStore.maxToolbarActions) enabled actions (\(ProConfig.maxPrincipalActions) on the toolbar and \(ProConfig.maxBurgerActions) in the More menu). Turn off another action first.")
         }
     }
 
