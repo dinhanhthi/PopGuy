@@ -232,38 +232,18 @@ jobs:
         run: |
           mkdir -p build/appcast-archives
           cp "build/export/PopGuy-$VERSION.zip" build/appcast-archives/
-          # Do NOT copy the .md into the archives folder: that makes generate_appcast
-          # emit a <sparkle:releaseNotesLink>, which Sparkle renders EMBEDDED inside the
-          # update dialog. We embed the notes inline instead (see below).
+          # Deliberately do NOT copy the release-notes .md into the archives folder.
+          # generate_appcast would turn it into a <sparkle:releaseNotesLink>, which
+          # Sparkle renders EMBEDDED inside the update dialog (a web page would render
+          # inside the modal). We show NO per-version notes in the dialog — just the
+          # compact "a new version is available" prompt. The "Version History" button
+          # still opens the GitHub releases page via fullReleaseNotesLink below.
           printf '%s' "$SPARKLE_PRIVATE_KEY" | ./sparkle-bin/bin/generate_appcast build/appcast-archives/ \
             --ed-key-file - \
             --full-release-notes-url "https://github.com/dinhanhthi/PopGuy/releases" \
             --download-url-prefix \
             "https://github.com/dinhanhthi/PopGuy/releases/download/v$VERSION/"
           cp build/appcast-archives/appcast.xml appcast.xml
-          # Embed the changelog inline as markdown shown INSIDE the update dialog.
-          # We intentionally avoid <sparkle:releaseNotesLink>: that link is rendered
-          # embedded in the dialog, so pointing it at a web page (e.g. the GitHub
-          # releases page) makes the whole page render inside the modal. An inline
-          # <description sparkle:format="markdown"> is self-contained (no hosting,
-          # never 404s; Sparkle >= 2.9 / macOS 12+ renders markdown). The "Version
-          # History" button uses fullReleaseNotesLink (above) → GitHub releases page,
-          # which opens in the browser.
-          python3 - "$VERSION" <<'PY'
-          import sys
-          version = sys.argv[1]
-          notes = open(f"build/export/PopGuy-{version}.md").read().strip()
-          with open("appcast.xml") as f:
-              xml = f.read()
-          desc = (
-              '            <description sparkle:format="markdown"><![CDATA[\n'
-              f"{notes}\n"
-              "]]></description>\n        </item>"
-          )
-          xml = xml.replace("        </item>", desc, 1)
-          with open("appcast.xml", "w") as f:
-              f.write(xml)
-          PY
 
       - name: Stage appcast for Pages
         run: mkdir -p _site && cp appcast.xml _site/appcast.xml
