@@ -17,6 +17,16 @@ struct PluginImportConsentView: View {
     let onConfirm: ([CustomAction]) -> Void
     let onCancel: () -> Void
 
+    @State private var selectedIDs: Set<UUID> = []
+
+    private var selectedActions: [CustomAction] {
+        result.imported.filter { selectedIDs.contains($0.id) }
+    }
+
+    private var allSelected: Bool {
+        result.imported.allSatisfy { selectedIDs.contains($0.id) }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             headerBar
@@ -37,6 +47,9 @@ struct PluginImportConsentView: View {
             footerBar
         }
         .frame(minWidth: 540, minHeight: 480)
+        .onAppear {
+            selectedIDs = Set(result.imported.map { $0.id })
+        }
     }
 
     // MARK: - Header
@@ -54,9 +67,9 @@ struct PluginImportConsentView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 if !result.imported.isEmpty {
                     Label(
-                        result.imported.count == 1
-                            ? "1 action to add"
-                            : "\(result.imported.count) actions to add",
+                        selectedIDs.count == result.imported.count
+                            ? (result.imported.count == 1 ? "1 action to add" : "\(result.imported.count) actions to add")
+                            : "\(selectedIDs.count) of \(result.imported.count) selected",
                         systemImage: "plus.circle"
                     )
                     .font(.caption)
@@ -106,13 +119,38 @@ struct PluginImportConsentView: View {
 
     private var importedSection: some View {
         VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
-            Text("Actions to add")
+            HStack {
+                Text("Actions to add")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(allSelected ? "Deselect All" : "Select All") {
+                    if allSelected {
+                        selectedIDs.removeAll()
+                    } else {
+                        selectedIDs = Set(result.imported.map { $0.id })
+                    }
+                }
+                .buttonStyle(.plain)
                 .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+                .foregroundColor(.accentColor)
+            }
 
             ForEach(result.imported) { action in
-                ImportedActionCard(action: action)
+                HStack(alignment: .top, spacing: 8) {
+                    Toggle("", isOn: Binding(
+                        get: { selectedIDs.contains(action.id) },
+                        set: { checked in
+                            if checked { selectedIDs.insert(action.id) }
+                            else { selectedIDs.remove(action.id) }
+                        }
+                    ))
+                    .toggleStyle(.checkbox)
+                    .padding(.top, 10)
+
+                    ImportedActionCard(action: action)
+                }
             }
         }
     }
@@ -155,10 +193,10 @@ struct PluginImportConsentView: View {
                 .buttonStyle(.bordered)
                 .keyboardShortcut(.escape, modifiers: [])
             Button("Add to PopGuy") {
-                onConfirm(result.imported)
+                onConfirm(selectedActions)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(result.imported.isEmpty)
+            .disabled(selectedIDs.isEmpty)
             .keyboardShortcut(.return, modifiers: [])
         }
         .padding(.horizontal, SettingsMetrics.cardPadding)
