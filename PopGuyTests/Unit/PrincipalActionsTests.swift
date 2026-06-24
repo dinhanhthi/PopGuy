@@ -96,6 +96,31 @@ struct PrincipalActionsTests {
         #expect(store.isPrincipal(.builtin(.improve)))
     }
 
+    @Test("disabled overflow assignments do not block moving enabled actions to More")
+    func disabledOverflowDoesNotBlockEnabledDemotion() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        // Fill burger zone with disabled assignments (not visible in overflowActionCount).
+        store.shortenEnabled = false
+        store.proofreadEnabled = false
+        _ = store.setPrincipal(.builtin(.shorten), false)
+        _ = store.setPrincipal(.builtin(.proofread), false)
+
+        let disabledOverflow = store.actionOrder.filter { !store.isPrincipal($0) }.count
+        #expect(disabledOverflow >= 2)
+        #expect(store.overflowActionCount < ProConfig.maxBurgerActions)
+
+        guard let principalID = store.principalOrderedIdentifiers.first else {
+            Issue.record("Expected a principal action")
+            return
+        }
+        #expect(store.setPrincipal(principalID, false))
+        #expect(!store.isPrincipal(principalID))
+        #expect(store.overflowActionCount <= ProConfig.maxBurgerActions)
+    }
+
     @Test("migration persists principalActionIDs across reload")
     func migrationPersistsAcrossReload() {
         let (suite, name) = makeSuite()

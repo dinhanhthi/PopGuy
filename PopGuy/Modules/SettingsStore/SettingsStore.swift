@@ -857,13 +857,14 @@ final class SettingsStore: ObservableObject {
         guard value != currentlyPrincipal else { return true }
 
         if value {
-            if principalActionIDs.count >= ProConfig.maxPrincipalActions {
+            // Enabled actions count toward the principal cap; disabled actions may
+            // be assigned freely and only block once enabled.
+            if isEnabled(id), principalActionCount >= ProConfig.maxPrincipalActions {
                 return false
             }
             principalActionIDs.insert(id)
         } else {
-            let overflowCount = actionOrder.filter { !principalActionIDs.contains($0) }.count
-            if overflowCount >= ProConfig.maxBurgerActions {
+            if isEnabled(id), overflowActionCount >= ProConfig.maxBurgerActions {
                 return false
             }
             principalActionIDs.remove(id)
