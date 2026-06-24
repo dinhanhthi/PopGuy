@@ -162,11 +162,17 @@ nonisolated enum GoogleCloudTTSProvider: TTSProvider {
         // audioConfig: Google supports speakingRate (0.25–4.0) and pitch
         // (-20.0…+20.0 semitones). Only emit the keys when a value is provided so
         // the provider default applies otherwise.
+        //
+        // Chirp 3: HD voices support speakingRate but reject the pitch parameter
+        // with HTTP 400 (INVALID_ARGUMENT). Emitting pitch for them makes every
+        // Chirp3-HD voice fail and fall back to the System voice, so the key is
+        // omitted for those voices.
+        let isChirp = voice.contains("Chirp")
         var audioConfig: [String: Any] = ["audioEncoding": "MP3"]
         if let speed {
             audioConfig["speakingRate"] = min(max(speed, 0.25), 4.0)
         }
-        if let pitch {
+        if let pitch, !isChirp {
             audioConfig["pitch"] = GoogleCloudTTSProvider.semitones(forPitchMultiplier: pitch)
         }
 

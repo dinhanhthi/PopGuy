@@ -872,6 +872,27 @@ struct GoogleCloudTTSProviderTests {
         #expect(audioConfig["pitch"] as? Double == 12.0)
     }
 
+    @Test("makeSynthesisRequest omits pitch but keeps speakingRate for Chirp3-HD voices")
+    func synthesisRequestOmitsPitchForChirpVoices() throws {
+        let req = try GoogleCloudTTSProvider.makeSynthesisRequest(
+            text: "Hi",
+            voice: "en-US-Chirp3-HD-Aoede",
+            languageCode: "en-US",
+            speed: 1.5,
+            pitch: 2.0,
+            config: .default,
+            apiKey: "test-key"
+        )
+        let bodyData = try #require(req.httpBody)
+        let json = try #require(
+            JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
+        )
+        let audioConfig = try #require(json["audioConfig"] as? [String: Any])
+        // Chirp3-HD supports speakingRate but rejects pitch (HTTP 400).
+        #expect(audioConfig["speakingRate"] as? Double == 1.5)
+        #expect(audioConfig["pitch"] == nil)
+    }
+
     @Test("makeSynthesisRequest omits speakingRate and pitch when nil")
     func synthesisRequestOmitsSpeedAndPitchWhenNil() throws {
         let req = try GoogleCloudTTSProvider.makeSynthesisRequest(
