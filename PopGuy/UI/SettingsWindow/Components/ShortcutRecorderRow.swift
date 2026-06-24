@@ -66,7 +66,7 @@ struct ShortcutRecorderRow: View {
                     Image(systemName: "record.circle")
                 }
                 .buttonStyle(.borderless)
-                .help("Record shortcut")
+                .hoverTooltip("Record shortcut")
 
                 // Clear button — only shown when a shortcut is set
                 if currentShortcut != nil {
@@ -76,7 +76,7 @@ struct ShortcutRecorderRow: View {
                         Image(systemName: "xmark.circle")
                     }
                     .buttonStyle(.borderless)
-                    .help("Remove shortcut")
+                    .hoverTooltip("Remove shortcut")
                 }
             }
         }

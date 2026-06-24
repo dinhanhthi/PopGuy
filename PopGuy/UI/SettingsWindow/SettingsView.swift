@@ -1290,39 +1290,41 @@ struct VoiceTestButton: View {
 
     private var isActive: Bool { activeID == rowID }
 
+    private var didFallBack: Bool { coordinator.didFallBackToSystem && isActive }
+
     var body: some View {
-        Button {
-            if isActive && coordinator.phase != .idle {
-                coordinator.stop()
-                activeID = nil
-            } else {
-                play()
+        HStack(spacing: 4) {
+            Button {
+                if isActive && coordinator.phase != .idle {
+                    coordinator.stop()
+                    activeID = nil
+                } else {
+                    play()
+                }
+            } label: {
+                if isActive && coordinator.phase == .loading {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if isActive && coordinator.phase == .playing {
+                    Image(systemName: "stop.fill")
+                } else {
+                    Image(systemName: "speaker.wave.2.fill")
+                }
             }
-        } label: {
-            if isActive && coordinator.phase == .loading {
-                ProgressView()
-                    .controlSize(.small)
-            } else if isActive && coordinator.phase == .playing {
-                Image(systemName: "stop.fill")
-            } else {
-                Image(systemName: "speaker.wave.2.fill")
-            }
-        }
-        .buttonStyle(.borderless)
-        .controlSize(.small)
-        .help(
-            coordinator.didFallBackToSystem && isActive
-                ? "Cloud voice unavailable — the System voice is being used instead."
-                : "Preview this voice"
-        )
-        .overlay(alignment: .topTrailing) {
-            if coordinator.didFallBackToSystem && isActive {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 7))
-                    .foregroundStyle(.orange)
-                    .offset(x: 6, y: -6)
-                    .help("Cloud voice unavailable — the System voice is being used instead.")
-                    .accessibilityLabel("Cloud voice unavailable, using System voice")
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .hoverTooltip(didFallBack ? "Cloud voice unavailable — the System voice is being used instead." : "Preview this voice")
+
+            if didFallBack {
+                HStack(spacing: 3) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("cloud isn't available")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
+                .hoverTooltip("Cloud voice unavailable — the System voice is being used instead.")
+                .accessibilityLabel("Cloud voice unavailable, using System voice")
             }
         }
     }
@@ -1904,7 +1906,7 @@ struct CLIVerifyButton: View {
                     .font(.caption)
                     .foregroundStyle(.red)
                     .lineLimit(2)
-                    .help(message)
+                    .hoverTooltip(message)
             }
         }
     }
@@ -1954,7 +1956,7 @@ struct GetAPIKeyLink: View {
             .font(.caption)
         }
         .buttonStyle(.borderless)
-        .help("Open the provider's website to get an API key")
+        .hoverTooltip("Open the provider's website to get an API key")
     }
 }
 

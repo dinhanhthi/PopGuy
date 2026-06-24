@@ -157,7 +157,7 @@ struct HistoryView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.borderless)
-                            .help("Clear search")
+                            .hoverTooltip("Clear search")
                         }
                     }
                     .padding(.leading, 10)
@@ -434,7 +434,7 @@ private struct HistoryRow: View {
             }
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
-            .help("Delete this record")
+            .hoverTooltip("Delete this record")
 
             Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                 .font(.caption)
@@ -506,7 +506,7 @@ private struct HistoryRow: View {
                 .buttonStyle(.borderless)
                 .controlSize(.small)
                 .foregroundStyle(.secondary)
-                .help("Copy \(title.lowercased())")
+                .hoverTooltip("Copy \(title.lowercased())")
             }
             Text(text.isEmpty ? "—" : text)
                 .font(.callout)

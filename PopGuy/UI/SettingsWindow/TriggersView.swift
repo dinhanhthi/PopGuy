@@ -98,7 +98,7 @@ struct TriggersView: View {
                                     Image(systemName: "xmark.circle")
                                 }
                                 .buttonStyle(.borderless)
-                                .help("Clear — revert to Cmd+C+C")
+                                .hoverTooltip("Clear — revert to Cmd+C+C")
                                 .disabled(!settings.triggerChordEnabled)
                             }
 
@@ -109,7 +109,7 @@ struct TriggersView: View {
                                 Image(systemName: "record.circle")
                             }
                             .buttonStyle(.borderless)
-                            .help("Record a replacement shortcut (e.g. ⌘⇧Space)")
+                            .hoverTooltip("Record a replacement shortcut (e.g. ⌘⇧Space)")
                             .disabled(!settings.triggerChordEnabled)
                         }
                     }
