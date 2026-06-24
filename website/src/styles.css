@@ -865,8 +865,9 @@ input:focus-visible {
 }
 
 .button--header {
-  min-height: 42px;
-  padding-inline: 16px;
+  min-height: 38px;
+  padding-inline: 13px;
+  font-size: 0.84rem;
 }
 
 .mobile-menu-button {
@@ -1519,16 +1520,16 @@ input:focus-visible {
 
 .footer-inner {
   display: grid;
-  min-height: 130px;
+  min-height: 96px;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 30px;
+  gap: 24px;
 }
 
 .footer-inner > div p {
   margin: 5px 0 0;
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: 0.82rem;
 }
 
 .footer-inner nav {
@@ -1542,7 +1543,7 @@ input:focus-visible {
   align-items: center;
   gap: 5px;
   color: #52617a;
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   font-weight: 600;
 }
 
@@ -1553,7 +1554,7 @@ input:focus-visible {
 .copyright {
   margin: 0;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   text-align: right;
 }
 
