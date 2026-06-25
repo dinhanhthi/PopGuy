@@ -19,7 +19,12 @@ export function Footer() {
             GitHub
           </a>
         </nav>
-        <p className="copyright">© 2026 PopGuy</p>
+        <p className="copyright">
+          © 2026 PopGuy · by{" "}
+          <a href="https://dinhanhthi.com/" target="_blank" rel="noreferrer">
+            Anh-Thi Dinh
+          </a>
+        </p>
       </div>
     </footer>
   );

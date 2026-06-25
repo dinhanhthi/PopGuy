@@ -1524,6 +1524,12 @@ input:focus-visible {
   text-align: right;
 }
 
+.copyright a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .docs-page {
   background: #fff;
 }
