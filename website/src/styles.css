@@ -340,11 +340,11 @@
 
 .docs-article {
   max-width: 760px;
-  padding-top: 64px;
+  padding-top: 48px;
 }
 
 .docs-article section {
-  margin-top: 36px;
+  margin-top: 32px;
 }
 
 /* Free-first pricing */
@@ -369,7 +369,7 @@
   grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.7fr);
   gap: 24px;
   align-items: start;
-  padding-block: 34px 100px;
+  padding-block: 24px 64px;
 }
 
 .free-plan,
@@ -380,7 +380,7 @@
 }
 
 .free-plan {
-  padding: 40px;
+  padding: 32px;
   box-shadow: 0 20px 55px rgba(32, 65, 110, 0.09);
 }
 
@@ -620,15 +620,15 @@ h4 {
 }
 
 h1 {
-  font-size: clamp(3rem, 6vw, 5.4rem);
+  font-size: clamp(2.3rem, 4.4vw, 3.4rem);
 }
 
 h2 {
-  font-size: clamp(2rem, 3.4vw, 3rem);
+  font-size: clamp(1.55rem, 2.6vw, 2.2rem);
 }
 
 h3 {
-  font-size: 1.15rem;
+  font-size: 1.08rem;
 }
 
 .shell,
@@ -642,7 +642,7 @@ h3 {
 }
 
 .section-pad {
-  padding-block: 112px;
+  padding-block: 72px;
 }
 
 .section-blue {
@@ -654,16 +654,16 @@ h3 {
 }
 
 .section-heading {
-  margin-bottom: 52px;
+  margin-bottom: 32px;
 }
 
 .section-heading h2 {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .section-heading p {
   color: var(--muted);
-  font-size: 1.05rem;
+  font-size: 0.95rem;
 }
 
 .section-label {
@@ -861,24 +861,23 @@ input:focus-visible {
 
 .hero {
   display: grid;
-  min-height: 620px;
   grid-template-columns: 0.85fr 1.35fr;
   align-items: center;
-  gap: 70px;
-  padding-block: 82px 92px;
+  gap: 56px;
+  padding-block: 56px 64px;
 }
 
 .hero h1 {
-  max-width: 590px;
-  margin-bottom: 26px;
+  max-width: 540px;
+  margin-bottom: 20px;
 }
 
 .hero-lede {
-  max-width: 570px;
-  margin-bottom: 34px;
+  max-width: 540px;
+  margin-bottom: 28px;
   color: var(--text);
-  font-size: 1.14rem;
-  line-height: 1.75;
+  font-size: 1.02rem;
+  line-height: 1.65;
 }
 
 .system-note {
@@ -1207,24 +1206,24 @@ input:focus-visible {
   display: grid;
   grid-template-columns: 0.88fr 1.12fr;
   align-items: center;
-  gap: 80px;
+  gap: 56px;
 }
 
 .github-copy h2 {
   max-width: 520px;
-  margin-bottom: 22px;
+  margin-bottom: 16px;
 }
 
 .github-copy > p:not(.section-label) {
   max-width: 560px;
   color: var(--muted);
-  font-size: 1.03rem;
+  font-size: 0.96rem;
 }
 
 .check-list {
   display: grid;
-  gap: 10px;
-  margin: 28px 0 34px;
+  gap: 9px;
+  margin: 20px 0 24px;
   padding: 0;
   list-style: none;
 }
@@ -1363,19 +1362,19 @@ input:focus-visible {
 }
 
 .providers {
-  padding-block: 84px;
+  padding-block: 64px;
 }
 
 .providers-inner {
   display: grid;
   grid-template-columns: 0.7fr 1.3fr;
   align-items: center;
-  gap: 70px;
+  gap: 52px;
 }
 
 .providers-inner h2 {
-  margin-bottom: 16px;
-  font-size: clamp(1.8rem, 3vw, 2.6rem);
+  margin-bottom: 14px;
+  font-size: clamp(1.5rem, 2.6vw, 2.1rem);
 }
 
 .providers-inner > div:first-child > p:not(.section-label) {
@@ -1406,7 +1405,7 @@ input:focus-visible {
 }
 
 .feature-row article {
-  padding: 34px 28px;
+  padding: 28px 22px;
   border-right: 1px solid var(--line);
 }
 
@@ -1415,15 +1414,15 @@ input:focus-visible {
 }
 
 .feature-row svg {
-  width: 30px;
-  height: 30px;
-  margin-bottom: 22px;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 16px;
   color: var(--blue);
   stroke-width: 1.7;
 }
 
 .feature-row h3 {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .feature-row p {
@@ -1436,34 +1435,33 @@ input:focus-visible {
 .pricing-cta,
 .changelog-cta {
   display: flex;
-  min-height: 260px;
   align-items: center;
-  gap: 44px;
-  margin-bottom: 96px;
-  padding: 44px 54px;
+  gap: 36px;
+  margin-bottom: 64px;
+  padding: 32px 40px;
   border: 1px solid #cfe2f7;
-  border-radius: 18px;
+  border-radius: 16px;
   background: var(--bg-blue);
 }
 
 .download-section > img,
 .pricing-cta > img {
-  width: 180px;
-  height: 180px;
-  align-self: flex-end;
+  width: 112px;
+  height: 112px;
+  align-self: center;
   object-fit: contain;
 }
 
 .download-section h2,
 .pricing-cta h2,
 .changelog-cta h2 {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .download-section p,
 .pricing-cta p,
 .changelog-cta p {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   color: var(--muted);
 }
 
@@ -1601,8 +1599,6 @@ input:focus-visible {
 }
 
 .docs-nav-group button.is-active {
-  background: #e7f2ff;
-  box-shadow: inset 3px 0 0 var(--blue);
   color: #075fcf;
   font-weight: 680;
 }
@@ -1619,7 +1615,7 @@ input:focus-visible {
 
 .docs-article {
   min-width: 0;
-  padding: 52px 54px 100px;
+  padding: 40px 48px 72px;
 }
 
 .docs-breadcrumb {
@@ -1637,16 +1633,16 @@ input:focus-visible {
 }
 
 .docs-article h1 {
-  margin-bottom: 16px;
-  font-size: clamp(2.5rem, 4vw, 3.35rem);
+  margin-bottom: 14px;
+  font-size: clamp(2rem, 3.4vw, 2.7rem);
 }
 
 .docs-summary {
   max-width: 700px;
-  margin-bottom: 24px;
+  margin-bottom: 22px;
   color: #34425a;
-  font-size: 1.06rem;
-  line-height: 1.65;
+  font-size: 1rem;
+  line-height: 1.6;
 }
 
 .docs-notice {
@@ -1816,8 +1812,8 @@ input:focus-visible {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 14px;
-  margin-top: 68px;
-  padding-top: 28px;
+  margin-top: 48px;
+  padding-top: 24px;
   border-top: 1px solid var(--line);
 }
 
@@ -1847,33 +1843,33 @@ input:focus-visible {
 }
 
 .page-hero {
-  padding-block: 86px 40px;
+  padding-block: 56px 32px;
 }
 
 .pricing-hero {
   display: grid;
-  grid-template-columns: 180px 1fr;
+  grid-template-columns: 128px 1fr;
   align-items: center;
-  gap: 42px;
+  gap: 36px;
   text-align: center;
 }
 
 .pricing-hero > img {
-  width: 180px;
-  height: 180px;
+  width: 128px;
+  height: 128px;
   object-fit: contain;
 }
 
 .pricing-hero h1 {
-  margin-bottom: 16px;
-  font-size: clamp(3rem, 5.6vw, 4.8rem);
+  margin-bottom: 14px;
+  font-size: clamp(2.3rem, 4.4vw, 3.4rem);
 }
 
 .pricing-hero > div > p {
-  max-width: 750px;
-  margin: 0 auto 24px;
+  max-width: 680px;
+  margin: 0 auto 20px;
   color: var(--muted);
-  font-size: 1.08rem;
+  font-size: 1rem;
 }
 
 .pricing-principles {
@@ -1902,15 +1898,14 @@ input:focus-visible {
 .pricing-plans {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px;
-  padding-block: 42px 30px;
+  gap: 20px;
+  padding-block: 32px 24px;
 }
 
 .plan-card {
   display: flex;
-  min-height: 520px;
   flex-direction: column;
-  padding: 36px;
+  padding: 30px;
   border: 1px solid var(--line-strong);
   border-radius: 16px;
   background: white;
@@ -1934,7 +1929,7 @@ input:focus-visible {
 
 .plan-card h2 {
   margin-bottom: 6px;
-  font-size: 2.2rem;
+  font-size: 1.85rem;
 }
 
 .plan-card-head p {
@@ -1970,8 +1965,8 @@ input:focus-visible {
 .plan-card ul {
   display: grid;
   flex: 1;
-  gap: 13px;
-  margin: 28px 0 32px;
+  gap: 11px;
+  margin: 22px 0 26px;
   padding: 0;
   list-style: none;
 }
@@ -1991,7 +1986,7 @@ input:focus-visible {
 }
 
 .comparison-section {
-  padding-top: 80px;
+  padding-top: 56px;
 }
 
 .comparison-wrap {
@@ -2091,17 +2086,17 @@ input:focus-visible {
 }
 
 .faq {
-  padding-block: 72px 90px;
+  padding-block: 56px 72px;
 }
 
 .faq .section-heading {
-  margin-bottom: 34px;
+  margin-bottom: 28px;
 }
 
 .faq-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 28px;
+  gap: 24px;
 }
 
 .faq-grid article {
@@ -2149,12 +2144,12 @@ input:focus-visible {
 }
 
 .changelog-hero {
-  padding-block: 72px 68px;
+  padding-block: 52px 44px;
 }
 
 .changelog-hero h1 {
   margin-bottom: 12px;
-  font-size: clamp(3rem, 5vw, 4.5rem);
+  font-size: clamp(2.3rem, 4.4vw, 3.4rem);
 }
 
 .changelog-hero h1::after {
@@ -2163,9 +2158,9 @@ input:focus-visible {
 }
 
 .changelog-hero p {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   color: var(--muted);
-  font-size: 1.08rem;
+  font-size: 1rem;
 }
 
 .changelog-hero a {
@@ -2180,13 +2175,13 @@ input:focus-visible {
 .changelog {
   position: relative;
   max-width: 1040px;
-  padding-block: 60px 70px;
+  padding-block: 44px 56px;
 }
 
 .changelog::before {
   position: absolute;
-  top: 75px;
-  bottom: 92px;
+  top: 59px;
+  bottom: 78px;
   left: 15px;
   width: 1px;
   background: var(--line);
@@ -2195,7 +2190,7 @@ input:focus-visible {
 
 .release {
   position: relative;
-  padding: 0 0 54px 64px;
+  padding: 0 0 40px 64px;
 }
 
 .release + .release {
@@ -2223,7 +2218,7 @@ input:focus-visible {
   display: grid;
   grid-template-columns: 1fr 0.86fr;
   align-items: start;
-  gap: 46px;
+  gap: 32px;
 }
 
 .version-line {
@@ -2286,8 +2281,8 @@ input:focus-visible {
 .release-groups {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 26px;
-  margin-top: 38px;
+  gap: 24px;
+  margin-top: 28px;
 }
 
 .release-groups h4 {
@@ -2478,7 +2473,7 @@ input:focus-visible {
 
   .hero {
     grid-template-columns: 1fr;
-    padding-block: 70px 76px;
+    padding-block: 48px 56px;
     text-align: center;
   }
 
@@ -2642,15 +2637,15 @@ input:focus-visible {
   }
 
   h1 {
-    font-size: clamp(2.65rem, 14vw, 4rem);
+    font-size: clamp(2.1rem, 10vw, 2.9rem);
   }
 
   h2 {
-    font-size: 2rem;
+    font-size: 1.6rem;
   }
 
   .section-pad {
-    padding-block: 78px;
+    padding-block: 56px;
   }
 
   .header-inner {
@@ -2659,7 +2654,7 @@ input:focus-visible {
 
   .hero {
     width: 100%;
-    padding: 58px 14px 64px;
+    padding: 40px 14px 48px;
   }
 
   .hero-lede {
@@ -2776,13 +2771,13 @@ input:focus-visible {
 
   .download-section > img,
   .pricing-cta > img {
-    width: 130px;
-    height: 130px;
-    margin: -75px auto 12px;
+    width: 96px;
+    height: 96px;
+    margin: 0 auto 8px;
   }
 
   .download-section {
-    margin-top: 65px;
+    margin-top: 0;
   }
 
   .download-trust {
@@ -2845,7 +2840,7 @@ input:focus-visible {
   }
 
   .pricing-hero h1 {
-    font-size: 2.8rem;
+    font-size: 2.2rem;
   }
 
   .pricing-plans {
@@ -2874,7 +2869,7 @@ input:focus-visible {
   }
 
   .pricing-cta {
-    margin-top: 60px;
+    margin-top: 24px;
   }
 
   .pricing-cta .inline-actions {
@@ -2886,7 +2881,7 @@ input:focus-visible {
   }
 
   .changelog-hero h1 {
-    font-size: 2.75rem;
+    font-size: 2.2rem;
   }
 
   .changelog {
@@ -2955,11 +2950,11 @@ input:focus-visible {
 
 .docs-article {
   max-width: 760px;
-  padding-top: 64px;
+  padding-top: 48px;
 }
 
 .docs-article section {
-  margin-top: 36px;
+  margin-top: 32px;
 }
 
 @media (max-width: 900px) {
@@ -2995,16 +2990,16 @@ input:focus-visible {
 /* ── Actions page ── */
 
 .page-hero {
-  padding-block: 86px 40px;
+  padding-block: 56px 32px;
 }
 
 .page-lede {
   max-width: 570px;
-  margin-top: 18px;
+  margin-top: 14px;
   margin-bottom: 0;
   color: var(--text);
-  font-size: 1.14rem;
-  line-height: 1.75;
+  font-size: 1.02rem;
+  line-height: 1.65;
 }
 
 .action-grid {
@@ -3016,7 +3011,7 @@ input:focus-visible {
 }
 
 .action-card {
-  padding: 34px 28px;
+  padding: 28px 22px;
   border-right: 1px solid var(--line);
 }
 
@@ -3029,15 +3024,15 @@ input:focus-visible {
 }
 
 .action-card svg {
-  width: 30px;
-  height: 30px;
-  margin-bottom: 22px;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 16px;
   color: var(--blue);
   stroke-width: 1.7;
 }
 
 .action-card h3 {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .action-card p {
@@ -3234,7 +3229,7 @@ input:focus-visible {
 
 .create-card {
   position: relative;
-  padding: 36px 32px;
+  padding: 30px 28px;
   border: 1px solid var(--line-strong);
   border-radius: 16px;
   background: white;
@@ -3243,9 +3238,9 @@ input:focus-visible {
 
 .create-number {
   display: grid;
-  width: 30px;
-  height: 30px;
-  margin-bottom: 20px;
+  width: 28px;
+  height: 28px;
+  margin-bottom: 16px;
   place-items: center;
   border-radius: 50%;
   background: var(--blue);
@@ -3280,22 +3275,22 @@ input:focus-visible {
 }
 
 .action-options article {
-  padding: 32px 28px;
+  padding: 28px 24px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: white;
 }
 
 .action-options svg {
-  width: 30px;
-  height: 30px;
-  margin-bottom: 20px;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 16px;
   color: var(--blue);
   stroke-width: 1.7;
 }
 
 .action-options h3 {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .action-options p {
@@ -3324,12 +3319,12 @@ input:focus-visible {
 /* ── Changelog preview (home) ── */
 
 .changelog-preview {
-  padding-block: 90px 100px;
+  padding-block: 64px 72px;
 }
 
 .latest-release {
   max-width: 760px;
-  padding: 36px 38px;
+  padding: 28px 32px;
   border: 1px solid var(--line-strong);
   border-radius: 16px;
   background: white;
@@ -3554,7 +3549,7 @@ input:focus-visible {
 /* ── Docs single page ── */
 
 .docs-section-block {
-  margin-bottom: 60px;
+  margin-bottom: 44px;
   scroll-margin-top: 90px;
 }
 
