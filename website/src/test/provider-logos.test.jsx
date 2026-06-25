@@ -12,10 +12,19 @@ describe("ProviderLogo", () => {
     expect(container.querySelector("svg")).not.toBeNull();
   });
 
-  it("uses the real OpenAI logo path", () => {
+  it("uses the updated OpenAI logo path", () => {
     const openAI = providerLogos.find((provider) => provider.name === "OpenAI");
 
-    expect(openAI.icon.path).toContain("M22.2819 9.8211");
+    expect(openAI.icon).toBeDefined();
+    expect(openAI.icon.path).toContain("M14.949 6.547");
+    expect(openAI.icon.viewBox).toBe("0 0 16 16");
+  });
+
+  it("includes an OpenAI-Compatible entry", () => {
+    const compat = providerLogos.find((p) => p.name === "OpenAI-Compatible");
+
+    expect(compat).toBeDefined();
+    expect(compat.icon.path).toBeTruthy();
   });
 
   it("renders an svg logo for non-textOnly providers", () => {
