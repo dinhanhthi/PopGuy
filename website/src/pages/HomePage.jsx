@@ -19,7 +19,7 @@ import {
   providerLogos
 } from "../components/ProviderLogos";
 import { releases } from "../data/changelog";
-import { DOWNLOAD_URL, GITHUB_URL, PRO_CHECKOUT_URL } from "../constants";
+import { DOWNLOAD_URL, GITHUB_URL } from "../constants";
 
 const features = [
   {
@@ -138,7 +138,7 @@ export function HomePage() {
             <div className="pricing-title-row">
               <div>
                 <span className="plan-label">Free</span>
-                <h2>Everything you need to start.</h2>
+                <h2>Free and fully capable.</h2>
               </div>
               <strong>$0</strong>
             </div>
@@ -164,9 +164,10 @@ export function HomePage() {
                 <li key={feature}><Check size={16} /> {feature}</li>
               ))}
             </ul>
-            <ButtonLink href={PRO_CHECKOUT_URL} icon="lock" variant="secondary">
-              Get Pro
-            </ButtonLink>
+            <button className="button button--secondary" disabled>
+              Coming soon
+            </button>
+            <p className="pro-early-note">2 months of Pro, on us — for early adopters.</p>
           </aside>
         </div>
       </section>

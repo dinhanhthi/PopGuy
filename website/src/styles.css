@@ -477,6 +477,13 @@
   font-size: 0.88rem;
 }
 
+.pro-early-note {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
 .pro-addon ul {
   gap: 12px;
   margin-block: 24px;
