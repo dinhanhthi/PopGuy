@@ -160,6 +160,9 @@ final class ActionEngineHandler: ToolbarActionHandling {
             return nil
         case .claudeCLI, .codexCLI, .geminiCLI:
             return nil
+        case .mlxLocal:
+            // MLX helper path is resolved internally by MLXHelperManager.
+            return nil
         }
     }
 
@@ -179,7 +182,8 @@ final class ActionEngineHandler: ToolbarActionHandling {
         case .geminiCLI:
             let p = settings.geminiCLIPath
             return p.isEmpty ? nil : p
-        case .openAI, .anthropic, .ollama, .deepL, .googleTranslate, .gemini, .glm, .openRouter, .custom:
+        case .openAI, .anthropic, .ollama, .deepL, .googleTranslate, .gemini, .glm, .openRouter, .custom,
+             .mlxLocal:
             return nil
         }
     }

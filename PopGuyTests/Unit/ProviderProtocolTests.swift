@@ -59,7 +59,7 @@ struct ProviderProtocolTests {
         #expect(opts.baseURL == url)
     }
 
-    @Test("ProviderKind covers all twelve providers")
+    @Test("ProviderKind covers all thirteen providers")
     func providerKindCoversAll() async {
         // Exhaustively matching all cases ensures no new case is added without
         // updating this test. Count must match ProviderKind.allCases.count.
@@ -67,9 +67,10 @@ struct ProviderProtocolTests {
             .openAI, .anthropic, .ollama, .deepL, .googleTranslate,
             .gemini, .glm, .openRouter, .custom,
             .claudeCLI, .codexCLI, .geminiCLI,
+            .mlxLocal,
         ]
-        #expect(kinds.count == 12)
-        #expect(ProviderKind.allCases.count == 12)
+        #expect(kinds.count == 13)
+        #expect(ProviderKind.allCases.count == 13)
     }
 
     @Test("usesLocalCLI is true for exactly claudeCLI, codexCLI, geminiCLI")

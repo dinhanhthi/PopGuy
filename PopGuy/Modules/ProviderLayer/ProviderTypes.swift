@@ -24,6 +24,7 @@ public nonisolated enum ProviderKind: String, Sendable, CaseIterable, Codable {
     case claudeCLI       = "claude_cli"
     case codexCLI        = "codex_cli"
     case geminiCLI       = "gemini_cli"
+    case mlxLocal        = "mlx_local"
 }
 
 // MARK: - ProviderKind display name
@@ -44,6 +45,7 @@ extension ProviderKind {
         case .claudeCLI:       return "Claude CLI (subscription)"
         case .codexCLI:        return "Codex CLI (subscription)"
         case .geminiCLI:       return "Gemini CLI (subscription)"
+        case .mlxLocal:        return "Local (MLX)"
         }
     }
 
@@ -71,6 +73,7 @@ extension ProviderKind {
         case .claudeCLI:       return "sparkles"
         case .codexCLI:        return "chevron.left.forwardslash.chevron.right"
         case .geminiCLI:       return "star"
+        case .mlxLocal:        return "memorychip"
         }
     }
 
@@ -92,6 +95,7 @@ extension ProviderKind {
         case .googleTranslate: return URL(string: "https://console.cloud.google.com/apis/credentials")
         case .ollama, .custom: return nil
         case .claudeCLI, .codexCLI, .geminiCLI: return nil
+        case .mlxLocal: return nil
         }
     }
 
@@ -102,7 +106,8 @@ extension ProviderKind {
         switch self {
         case .openAI, .anthropic, .ollama,
              .gemini, .glm, .openRouter, .custom,
-             .claudeCLI, .codexCLI, .geminiCLI:  return true
+             .claudeCLI, .codexCLI, .geminiCLI,
+             .mlxLocal:                           return true
         case .deepL, .googleTranslate:            return false
         }
     }
@@ -135,6 +140,8 @@ extension ProviderKind {
             return "Optional. A model id (e.g. gpt-5.5); empty uses the CLI default."
         case .geminiCLI:
             return "Optional. A model id (e.g. gemini-3-pro); empty uses the CLI default."
+        case .mlxLocal:
+            return "Select an on-device model. Download models in Settings → Local (MLX)."
         }
     }
 }
@@ -164,7 +171,8 @@ extension ProviderKind {
             return URL(string: "https://openrouter.ai/api/v1")
         case .openAI, .anthropic, .gemini, .ollama, .custom,
              .deepL, .googleTranslate,
-             .claudeCLI, .codexCLI, .geminiCLI:
+             .claudeCLI, .codexCLI, .geminiCLI,
+             .mlxLocal:
             return nil
         }
     }
@@ -193,6 +201,8 @@ extension ProviderKind {
         case .ollama, .custom,
              .deepL, .googleTranslate:
             return []
+        case .mlxLocal:
+            return LocalModelCatalog.all.map(\.id)
         case .claudeCLI:
             return ["opus", "sonnet", "haiku"]
         case .codexCLI:
@@ -217,7 +227,7 @@ extension ProviderKind {
         case .claudeCLI, .codexCLI, .geminiCLI:
             return true
         case .openAI, .anthropic, .ollama, .deepL, .googleTranslate,
-             .gemini, .glm, .openRouter, .custom:
+             .gemini, .glm, .openRouter, .custom, .mlxLocal:
             return false
         }
     }

@@ -10,7 +10,9 @@ import Foundation
 // MARK: - Request
 
 /// A request sent by the parent app to the helper over stdin.
-public enum HelperRequest: Codable, Equatable, Sendable {
+// nonisolated: prevents SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor from isolating
+// Codable conformances, making encode/decode callable from any concurrency context.
+public nonisolated enum HelperRequest: Codable, Equatable, Sendable {
 
     /// Liveness check. The helper responds with `.ready`.
     case ping
@@ -99,7 +101,8 @@ public enum HelperRequest: Codable, Equatable, Sendable {
 // MARK: - Response
 
 /// A response sent by the helper to the parent app over stdout.
-public enum HelperResponse: Codable, Equatable, Sendable {
+// nonisolated: same reason as HelperRequest — allows decode in any context.
+public nonisolated enum HelperResponse: Codable, Equatable, Sendable {
 
     /// Helper is alive and ready for requests.
     case ready
