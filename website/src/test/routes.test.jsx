@@ -22,7 +22,7 @@ describe("website routes", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the docs sidebar with the four main sections", () => {
+  it("renders the docs sidebar with the six main sections", () => {
     render(
       <MemoryRouter initialEntries={["/docs"]}>
         <AppRoutes />
@@ -38,7 +38,9 @@ describe("website routes", () => {
       "Installation",
       "Privacy",
       "Action Types",
-      "Create an Action"
+      "Create an Action",
+      "Create a Plugin",
+      "PopClip Extensions"
     ]);
   });
 
@@ -79,6 +81,30 @@ describe("website routes", () => {
     fireEvent.click(screen.getByRole("button", { name: /See more/ }));
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("0.8.0")).toBeInTheDocument();
+    // The latest version is shown inside the opened changelog modal.
+    expect(
+      screen.getAllByText("0.3.0").length
+    ).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows short descriptions for Action Library cards and modal rows", () => {
+    render(
+      <MemoryRouter initialEntries={["/actions"]}>
+        <AppRoutes />
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.getByText("Search the selection with Google.")
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /View all 93/ }));
+
+    const modal = screen.getByRole("dialog", {
+      name: "Action Library — all presets"
+    });
+    expect(
+      within(modal).getByText("Open the selected place in Apple Maps.")
+    ).toBeInTheDocument();
   });
 });

@@ -59,7 +59,7 @@ export function Header() {
               target="_blank"
               rel="noreferrer"
             >
-              <Download size={17} aria-hidden="true" />
+              <Download size={15} aria-hidden="true" />
               Download
             </a>
           </div>
