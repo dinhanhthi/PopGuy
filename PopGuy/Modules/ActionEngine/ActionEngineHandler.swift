@@ -202,6 +202,7 @@ final class ActionEngineHandler: ToolbarActionHandling {
         // full ActionConfig including customPrompt).
         let customPrompt = config.customPrompt
         let preserveFormatting = settings.preserveFormatting
+        let globalPrompt = settings.globalPrompt
 
         let startedAt = Date()
         // Snapshot the source app now; viewModel.sourceBundleID may change mid-stream.
@@ -215,7 +216,8 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     apiKey: apiKey,
                     baseURLOverride: baseURLOverride,
                     executablePathOverride: executablePath,
-                    preserveFormatting: preserveFormatting
+                    preserveFormatting: preserveFormatting,
+                    globalPrompt: globalPrompt
                 )
                 var accumulated = ""
                 for try await token in stream {
@@ -248,6 +250,7 @@ final class ActionEngineHandler: ToolbarActionHandling {
         let executablePath = resolveExecutablePath(for: config.providerKind)
         let customPrompt = config.customPrompt
         let preserveFormatting = settings.preserveFormatting
+        let globalPrompt = settings.globalPrompt
 
         let startedAt = Date()
         // Snapshot the source app now; viewModel.sourceBundleID may change mid-stream.
@@ -261,7 +264,8 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     apiKey: apiKey,
                     baseURLOverride: baseURLOverride,
                     executablePathOverride: executablePath,
-                    preserveFormatting: preserveFormatting
+                    preserveFormatting: preserveFormatting,
+                    globalPrompt: globalPrompt
                 )
                 var accumulated = ""
                 for try await token in stream {
@@ -294,6 +298,7 @@ final class ActionEngineHandler: ToolbarActionHandling {
         let executablePath = resolveExecutablePath(for: config.providerKind)
         let customPrompt = config.customPrompt
         let preserveFormatting = settings.preserveFormatting
+        let globalPrompt = settings.globalPrompt
 
         let startedAt = Date()
         // Snapshot the source app now; viewModel.sourceBundleID may change mid-stream.
@@ -307,7 +312,8 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     apiKey: apiKey,
                     baseURLOverride: baseURLOverride,
                     executablePathOverride: executablePath,
-                    preserveFormatting: preserveFormatting
+                    preserveFormatting: preserveFormatting,
+                    globalPrompt: globalPrompt
                 )
                 var accumulated = ""
                 for try await token in stream {
@@ -360,6 +366,7 @@ final class ActionEngineHandler: ToolbarActionHandling {
         let baseURLOverride = resolveBaseURL(for: action.providerKind)
         let executablePath = resolveExecutablePath(for: action.providerKind)
         let preserveFormatting = settings.preserveFormatting
+        let globalPrompt = settings.globalPrompt
 
         // Choose the engine action based on the custom action's type.
         // .ai          → .custom(prompt:) — free-form system prompt.
@@ -391,7 +398,8 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     apiKey: apiKey,
                     baseURLOverride: baseURLOverride,
                     executablePathOverride: executablePath,
-                    preserveFormatting: preserveFormatting
+                    preserveFormatting: preserveFormatting,
+                    globalPrompt: globalPrompt
                 )
                 var accumulated = ""
                 for try await token in stream {
@@ -423,6 +431,7 @@ final class ActionEngineHandler: ToolbarActionHandling {
         let baseURLOverride = resolveBaseURL(for: config.providerKind)
         let executablePath = resolveExecutablePath(for: config.providerKind)
         let preserveFormatting = settings.preserveFormatting
+        let globalPrompt = settings.globalPrompt
 
         let startedAt = Date()
         // Snapshot the source app now; viewModel.sourceBundleID may change mid-stream.
@@ -436,7 +445,8 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     apiKey: apiKey,
                     baseURLOverride: baseURLOverride,
                     executablePathOverride: executablePath,
-                    preserveFormatting: preserveFormatting
+                    preserveFormatting: preserveFormatting,
+                    globalPrompt: globalPrompt
                 )
                 var accumulated = ""
                 for try await token in stream {
@@ -468,6 +478,7 @@ final class ActionEngineHandler: ToolbarActionHandling {
         let baseURLOverride = resolveBaseURL(for: config.providerKind)
         let executablePath = resolveExecutablePath(for: config.providerKind)
         let preserveFormatting = settings.preserveFormatting
+        let globalPrompt = settings.globalPrompt
 
         let startedAt = Date()
         // Snapshot the source app now; viewModel.sourceBundleID may change mid-stream.
@@ -485,7 +496,8 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     apiKey: apiKey,
                     baseURLOverride: baseURLOverride,
                     executablePathOverride: executablePath,
-                    preserveFormatting: preserveFormatting
+                    preserveFormatting: preserveFormatting,
+                    globalPrompt: globalPrompt
                 )
                 var accumulated = ""
                 for try await token in stream {

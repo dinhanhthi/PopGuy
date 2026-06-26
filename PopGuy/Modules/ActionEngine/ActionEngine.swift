@@ -135,6 +135,11 @@ nonisolated struct ActionEngine: Sendable {
     ///   - preserveFormatting: When true, appends a Markdown-preservation directive
     ///                      to the system prompt (or to the user input when a custom
     ///                      prompt consumed the system role via `{{text}}`).
+    ///   - globalPrompt: A user-defined instruction prepended to the action's system
+    ///                      prompt (placed first so it reads as overarching context,
+    ///                      leaving the action's authoritative directives last). When
+    ///                      the action consumed the system role via `{{text}}`, the
+    ///                      global prompt becomes the system prompt. Empty = no-op.
     /// - Returns: An `AsyncThrowingStream<String, Error>` of token deltas.
     func dispatch(
         action: Action,
@@ -143,7 +148,8 @@ nonisolated struct ActionEngine: Sendable {
         apiKey: String,
         baseURLOverride: String? = nil,
         executablePathOverride: String? = nil,
-        preserveFormatting: Bool = false
+        preserveFormatting: Bool = false,
+        globalPrompt: String = ""
     ) async throws -> AsyncThrowingStream<String, Error> {
 
         // Guard: OpenAI-wire providers that require an explicit endpoint must have
@@ -180,11 +186,25 @@ nonisolated struct ActionEngine: Sendable {
             input: input
         )
 
+        // Prepend the user's global prompt (if any) so it reads as overarching
+        // context, with the action's authoritative directives kept last. When the
+        // action consumed the system role via {{text}} (systemPrompt is nil), the
+        // global prompt becomes the system prompt instead of muddying the user input.
+        var withGlobalPrompt = systemPrompt
+        let trimmedGlobal = globalPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedGlobal.isEmpty {
+            if let existing = withGlobalPrompt {
+                withGlobalPrompt = trimmedGlobal + "\n\n" + existing
+            } else {
+                withGlobalPrompt = trimmedGlobal
+            }
+        }
+
         // When preserveFormatting is enabled, append a Markdown-preservation
         // directive. If a system prompt exists it goes there; otherwise the custom
         // prompt consumed the system role via {{text}} substitution, so the
         // directive is appended to the user input instead.
-        var finalSystemPrompt = systemPrompt
+        var finalSystemPrompt = withGlobalPrompt
         var finalInput = effectiveInput
         if preserveFormatting {
             if let systemPrompt = finalSystemPrompt {

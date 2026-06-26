@@ -154,6 +154,7 @@ final class SettingsStore: ObservableObject {
         static let showDockIconWithSettings   = "settings.showDockIconWithSettings"
         static let resultFontSize             = "settings.resultFontSize"
         static let preserveFormatting         = "settings.preserveFormatting"
+        static let globalPrompt               = "settings.globalPrompt"
         static let toolbarZoom                = "settings.toolbarZoom"
         static let zoomIncludesFontSize       = "settings.zoomIncludesFontSize"
         static let claudeCLIPath              = "settings.claudeCLIPath"
@@ -469,6 +470,14 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(preserveFormatting, forKey: Keys.preserveFormatting) }
     }
 
+    /// A user-defined instruction prepended to the prompt of every AI action
+    /// (Improve, Shorten, Proofread, Translate, custom actions, and the ask-anything
+    /// Prompt action), so the same instruction need not be repeated per action.
+    /// Default empty (no-op).
+    @Published var globalPrompt: String {
+        didSet { defaults.set(globalPrompt, forKey: Keys.globalPrompt) }
+    }
+
     /// Zoom level applied to the floating toolbar (default: .x1).
     @Published var toolbarZoom: ToolbarZoom {
         didSet { defaults.set(toolbarZoom.rawValue, forKey: Keys.toolbarZoom) }
@@ -597,6 +606,7 @@ final class SettingsStore: ObservableObject {
         showDockIconWithSettings = defaults.object(forKey: Keys.showDockIconWithSettings) as? Bool ?? true
         resultFontSize = defaults.string(forKey: Keys.resultFontSize).flatMap(ResultFontSize.init(rawValue:)) ?? .normal
         preserveFormatting = defaults.bool(forKey: Keys.preserveFormatting)
+        globalPrompt = defaults.string(forKey: Keys.globalPrompt) ?? ""
         toolbarZoom = defaults.string(forKey: Keys.toolbarZoom).flatMap(ToolbarZoom.init(rawValue:)) ?? .x1
         zoomIncludesFontSize = defaults.object(forKey: Keys.zoomIncludesFontSize) == nil ? true : defaults.bool(forKey: Keys.zoomIncludesFontSize)
         actCount = defaults.object(forKey: Keys.actCount) as? Int ?? 0

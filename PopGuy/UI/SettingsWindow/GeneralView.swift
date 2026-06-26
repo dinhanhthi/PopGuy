@@ -43,6 +43,21 @@ struct GeneralView: View {
                 }
             }
 
+            Section(header: Text("Global Prompt")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextEditor(text: $settings.globalPrompt)
+                        .font(.body)
+                        .frame(minHeight: 80)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(.separator, lineWidth: 1)
+                        )
+                    Text("Added to the beginning of every AI action's prompt — Improve, Shorten, Proofread, Translate, the Prompt action, and custom actions — so you don't repeat the same instruction in each one. Leave empty to disable.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section(header: Text("Closing the Toolbar")) {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Confirm before closing a finished result", isOn: $settings.confirmCloseAfterResult)

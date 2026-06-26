@@ -656,4 +656,116 @@ struct ActionEngineTests {
         #expect(!prompt.contains(preserveFormattingInstruction))
         #expect(mock.capturedInput == input)
     }
+
+    // MARK: - globalPrompt
+
+    private let globalPromptText = "Always respond in a concise, professional tone."
+
+    @Test("globalPrompt: prepended to the system prompt with a blank-line separator")
+    func globalPromptPrependsToSystemPrompt() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .improve(customPrompt: nil, tone: .neutral),
+            input:  "Some text",
+            config: improveConfig,
+            apiKey: "sk-test",
+            globalPrompt: globalPromptText
+        )
+        let prompt = try #require(mock.capturedSystemPrompt)
+        // Full equality: global prompt + blank-line separator + base improve prompt.
+        #expect(prompt == globalPromptText + "\n\n" + improveSystemPromptBase)
+        #expect(prompt.hasPrefix(globalPromptText + "\n\n"))
+    }
+
+    @Test("globalPrompt: becomes the system prompt when {{text}} consumed the system role")
+    func globalPromptBecomesSystemPromptWhenSystemPromptIsNil() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .custom(prompt: "Summarize: {{text}}"),
+            input:  "Hello world",
+            config: improveConfig,
+            apiKey: "sk-test",
+            globalPrompt: globalPromptText
+        )
+        // The global prompt fills the otherwise-nil system role...
+        #expect(mock.capturedSystemPrompt == globalPromptText)
+        // ...and the substituted user request is NOT polluted with the global prompt.
+        #expect(mock.capturedInput == "Summarize: Hello world")
+    }
+
+    @Test("globalPrompt + preserveFormatting: global leads, preserve directive trails")
+    func globalPromptAndPreserveFormattingOrdering() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .improve(customPrompt: nil, tone: .neutral),
+            input:  "Some text",
+            config: improveConfig,
+            apiKey: "sk-test",
+            preserveFormatting: true,
+            globalPrompt: globalPromptText
+        )
+        let prompt = try #require(mock.capturedSystemPrompt)
+        // global (prepended) + base + preserve directive (appended).
+        #expect(prompt == globalPromptText + "\n\n" + improveSystemPromptBase + "\n\n" + preserveFormattingInstruction)
+        #expect(prompt.hasPrefix(globalPromptText + "\n\n"))
+        #expect(prompt.hasSuffix("\n\n" + preserveFormattingInstruction))
+    }
+
+    @Test("globalPrompt: prepended before the Translate directives (target language stays after)")
+    func globalPromptPrependedForTranslate() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .translate(targetLanguage: "French", customPrompt: nil, tone: .neutral),
+            input:  "Hello",
+            config: translateConfig,
+            apiKey: "key-deepl",
+            globalPrompt: globalPromptText
+        )
+        let prompt = try #require(mock.capturedSystemPrompt)
+        #expect(prompt.hasPrefix(globalPromptText + "\n\n"))
+        // The authoritative translate directive must still follow the global prompt,
+        // so the configured target language keeps its higher-weight trailing position.
+        let globalRange = try #require(prompt.range(of: globalPromptText))
+        let translateRange = try #require(prompt.range(of: "Translate the following text to French."))
+        #expect(globalRange.lowerBound < translateRange.lowerBound)
+    }
+
+    @Test("globalPrompt: whitespace-only value is a no-op")
+    func globalPromptWhitespaceOnlyIsNoOp() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .improve(customPrompt: nil, tone: .neutral),
+            input:  "Some text",
+            config: improveConfig,
+            apiKey: "sk-test",
+            globalPrompt: "   \n  \t "
+        )
+        let prompt = try #require(mock.capturedSystemPrompt)
+        #expect(prompt == improveSystemPromptBase)
+    }
+
+    @Test("globalPrompt: empty default does not modify the system prompt")
+    func globalPromptEmptyDefaultIsNoOp() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .improve(customPrompt: nil, tone: .neutral),
+            input:  "Some text",
+            config: improveConfig,
+            apiKey: "sk-test"
+        )
+        let prompt = try #require(mock.capturedSystemPrompt)
+        #expect(prompt == improveSystemPromptBase)
+    }
 }
