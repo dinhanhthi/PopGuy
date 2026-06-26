@@ -481,7 +481,7 @@
   margin-top: 10px;
   color: var(--muted);
   font-size: 0.8rem;
-  text-align: center;
+  text-align: left;
 }
 
 .pro-addon ul {
@@ -852,6 +852,18 @@ input:focus-visible {
 .button--secondary:hover {
   border-color: #a8bdd5;
   background: var(--bg-blue);
+}
+
+.button--gold {
+  background: #faf0cf;
+  border-color: #e6cf8f;
+  color: #5f470a;
+  font-weight: 700;
+}
+
+.button--gold:hover {
+  background: #f5e6b4;
+  border-color: #ddc079;
 }
 
 .button--header {
