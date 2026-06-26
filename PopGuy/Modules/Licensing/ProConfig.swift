@@ -135,7 +135,7 @@ nonisolated enum ProConfig {
     /// `false` while the Lemon Squeezy store is pending approval — every purchase
     /// button is disabled and shows `purchaseComingSoonNote` instead of opening
     /// checkout. Flip to `true` once the store is live.
-    static let purchaseEnabled = false
+    static let purchaseEnabled = true
 
     /// Short note shown next to disabled purchase buttons while
     /// `purchaseEnabled` is `false`. English only (UI copy).
