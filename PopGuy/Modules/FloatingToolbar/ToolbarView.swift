@@ -229,7 +229,11 @@ struct ToolbarView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: metrics.cardRadius, style: .continuous)
-                .fill(.regularMaterial)
+                // Opaque window-background fill (not translucent material): the
+                // toolbar floats over arbitrary app content, so a vibrancy
+                // material let bright backgrounds bleed through and washed out
+                // the text. Solid fill keeps contrast and still tracks light/dark.
+                .fill(Color(nsColor: .windowBackgroundColor))
                 .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 3)
         )
         // Hairline edge so the material card stays defined on light backgrounds
