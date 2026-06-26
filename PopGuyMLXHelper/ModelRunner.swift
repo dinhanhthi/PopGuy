@@ -22,16 +22,22 @@ import Tokenizers
 ///
 /// This directory is passed to `HubCache` so that `#hubDownloader(sharedHubClient)` and
 /// `ModelDownloader` both read/write the same location.
-let sharedHubClient: HubClient = {
+///
+/// Exposed as a top-level constant so `main.swift`'s disk-polling progress sampler can
+/// derive the model's `blobs/` path without re-deriving the cache root independently.
+let sharedHubCacheDir: URL = {
     let appSupport = FileManager.default.urls(
         for: .applicationSupportDirectory, in: .userDomainMask
     ).first!
-    let cacheDir = appSupport
+    return appSupport
         .appending(component: "PopGuy", directoryHint: .isDirectory)
         .appending(component: "models", directoryHint: .isDirectory)
         .appending(component: "huggingface", directoryHint: .isDirectory)
         .appending(component: "hub", directoryHint: .isDirectory)
-    let cache = HubCache(cacheDirectory: cacheDir)
+}()
+
+let sharedHubClient: HubClient = {
+    let cache = HubCache(cacheDirectory: sharedHubCacheDir)
     return HubClient(cache: cache)
 }()
 

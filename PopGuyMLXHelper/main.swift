@@ -24,6 +24,55 @@
 
 import Foundation
 
+// MARK: - Download progress state
+
+/// Shared mutable state for the two concurrent progress paths during a Xet download.
+///
+/// @MainActor isolation makes this implicitly Sendable without @unchecked.
+/// Both the progressHandler (already @MainActor) and the disk-polling sampler
+/// (Task { @MainActor in ... }) access it on the same actor, so no data races.
+@MainActor
+private final class DownloadProgressState {
+    /// Total byte count captured from the first Progress callback.
+    /// Set to progress.totalUnitCount on the first call where it is > 0.
+    var expectedTotal: Int64 = 0
+    /// Monotonically increasing best-known fraction. Never goes backwards.
+    var highWater: Double = 0
+}
+
+// MARK: - HubCache path helpers (MIRROR)
+//
+// MIRROR: hubDirNameHelper
+//   Keep byte-identical with PopGuy/Modules/ProviderLayer/LocalEngine/MLXHelperManager.swift
+//   hubDirName(for:) until the helper is refactored to share the function.
+//   Same logic: "models--" + repoID with "/" replaced by "--".
+
+/// Maps a HuggingFace repo id to its HubCache directory name.
+/// Source of truth: swift-huggingface HubCache.repoDirectory — "models--{ns}--{name}".
+private func hubDirNameHelper(for repoID: String) -> String {
+    "models--" + repoID.replacingOccurrences(of: "/", with: "--")
+}
+
+/// Returns the total byte count of all regular files inside the model's `blobs/` directory.
+/// Returns 0 if the directory does not exist or any enumeration error occurs — never throws.
+private func blobsDirSize(cacheBase: URL, modelID: String) -> Int64 {
+    let blobsDir = cacheBase
+        .appendingPathComponent(hubDirNameHelper(for: modelID))
+        .appendingPathComponent("blobs")
+    guard let enumerator = FileManager.default.enumerator(
+        at: blobsDir,
+        includingPropertiesForKeys: [.fileSizeKey],
+        options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+    ) else { return 0 }
+    var total: Int64 = 0
+    for case let fileURL as URL in enumerator {
+        if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+            total += Int64(size)
+        }
+    }
+    return total
+}
+
 // MARK: - Constants
 
 /// Maximum line length in bytes before the line is rejected (OOM prevention).
@@ -194,6 +243,37 @@ func runMain() async {
 
             case .download(let modelID):
                 let modelDownloader = ModelDownloader(hubClient: sharedHubClient)
+                // Shared mutable state for the two progress paths.
+                // Both paths run on @MainActor so access is serialized.
+                let state = DownloadProgressState()
+
+                // Disk-polling sampler: every ~1 s, sum blob sizes on disk and emit
+                // a progress fraction derived from on-disk bytes vs. expectedTotal.
+                // This unblocks the progress bar during large Xet downloads where
+                // Foundation Progress stays near 0 until the blob finishes.
+                // The task captures `state` (a let binding), which is @MainActor and
+                // therefore implicitly Sendable — no @unchecked, no suppressions.
+                let sampler = Task { @MainActor in
+                    while !Task.isCancelled {
+                        try? await Task.sleep(nanoseconds: 1_000_000_000)  // 1 s
+                        guard !Task.isCancelled else { break }
+                        let expectedTotal = state.expectedTotal
+                        guard expectedTotal > 0 else { continue }
+                        let onDisk = blobsDirSize(cacheBase: sharedHubCacheDir, modelID: modelID)
+                        let diskFraction = min(1.0, Double(onDisk) / Double(expectedTotal))
+                        // Monotonic: never go backwards.
+                        let fraction = max(diskFraction, state.highWater)
+                        state.highWater = fraction
+                        writeResponse(.progress(
+                            modelID: modelID,
+                            fraction: fraction,
+                            downloadedBytes: onDisk,
+                            totalBytes: expectedTotal
+                        ))
+                    }
+                }
+                defer { sampler.cancel() }
+
                 do {
                     _ = try await modelDownloader.downloadSnapshot(
                         modelID: modelID,
@@ -201,12 +281,21 @@ func runMain() async {
                             // Use fractionCompleted to aggregate child file progress.
                             // progress.completedUnitCount stays 0 on the parent; only
                             // fractionCompleted correctly reflects child progress.
-                            let fraction = max(0.0, min(1.0, progress.fractionCompleted))
+                            //
+                            // Capture expectedTotal from the first callback where
+                            // totalUnitCount is positive (used by the disk sampler).
                             let total = progress.totalUnitCount
-                            let downloaded = Int64(Double(total) * fraction)
+                            if state.expectedTotal == 0, total > 0 {
+                                state.expectedTotal = total
+                            }
+                            let fraction = max(0.0, min(1.0, progress.fractionCompleted))
+                            // Monotonic: take the best of Foundation progress and disk sampler.
+                            let bestFraction = max(fraction, state.highWater)
+                            state.highWater = bestFraction
+                            let downloaded = Int64(Double(total) * bestFraction)
                             writeResponse(.progress(
                                 modelID: modelID,
-                                fraction: fraction,
+                                fraction: bestFraction,
                                 downloadedBytes: downloaded,
                                 totalBytes: total
                             ))

@@ -34,9 +34,15 @@ nonisolated struct MLXLocalProvider: Provider {
         let maxTokens = max(1, min(options.maxTokens, 16384))
         let temperature = 0.7  // ProviderOptions has no temperature field; use safe default.
 
+        // The action stores the catalog id (e.g. "gemma-4-e2b"); the helper needs the
+        // HuggingFace repo id (e.g. "mlx-community/gemma-4-e2b-it-4bit") to load the model.
+        // Map id -> repoID via the catalog, matching the download path. Fall back to the
+        // raw value so a directly-entered repo id still works.
+        let repoID = LocalModelCatalog.model(for: model)?.repoID ?? model
+
         do {
             return try await MLXHelperManager.shared.generate(
-                modelID: model,
+                modelID: repoID,
                 systemPrompt: systemPrompt,
                 input: input,
                 maxTokens: maxTokens,
