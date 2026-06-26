@@ -74,7 +74,7 @@ public nonisolated enum LocalModelCatalog {
         LocalModel(
             id: "gemma-4-e2b",
             repoID: "mlx-community/gemma-4-e2b-it-4bit",
-            displayName: "Gemma 4 2B (4-bit) — Free",
+            displayName: "Gemma 4 2B (4-bit)",
             family: .gemma,
             approxSizeBytes: 1_000_000_000,
             minRAMBytes: 4_294_967_296
