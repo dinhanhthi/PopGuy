@@ -1098,8 +1098,14 @@ final class SettingsStore: ObservableObject {
     ///
     /// Returns nil without launching the helper when it is not running.
     /// The UI calls this on a timer and after generate/unload to keep the indicator current.
+    ///
+    /// The helper reports the loaded model by its HuggingFace **repo id** (what
+    /// `generate` loads); the UI keys off the catalog **id**, so map repo id → catalog id.
     func refreshLoadedLocalModel() async {
-        loadedLocalModelID = await mlxHelper.loadedModelID()
+        let reportedRepoID = await mlxHelper.loadedModelID()
+        loadedLocalModelID = reportedRepoID.flatMap { repo in
+            LocalModelCatalog.all.first { $0.repoID == repo }?.id
+        }
     }
 
     /// Unload the currently loaded model from the helper, then refresh `loadedLocalModelID`.

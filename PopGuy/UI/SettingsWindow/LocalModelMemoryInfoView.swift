@@ -16,12 +16,12 @@ struct LocalModelMemoryInfoView: View {
     let onClose: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             headerBar
             Divider()
             scrollContent
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 480, minHeight: 520)
     }
 
     // MARK: - Header
@@ -31,7 +31,6 @@ struct LocalModelMemoryInfoView: View {
             Image(systemName: "memorychip")
                 .font(.title3)
                 .foregroundStyle(.secondary)
-                .frame(width: 24)
             Text("How Models Use Memory")
                 .font(.title2.weight(.semibold))
             Spacer(minLength: 0)
@@ -43,10 +42,10 @@ struct LocalModelMemoryInfoView: View {
             .buttonStyle(.plain)
             .hoverTooltip("Close")
         }
-        .padding(.horizontal, SettingsMetrics.pagePadding)
-        .padding(.top, 14)
-        .padding(.bottom, 14)
-        .ignoresSafeArea(.container, edges: .top)
+        .padding(.horizontal, SettingsMetrics.cardPadding)
+        .padding(.bottom, SettingsMetrics.cardPadding)
+        .padding(.top, 0)
+        .padding(.bottom, 2)
     }
 
     // MARK: - Scroll content
@@ -57,7 +56,7 @@ struct LocalModelMemoryInfoView: View {
 
                 infoSection(
                     symbol: "memorychip",
-                    title: "What \"Needs X GB RAM\" means"
+                    title: "What \"Needs X GB RAM\" means?"
                 ) {
                     Text(
                         "The RAM figure is the recommended unified memory for that model on Apple Silicon. " +
@@ -69,7 +68,7 @@ struct LocalModelMemoryInfoView: View {
 
                 infoSection(
                     symbol: "clock.arrow.circlepath",
-                    title: "When a model loads — cold start"
+                    title: "When a model loads — cold start?"
                 ) {
                     Text(
                         "A model is not loaded when you download it or when PopGuy launches. It loads the " +

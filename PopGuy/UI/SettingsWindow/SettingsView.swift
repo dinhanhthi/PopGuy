@@ -104,12 +104,6 @@ struct SettingsView: View {
     /// cover the sidebar list and footer. Set by ActionsView via a binding.
     @State private var editingAction: CustomAction?
 
-    /// Mirrors `editingAction` but trails it by the panel animation duration on
-    /// dismiss, so the slide-out animation renders the form rather than a blank panel.
-    /// Set to non-nil immediately when editingAction is set; cleared after dismiss
-    /// animation completes (panelAnimation duration = 0.28 s).
-    @State private var displayedEditingAction: CustomAction?
-
     /// When true, the Action Library gallery panel slides in from the right edge,
     /// matching the Add/Edit Action panel. Lifted here (not in ActionsView) so it
     /// covers the whole window. Set by ActionsView's "Browse Library" button.
@@ -190,24 +184,20 @@ struct SettingsView: View {
             // Floor at 480 to honour CustomActionEditSheet's own minWidth
             // (avoids horizontal clipping when the window is near its minimum).
             //
-            // `displayedEditingAction` trails `editingAction` by the animation
-            // duration so the form stays visible during the slide-out transition
-            // (the content closure must not evaluate to empty while animating out).
+            // Driven directly off `editingAction`: SwiftUI keeps the outgoing
+            // view's snapshot during the .move transition, so the form stays
+            // visible while sliding out (same as the Action Library panel).
             SlideOverPanel(
                 isPresented: editingAction != nil,
                 containerWidth: containerWidth,
                 widthFraction: 3.0 / 4.0,
                 minWidth: 480,
                 onDismiss: {
-                    // SlideOverPanel already wraps this call in withAnimation;
-                    // we only need to set the flag here.
+                    // SlideOverPanel already wraps this call in withAnimation.
                     editingAction = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
-                        displayedEditingAction = nil
-                    }
                 }
             ) {
-                if let action = displayedEditingAction {
+                if let action = editingAction {
                     CustomActionEditSheet(
                         action: action,
                         settings: settings,
@@ -223,15 +213,9 @@ struct SettingsView: View {
                             }
                             if clamped { showSaveLimitAlert = true }
                             withAnimation(panelAnimation) { editingAction = nil }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
-                                displayedEditingAction = nil
-                            }
                         },
                         onCancel: {
                             withAnimation(panelAnimation) { editingAction = nil }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
-                                displayedEditingAction = nil
-                            }
                         }
                     )
                 }
@@ -284,11 +268,6 @@ struct SettingsView: View {
                     }
                 )
             }
-        }
-        // Mirror editingAction → displayedEditingAction on open only; dismiss
-        // path clears displayedEditingAction after the animation (0.30 s delay).
-        .onChange(of: editingAction) { newValue in
-            if let newValue { displayedEditingAction = newValue }
         }
         .frame(minWidth: 680, idealWidth: 740, minHeight: 460, idealHeight: 520)
         .alert("Toolbar Limit Reached", isPresented: $showSaveLimitAlert) {
