@@ -178,6 +178,7 @@
 				D34244432FD4A56C001600A8 /* Frameworks */,
 				D34244442FD4A56C001600A8 /* Resources */,
 				D3BD08622FED9BE700078DEB /* CopyFiles */,
+				D3BD18CB2FEE958200078DEB /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -348,6 +349,27 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		D3BD18CB2FEE958200078DEB /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Embed the MLX Metal shader bundle next to the helper so MLX can load its\n# default.metallib at runtime (the helper searches its own directory). Copy the\n# whole resource bundle (a proper, signable nested bundle) and code-sign it so the\n# app's outer code-signing accepts it.\nset -e\nSRC=\"${BUILT_PRODUCTS_DIR}/mlx-swift_Cmlx.bundle\"\nDEST_DIR=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers\"\nDEST=\"${DEST_DIR}/mlx-swift_Cmlx.bundle\"\nif [ -d \"$SRC\" ]; then\n  mkdir -p \"$DEST_DIR\"\n  rm -rf \"$DEST\"\n  cp -R \"$SRC\" \"$DEST\"\n  # Remove the stale loose copy from earlier attempts, if present.\n  rm -f \"${DEST_DIR}/mlx.metallib\"\n  if [ -n \"${EXPANDED_CODE_SIGN_IDENTITY:-}\" ] && [ \"${EXPANDED_CODE_SIGN_IDENTITY}\" != \"-\" ]; then\n    codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" \"$DEST\"\n  else\n    codesign --force --sign - \"$DEST\"\n  fi\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		D34244422FD4A56C001600A8 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -436,7 +458,7 @@
 				DEVELOPMENT_TEAM = 86H6CNLN4C;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -500,7 +522,7 @@
 				DEVELOPMENT_TEAM = 86H6CNLN4C;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
