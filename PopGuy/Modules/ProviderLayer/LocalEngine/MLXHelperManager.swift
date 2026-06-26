@@ -584,6 +584,10 @@ actor MLXHelperManager {
     /// HubCache folder layout (matches swift-huggingface HubCache.repoDirectory):
     ///   `<hubCacheBaseURL>/models--{ns}--{name}/refs/main`
     /// where `/` in the repo id is replaced with `--`.
+    ///
+    /// NOTE: The store no longer uses `installedModels()` as the authority for which
+    /// models are installed — it uses its own persisted completed set. This method is
+    /// kept for legacy test coverage (MLXHelperManagerTests) and must not be removed.
     func installedModels() -> [String] {
         let hubDir = resolvedHubDir()
 
@@ -594,6 +598,18 @@ actor MLXHelperManager {
                 .appendingPathComponent("main")
             return FileManager.default.fileExists(atPath: refsMain.path) ? model.id : nil
         }
+    }
+
+    /// Returns true if the HubCache model directory exists on disk for the given catalog model id.
+    ///
+    /// Used by `SettingsStore.refreshInstalledLocalModels()` as a reconciliation check:
+    /// a model id in the persisted completed set is dropped when its directory is absent
+    /// (external deletion). This is NOT used to infer installation from disk alone.
+    func modelDirExists(modelID: String) -> Bool {
+        guard let model = LocalModelCatalog.model(for: modelID) else { return false }
+        let hubDir = resolvedHubDir()
+        let modelDir = hubDir.appendingPathComponent(hubDirName(for: model.repoID))
+        return FileManager.default.fileExists(atPath: modelDir.path)
     }
 
     /// Remove all cached files for a catalog model.

@@ -198,11 +198,12 @@ func runMain() async {
                     _ = try await modelDownloader.downloadSnapshot(
                         modelID: modelID,
                         progressHandler: { progress in
-                            let downloaded = Int64(progress.completedUnitCount)
-                            let total = Int64(progress.totalUnitCount)
-                            let fraction = total > 0
-                                ? Double(downloaded) / Double(total)
-                                : 0.0
+                            // Use fractionCompleted to aggregate child file progress.
+                            // progress.completedUnitCount stays 0 on the parent; only
+                            // fractionCompleted correctly reflects child progress.
+                            let fraction = max(0.0, min(1.0, progress.fractionCompleted))
+                            let total = progress.totalUnitCount
+                            let downloaded = Int64(Double(total) * fraction)
                             writeResponse(.progress(
                                 modelID: modelID,
                                 fraction: fraction,

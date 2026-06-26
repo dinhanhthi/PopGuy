@@ -82,8 +82,11 @@ private func writeStubHelper(mode: StubMode = .fast) throws -> URL {
     return stubURL
 }
 
-/// Creates the `refs/main` sentinel file that MLXHelperManager.installedModels()
-/// uses to detect whether a model is present on disk.
+/// Creates the model directory tree that `MLXHelperManager.modelDirExists(modelID:)`
+/// uses to detect whether a model's files are still on disk.
+///
+/// Also creates `refs/main` so that the legacy `installedModels()` helper (used by
+/// MLXHelperManagerTests) still returns the seeded model.
 ///
 /// - Parameters:
 ///   - hubDir: The base hub cache directory (injected into MLXHelperManager).
@@ -94,6 +97,13 @@ private func seedInstalledModel(hubDir: URL, repoID: String) throws {
         .appendingPathComponent("refs")
     try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
     try "".write(to: modelDir.appendingPathComponent("main"), atomically: true, encoding: .utf8)
+}
+
+/// Removes the model directory that `seedInstalledModel` created, simulating an
+/// external deletion. Used by the reconciliation tests.
+private func removeInstalledModel(hubDir: URL, repoID: String) throws {
+    let modelDir = hubDir.appendingPathComponent(hubDirName(for: repoID))
+    try FileManager.default.removeItem(at: modelDir)
 }
 
 // MARK: - Timeout helper
@@ -389,6 +399,8 @@ struct LocalMLXSettingsTests {
         #expect(store.activeLocalModelDownloadID == nil, "Expected activeID cleared after cancel")
         #expect(store.localModelDownloadProgress.isEmpty, "Expected progress dict cleared after cancel")
         #expect(store.localModelDownloadError == nil, "Expected no error after a clean cancel")
+        #expect(!store.installedLocalModels.contains(freeModel.id),
+                "Expected cancelled download NOT to mark model installed")
 
         await manager.shutdown()
     }
@@ -420,6 +432,8 @@ struct LocalMLXSettingsTests {
         #expect(store.localModelDownloadError != nil, "Expected error to be set after stub failure")
         #expect(store.activeLocalModelDownloadID == nil, "Expected activeID cleared after error")
         #expect(store.localModelDownloadProgress.isEmpty, "Expected progress cleared after error")
+        #expect(!store.installedLocalModels.contains(freeModel.id),
+                "Expected failed download NOT to mark model installed")
 
         await manager.shutdown()
     }
@@ -533,8 +547,16 @@ struct LocalMLXSettingsTests {
 
     // MARK: - refreshInstalledLocalModels
 
-    @Test("refreshInstalledLocalModels reflects seeded model on disk")
-    func refreshReflectsSeededModel() async throws {
+    /// Reconciliation removes a completed model from installedLocalModels when its
+    /// directory is externally deleted from disk.
+    ///
+    /// New contract: installedLocalModels = completedLocalModelIDs ∩ disk.
+    /// Disk-only presence (no entry in completedLocalModelIDs) is NOT sufficient.
+    @Test("refreshInstalledLocalModels reconciliation removes externally-deleted model")
+    func refreshReconciliationRemovesDeletedModel() async throws {
+        let stubURL = try writeStubHelper(mode: .fast)
+        defer { try? FileManager.default.removeItem(at: stubURL) }
+
         let tempHub = FileManager.default.temporaryDirectory
             .appendingPathComponent("LocalMLXHub-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: tempHub) }
@@ -543,18 +565,54 @@ struct LocalMLXSettingsTests {
         defer { removeSuite(name) }
 
         let freeModel = LocalModelCatalog.all.first { $0.isFreeTier }!
+        // Seed the model directory so modelDirExists returns true during the download.
         try seedInstalledModel(hubDir: tempHub, repoID: freeModel.repoID)
 
-        // No stub needed — installedModels() is synchronous file I/O, no helper launch.
+        let manager = MLXHelperManager(helperURL: stubURL, supported: true, hubCacheBaseURL: tempHub)
+        let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
+
+        // Complete a download so the model ends up in completedLocalModelIDs.
+        store.downloadLocalModel(freeModel.id, isPro: false)
+        try await withTimeout(seconds: 10) {
+            while await store.activeLocalModelDownloadID != nil {
+                try await Task.sleep(nanoseconds: 20_000_000)
+            }
+        }
+        #expect(store.installedLocalModels.contains(freeModel.id),
+                "Expected model installed after successful download")
+
+        // Simulate external deletion by removing the model directory.
+        try removeInstalledModel(hubDir: tempHub, repoID: freeModel.repoID)
+
+        // Reconciliation should drop the id.
+        await store.refreshInstalledLocalModels()
+        #expect(!store.installedLocalModels.contains(freeModel.id),
+                "Expected model removed from installedLocalModels after directory deletion")
+
+        await manager.shutdown()
+    }
+
+    /// Disk-only presence does NOT make a model show as installed.
+    /// The completed set must contain the id for it to appear installed.
+    @Test("refreshInstalledLocalModels ignores disk-only presence (no completed entry)")
+    func refreshIgnoresDiskOnlyPresence() async throws {
+        let tempHub = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LocalMLXHub-diskonly-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: tempHub) }
+
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let freeModel = LocalModelCatalog.all.first { $0.isFreeTier }!
+        // Seed the directory on disk — but do NOT record it in completedLocalModelIDs.
+        try seedInstalledModel(hubDir: tempHub, repoID: freeModel.repoID)
+
         let manager = MLXHelperManager(helperURL: URL(fileURLWithPath: "/nonexistent"), supported: true, hubCacheBaseURL: tempHub)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
-        #expect(store.installedLocalModels.isEmpty, "Cache starts empty before refresh")
-
         await store.refreshInstalledLocalModels()
-
-        #expect(store.installedLocalModels.contains(freeModel.id),
-                "Expected \(freeModel.id) to appear after refresh")
+        #expect(store.installedLocalModels.isEmpty,
+                "Expected empty: disk-only presence without a completed entry must not show as installed")
     }
 
     @Test("refreshInstalledLocalModels returns empty when no models seeded")
@@ -571,5 +629,19 @@ struct LocalMLXSettingsTests {
 
         await store.refreshInstalledLocalModels()
         #expect(store.installedLocalModels.isEmpty, "Expected empty set when no models are on disk")
+    }
+
+    // MARK: - allowedProviders contains .mlxLocal (Issue 4)
+
+    @Test(".mlxLocal is in ActionKind.improve.allowedProviders")
+    func mlxLocalInImproveAllowedProviders() {
+        #expect(ActionKind.improve.allowedProviders.contains(.mlxLocal),
+                "Expected .mlxLocal in improve.allowedProviders")
+    }
+
+    @Test(".mlxLocal is in CustomAction.allowedProviders(for: .ai)")
+    func mlxLocalInCustomActionAIAllowedProviders() {
+        #expect(CustomAction.allowedProviders(for: .ai).contains(.mlxLocal),
+                "Expected .mlxLocal in CustomAction.allowedProviders(for: .ai)")
     }
 }

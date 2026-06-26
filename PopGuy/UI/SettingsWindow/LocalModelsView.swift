@@ -127,7 +127,7 @@ struct LocalModelsView: View {
                         .font(.callout)
                         .lineLimit(1)
 
-                    if !model.isFreeTier {
+                    if !model.isFreeTier && !isPro {
                         ProBadge()
                             .hoverTooltip("Requires a Pro license")
                     }

@@ -25,8 +25,11 @@
 // on the MainActor via the wiring in ActionEngineHandler, so no actor hop is
 // needed at dispatch time.
 //
-// Local (MLX) model state (not persisted — disk is source of truth):
-//   - installedLocalModels: Set<String>  — catalog model ids on disk (cache)
+// Local (MLX) model state:
+//   - completedLocalModelIDs: Set<String>  — PERSISTED set of successfully-downloaded model ids
+//                                            (source of truth for installation status)
+//   - installedLocalModels: Set<String>  — PUBLISHED cache: completedLocalModelIDs reconciled
+//                                          with disk (ids whose model dir no longer exists are dropped)
 //   - localModelDownloadProgress: [String: Double]  — transient, cleared on completion
 //   - activeLocalModelDownloadID: String?  — which model is being downloaded
 //   - localModelDownloadError: String?  — last download error message
@@ -162,6 +165,7 @@ final class SettingsStore: ObservableObject {
         static let actionOrder                = "settings.actionOrder"
         static let principalActionIDs         = "settings.principalActionIDs"
         static let actCount                   = "settings.actCount"
+        static let completedLocalModelIDs     = "settings.completedLocalModelIDs"
     }
 
     // MARK: - Storage
@@ -178,12 +182,25 @@ final class SettingsStore: ObservableObject {
     /// depending on actual hardware. Production passes `MLXCapability.isSupported`.
     private let isMLXSupported: Bool
 
-    // MARK: - Local model state (transient — NOT persisted)
+    // MARK: - Local model state
 
-    /// Catalog model ids whose files are present on disk.
+    /// Persisted set of catalog model ids that have completed a successful download.
     ///
-    /// This is a CACHE of `MLXHelperManager.installedModels()`. Disk is the source
-    /// of truth. Call `refreshInstalledLocalModels()` to sync.
+    /// This is the SOURCE OF TRUTH for which models are installed. A model is
+    /// added here only when its download stream completes without error and without
+    /// cancellation. `refreshInstalledLocalModels()` reconciles this set with disk
+    /// (drops ids whose directory no longer exists) to detect external deletions.
+    ///
+    /// Persisted to UserDefaults so the installed status survives app restarts
+    /// without rescanning disk every launch.
+    private var completedLocalModelIDs: Set<String> {
+        didSet {
+            save(completedLocalModelIDs, key: Keys.completedLocalModelIDs)
+        }
+    }
+
+    /// Catalog model ids confirmed as installed: the persisted completed set
+    /// reconciled against disk. Published so the UI can observe changes.
     @Published private(set) var installedLocalModels: Set<String> = []
 
     /// Per-model download progress (0.0 … 1.0). Cleared on completion or error.
@@ -479,6 +496,7 @@ final class SettingsStore: ObservableObject {
         self.defaults = defaults
         self.mlxHelper = mlxHelper
         self.isMLXSupported = isMLXSupported
+        completedLocalModelIDs = Self.load(Set<String>.self, key: Keys.completedLocalModelIDs, from: defaults) ?? []
 
         // Load persisted values or fall back to built-in defaults.
         let rawImproveConfig = Self.load(ActionConfig.self, key: Keys.improveConfig, from: defaults) ?? .defaultImprove
@@ -1051,14 +1069,28 @@ final class SettingsStore: ObservableObject {
 
     // MARK: - Local model installed-models cache
 
-    /// Refresh the `installedLocalModels` cache from disk.
+    /// Refresh the `installedLocalModels` cache.
     ///
-    /// Delegates to `MLXHelperManager.installedModels()` (actor-isolated) and
-    /// updates the published set on the MainActor. Call on Settings view appear
-    /// and after any download or delete completes.
+    /// Reconciles the persisted `completedLocalModelIDs` set against disk:
+    /// - Keeps an id only if its model directory still exists on disk.
+    /// - NEVER adds an id just because disk files exist — only successful
+    ///   downloads (tracked in completedLocalModelIDs) count as installed.
+    /// - Writes back any pruned ids to keep the persisted set consistent with disk.
+    ///
+    /// Call on Settings view appear and after any download or delete completes.
     func refreshInstalledLocalModels() async {
-        let ids = await mlxHelper.installedModels()
-        installedLocalModels = Set(ids)
+        let helper = mlxHelper
+        var reconciled = Set<String>()
+        for id in completedLocalModelIDs {
+            if await helper.modelDirExists(modelID: id) {
+                reconciled.insert(id)
+            }
+        }
+        // Write back pruned set if anything was removed (external deletion).
+        if reconciled != completedLocalModelIDs {
+            completedLocalModelIDs = reconciled
+        }
+        installedLocalModels = reconciled
     }
 
     // MARK: - Local model download
@@ -1109,12 +1141,18 @@ final class SettingsStore: ObservableObject {
         let helper = mlxHelper
 
         activeDownloadTask = Task {
+            var completedSuccessfully = false
             do {
                 let stream = try await helper.download(modelID: repoID)
                 for try await progress in stream {
                     if Task.isCancelled { break }
                     guard myToken == downloadToken else { return }
                     localModelDownloadProgress[id] = progress.fraction
+                }
+                // Mark success only when the loop finished without cancellation
+                // and this token is still the current download.
+                if !Task.isCancelled {
+                    completedSuccessfully = true
                 }
             } catch {
                 guard myToken == downloadToken else { return }
@@ -1123,6 +1161,10 @@ final class SettingsStore: ObservableObject {
                 }
             }
             guard myToken == downloadToken else { return }
+            // Record the model as installed only on a verified successful completion.
+            if completedSuccessfully {
+                completedLocalModelIDs.insert(id)
+            }
             localModelDownloadProgress.removeValue(forKey: id)
             activeLocalModelDownloadID = nil
             await refreshInstalledLocalModels()
@@ -1144,11 +1186,13 @@ final class SettingsStore: ObservableObject {
     ///
     /// If a download of the same model is in flight, it is cancelled first to
     /// prevent the download racing against the delete and writing files after
-    /// the delete completes.
+    /// the delete completes. The model id is removed from the persisted completed
+    /// set so it no longer shows as installed.
     func deleteLocalModel(_ id: String) async {
         if activeLocalModelDownloadID == id {
             cancelLocalModelDownload()
         }
+        completedLocalModelIDs.remove(id)
         await mlxHelper.delete(modelID: id)
         await refreshInstalledLocalModels()
     }

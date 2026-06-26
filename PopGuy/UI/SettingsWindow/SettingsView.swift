@@ -561,9 +561,10 @@ private struct APIKeysTab: View {
                     selection: $providerCategory,
                     segments: [
                         .init(value: 0, label: "AI"),
-                        .init(value: 1, label: "Translation"),
-                        .init(value: 2, label: "Speech"),
-                        .init(value: 3, label: "Dictionary"),
+                        .init(value: 1, label: "Local"),
+                        .init(value: 2, label: "Translation"),
+                        .init(value: 3, label: "Speech"),
+                        .init(value: 4, label: "Dictionary"),
                     ]
                 )
 
@@ -578,8 +579,9 @@ private struct APIKeysTab: View {
                 VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
                     switch providerCategory {
                     case 0:  aiProviderCards
-                    case 1:  translationProviderCards
-                    case 2:  speechProviderCards
+                    case 1:  localProviderCards
+                    case 2:  translationProviderCards
+                    case 3:  speechProviderCards
                     default: dictionaryProviderCards
                     }
                 }
@@ -737,8 +739,12 @@ private struct APIKeysTab: View {
                 onVerify: { await verifyKey(for: .custom) }
             )
         }
+    }
 
-        // Local (MLX) on-device models — manager card at the bottom of the AI segment.
+    // MARK: - Local (MLX) cards
+
+    @ViewBuilder
+    private var localProviderCards: some View {
         LocalModelsView(
             settings: settings,
             isPro: licenseGate.entitlements.isPro,
