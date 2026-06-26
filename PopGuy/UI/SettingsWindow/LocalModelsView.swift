@@ -1,0 +1,328 @@
+// LocalModelsView.swift
+// PopGuy — UI/SettingsWindow
+//
+// SwiftUI view for managing on-device MLX models (download, delete, progress).
+//
+// Displayed inside the Providers tab (AI segment) as a SettingsCard at the
+// bottom of the AI provider list. Shows the full LocalModelCatalog, gated by
+// MLXCapability and the user's Pro status.
+//
+// API consumed (all from Phase 3 / Phase 4 — no new logic here):
+//   - MLXCapability.isSupported / .unsupportedReason
+//   - LocalModelCatalog.all
+//   - SettingsStore.installedLocalModels, .localModelDownloadProgress,
+//     .activeLocalModelDownloadID, .localModelDownloadError
+//   - SettingsStore.availability(for:isPro:) → LocalModelAvailability
+//   - SettingsStore.downloadLocalModel(_:isPro:)   (sync)
+//   - SettingsStore.cancelLocalModelDownload()     (sync)
+//   - SettingsStore.deleteLocalModel(_:)           (async — wrapped in Task)
+//   - SettingsStore.refreshInstalledLocalModels()  (async — wrapped in Task)
+//
+// Isolation: @MainActor throughout — implicitly via SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor.
+// SettingsStore is @MainActor ObservableObject; observed via @ObservedObject.
+
+import SwiftUI
+
+// MARK: - LocalModelsView
+
+/// Full Local (MLX) model manager card: capability check, catalog list,
+/// download / cancel / delete controls, and Pro-lock state.
+struct LocalModelsView: View {
+
+    @ObservedObject var settings: SettingsStore
+    /// True when the user holds a Pro license or an active trial.
+    let isPro: Bool
+    /// Navigates to the License tab when the user taps "Get Pro" on a locked model.
+    var onUpgrade: () -> Void = {}
+
+    /// Delete error message, distinct from download error.
+    /// Surfaced in the same error-banner area as download errors.
+    @State private var deleteError: String? = nil
+
+    // MARK: - Body
+
+    var body: some View {
+        SettingsCard(
+            title: "Local (On-Device) Models",
+            subtitle: "Run AI privately — no API key, no internet required."
+        ) {
+            if !MLXCapability.isSupported {
+                unsupportedNotice
+            } else {
+                modelList
+            }
+        }
+    }
+
+    // MARK: - Unsupported notice
+
+    /// Shown on Intel Macs or macOS 13: calm, intentional-looking notice.
+    private var unsupportedNotice: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "memorychip")
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Not available on your Mac")
+                    .font(.callout)
+                Text(MLXCapability.unsupportedReason)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    // MARK: - Model list
+
+    private var modelList: some View {
+        VStack(alignment: .leading, spacing: SettingsMetrics.contentSpacing) {
+            // Show whichever error is most recent; download error takes priority
+            // when both are set (a fresh download attempt clears deleteError anyway).
+            if let errorMsg = settings.localModelDownloadError ?? deleteError {
+                errorBanner(errorMsg)
+            }
+
+            ForEach(LocalModelCatalog.all, id: \.id) { model in
+                modelRow(model)
+
+                if model.id != LocalModelCatalog.all.last?.id {
+                    Divider()
+                }
+            }
+        }
+        .task {
+            await settings.refreshInstalledLocalModels()
+        }
+    }
+
+    // MARK: - Error banner
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .font(.callout)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Model row
+
+    @ViewBuilder
+    private func modelRow(_ model: LocalModel) -> some View {
+        let availability = settings.availability(for: model, isPro: isPro)
+        let isDownloading = settings.activeLocalModelDownloadID == model.id
+        let isInstalled = settings.installedLocalModels.contains(model.id)
+
+        HStack(spacing: 10) {
+            // Left: name + metadata
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(model.displayName)
+                        .font(.callout)
+                        .lineLimit(1)
+
+                    if !model.isFreeTier {
+                        ProBadge()
+                            .hoverTooltip("Requires a Pro license")
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    Label(
+                        formatBytes(model.approxSizeBytes),
+                        systemImage: "internaldrive"
+                    )
+                    Label(
+                        "needs \(formatRAM(model.minRAMBytes))",
+                        systemImage: "memorychip"
+                    )
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .labelStyle(.titleAndIcon)
+            }
+
+            Spacer(minLength: 8)
+
+            // Right: state-dependent control
+            trailingControl(model: model, availability: availability, isDownloading: isDownloading, isInstalled: isInstalled)
+        }
+
+        // Progress bar — shown below the row when this model is being downloaded
+        if isDownloading {
+            let progress = settings.localModelDownloadProgress[model.id] ?? 0.0
+            ProgressView(value: progress, total: 1.0)
+                .progressViewStyle(.linear)
+                .tint(.accentColor)
+        }
+    }
+
+    // MARK: - Trailing control
+
+    @ViewBuilder
+    private func trailingControl(
+        model: LocalModel,
+        availability: LocalModelAvailability,
+        isDownloading: Bool,
+        isInstalled: Bool
+    ) -> some View {
+        switch availability {
+        case .unsupported:
+            // Should not reach here (whole list is hidden), but guard anyway.
+            EmptyView()
+
+        case .proLocked:
+            // Pro-locked model.
+            //
+            // Delete is ALWAYS allowed when a model is already on disk — the user
+            // must be able to reclaim space even after downgrading from Pro.
+            //
+            // Download/use stays gated behind the upgrade flow.
+            if isInstalled {
+                HStack(spacing: 8) {
+                    // Lock badge signals the model can't be re-downloaded without Pro.
+                    Button {
+                        onUpgrade()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "lock.fill")
+                                .font(.caption)
+                            Text("Pro")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(.proGold)
+                    .hoverTooltip("Requires Pro to download or use. Tap to upgrade.")
+
+                    deleteButton(for: model)
+                }
+            } else {
+                // Not installed: upgrade button only.
+                Button {
+                    onUpgrade()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "lock.fill")
+                            .font(.caption)
+                        Text("Pro")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(.proGold)
+                .hoverTooltip("This model requires a Pro license. Tap to upgrade.")
+            }
+
+        case .available:
+            if isDownloading {
+                // Downloading: progress is shown below the row; Cancel button here.
+                Button("Cancel") {
+                    settings.cancelLocalModelDownload()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .hoverTooltip("Cancel the download")
+
+            } else if isInstalled {
+                // Installed: indicator + Delete button
+                HStack(spacing: 8) {
+                    Label("Installed", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                        .labelStyle(.titleAndIcon)
+
+                    deleteButton(for: model)
+                }
+
+            } else {
+                // Not installed, not downloading: Download button
+                let anyDownloadActive = settings.activeLocalModelDownloadID != nil
+                Button("Download") {
+                    deleteError = nil
+                    settings.downloadLocalModel(model.id, isPro: isPro)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(anyDownloadActive)
+                .hoverTooltip(anyDownloadActive
+                    ? "Another model is downloading — wait for it to finish"
+                    : "Download \(model.displayName)")
+            }
+        }
+    }
+
+    // MARK: - Delete button
+
+    /// Shared delete button used by both `.available` and `.proLocked` installed states.
+    @ViewBuilder
+    private func deleteButton(for model: LocalModel) -> some View {
+        Button("Delete") {
+            deleteError = nil
+            Task {
+                await settings.deleteLocalModel(model.id)
+                // deleteLocalModel calls refreshInstalledLocalModels internally,
+                // so the installed set updates automatically. If the model file
+                // remains (e.g. file-system error), surface a generic message.
+                if settings.installedLocalModels.contains(model.id) {
+                    deleteError = "Could not delete \(model.displayName). Check disk permissions and try again."
+                }
+            }
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .hoverTooltip("Remove this model from disk")
+    }
+
+    // MARK: - Byte formatters
+
+    /// Formats a byte count as a compact human-readable size (e.g. "1 GB", "2.2 GB").
+    private func formatBytes(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useGB, .useMB]
+        formatter.countStyle = .file
+        formatter.includesUnit = true
+        formatter.isAdaptive = false
+        return formatter.string(fromByteCount: bytes)
+    }
+
+    /// Formats a RAM byte count as a rounded GB value for the needs-RAM hint.
+    /// All current catalog entries require ≥ 4 GB, so this always returns a GB string.
+    private func formatRAM(_ bytes: Int64) -> String {
+        let gb = Double(bytes) / 1_073_741_824.0  // 1024^3
+        let rounded = Int(gb.rounded())
+        return "\(rounded) GB RAM"
+    }
+}
+
+// MARK: - Preview
+
+#Preview("LocalModelsView — supported Mac, Pro") {
+    ScrollView {
+        LocalModelsView(
+            settings: SettingsStore(),
+            isPro: true,
+            onUpgrade: {}
+        )
+        .padding()
+    }
+    .frame(width: 520)
+}
+
+#Preview("LocalModelsView — supported Mac, Free") {
+    ScrollView {
+        LocalModelsView(
+            settings: SettingsStore(),
+            isPro: false,
+            onUpgrade: {}
+        )
+        .padding()
+    }
+    .frame(width: 520)
+}

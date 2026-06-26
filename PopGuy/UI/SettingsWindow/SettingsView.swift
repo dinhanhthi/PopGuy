@@ -300,7 +300,7 @@ struct SettingsView: View {
             DeferredSectionContent {
                 switch section {
                 case .general:     GeneralView(settings: settings)
-                case .providers:   APIKeysTab(settings: settings, keychain: keychain)
+                case .providers:   APIKeysTab(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense)
                 case .actions:     ActionsView(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, navigator: navigator, editingAction: $editingAction, showingLibrary: $showingLibrary)
                 case .history:     HistoryView(history: history, settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
                 case .triggers:    TriggersView(settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
@@ -510,6 +510,8 @@ private struct SettingsTabScaffold<Content: View>: View {
 private struct APIKeysTab: View {
     @ObservedObject var settings: SettingsStore
     let keychain: KeychainManager
+    @ObservedObject var licenseGate: LicenseGate
+    var onUpgrade: () -> Void = {}
 
     // Segmented control: 0 = AI, 1 = Translation, 2 = Speech, 3 = Dictionary.
     @State private var providerCategory: Int = 0
@@ -735,6 +737,13 @@ private struct APIKeysTab: View {
                 onVerify: { await verifyKey(for: .custom) }
             )
         }
+
+        // Local (MLX) on-device models — manager card at the bottom of the AI segment.
+        LocalModelsView(
+            settings: settings,
+            isPro: licenseGate.entitlements.isPro,
+            onUpgrade: onUpgrade
+        )
     }
 
     // MARK: - Translation cards
@@ -1556,7 +1565,12 @@ struct ProviderPicker: View {
     var body: some View {
         LabeledContent(label) {
             Picker("", selection: $selection) {
-                let providers = allowed ?? ProviderKind.allCases
+                // Include .mlxLocal only on supported hardware (Apple Silicon + macOS 14+).
+                // Filter is applied AFTER the allowed-list so an explicit `allowed:`
+                // list cannot accidentally include mlxLocal on unsupported Macs.
+                let providers = (allowed ?? ProviderKind.allCases).filter {
+                    $0 != .mlxLocal || MLXCapability.isSupported
+                }
                 ForEach(providers, id: \.self) { kind in
                     Text(kind.displayName).tag(kind)
                 }
@@ -1634,7 +1648,11 @@ struct ModelField: View {
 
     var body: some View {
         LabeledContent {
-            if hasCurated {
+            if providerKind == .mlxLocal {
+                // Local (MLX) — show only installed models from the catalog,
+                // not free-text entry (the user cannot type an arbitrary local path).
+                mlxLocalModelPicker
+            } else if hasCurated {
                 pickerWithCustomMode
             } else {
                 // No curated list (Ollama, Custom…) — always show plain TextField.
@@ -1666,6 +1684,74 @@ struct ModelField: View {
         // Inline check feedback shown below the field when a result is available.
         if freeTextVisible, let outcome = checkOutcome {
             modelCheckFeedbackView(outcome)
+        }
+    }
+
+    // MARK: - MLX local model picker
+
+    /// Picker for the `.mlxLocal` provider: shows only installed catalog models.
+    ///
+    /// If the stored `model` id is not currently installed (e.g. the user downloaded
+    /// a model, assigned it, then deleted it), we do NOT silently rewrite the binding.
+    /// Instead the stored id is shown as a "(not installed)" placeholder entry so
+    /// the user can see the situation and make an active choice. The binding is only
+    /// updated when the user explicitly selects a different entry.
+    ///
+    /// If no models are installed at all, shows a hint pointing to Local Models.
+    @ViewBuilder
+    private var mlxLocalModelPicker: some View {
+        let installedModels: [LocalModel] = LocalModelCatalog.all.filter {
+            settings?.installedLocalModels.contains($0.id) ?? false
+        }
+        let currentIsInstalled = installedModels.map(\.id).contains(model)
+
+        if installedModels.isEmpty && model.isEmpty {
+            // Nothing installed and nothing previously selected.
+            HStack(spacing: 6) {
+                Image(systemName: "tray")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                Text("No models downloaded. Go to Providers → AI → Local Models.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                Picker("", selection: $model) {
+                    ForEach(installedModels, id: \.id) { localModel in
+                        Text(localModel.displayName).tag(localModel.id)
+                    }
+                    // When the stored id is not installed, show it as a disabled
+                    // placeholder so the user SEES the situation without any silent
+                    // mutation of their persisted ActionConfig.
+                    if !currentIsInstalled && !model.isEmpty {
+                        Divider()
+                        Text("\(model) (not installed)").tag(model)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+
+                // Hint shown only when the current selection is not installed.
+                if !currentIsInstalled && !model.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.caption2)
+                        Text("This model is not downloaded. Get it in Providers → AI → Local Models.")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.orange)
+                } else if installedModels.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "tray")
+                            .font(.caption2)
+                        Text("No models downloaded. Go to Providers → AI → Local Models.")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
