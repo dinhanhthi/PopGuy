@@ -109,6 +109,10 @@ struct SettingsView: View {
     /// covers the whole window. Set by ActionsView's "Browse Library" button.
     @State private var showingLibrary = false
 
+    /// When true, the Local AI memory info panel slides in from the right edge.
+    /// Triggered by the "Read more: how models use memory" link in LocalModelsView.
+    @State private var showingMemoryInfo = false
+
     private static let galleryLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PopGuy", category: "action-library")
 
     /// Drives the "toolbar action limit reached" alert raised when saving an
@@ -176,76 +180,58 @@ struct SettingsView: View {
             }
         )
 
-            // Blurred backdrop over the rest of the window behind the panel.
-            // Tap to dismiss, mirroring a modal's click-outside.
-            if editingAction != nil {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-                    .onTapGesture {
-                        withAnimation(panelAnimation) { editingAction = nil }
-                    }
-                    .zIndex(1)
-            }
-
-            // Add/Edit Action panel — slides in from the right edge as a 2/3-width
-            // slide-over (replaces the former modal sheet so the form gets a smooth
-            // slide animation). The background ignores the top safe area to fill
-            // behind the transparent titlebar, while the form content respects it
-            // so the header clears the traffic lights.
-            if let action = editingAction {
-                CustomActionEditSheet(
-                    action: action,
-                    settings: settings,
-                    keychain: keychain,
-                    licenseGate: licenseGate,
-                    onUpgrade: { navigator.section = .license },
-                    onSave: { saved in
-                        let clamped: Bool
-                        if settings.customActions.contains(where: { $0.id == saved.id }) {
-                            clamped = settings.updateCustomAction(saved)
-                        } else {
-                            clamped = settings.addCustomAction(saved)
-                        }
-                        if clamped { showSaveLimitAlert = true }
-                        withAnimation(panelAnimation) { editingAction = nil }
-                    },
-                    onCancel: {
-                        withAnimation(panelAnimation) { editingAction = nil }
-                    }
-                )
-                // Floor at 480 to honour CustomActionEditSheet's own minWidth
-                // (avoids horizontal clipping when the window is near its minimum).
-                .frame(width: max(containerWidth * 3 / 4, 480))
-                .frame(maxHeight: .infinity)
-                .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
-                .shadow(color: .black.opacity(0.22), radius: 12, x: -3, y: 0)
-                .transition(.move(edge: .trailing))
-                .zIndex(2)
-                // Esc dismisses, matching the old modal sheet.
-                .onExitCommand {
-                    withAnimation(panelAnimation) { editingAction = nil }
+            // Add/Edit Action panel — slides in from the right edge.
+            // Floor at 480 to honour CustomActionEditSheet's own minWidth
+            // (avoids horizontal clipping when the window is near its minimum).
+            //
+            // Driven directly off `editingAction`: SwiftUI keeps the outgoing
+            // view's snapshot during the .move transition, so the form stays
+            // visible while sliding out (same as the Action Library panel).
+            SlideOverPanel(
+                isPresented: editingAction != nil,
+                containerWidth: containerWidth,
+                widthFraction: 3.0 / 4.0,
+                minWidth: 480,
+                onDismiss: {
+                    // SlideOverPanel already wraps this call in withAnimation.
+                    editingAction = nil
                 }
-            }
-
-            // Blurred backdrop behind the Action Library panel; tap to dismiss.
-            if showingLibrary {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-                    .onTapGesture {
-                        withAnimation(panelAnimation) { showingLibrary = false }
-                    }
-                    .zIndex(1)
+            ) {
+                if let action = editingAction {
+                    CustomActionEditSheet(
+                        action: action,
+                        settings: settings,
+                        keychain: keychain,
+                        licenseGate: licenseGate,
+                        onUpgrade: { navigator.section = .license },
+                        onSave: { saved in
+                            let clamped: Bool
+                            if settings.customActions.contains(where: { $0.id == saved.id }) {
+                                clamped = settings.updateCustomAction(saved)
+                            } else {
+                                clamped = settings.addCustomAction(saved)
+                            }
+                            if clamped { showSaveLimitAlert = true }
+                            withAnimation(panelAnimation) { editingAction = nil }
+                        },
+                        onCancel: {
+                            withAnimation(panelAnimation) { editingAction = nil }
+                        }
+                    )
+                }
             }
 
             // Action Library gallery — slides in from the right edge as a 2/3-width
             // slide-over, matching the Add/Edit Action panel. Browsing is free;
             // install routes through sanitizeImported → addCustomAction and counts
             // toward maxCustomActions (the gallery disables Install at the limit).
-            if showingLibrary {
+            SlideOverPanel(
+                isPresented: showingLibrary,
+                containerWidth: containerWidth,
+                widthFraction: 3.0 / 4.0,
+                minWidth: 560,
+                onDismiss: { showingLibrary = false }
+            ) {
                 ActionLibraryView(
                     canInstall: settings.customActions.count < licenseGate.entitlements.maxCustomActions,
                     isInstalled: { preset in
@@ -267,16 +253,20 @@ struct SettingsView: View {
                         withAnimation(panelAnimation) { showingLibrary = false }
                     }
                 )
-                // Floor at 560 to honour ActionLibraryView's own minWidth.
-                .frame(width: max(containerWidth * 3 / 4, 560))
-                .frame(maxHeight: .infinity)
-                .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
-                .shadow(color: .black.opacity(0.22), radius: 12, x: -3, y: 0)
-                .transition(.move(edge: .trailing))
-                .zIndex(2)
-                .onExitCommand {
-                    withAnimation(panelAnimation) { showingLibrary = false }
-                }
+            }
+
+            // Local AI memory info panel — slides in from the right edge.
+            // Triggered by "Read more: how models use memory" in LocalModelsView.
+            SlideOverPanel(
+                isPresented: showingMemoryInfo,
+                containerWidth: containerWidth,
+                onDismiss: { showingMemoryInfo = false }
+            ) {
+                LocalModelMemoryInfoView(
+                    onClose: {
+                        withAnimation(panelAnimation) { showingMemoryInfo = false }
+                    }
+                )
             }
         }
         .frame(minWidth: 680, idealWidth: 740, minHeight: 460, idealHeight: 520)
@@ -300,7 +290,7 @@ struct SettingsView: View {
             DeferredSectionContent {
                 switch section {
                 case .general:     GeneralView(settings: settings)
-                case .providers:   APIKeysTab(settings: settings, keychain: keychain)
+                case .providers:   APIKeysTab(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, onReadMore: { withAnimation(panelAnimation) { showingMemoryInfo = true } })
                 case .actions:     ActionsView(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, navigator: navigator, editingAction: $editingAction, showingLibrary: $showingLibrary)
                 case .history:     HistoryView(history: history, settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
                 case .triggers:    TriggersView(settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
@@ -510,6 +500,10 @@ private struct SettingsTabScaffold<Content: View>: View {
 private struct APIKeysTab: View {
     @ObservedObject var settings: SettingsStore
     let keychain: KeychainManager
+    @ObservedObject var licenseGate: LicenseGate
+    var onUpgrade: () -> Void = {}
+    /// Called when the user taps "Read more: how models use memory" in LocalModelsView.
+    var onReadMore: () -> Void = {}
 
     // Segmented control: 0 = AI, 1 = Translation, 2 = Speech, 3 = Dictionary.
     @State private var providerCategory: Int = 0
@@ -559,9 +553,10 @@ private struct APIKeysTab: View {
                     selection: $providerCategory,
                     segments: [
                         .init(value: 0, label: "AI"),
-                        .init(value: 1, label: "Translation"),
-                        .init(value: 2, label: "Speech"),
-                        .init(value: 3, label: "Dictionary"),
+                        .init(value: 1, label: "Local AI"),
+                        .init(value: 2, label: "Translation"),
+                        .init(value: 3, label: "Speech"),
+                        .init(value: 4, label: "Dictionary"),
                     ]
                 )
 
@@ -576,8 +571,9 @@ private struct APIKeysTab: View {
                 VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
                     switch providerCategory {
                     case 0:  aiProviderCards
-                    case 1:  translationProviderCards
-                    case 2:  speechProviderCards
+                    case 1:  localProviderCards
+                    case 2:  translationProviderCards
+                    case 3:  speechProviderCards
                     default: dictionaryProviderCards
                     }
                 }
@@ -735,6 +731,18 @@ private struct APIKeysTab: View {
                 onVerify: { await verifyKey(for: .custom) }
             )
         }
+    }
+
+    // MARK: - Local (MLX) cards
+
+    @ViewBuilder
+    private var localProviderCards: some View {
+        LocalModelsView(
+            settings: settings,
+            isPro: licenseGate.entitlements.isPro,
+            onUpgrade: onUpgrade,
+            onReadMore: onReadMore
+        )
     }
 
     // MARK: - Translation cards
@@ -1556,7 +1564,12 @@ struct ProviderPicker: View {
     var body: some View {
         LabeledContent(label) {
             Picker("", selection: $selection) {
-                let providers = allowed ?? ProviderKind.allCases
+                // Include .mlxLocal only on supported hardware (Apple Silicon + macOS 14+).
+                // Filter is applied AFTER the allowed-list so an explicit `allowed:`
+                // list cannot accidentally include mlxLocal on unsupported Macs.
+                let providers = (allowed ?? ProviderKind.allCases).filter {
+                    $0 != .mlxLocal || MLXCapability.isSupported
+                }
                 ForEach(providers, id: \.self) { kind in
                     Text(kind.displayName).tag(kind)
                 }
@@ -1634,7 +1647,11 @@ struct ModelField: View {
 
     var body: some View {
         LabeledContent {
-            if hasCurated {
+            if providerKind == .mlxLocal {
+                // Local (MLX) — show only installed models from the catalog,
+                // not free-text entry (the user cannot type an arbitrary local path).
+                mlxLocalModelPicker
+            } else if hasCurated {
                 pickerWithCustomMode
             } else {
                 // No curated list (Ollama, Custom…) — always show plain TextField.
@@ -1666,6 +1683,74 @@ struct ModelField: View {
         // Inline check feedback shown below the field when a result is available.
         if freeTextVisible, let outcome = checkOutcome {
             modelCheckFeedbackView(outcome)
+        }
+    }
+
+    // MARK: - MLX local model picker
+
+    /// Picker for the `.mlxLocal` provider: shows only installed catalog models.
+    ///
+    /// If the stored `model` id is not currently installed (e.g. the user downloaded
+    /// a model, assigned it, then deleted it), we do NOT silently rewrite the binding.
+    /// Instead the stored id is shown as a "(not installed)" placeholder entry so
+    /// the user can see the situation and make an active choice. The binding is only
+    /// updated when the user explicitly selects a different entry.
+    ///
+    /// If no models are installed at all, shows a hint pointing to Local Models.
+    @ViewBuilder
+    private var mlxLocalModelPicker: some View {
+        let installedModels: [LocalModel] = LocalModelCatalog.all.filter {
+            settings?.installedLocalModels.contains($0.id) ?? false
+        }
+        let currentIsInstalled = installedModels.map(\.id).contains(model)
+
+        if installedModels.isEmpty && model.isEmpty {
+            // Nothing installed and nothing previously selected.
+            HStack(spacing: 6) {
+                Image(systemName: "tray")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                Text("No models downloaded. Go to Providers → AI → Local Models.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                Picker("", selection: $model) {
+                    ForEach(installedModels, id: \.id) { localModel in
+                        Text(localModel.displayName).tag(localModel.id)
+                    }
+                    // When the stored id is not installed, show it as a disabled
+                    // placeholder so the user SEES the situation without any silent
+                    // mutation of their persisted ActionConfig.
+                    if !currentIsInstalled && !model.isEmpty {
+                        Divider()
+                        Text("\(model) (not installed)").tag(model)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+
+                // Hint shown only when the current selection is not installed.
+                if !currentIsInstalled && !model.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.caption2)
+                        Text("This model is not downloaded. Get it in Providers → AI → Local Models.")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.orange)
+                } else if installedModels.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "tray")
+                            .font(.caption2)
+                        Text("No models downloaded. Go to Providers → AI → Local Models.")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 

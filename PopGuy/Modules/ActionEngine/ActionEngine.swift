@@ -387,6 +387,10 @@ extension ActionEngine {
             case .geminiCLI:
                 // Keyless — uses ~/.gemini/oauth_creds.json managed by the gemini CLI.
                 return GeminiCLIProvider()
+            case .mlxLocal:
+                // Keyless — communicates with the bundled PopGuyMLXHelper subprocess.
+                // MLXHelperManager.shared is accessed inside the provider, not here.
+                return MLXLocalProvider()
             }
         }
     }

@@ -82,6 +82,17 @@ nonisolated enum ProConfig {
     /// Whether free users may assign a default action to the double-click trigger.
     static let freeDoubleClickActionAllowed = false
 
+    // MARK: Local (MLX) free-tier model set
+
+    /// Model ids available on the free plan for the Local (MLX) provider.
+    /// Only models whose id appears here are considered free; all others require Pro.
+    static let freeLocalModelIDs: Set<String> = ["gemma-4-e2b"]
+
+    /// Returns `true` if the given catalog model id is available on the free plan.
+    static func isLocalModelFree(_ id: String) -> Bool {
+        freeLocalModelIDs.contains(id)
+    }
+
     // MARK: Usage nag schedule (free tier only; Pro is never nagged)
 
     /// Acts ≤ this are silent (no nag).
