@@ -48,8 +48,8 @@ nonisolated enum ProviderKeyValidator {
             request = try DeepLProvider.makeValidationRequest(apiKey: apiKey)
         case .googleTranslate:
             request = try GoogleTranslateProvider.makeValidationRequest(apiKey: apiKey)
-        case .ollama:
-            // Ollama is keyless — nothing to validate.
+        case .ollama, .mlxLocal:
+            // Keyless local providers — nothing to validate.
             return
         case .claudeCLI, .codexCLI, .geminiCLI:
             // CLI providers authenticate via subscription/OAuth (macOS Keychain or

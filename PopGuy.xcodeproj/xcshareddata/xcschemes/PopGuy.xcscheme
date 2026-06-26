@@ -39,6 +39,17 @@
                ReferencedContainer = "container:PopGuy.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D342445C2FD4A56D001600A8"
+               BuildableName = "PopGuyUITests.xctest"
+               BlueprintName = "PopGuyUITests"
+               ReferencedContainer = "container:PopGuy.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

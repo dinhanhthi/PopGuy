@@ -100,10 +100,20 @@ jobs:
           /usr/libexec/PlistBuddy -c "Print :PGReleaseDate" PopGuy/Info.plist
 
       # ── Build ─────────────────────────────────────────────────────────────
+      # The PopGuyMLXHelper target links Apple MLX, which compiles Metal shaders —
+      # the Metal Toolchain is a separately-downloaded Xcode component and is not
+      # present on a clean runner. Without it the archive fails to build the helper.
+      - name: Download Metal Toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
+
+      # -skipMacroValidation: mlx-swift-lm's MLXHuggingFace uses a Swift macro
+      # (MLXHuggingFaceMacros). On a dev Mac it requires a one-time "Trust & Enable";
+      # on CI there is no GUI, so skip the fingerprint validation.
       - name: Archive
         run: |
           xcodebuild -project PopGuy.xcodeproj -scheme PopGuy \
             -configuration Release \
+            -skipMacroValidation \
             -archivePath build/PopGuy.xcarchive archive
 
       - name: Export (Developer ID signed)

@@ -7,8 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		67371C126C704661A587 /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 650B6D4AF28B434E9D1C /* HuggingFace */; };
 		903BE62C47B3A159E67B114F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B605796E047F0B1A8CAEB221 /* Sparkle */; };
 		A043BAE1603803A839C0CB52 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = A5534EA92B26FA8ADC30543F /* Yams */; };
+		D3132B4DA6DB4860A6AC /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = 946417FD3A4347A6B0AB /* Tokenizers */; };
+		D3BD085B2FED9B1800078DEB /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = D3BD085A2FED9B1800078DEB /* MLXHuggingFace */; };
+		D3BD085D2FED9B1800078DEB /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = D3BD085C2FED9B1800078DEB /* MLXLLM */; };
+		D3BD085F2FED9B1800078DEB /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = D3BD085E2FED9B1800078DEB /* MLXLMCommon */; };
+		D3BD08632FED9C1200078DEB /* PopGuyMLXHelper in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3BD084C2FED962E00078DEB /* PopGuyMLXHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -26,12 +32,42 @@
 			remoteGlobalIDString = D34244452FD4A56C001600A8;
 			remoteInfo = PopGuy;
 		};
+		D3BD08642FED9C3700078DEB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D342443E2FD4A56C001600A8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D3BD084B2FED962E00078DEB;
+			remoteInfo = PopGuyMLXHelper;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D3BD084A2FED962E00078DEB /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		D3BD08622FED9BE700078DEB /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				D3BD08632FED9C1200078DEB /* PopGuyMLXHelper in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		D34244462FD4A56C001600A8 /* PopGuy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PopGuy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D34244532FD4A56D001600A8 /* PopGuyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PopGuyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D342445D2FD4A56D001600A8 /* PopGuyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PopGuyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D3BD084C2FED962E00078DEB /* PopGuyMLXHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = PopGuyMLXHelper; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -63,6 +99,11 @@
 			path = PopGuyUITests;
 			sourceTree = "<group>";
 		};
+		D3BD084D2FED962E00078DEB /* PopGuyMLXHelper */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PopGuyMLXHelper;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +130,18 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D3BD08492FED962E00078DEB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D3BD085D2FED9B1800078DEB /* MLXLLM in Frameworks */,
+				D3BD085F2FED9B1800078DEB /* MLXLMCommon in Frameworks */,
+				D3BD085B2FED9B1800078DEB /* MLXHuggingFace in Frameworks */,
+				67371C126C704661A587 /* HuggingFace in Frameworks */,
+				D3132B4DA6DB4860A6AC /* Tokenizers in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -98,6 +151,7 @@
 				D34244482FD4A56C001600A8 /* PopGuy */,
 				D34244562FD4A56D001600A8 /* PopGuyTests */,
 				D34244602FD4A56D001600A8 /* PopGuyUITests */,
+				D3BD084D2FED962E00078DEB /* PopGuyMLXHelper */,
 				D34244472FD4A56C001600A8 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -108,6 +162,7 @@
 				D34244462FD4A56C001600A8 /* PopGuy.app */,
 				D34244532FD4A56D001600A8 /* PopGuyTests.xctest */,
 				D342445D2FD4A56D001600A8 /* PopGuyUITests.xctest */,
+				D3BD084C2FED962E00078DEB /* PopGuyMLXHelper */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -122,10 +177,13 @@
 				D34244422FD4A56C001600A8 /* Sources */,
 				D34244432FD4A56C001600A8 /* Frameworks */,
 				D34244442FD4A56C001600A8 /* Resources */,
+				D3BD08622FED9BE700078DEB /* CopyFiles */,
+				D3BD18CB2FEE958200078DEB /* ShellScript */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D3BD08652FED9C3700078DEB /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				D34244482FD4A56C001600A8 /* PopGuy */,
@@ -185,6 +243,33 @@
 			productReference = D342445D2FD4A56D001600A8 /* PopGuyUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		D3BD084B2FED962E00078DEB /* PopGuyMLXHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D3BD08522FED962F00078DEB /* Build configuration list for PBXNativeTarget "PopGuyMLXHelper" */;
+			buildPhases = (
+				D3BD08482FED962E00078DEB /* Sources */,
+				D3BD08492FED962E00078DEB /* Frameworks */,
+				D3BD084A2FED962E00078DEB /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D3BD084D2FED962E00078DEB /* PopGuyMLXHelper */,
+			);
+			name = PopGuyMLXHelper;
+			packageProductDependencies = (
+				D3BD085A2FED9B1800078DEB /* MLXHuggingFace */,
+				D3BD085C2FED9B1800078DEB /* MLXLLM */,
+				D3BD085E2FED9B1800078DEB /* MLXLMCommon */,
+				650B6D4AF28B434E9D1C /* HuggingFace */,
+				946417FD3A4347A6B0AB /* Tokenizers */,
+			);
+			productName = PopGuyMLXHelper;
+			productReference = D3BD084C2FED962E00078DEB /* PopGuyMLXHelper */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -206,6 +291,9 @@
 						CreatedOnToolsVersion = 26.5;
 						TestTargetID = D34244452FD4A56C001600A8;
 					};
+					D3BD084B2FED962E00078DEB = {
+						CreatedOnToolsVersion = 26.5;
+					};
 				};
 			};
 			buildConfigurationList = D34244412FD4A56C001600A8 /* Build configuration list for PBXProject "PopGuy" */;
@@ -220,6 +308,9 @@
 			packageReferences = (
 				DC0B6AE01890AE6FBF496F23 /* XCRemoteSwiftPackageReference "Sparkle" */,
 				F511D9CB8F68D9D9B0341314 /* XCRemoteSwiftPackageReference "Yams" */,
+				D3BD08532FED9B1800078DEB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+				BE6B9CF0E16F4CD6A403 /* XCRemoteSwiftPackageReference "swift-huggingface" */,
+				16E1B0DC95B9477BAB71 /* XCRemoteSwiftPackageReference "swift-transformers" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D34244472FD4A56C001600A8 /* Products */;
@@ -229,6 +320,7 @@
 				D34244452FD4A56C001600A8 /* PopGuy */,
 				D34244522FD4A56D001600A8 /* PopGuyTests */,
 				D342445C2FD4A56D001600A8 /* PopGuyUITests */,
+				D3BD084B2FED962E00078DEB /* PopGuyMLXHelper */,
 			);
 		};
 /* End PBXProject section */
@@ -257,6 +349,27 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		D3BD18CB2FEE958200078DEB /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Embed the MLX Metal shader bundle next to the helper so MLX can load its\n# default.metallib at runtime (the helper searches its own directory). Copy the\n# whole resource bundle (a proper, signable nested bundle) and code-sign it so the\n# app's outer code-signing accepts it.\nset -e\nSRC=\"${BUILT_PRODUCTS_DIR}/mlx-swift_Cmlx.bundle\"\nDEST_DIR=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers\"\nDEST=\"${DEST_DIR}/mlx-swift_Cmlx.bundle\"\nif [ -d \"$SRC\" ]; then\n  mkdir -p \"$DEST_DIR\"\n  rm -rf \"$DEST\"\n  cp -R \"$SRC\" \"$DEST\"\n  # Remove the stale loose copy from earlier attempts, if present.\n  rm -f \"${DEST_DIR}/mlx.metallib\"\n  # Release builds need a secure timestamp on the nested bundle for notarization.\n  SIGN_TS=\"\"\n  if [ \"${CONFIGURATION}\" = \"Release\" ]; then SIGN_TS=\"--timestamp\"; fi\n  if [ -n \"${EXPANDED_CODE_SIGN_IDENTITY:-}\" ] && [ \"${EXPANDED_CODE_SIGN_IDENTITY}\" != \"-\" ]; then\n    codesign --force ${SIGN_TS} --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" \"$DEST\"\n  else\n    codesign --force --sign - \"$DEST\"\n  fi\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		D34244422FD4A56C001600A8 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -279,6 +392,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D3BD08482FED962E00078DEB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -291,6 +411,11 @@
 			isa = PBXTargetDependency;
 			target = D34244452FD4A56C001600A8 /* PopGuy */;
 			targetProxy = D342445E2FD4A56D001600A8 /* PBXContainerItemProxy */;
+		};
+		D3BD08652FED9C3700078DEB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D3BD084B2FED962E00078DEB /* PopGuyMLXHelper */;
+			targetProxy = D3BD08642FED9C3700078DEB /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -333,7 +458,7 @@
 				DEVELOPMENT_TEAM = 86H6CNLN4C;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -397,7 +522,7 @@
 				DEVELOPMENT_TEAM = 86H6CNLN4C;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -575,6 +700,45 @@
 			};
 			name = Release;
 		};
+		D3BD08502FED962F00078DEB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 86H6CNLN4C;
+				ENABLE_HARDENED_RUNTIME = YES;
+				EXCLUDED_ARCHS = "";
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				PRODUCT_BUNDLE_IDENTIFIER = dinh.thi.PopGuy.MLXHelper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		D3BD08512FED962F00078DEB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 86H6CNLN4C;
+				ENABLE_HARDENED_RUNTIME = YES;
+				EXCLUDED_ARCHS = "";
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				PRODUCT_BUNDLE_IDENTIFIER = dinh.thi.PopGuy.MLXHelper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -614,9 +778,42 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		D3BD08522FED962F00078DEB /* Build configuration list for PBXNativeTarget "PopGuyMLXHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D3BD08502FED962F00078DEB /* Debug */,
+				D3BD08512FED962F00078DEB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		16E1B0DC95B9477BAB71 /* XCRemoteSwiftPackageReference "swift-transformers" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-transformers";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.3.3;
+			};
+		};
+		BE6B9CF0E16F4CD6A403 /* XCRemoteSwiftPackageReference "swift-huggingface" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-huggingface.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
+		D3BD08532FED9B1800078DEB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.31.3;
+			};
+		};
 		DC0B6AE01890AE6FBF496F23 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sparkle-project/Sparkle";
@@ -636,6 +833,16 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		650B6D4AF28B434E9D1C /* HuggingFace */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BE6B9CF0E16F4CD6A403 /* XCRemoteSwiftPackageReference "swift-huggingface" */;
+			productName = HuggingFace;
+		};
+		946417FD3A4347A6B0AB /* Tokenizers */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 16E1B0DC95B9477BAB71 /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Tokenizers;
+		};
 		A5534EA92B26FA8ADC30543F /* Yams */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F511D9CB8F68D9D9B0341314 /* XCRemoteSwiftPackageReference "Yams" */;
@@ -645,6 +852,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DC0B6AE01890AE6FBF496F23 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		D3BD085A2FED9B1800078DEB /* MLXHuggingFace */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D3BD08532FED9B1800078DEB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXHuggingFace;
+		};
+		D3BD085C2FED9B1800078DEB /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D3BD08532FED9B1800078DEB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLLM;
+		};
+		D3BD085E2FED9B1800078DEB /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D3BD08532FED9B1800078DEB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLMCommon;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

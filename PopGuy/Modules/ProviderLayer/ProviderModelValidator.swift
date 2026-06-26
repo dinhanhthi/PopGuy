@@ -85,6 +85,10 @@ nonisolated enum ProviderModelValidator {
             // CLI providers authenticate via subscription; spawning a 10-30s process
             // to validate a freeform model name is not acceptable. Skip validation.
             return
+        case .mlxLocal:
+            // On-device models are validated by checking the local cache, not by
+            // sending a live request. Skip network validation.
+            return
         case .openAI, .anthropic, .ollama,
              .deepL, .googleTranslate:
             resolvedBaseURL = nil
@@ -156,6 +160,9 @@ nonisolated enum ProviderModelValidator {
         case .geminiCLI:
             // Unreachable: see .claudeCLI comment above.
             return GeminiCLIProvider()
+        case .mlxLocal:
+            // Unreachable: .mlxLocal early-returns in validate() above.
+            return MLXLocalProvider()
         }
     }
 }

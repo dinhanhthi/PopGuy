@@ -41,7 +41,7 @@ extension ActionKind {
         switch self {
         case .improve, .shorten, .proofread, .prompt:
             return [.openAI, .anthropic, .ollama, .gemini, .glm, .openRouter, .custom,
-                    .claudeCLI, .codexCLI, .geminiCLI]
+                    .claudeCLI, .codexCLI, .geminiCLI, .mlxLocal]
         case .translate:
             return ProviderKind.allCases
         }
