@@ -104,10 +104,20 @@ struct SettingsView: View {
     /// cover the sidebar list and footer. Set by ActionsView via a binding.
     @State private var editingAction: CustomAction?
 
+    /// Mirrors `editingAction` but trails it by the panel animation duration on
+    /// dismiss, so the slide-out animation renders the form rather than a blank panel.
+    /// Set to non-nil immediately when editingAction is set; cleared after dismiss
+    /// animation completes (panelAnimation duration = 0.28 s).
+    @State private var displayedEditingAction: CustomAction?
+
     /// When true, the Action Library gallery panel slides in from the right edge,
     /// matching the Add/Edit Action panel. Lifted here (not in ActionsView) so it
     /// covers the whole window. Set by ActionsView's "Browse Library" button.
     @State private var showingLibrary = false
+
+    /// When true, the Local AI memory info panel slides in from the right edge.
+    /// Triggered by the "Read more: how models use memory" link in LocalModelsView.
+    @State private var showingMemoryInfo = false
 
     private static let galleryLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PopGuy", category: "action-library")
 
@@ -176,76 +186,68 @@ struct SettingsView: View {
             }
         )
 
-            // Blurred backdrop over the rest of the window behind the panel.
-            // Tap to dismiss, mirroring a modal's click-outside.
-            if editingAction != nil {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-                    .onTapGesture {
-                        withAnimation(panelAnimation) { editingAction = nil }
+            // Add/Edit Action panel — slides in from the right edge.
+            // Floor at 480 to honour CustomActionEditSheet's own minWidth
+            // (avoids horizontal clipping when the window is near its minimum).
+            //
+            // `displayedEditingAction` trails `editingAction` by the animation
+            // duration so the form stays visible during the slide-out transition
+            // (the content closure must not evaluate to empty while animating out).
+            SlideOverPanel(
+                isPresented: editingAction != nil,
+                containerWidth: containerWidth,
+                widthFraction: 3.0 / 4.0,
+                minWidth: 480,
+                onDismiss: {
+                    // SlideOverPanel already wraps this call in withAnimation;
+                    // we only need to set the flag here.
+                    editingAction = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
+                        displayedEditingAction = nil
                     }
-                    .zIndex(1)
-            }
-
-            // Add/Edit Action panel — slides in from the right edge as a 2/3-width
-            // slide-over (replaces the former modal sheet so the form gets a smooth
-            // slide animation). The background ignores the top safe area to fill
-            // behind the transparent titlebar, while the form content respects it
-            // so the header clears the traffic lights.
-            if let action = editingAction {
-                CustomActionEditSheet(
-                    action: action,
-                    settings: settings,
-                    keychain: keychain,
-                    licenseGate: licenseGate,
-                    onUpgrade: { navigator.section = .license },
-                    onSave: { saved in
-                        let clamped: Bool
-                        if settings.customActions.contains(where: { $0.id == saved.id }) {
-                            clamped = settings.updateCustomAction(saved)
-                        } else {
-                            clamped = settings.addCustomAction(saved)
-                        }
-                        if clamped { showSaveLimitAlert = true }
-                        withAnimation(panelAnimation) { editingAction = nil }
-                    },
-                    onCancel: {
-                        withAnimation(panelAnimation) { editingAction = nil }
-                    }
-                )
-                // Floor at 480 to honour CustomActionEditSheet's own minWidth
-                // (avoids horizontal clipping when the window is near its minimum).
-                .frame(width: max(containerWidth * 3 / 4, 480))
-                .frame(maxHeight: .infinity)
-                .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
-                .shadow(color: .black.opacity(0.22), radius: 12, x: -3, y: 0)
-                .transition(.move(edge: .trailing))
-                .zIndex(2)
-                // Esc dismisses, matching the old modal sheet.
-                .onExitCommand {
-                    withAnimation(panelAnimation) { editingAction = nil }
                 }
-            }
-
-            // Blurred backdrop behind the Action Library panel; tap to dismiss.
-            if showingLibrary {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-                    .onTapGesture {
-                        withAnimation(panelAnimation) { showingLibrary = false }
-                    }
-                    .zIndex(1)
+            ) {
+                if let action = displayedEditingAction {
+                    CustomActionEditSheet(
+                        action: action,
+                        settings: settings,
+                        keychain: keychain,
+                        licenseGate: licenseGate,
+                        onUpgrade: { navigator.section = .license },
+                        onSave: { saved in
+                            let clamped: Bool
+                            if settings.customActions.contains(where: { $0.id == saved.id }) {
+                                clamped = settings.updateCustomAction(saved)
+                            } else {
+                                clamped = settings.addCustomAction(saved)
+                            }
+                            if clamped { showSaveLimitAlert = true }
+                            withAnimation(panelAnimation) { editingAction = nil }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
+                                displayedEditingAction = nil
+                            }
+                        },
+                        onCancel: {
+                            withAnimation(panelAnimation) { editingAction = nil }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
+                                displayedEditingAction = nil
+                            }
+                        }
+                    )
+                }
             }
 
             // Action Library gallery — slides in from the right edge as a 2/3-width
             // slide-over, matching the Add/Edit Action panel. Browsing is free;
             // install routes through sanitizeImported → addCustomAction and counts
             // toward maxCustomActions (the gallery disables Install at the limit).
-            if showingLibrary {
+            SlideOverPanel(
+                isPresented: showingLibrary,
+                containerWidth: containerWidth,
+                widthFraction: 3.0 / 4.0,
+                minWidth: 560,
+                onDismiss: { showingLibrary = false }
+            ) {
                 ActionLibraryView(
                     canInstall: settings.customActions.count < licenseGate.entitlements.maxCustomActions,
                     isInstalled: { preset in
@@ -267,17 +269,26 @@ struct SettingsView: View {
                         withAnimation(panelAnimation) { showingLibrary = false }
                     }
                 )
-                // Floor at 560 to honour ActionLibraryView's own minWidth.
-                .frame(width: max(containerWidth * 3 / 4, 560))
-                .frame(maxHeight: .infinity)
-                .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
-                .shadow(color: .black.opacity(0.22), radius: 12, x: -3, y: 0)
-                .transition(.move(edge: .trailing))
-                .zIndex(2)
-                .onExitCommand {
-                    withAnimation(panelAnimation) { showingLibrary = false }
-                }
             }
+
+            // Local AI memory info panel — slides in from the right edge.
+            // Triggered by "Read more: how models use memory" in LocalModelsView.
+            SlideOverPanel(
+                isPresented: showingMemoryInfo,
+                containerWidth: containerWidth,
+                onDismiss: { showingMemoryInfo = false }
+            ) {
+                LocalModelMemoryInfoView(
+                    onClose: {
+                        withAnimation(panelAnimation) { showingMemoryInfo = false }
+                    }
+                )
+            }
+        }
+        // Mirror editingAction → displayedEditingAction on open only; dismiss
+        // path clears displayedEditingAction after the animation (0.30 s delay).
+        .onChange(of: editingAction) { newValue in
+            if let newValue { displayedEditingAction = newValue }
         }
         .frame(minWidth: 680, idealWidth: 740, minHeight: 460, idealHeight: 520)
         .alert("Toolbar Limit Reached", isPresented: $showSaveLimitAlert) {
@@ -300,7 +311,7 @@ struct SettingsView: View {
             DeferredSectionContent {
                 switch section {
                 case .general:     GeneralView(settings: settings)
-                case .providers:   APIKeysTab(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense)
+                case .providers:   APIKeysTab(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, onReadMore: { withAnimation(panelAnimation) { showingMemoryInfo = true } })
                 case .actions:     ActionsView(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, navigator: navigator, editingAction: $editingAction, showingLibrary: $showingLibrary)
                 case .history:     HistoryView(history: history, settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
                 case .triggers:    TriggersView(settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
@@ -512,6 +523,8 @@ private struct APIKeysTab: View {
     let keychain: KeychainManager
     @ObservedObject var licenseGate: LicenseGate
     var onUpgrade: () -> Void = {}
+    /// Called when the user taps "Read more: how models use memory" in LocalModelsView.
+    var onReadMore: () -> Void = {}
 
     // Segmented control: 0 = AI, 1 = Translation, 2 = Speech, 3 = Dictionary.
     @State private var providerCategory: Int = 0
@@ -561,7 +574,7 @@ private struct APIKeysTab: View {
                     selection: $providerCategory,
                     segments: [
                         .init(value: 0, label: "AI"),
-                        .init(value: 1, label: "Local"),
+                        .init(value: 1, label: "Local AI"),
                         .init(value: 2, label: "Translation"),
                         .init(value: 3, label: "Speech"),
                         .init(value: 4, label: "Dictionary"),
@@ -748,7 +761,8 @@ private struct APIKeysTab: View {
         LocalModelsView(
             settings: settings,
             isPro: licenseGate.entitlements.isPro,
-            onUpgrade: onUpgrade
+            onUpgrade: onUpgrade,
+            onReadMore: onReadMore
         )
     }
 

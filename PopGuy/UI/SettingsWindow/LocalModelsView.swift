@@ -34,6 +34,8 @@ struct LocalModelsView: View {
     let isPro: Bool
     /// Navigates to the License tab when the user taps "Get Pro" on a locked model.
     var onUpgrade: () -> Void = {}
+    /// Called when the user taps "Read more: how models use memory".
+    var onReadMore: () -> Void = {}
 
     /// Delete error message, distinct from download error.
     /// Surfaced in the same error-banner area as download errors.
@@ -43,9 +45,25 @@ struct LocalModelsView: View {
 
     var body: some View {
         SettingsCard(
-            title: "Local (On-Device) Models",
-            subtitle: "Run AI privately — no API key, no internet required."
+            title: "Local (On-Device) Models"
         ) {
+            // Subtitle row with "Read more" link alongside it.
+            HStack(spacing: 0) {
+                Text("Run AI privately — no API key, no internet required.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(" ")
+                    .font(.caption)
+                Button("Read more: how models use memory") {
+                    onReadMore()
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.blue.opacity(0.85))
+                .hoverTooltip("Learn how on-device models load, use, and release memory")
+                Spacer(minLength: 0)
+            }
+
             if !MLXCapability.isSupported {
                 unsupportedNotice
             } else {
@@ -91,9 +109,59 @@ struct LocalModelsView: View {
                     Divider()
                 }
             }
+
+            Divider()
+
+            idleTimeoutRow
         }
         .task {
             await settings.refreshInstalledLocalModels()
+            await settings.refreshLoadedLocalModel()
+        }
+        // Periodic polling to keep the in-memory indicator current.
+        .task(id: "mlx-polling") {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                guard !Task.isCancelled else { break }
+                await settings.refreshLoadedLocalModel()
+            }
+        }
+    }
+
+    // MARK: - Idle timeout row
+
+    private static let idleOptions: [(label: String, seconds: Int)] = [
+        ("Never", 0),
+        ("1 min", 60),
+        ("2 min", 120),
+        ("5 min", 300),
+        ("10 min", 600),
+        ("30 min", 1800),
+    ]
+
+    private var idleTimeoutDisplayLabel: String {
+        Self.idleOptions.first { $0.seconds == settings.localModelIdleSeconds }?.label ?? "5 min"
+    }
+
+    private var idleTimeoutRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Text("Keep models in memory for:")
+                    .font(.callout)
+
+                Picker("", selection: $settings.localModelIdleSeconds) {
+                    ForEach(Self.idleOptions, id: \.seconds) { option in
+                        Text(option.label).tag(option.seconds)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+
+            Text("Idle models are unloaded and the background engine quits to free memory.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -118,6 +186,7 @@ struct LocalModelsView: View {
         let availability = settings.availability(for: model, isPro: isPro)
         let isDownloading = settings.activeLocalModelDownloadID == model.id
         let isInstalled = settings.installedLocalModels.contains(model.id)
+        let isInMemory = settings.loadedLocalModelID == model.id
 
         HStack(spacing: 10) {
             // Left: name + metadata
@@ -130,6 +199,20 @@ struct LocalModelsView: View {
                     if !model.isFreeTier && !isPro {
                         ProBadge()
                             .hoverTooltip("Requires a Pro license")
+                    }
+
+                    // "In memory" indicator — shown when this model is currently
+                    // loaded in the helper process and consuming RAM.
+                    if isInMemory {
+                        HStack(spacing: 3) {
+                            Image(systemName: "circle.fill")
+                                .font(.system(size: 6))
+                                .foregroundStyle(.green)
+                            Text("In memory")
+                                .font(.caption2)
+                                .foregroundStyle(.green)
+                        }
+                        .hoverTooltip("Loaded in memory and ready to use")
                     }
                 }
 
@@ -151,7 +234,7 @@ struct LocalModelsView: View {
             Spacer(minLength: 8)
 
             // Right: state-dependent control
-            trailingControl(model: model, availability: availability, isDownloading: isDownloading, isInstalled: isInstalled)
+            trailingControl(model: model, availability: availability, isDownloading: isDownloading, isInstalled: isInstalled, isInMemory: isInMemory)
         }
 
         // Progress indicator — shown below the row while this model downloads.
@@ -178,7 +261,8 @@ struct LocalModelsView: View {
         model: LocalModel,
         availability: LocalModelAvailability,
         isDownloading: Bool,
-        isInstalled: Bool
+        isInstalled: Bool,
+        isInMemory: Bool
     ) -> some View {
         switch availability {
         case .unsupported:
@@ -239,12 +323,23 @@ struct LocalModelsView: View {
                 .hoverTooltip("Cancel the download")
 
             } else if isInstalled {
-                // Installed: indicator + Delete button
+                // Installed: indicator + optional Unload + Delete button
                 HStack(spacing: 8) {
                     Label("Installed", systemImage: "checkmark.circle.fill")
                         .font(.caption)
                         .foregroundStyle(.green)
                         .labelStyle(.titleAndIcon)
+
+                    if isInMemory {
+                        Button("Unload") {
+                            Task {
+                                await settings.unloadLoadedLocalModel()
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .hoverTooltip("Free this model's memory now")
+                    }
 
                     deleteButton(for: model)
                 }
@@ -281,6 +376,8 @@ struct LocalModelsView: View {
                 if settings.installedLocalModels.contains(model.id) {
                     deleteError = "Could not delete \(model.displayName). Check disk permissions and try again."
                 }
+                // Refresh loaded model status in case the deleted model was in memory.
+                await settings.refreshLoadedLocalModel()
             }
         }
         .buttonStyle(.bordered)
