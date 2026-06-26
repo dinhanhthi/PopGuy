@@ -1204,7 +1204,18 @@ final class SettingsStore: ObservableObject {
             } catch {
                 guard myToken == downloadToken else { return }
                 if !Task.isCancelled {
-                    localModelDownloadError = error.localizedDescription
+                    if let mlxErr = error as? MLXHelperError {
+                        switch mlxErr {
+                        case .helperNotFound:  localModelDownloadError = "MLX helper not found. Try reinstalling PopGuy."
+                        case .launchFailed:    localModelDownloadError = "Failed to start the on-device engine."
+                        case .startupTimeout:  localModelDownloadError = "On-device engine timed out. Try again."
+                        case .ipcError:        localModelDownloadError = "On-device engine communication error."
+                        case .processExited:   localModelDownloadError = "On-device engine exited unexpectedly."
+                        case .unsupported:     localModelDownloadError = error.localizedDescription
+                        }
+                    } else {
+                        localModelDownloadError = "Download failed. Check your internet connection and try again."
+                    }
                 }
             }
             guard myToken == downloadToken else { return }
