@@ -26,13 +26,16 @@ import Foundation
 
 // MARK: - Download progress state
 
-/// Shared mutable state for the two concurrent progress paths during a Xet download.
+/// Shared mutable state for the concurrent progress paths during a model download.
 ///
 /// @MainActor isolation makes this implicitly Sendable without @unchecked.
 /// Both the progressHandler (already @MainActor) and the disk-polling sampler
 /// (Task { @MainActor in ... }) access it on the same actor, so no data races.
 @MainActor
 private final class DownloadProgressState {
+    /// Timestamp recorded just before the download starts.
+    /// Used by the URLSession temp-file sampler to filter out pre-existing temp files.
+    let startTime: Date = Date()
     /// Total byte count captured from the first Progress callback.
     /// Set to progress.totalUnitCount on the first call where it is > 0.
     var expectedTotal: Int64 = 0
@@ -71,6 +74,40 @@ private func blobsDirSize(cacheBase: URL, modelID: String) -> Int64 {
         }
     }
     return total
+}
+
+/// Returns the size of the largest URLSession temp file created at or after `startDate`
+/// whose size does not exceed `expectedTotal` (with a 1 MB tolerance for metadata overhead).
+///
+/// URLSession download tasks write data to `NSTemporaryDirectory()` while in progress.
+/// Foundation Progress does not report reliable incremental byte counts for macOS LFS
+/// downloads, so polling the temp file gives accurate real-time progress.
+///
+/// Because PopGuyMLXHelper is a dedicated subprocess with its own per-user temp area and
+/// only one download runs at a time, the largest recently-created file is the active download.
+/// Returns 0 if no qualifying file is found — never throws.
+private func urlSessionTempBytes(since startDate: Date, expectedTotal: Int64) -> Int64 {
+    let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory())
+    let keys: Set<URLResourceKey> = [.fileSizeKey, .creationDateKey, .isRegularFileKey]
+    guard let enumerator = FileManager.default.enumerator(
+        at: tmpDir,
+        includingPropertiesForKeys: Array(keys),
+        options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+    ) else { return 0 }
+    let ceiling = expectedTotal > 0 ? expectedTotal + 1_048_576 : Int64.max
+    var best: Int64 = 0
+    for case let url as URL in enumerator {
+        guard let values = try? url.resourceValues(forKeys: keys),
+              values.isRegularFile == true,
+              let size = values.fileSize,
+              let created = values.creationDate,
+              created >= startDate.addingTimeInterval(-2)   // 2 s tolerance for clock skew
+        else { continue }
+        let sz = Int64(size)
+        guard sz > 0, sz <= ceiling else { continue }
+        if sz > best { best = sz }
+    }
+    return best
 }
 
 // MARK: - Constants
@@ -266,10 +303,13 @@ func runMain() async {
                 // Both paths run on @MainActor so access is serialized.
                 let state = DownloadProgressState()
 
-                // Disk-polling sampler: every ~1 s, sum blob sizes on disk and emit
-                // a progress fraction derived from on-disk bytes vs. expectedTotal.
-                // This unblocks the progress bar during large Xet downloads where
-                // Foundation Progress stays near 0 until the blob finishes.
+                // Disk-polling sampler: every ~1 s, measure download bytes from two sources:
+                //   1. blobs/ directory — covers already-committed blob data.
+                //   2. NSTemporaryDirectory() — covers the URLSession temp file while the
+                //      large safetensors is in-flight (Foundation Progress does not report
+                //      reliable incremental counts for macOS LFS downloads; the bytes only
+                //      appear in blobs/ after the temp file is copied in at completion).
+                // The larger of the two sources wins (monotonic high-water mark).
                 // The task captures `state` (a let binding), which is @MainActor and
                 // therefore implicitly Sendable — no @unchecked, no suppressions.
                 let sampler = Task { @MainActor in
@@ -278,7 +318,9 @@ func runMain() async {
                         guard !Task.isCancelled else { break }
                         let expectedTotal = state.expectedTotal
                         guard expectedTotal > 0 else { continue }
-                        let onDisk = blobsDirSize(cacheBase: sharedHubCacheDir, modelID: modelID)
+                        let blobBytes = blobsDirSize(cacheBase: sharedHubCacheDir, modelID: modelID)
+                        let tempBytes = urlSessionTempBytes(since: state.startTime, expectedTotal: expectedTotal)
+                        let onDisk = max(blobBytes, tempBytes)
                         let diskFraction = min(1.0, Double(onDisk) / Double(expectedTotal))
                         // Monotonic: never go backwards.
                         let fraction = max(diskFraction, state.highWater)
