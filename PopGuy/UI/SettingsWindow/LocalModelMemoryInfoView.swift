@@ -22,6 +22,9 @@ struct LocalModelMemoryInfoView: View {
             scrollContent
         }
         .frame(minWidth: 480, minHeight: 520)
+        // Match the ActionLibraryView baseline: extend to the panel's top edge so the
+        // header's top gap stays fixed (and equal to its bottom gap) as the window resizes.
+        .ignoresSafeArea(.container, edges: .top)
     }
 
     // MARK: - Header
@@ -42,10 +45,10 @@ struct LocalModelMemoryInfoView: View {
             .buttonStyle(.plain)
             .hoverTooltip("Close")
         }
+        // Symmetric vertical padding, matching the ActionLibraryView baseline
+        // so the header sits the same distance from the panel's top and bottom edges.
         .padding(.horizontal, SettingsMetrics.cardPadding)
-        .padding(.bottom, SettingsMetrics.cardPadding)
-        .padding(.top, 0)
-        .padding(.bottom, 2)
+        .padding(.vertical, SettingsMetrics.cardPadding + 6)
     }
 
     // MARK: - Scroll content
