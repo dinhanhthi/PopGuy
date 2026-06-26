@@ -9,7 +9,6 @@ import {
   ListMinus,
   MessageSquareCheck,
   Settings2,
-  Share2,
   ShieldCheck,
   SquarePen,
   Terminal,
@@ -72,14 +71,6 @@ const builtIn = [
   { icon: SquarePen, name: "Prompt", text: "Ask anything with your own prompt." },
   { icon: Volume2, name: "Speak", text: "Read the selection aloud." },
   { icon: BookOpen, name: "Look up", text: "Look up the selection." }
-];
-
-const afterRunOptions = [
-  "Close toolbar",
-  "Do nothing",
-  "Copy result",
-  "Paste back",
-  "Show as popup"
 ];
 
 const curatedLibrary = libraryCategories.map((category) => ({
@@ -151,7 +142,7 @@ export function ActionsPage() {
           <span>{libraryStats.local}</span>
         </div>
         <div className="library-grid">
-          {curatedLibrary.map(({ category, presets }) =>
+          {curatedLibrary.map(({ presets }) =>
             presets.map((preset) => (
               <article key={preset.id} className="library-card">
                 <preset.icon aria-hidden="true" />
@@ -173,61 +164,33 @@ export function ActionsPage() {
         </div>
       </section>
 
-      <section className="shell section-pad">
-        <div className="section-heading">
-          <h2>Make your own.</h2>
-          <p>Two ways to create custom actions.</p>
-        </div>
-        <div className="create-ways">
-          <article className="create-card">
-            <span className="create-number">1</span>
-            <h3>In the app</h3>
-            <p>
-              Settings → Actions → Add. Set name, icon, type, and content. Done.
-            </p>
-          </article>
-          <article className="create-card">
-            <span className="create-number">2</span>
-            <h3>Share a JSON file</h3>
-            <p>
-              Export any action as a <code>.json</code> file. Share it. Others
-              import it.
-            </p>
-          </article>
-        </div>
-      </section>
-
       <section className="section-blue">
         <div className="shell section-pad">
           <div className="section-heading">
-            <h2>Each action has</h2>
+            <h2>Make your own.</h2>
+            <p>Two ways to create custom actions.</p>
           </div>
-          <div className="action-options">
-            <article>
-              <Settings2 aria-hidden="true" />
-              <h3>Icon</h3>
-              <p>SF Symbol or emoji.</p>
+          <div className="create-ways">
+            <article className="create-card">
+              <span className="create-number">1</span>
+              <h3>In the app</h3>
+              <p>
+                Settings → Actions → Add. Set name, icon, type, and content. Done.
+              </p>
             </article>
-            <article>
-              <Share2 aria-hidden="true" />
-              <h3>After Run</h3>
-              <p>What happens with the result.</p>
-              <ul>
-                {afterRunOptions.map((option) => (
-                  <li key={option}>{option}</li>
-                ))}
-              </ul>
-            </article>
-            <article>
-              <Bot aria-hidden="true" />
-              <h3>Show When</h3>
-              <p>Regex filter. Only appear for matching text.</p>
+            <article className="create-card">
+              <span className="create-number">2</span>
+              <h3>Share a JSON file</h3>
+              <p>
+                Export any action as a <code>.json</code> file. Share it. Others
+                import it.
+              </p>
             </article>
           </div>
         </div>
       </section>
 
-      <section className="download-section shell">
+      <section className="download-section page-actions shell">
         <img src="/popguy-logo.png" alt="" />
         <div>
           <h2>Get PopGuy.</h2>

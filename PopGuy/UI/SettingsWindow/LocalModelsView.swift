@@ -66,6 +66,10 @@ struct LocalModelsView: View {
                 Spacer(minLength: 0)
             }
 
+            idleTimeoutRow
+
+            Divider()
+
             if !MLXCapability.isSupported {
                 unsupportedNotice
             } else {
@@ -111,10 +115,6 @@ struct LocalModelsView: View {
                     Divider()
                 }
             }
-
-            Divider()
-
-            idleTimeoutRow
         }
         .task {
             await settings.refreshInstalledLocalModels()
