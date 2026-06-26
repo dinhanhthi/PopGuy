@@ -138,7 +138,7 @@ nonisolated struct LemonSqueezyLicenseValidator: LicenseValidating {
         // Check for activation limit exhaustion via both usage/limit signals and
         // error message (tolerant of future LS wording changes).
         if isActivationLimitReached(response) {
-            return .invalid(reason: "This license has reached its activation limit (all seats are in use).")
+            return .invalid(reason: "This license is already active on the maximum number of Macs. If you reinstalled or replaced a Mac, deactivate it in Settings → License first, or email me@dinhanhthi.com to free up an activation.")
         }
 
         let reason = response.error ?? "License key is not valid."

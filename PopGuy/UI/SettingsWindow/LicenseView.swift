@@ -91,6 +91,11 @@ struct LicenseView: View {
         .buttonStyle(.bordered)
         .controlSize(.small)
         .foregroundStyle(.red)
+
+        Text("Deactivate this Mac before you erase, sell, or reinstall — it frees an activation so you don't get locked out.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
