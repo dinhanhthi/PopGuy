@@ -24,6 +24,12 @@
 // ActionEngine reads a Sendable snapshot (ActionConfig + String) synchronously
 // on the MainActor via the wiring in ActionEngineHandler, so no actor hop is
 // needed at dispatch time.
+//
+// Local (MLX) model state (not persisted — disk is source of truth):
+//   - installedLocalModels: Set<String>  — catalog model ids on disk (cache)
+//   - localModelDownloadProgress: [String: Double]  — transient, cleared on completion
+//   - activeLocalModelDownloadID: String?  — which model is being downloaded
+//   - localModelDownloadError: String?  — last download error message
 
 import Foundation
 import Combine
@@ -79,6 +85,25 @@ nonisolated enum ToolbarZoom: String, CaseIterable, Identifiable, Codable {
         case .x1_3: return "1.3×"
         }
     }
+}
+
+// MARK: - LocalModelAvailability
+
+/// Decision returned by `SettingsStore.availability(for:isPro:)`.
+///
+/// Checked in this priority order:
+///  1. Capability (MLX supported on this Mac?)
+///  2. Licensing (Pro model but user is not Pro?)
+///  3. Available (all clear)
+///
+/// `nonisolated` so views can pattern-match on it without an actor hop.
+nonisolated enum LocalModelAvailability: Sendable {
+    /// MLX is not supported on this Mac (e.g. Intel or macOS < 14).
+    case unsupported(reason: String)
+    /// The model requires Pro and the user is on the free plan.
+    case proLocked
+    /// The model can be downloaded or used.
+    case available
 }
 
 // MARK: - SettingsStore
@@ -142,6 +167,44 @@ final class SettingsStore: ObservableObject {
     // MARK: - Storage
 
     private let defaults: UserDefaults
+
+    // MARK: - Local model dependencies (injectable for tests)
+
+    /// MLXHelperManager used for install-detection, download, and delete.
+    /// Defaults to the shared singleton; tests inject a stub.
+    private let mlxHelper: MLXHelperManager
+
+    /// Capability flag injected at init so tests can exercise all branches without
+    /// depending on actual hardware. Production passes `MLXCapability.isSupported`.
+    private let isMLXSupported: Bool
+
+    // MARK: - Local model state (transient — NOT persisted)
+
+    /// Catalog model ids whose files are present on disk.
+    ///
+    /// This is a CACHE of `MLXHelperManager.installedModels()`. Disk is the source
+    /// of truth. Call `refreshInstalledLocalModels()` to sync.
+    @Published private(set) var installedLocalModels: Set<String> = []
+
+    /// Per-model download progress (0.0 … 1.0). Cleared on completion or error.
+    @Published private(set) var localModelDownloadProgress: [String: Double] = [:]
+
+    /// The model id currently being downloaded, or `nil` when idle.
+    @Published private(set) var activeLocalModelDownloadID: String?
+
+    /// Last download error message, or `nil` when the last download succeeded.
+    @Published private(set) var localModelDownloadError: String?
+
+    /// The running download Task. Retained so `cancelLocalModelDownload()` can cancel it.
+    private var activeDownloadTask: Task<Void, Never>?
+
+    /// Monotonically-incrementing token that identifies the current download.
+    /// Each call to `downloadLocalModel` bumps this counter and captures a copy
+    /// into the Task. Any cleanup/state write inside the Task is guarded on
+    /// `myToken == downloadToken` so a cancelled/superseded download cannot
+    /// null out a replacement download's `activeLocalModelDownloadID`, progress,
+    /// or error.
+    private var downloadToken: Int = 0
 
     // MARK: - Published properties
 
@@ -401,10 +464,21 @@ final class SettingsStore: ObservableObject {
 
     /// Create a SettingsStore backed by the given UserDefaults instance.
     ///
-    /// - Parameter defaults: The `UserDefaults` suite to use. Defaults to
-    ///   `.standard`. Pass `UserDefaults(suiteName: "<unique>")` in tests.
-    init(defaults: UserDefaults = .standard) {
+    /// - Parameters:
+    ///   - defaults: The `UserDefaults` suite to use. Defaults to `.standard`.
+    ///     Pass `UserDefaults(suiteName: "<unique>")` in tests.
+    ///   - mlxHelper: The `MLXHelperManager` to use for local model operations.
+    ///     Defaults to `.shared`. Pass a stub in tests.
+    ///   - isMLXSupported: Whether MLX is supported on this Mac.
+    ///     Defaults to `MLXCapability.isSupported`. Pass a fixed value in tests.
+    init(
+        defaults: UserDefaults = .standard,
+        mlxHelper: MLXHelperManager = .shared,
+        isMLXSupported: Bool = MLXCapability.isSupported
+    ) {
         self.defaults = defaults
+        self.mlxHelper = mlxHelper
+        self.isMLXSupported = isMLXSupported
 
         // Load persisted values or fall back to built-in defaults.
         let rawImproveConfig = Self.load(ActionConfig.self, key: Keys.improveConfig, from: defaults) ?? .defaultImprove
@@ -957,6 +1031,126 @@ final class SettingsStore: ObservableObject {
             case .custom(let uuid):    return customActions.first { $0.id == uuid }?.isEnabled ?? false
             }
         }
+    }
+
+    // MARK: - Local model availability
+
+    /// Returns the availability status for `model` given whether the user is Pro.
+    ///
+    /// Checks in priority order: capability → licensing → available.
+    /// Callers (UI + download enforcement) should call this before any download or use.
+    nonisolated func availability(for model: LocalModel, isPro: Bool) -> LocalModelAvailability {
+        guard isMLXSupported else {
+            return .unsupported(reason: MLXCapability.unsupportedReason)
+        }
+        if !model.isFreeTier && !isPro {
+            return .proLocked
+        }
+        return .available
+    }
+
+    // MARK: - Local model installed-models cache
+
+    /// Refresh the `installedLocalModels` cache from disk.
+    ///
+    /// Delegates to `MLXHelperManager.installedModels()` (actor-isolated) and
+    /// updates the published set on the MainActor. Call on Settings view appear
+    /// and after any download or delete completes.
+    func refreshInstalledLocalModels() async {
+        let ids = await mlxHelper.installedModels()
+        installedLocalModels = Set(ids)
+    }
+
+    // MARK: - Local model download
+
+    /// Download the model with the given catalog id.
+    ///
+    /// - Checks capability and Pro gate via `availability(for:isPro:)`; refuses and
+    ///   sets `localModelDownloadError` when not `.available`.
+    /// - Streams progress updates to `localModelDownloadProgress[id]`.
+    /// - On completion clears progress, clears `activeLocalModelDownloadID`, and
+    ///   calls `refreshInstalledLocalModels()`.
+    /// - On error clears progress, clears `activeLocalModelDownloadID`, and sets
+    ///   `localModelDownloadError`.
+    /// - The work runs in a stored `Task` that `cancelLocalModelDownload()` cancels.
+    func downloadLocalModel(_ id: String, isPro: Bool) {
+        guard let model = LocalModelCatalog.model(for: id) else {
+            localModelDownloadError = "Unknown model id: \(id)"
+            return
+        }
+
+        switch availability(for: model, isPro: isPro) {
+        case .unsupported(let reason):
+            localModelDownloadError = reason
+            return
+        case .proLocked:
+            localModelDownloadError = "This model requires a Pro license."
+            return
+        case .available:
+            break
+        }
+
+        // Cancel any in-flight download before starting a new one.
+        // Eagerly clear all stale progress so a prior download's progress key
+        // (which may differ from the new id) is not left in the dict.
+        activeDownloadTask?.cancel()
+        localModelDownloadProgress = [:]
+
+        localModelDownloadError = nil
+        activeLocalModelDownloadID = id
+
+        // Bump the monotonic token. The Task captures `myToken` and guards every
+        // state write so a cancelled/superseded Task A's teardown cannot clobber
+        // the replacement Task B's activeID, progress, or error.
+        downloadToken &+= 1
+        let myToken = downloadToken
+
+        let repoID = model.repoID
+        let helper = mlxHelper
+
+        activeDownloadTask = Task {
+            do {
+                let stream = try await helper.download(modelID: repoID)
+                for try await progress in stream {
+                    if Task.isCancelled { break }
+                    guard myToken == downloadToken else { return }
+                    localModelDownloadProgress[id] = progress.fraction
+                }
+            } catch {
+                guard myToken == downloadToken else { return }
+                if !Task.isCancelled {
+                    localModelDownloadError = error.localizedDescription
+                }
+            }
+            guard myToken == downloadToken else { return }
+            localModelDownloadProgress.removeValue(forKey: id)
+            activeLocalModelDownloadID = nil
+            await refreshInstalledLocalModels()
+        }
+    }
+
+    /// Cancel the currently active model download, if any.
+    ///
+    /// Cancelling terminates the stream on the helper side (via `onTermination`).
+    /// Progress and active-id are cleared by the task's completion block.
+    func cancelLocalModelDownload() {
+        activeDownloadTask?.cancel()
+        activeDownloadTask = nil
+    }
+
+    // MARK: - Local model delete
+
+    /// Delete the on-disk files for the given catalog model id, then refresh the cache.
+    ///
+    /// If a download of the same model is in flight, it is cancelled first to
+    /// prevent the download racing against the delete and writing files after
+    /// the delete completes.
+    func deleteLocalModel(_ id: String) async {
+        if activeLocalModelDownloadID == id {
+            cancelLocalModelDownload()
+        }
+        await mlxHelper.delete(modelID: id)
+        await refreshInstalledLocalModels()
     }
 
     // MARK: - Private helpers
