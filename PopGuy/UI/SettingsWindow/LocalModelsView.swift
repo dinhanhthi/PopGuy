@@ -40,6 +40,8 @@ struct LocalModelsView: View {
     /// Delete error message, distinct from download error.
     /// Surfaced in the same error-banner area as download errors.
     @State private var deleteError: String? = nil
+    /// Model awaiting user confirmation before deletion.
+    @State private var modelPendingDelete: LocalModel? = nil
 
     // MARK: - Body
 
@@ -125,6 +127,29 @@ struct LocalModelsView: View {
                 guard !Task.isCancelled else { break }
                 await settings.refreshLoadedLocalModel()
             }
+        }
+        .alert(
+            "Delete \(modelPendingDelete?.displayName ?? "model")?",
+            isPresented: Binding(
+                get: { modelPendingDelete != nil },
+                set: { if !$0 { modelPendingDelete = nil } }
+            )
+        ) {
+            Button("Delete", role: .destructive) {
+                guard let model = modelPendingDelete else { return }
+                modelPendingDelete = nil
+                deleteError = nil
+                Task {
+                    await settings.deleteLocalModel(model.id)
+                    if settings.installedLocalModels.contains(model.id) {
+                        deleteError = "Could not delete \(model.displayName). Check disk permissions and try again."
+                    }
+                    await settings.refreshLoadedLocalModel()
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This will remove the model files from your Mac. You can re-download it later.")
         }
     }
 
@@ -384,18 +409,7 @@ struct LocalModelsView: View {
     @ViewBuilder
     private func deleteButton(for model: LocalModel) -> some View {
         Button("Delete") {
-            deleteError = nil
-            Task {
-                await settings.deleteLocalModel(model.id)
-                // deleteLocalModel calls refreshInstalledLocalModels internally,
-                // so the installed set updates automatically. If the model file
-                // remains (e.g. file-system error), surface a generic message.
-                if settings.installedLocalModels.contains(model.id) {
-                    deleteError = "Could not delete \(model.displayName). Check disk permissions and try again."
-                }
-                // Refresh loaded model status in case the deleted model was in memory.
-                await settings.refreshLoadedLocalModel()
-            }
+            modelPendingDelete = model
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
