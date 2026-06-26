@@ -63,10 +63,14 @@ private func writeStubHelper(emitReady: Bool = true) throws -> URL {
     """# + "\n" + readyLine + #"""
 
 
+    # Track loaded model id (stateful stub).
+    loaded_model_id=""
+
     while IFS= read -r line; do
         case "$line" in
             *'"type":"generate"'*|*'"type": "generate"'*)
                 mode=$(echo "$line" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('input',''))" 2>/dev/null || echo "")
+                loaded_model_id=$(echo "$line" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('modelID',''))" 2>/dev/null || echo "")
                 case "$mode" in
                     echo)
                         printf '{"type":"token","delta":"echo"}\n'
@@ -112,6 +116,17 @@ private func writeStubHelper(emitReady: Bool = true) throws -> URL {
                 ;;
             *'"type":"ping"'*|*'"type": "ping"'*)
                 printf '{"type":"ready"}\n'
+                ;;
+            *'"type":"unload"'*|*'"type": "unload"'*)
+                loaded_model_id=""
+                printf '{"type":"done"}\n'
+                ;;
+            *'"type":"status"'*|*'"type": "status"'*)
+                if [ -n "$loaded_model_id" ]; then
+                    printf '{"type":"status","modelID":"%s"}\n' "$loaded_model_id"
+                else
+                    printf '{"type":"status"}\n'
+                fi
                 ;;
             *)
                 ;;
@@ -705,5 +720,179 @@ struct InstalledModelsTests {
 
         let after = await manager.installedModels()
         #expect(after.isEmpty, "Expected no installed models after delete; got: \(after)")
+    }
+}
+
+// MARK: - Memory lifecycle tests (loadedModelID / unloadModel / applyIdleTimeoutChange)
+
+@Suite("MLXHelperManager memory lifecycle", .serialized)
+struct MLXHelperManagerMemoryTests {
+
+    // MARK: - loadedModelID
+
+    @Test("loadedModelID returns nil when process is not running")
+    func loadedModelIDNilWhenNotRunning() async throws {
+        let stubURL = try writeStubHelper()
+        defer { try? FileManager.default.removeItem(at: stubURL) }
+
+        // Never launch the helper — process is nil.
+        let manager = MLXHelperManager(helperURL: stubURL, supported: true)
+        let id = await manager.loadedModelID()
+        #expect(id == nil, "Expected nil when no process has been launched")
+    }
+
+    @Test("loadedModelID returns nil when no model is loaded in the running helper")
+    func loadedModelIDNilWhenNoModelLoaded() async throws {
+        let stubURL = try writeStubHelper()
+        defer { try? FileManager.default.removeItem(at: stubURL) }
+
+        // Launch the helper via generate (so it's running), then query status immediately.
+        // The stub tracks loaded_model_id; after a fresh launch with no generate, it is "".
+        // Actually: we need to ensure the helper is running without a generate call.
+        // The easiest way: generate first (to start the helper), then query.
+        // After generate finishes, the stub has set loaded_model_id to the modelID.
+        // Instead, use a manager with a 5 s timeout, and use ping (which the helper handles
+        // as a side-effect of launching). But launchIfNeeded is private.
+        // Approach: generate with "echo" mode (finishes quickly), then unload via unloadModel,
+        // then query status — loaded_model_id should be "".
+        let manager = MLXHelperManager(helperURL: stubURL, supported: true, readyTimeoutNanos: 5_000_000_000)
+
+        // Start a generate and wait for it to complete (process stays running after).
+        let stream = try await manager.generate(
+            modelID: "gemma-4-e2b",
+            systemPrompt: nil,
+            input: "echo",
+            maxTokens: 10,
+            temperature: 0.7
+        )
+        try await collectWithTimeout(seconds: 10) {
+            for try await _ in stream { }
+        }
+
+        // Unload model so the stub clears loaded_model_id.
+        await manager.unloadModel()
+        // Give the unload response (done) time to arrive.
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        let id = await manager.loadedModelID()
+        #expect(id == nil, "Expected nil after unload, got: \(String(describing: id))")
+
+        await manager.shutdown()
+    }
+
+    @Test("loadedModelID returns the model id the stub reports after generate")
+    func loadedModelIDReturnsLoadedID() async throws {
+        let stubURL = try writeStubHelper()
+        defer { try? FileManager.default.removeItem(at: stubURL) }
+
+        let manager = MLXHelperManager(helperURL: stubURL, supported: true, readyTimeoutNanos: 5_000_000_000)
+
+        // Run a generate so the stub sets loaded_model_id.
+        let stream = try await manager.generate(
+            modelID: "gemma-4-e2b",
+            systemPrompt: nil,
+            input: "echo",
+            maxTokens: 10,
+            temperature: 0.7
+        )
+        try await collectWithTimeout(seconds: 10) {
+            for try await _ in stream { }
+        }
+
+        let id = await manager.loadedModelID()
+        #expect(id == "gemma-4-e2b", "Expected gemma-4-e2b, got: \(String(describing: id))")
+
+        await manager.shutdown()
+    }
+
+    // MARK: - unloadModel
+
+    @Test("unloadModel sends unload request and stub clears loaded_model_id")
+    func unloadModelClearsID() async throws {
+        let stubURL = try writeStubHelper()
+        defer { try? FileManager.default.removeItem(at: stubURL) }
+
+        let manager = MLXHelperManager(helperURL: stubURL, supported: true, readyTimeoutNanos: 5_000_000_000)
+
+        // Launch helper via generate.
+        let stream = try await manager.generate(
+            modelID: "gemma-4-e2b",
+            systemPrompt: nil,
+            input: "echo",
+            maxTokens: 10,
+            temperature: 0.7
+        )
+        try await collectWithTimeout(seconds: 10) {
+            for try await _ in stream { }
+        }
+
+        // Confirm model is loaded.
+        let beforeID = await manager.loadedModelID()
+        #expect(beforeID == "gemma-4-e2b", "Pre-condition: expected gemma-4-e2b loaded")
+
+        // Unload and allow the done response to arrive.
+        await manager.unloadModel()
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let afterID = await manager.loadedModelID()
+        #expect(afterID == nil, "Expected nil after unloadModel(), got: \(String(describing: afterID))")
+
+        await manager.shutdown()
+    }
+
+    @Test("unloadModel is a no-op when process is not running")
+    func unloadModelNoOpWhenNotRunning() async throws {
+        let stubURL = try writeStubHelper()
+        defer { try? FileManager.default.removeItem(at: stubURL) }
+
+        let manager = MLXHelperManager(helperURL: stubURL, supported: true)
+        // Should not throw or hang — just a no-op.
+        await manager.unloadModel()
+        // Success: reaching here without error.
+    }
+
+    // MARK: - applyIdleTimeoutChange
+
+    @Test("applyIdleTimeoutChange tears down idle process so next launch gets new env")
+    func applyIdleTimeoutChangeTeardownAndRelaunch() async throws {
+        let stubURL = try writeStubHelper()
+        defer { try? FileManager.default.removeItem(at: stubURL) }
+
+        let manager = MLXHelperManager(helperURL: stubURL, supported: true, readyTimeoutNanos: 5_000_000_000)
+
+        // Launch helper via generate.
+        let stream = try await manager.generate(
+            modelID: "gemma-4-e2b",
+            systemPrompt: nil,
+            input: "echo",
+            maxTokens: 10,
+            temperature: 0.7
+        )
+        try await collectWithTimeout(seconds: 10) {
+            for try await _ in stream { }
+        }
+
+        let epochBeforeChange = await manager.currentEpoch()
+
+        // Apply idle change while process is idle — should tear it down.
+        await manager.applyIdleTimeoutChange(60)
+
+        // Poll for epoch bump (teardown is synchronous on actor).
+        let epochAfterChange: Int = try await collectWithTimeout(seconds: 5) {
+            while true {
+                let e = await manager.currentEpoch()
+                if e > epochBeforeChange { return e }
+                try await Task.sleep(nanoseconds: 10_000_000)
+            }
+        }
+
+        #expect(epochAfterChange > epochBeforeChange,
+                "Expected epoch to increase after applyIdleTimeoutChange on idle process")
+
+        // loadedModelID should now return nil since the process was torn down.
+        let id = await manager.loadedModelID()
+        #expect(id == nil, "Expected nil after teardown, got: \(String(describing: id))")
+
+        await manager.shutdown()
     }
 }

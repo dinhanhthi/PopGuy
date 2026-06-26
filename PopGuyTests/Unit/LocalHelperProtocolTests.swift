@@ -125,6 +125,17 @@ struct HelperRequestTests {
         #expect(try roundTrip(HelperRequest.unload) == .unload)
     }
 
+    @Test("status encodes type=status")
+    func statusTypeDiscriminator() throws {
+        let obj = try json(HelperRequest.status)
+        #expect(obj["type"] as? String == "status")
+    }
+
+    @Test("status round-trip identity")
+    func statusRoundTrip() throws {
+        #expect(try roundTrip(HelperRequest.status) == .status)
+    }
+
     @Test("unknown type throws on decode")
     func unknownTypeThrows() throws {
         let data = Data(#"{"type":"bogus"}"#.utf8)
@@ -251,6 +262,34 @@ struct HelperResponseTests {
         #expect(throws: (any Error).self) {
             try decoder.decode(HelperResponse.self, from: data)
         }
+    }
+
+    @Test("status with non-nil modelID encodes type=status and modelID")
+    func statusWithModelIDTypeDiscriminator() throws {
+        let resp = HelperResponse.status(loadedModelID: "mlx-community/gemma-4-e2b-it-4bit")
+        let obj = try json(resp)
+        #expect(obj["type"] as? String == "status")
+        #expect(obj["modelID"] as? String == "mlx-community/gemma-4-e2b-it-4bit")
+    }
+
+    @Test("status with nil modelID encodes type=status without modelID key")
+    func statusWithNilModelIDTypeDiscriminator() throws {
+        let resp = HelperResponse.status(loadedModelID: nil)
+        let obj = try json(resp)
+        #expect(obj["type"] as? String == "status")
+        #expect(obj["modelID"] == nil)
+    }
+
+    @Test("status with non-nil modelID round-trip identity")
+    func statusWithModelIDRoundTrip() throws {
+        let resp = HelperResponse.status(loadedModelID: "mlx-community/gemma-4-e2b-it-4bit")
+        #expect(try roundTrip(resp) == resp)
+    }
+
+    @Test("status with nil modelID round-trip identity")
+    func statusWithNilModelIDRoundTrip() throws {
+        let resp = HelperResponse.status(loadedModelID: nil)
+        #expect(try roundTrip(resp) == resp)
     }
 }
 

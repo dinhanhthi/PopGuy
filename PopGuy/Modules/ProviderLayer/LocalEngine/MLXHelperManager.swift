@@ -111,6 +111,14 @@ private enum ActiveRequest {
     case none
 }
 
+// MARK: - StatusWaiter result
+
+/// Internal result type for the status request continuation.
+private enum StatusResult: Sendable {
+    case loaded(String?)
+    case failed(Error)
+}
+
 // MARK: - MLXHelperManager
 
 /// Actor that owns and communicates with the long-lived PopGuyMLXHelper subprocess.
@@ -155,6 +163,16 @@ actor MLXHelperManager {
 
     /// Task running the 15-second startup timeout.
     private var readyTimeoutTask: Task<Void, Never>?
+
+    /// One-shot continuation waiting for a `status` response.
+    /// Resumes with the loaded model id (nil = nothing loaded).
+    private var statusWaiter: CheckedContinuation<String?, Error>?
+
+    /// Task running the status request timeout (reuses readyTimeoutNanos).
+    private var statusTimeoutTask: Task<Void, Never>?
+
+    /// Configured idle timeout in seconds passed to the helper via env. 0 = never unload.
+    private var idleSeconds: Int = 300
 
     // MARK: - Init
 
@@ -212,12 +230,13 @@ actor MLXHelperManager {
         proc.executableURL = helperURL
         proc.arguments = []
         proc.environment = [
-            "HOME":    NSHomeDirectory(),
-            "USER":    NSUserName(),
-            "LOGNAME": NSUserName(),
-            "PATH":    "/usr/bin:/bin",
-            "LANG":    "en_US.UTF-8",
-            "LC_ALL":  "en_US.UTF-8",
+            "HOME":                      NSHomeDirectory(),
+            "USER":                      NSUserName(),
+            "LOGNAME":                   NSUserName(),
+            "PATH":                      "/usr/bin:/bin",
+            "LANG":                      "en_US.UTF-8",
+            "LC_ALL":                    "en_US.UTF-8",
+            "POPGUY_MLX_IDLE_SECONDS":   "\(idleSeconds)",
         ]
 
         let stdoutPipe = Pipe()
@@ -291,6 +310,8 @@ actor MLXHelperManager {
     private func teardownProcess() {
         readyTimeoutTask?.cancel()
         readyTimeoutTask = nil
+        statusTimeoutTask?.cancel()
+        statusTimeoutTask = nil
 
         process?.terminate()
         process = nil
@@ -301,6 +322,11 @@ actor MLXHelperManager {
 
         if let waiter = readyWaiter {
             readyWaiter = nil
+            waiter.resume(throwing: MLXHelperError.processExited)
+        }
+
+        if let waiter = statusWaiter {
+            statusWaiter = nil
             waiter.resume(throwing: MLXHelperError.processExited)
         }
     }
@@ -342,22 +368,46 @@ actor MLXHelperManager {
 
         case .error(let message):
             failActiveRequest(MLXHelperError.ipcError(message))
+
+        case .status(let loadedModelID):
+            statusTimeoutTask?.cancel()
+            statusTimeoutTask = nil
+            if let waiter = statusWaiter {
+                statusWaiter = nil
+                waiter.resume(returning: loadedModelID)
+            }
         }
     }
 
     private func handleProcessExit(epoch: Int) {
         guard epoch == processEpoch else { return }
 
-        let err = MLXHelperError.processExited
         readyTimeoutTask?.cancel()
         readyTimeoutTask = nil
+        statusTimeoutTask?.cancel()
+        statusTimeoutTask = nil
+
         if let waiter = readyWaiter {
             readyWaiter = nil
-            waiter.resume(throwing: err)
+            waiter.resume(throwing: MLXHelperError.processExited)
         }
-        failActiveRequest(err)
-        process = nil
-        stdinHandle = nil
+
+        if let waiter = statusWaiter {
+            statusWaiter = nil
+            waiter.resume(throwing: MLXHelperError.processExited)
+        }
+
+        // Only fail the active request when one is in-flight.
+        // When activeRequest == .none, the process exited idle (e.g. watchdog triggered
+        // exit-on-idle) — this is normal and must not surface as an error.
+        if case .none = activeRequest {
+            process = nil
+            stdinHandle = nil
+        } else {
+            failActiveRequest(MLXHelperError.processExited)
+            process = nil
+            stdinHandle = nil
+        }
     }
 
     private func handleReadyTimeout(epoch: Int) {
@@ -573,6 +623,89 @@ actor MLXHelperManager {
         default:
             activeRequest = .none
         }
+    }
+
+    // MARK: - New public API (memory lifecycle controls)
+
+    /// Returns the id of the model currently loaded in the helper, or nil if no process
+    /// is running or no model is loaded.
+    ///
+    /// Never launches the helper — returns nil immediately when the process is not running
+    /// so the idle-exit state is not accidentally revived by a status poll.
+    func loadedModelID() async -> String? {
+        guard let proc = process, proc.isRunning else { return nil }
+
+        // Guard: only one status waiter at a time.
+        guard statusWaiter == nil else { return nil }
+
+        let myEpoch = processEpoch
+        let timeoutNanos = readyTimeoutNanos
+
+        do {
+            return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<String?, Error>) in
+                self.statusWaiter = cont
+
+                // Arm timeout.
+                let timeoutTask = Task { [weak self] in
+                    do {
+                        try await Task.sleep(nanoseconds: timeoutNanos)
+                    } catch {
+                        return  // Cancelled by status reply — normal path.
+                    }
+                    guard let self else { return }
+                    await self.handleStatusTimeout(epoch: myEpoch)
+                }
+                self.statusTimeoutTask = timeoutTask
+
+                // Send the status request. If send fails, resolve the continuation immediately.
+                do {
+                    try self.sendRequest(.status)
+                } catch {
+                    self.statusTimeoutTask?.cancel()
+                    self.statusTimeoutTask = nil
+                    self.statusWaiter = nil
+                    cont.resume(throwing: error)
+                }
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    private func handleStatusTimeout(epoch: Int) {
+        guard epoch == processEpoch else { return }
+        guard let waiter = statusWaiter else { return }
+        statusWaiter = nil
+        statusTimeoutTask?.cancel()
+        statusTimeoutTask = nil
+        waiter.resume(throwing: MLXHelperError.startupTimeout)
+    }
+
+    /// Send an `.unload` request to the helper if it is currently running.
+    ///
+    /// Does not wait for a response (the helper emits `.done`, which the reader task
+    /// handles via `finishActiveRequest` — a no-op when `activeRequest == .none`).
+    /// No-op when the process is not running.
+    func unloadModel() async {
+        guard let proc = process, proc.isRunning else { return }
+        // Only send when idle to stay race-free with the single-flight machinery.
+        guard case .none = activeRequest else { return }
+        try? sendRequest(.unload)
+    }
+
+    /// Apply a new idle timeout value.
+    ///
+    /// Updates the stored value. When the helper is running and idle (no active
+    /// request, no pending ready handshake), tears it down immediately so the
+    /// next launch picks up the new env value. When a request is active, the new
+    /// value is stored and will be used on the next relaunch.
+    func applyIdleTimeoutChange(_ seconds: Int) {
+        idleSeconds = seconds
+        // Only tear down when idle: no active request, no in-progress launch (readyWaiter == nil).
+        guard let proc = process, proc.isRunning else { return }
+        guard case .none = activeRequest else { return }
+        guard readyWaiter == nil else { return }
+        teardownProcess()
     }
 
     // MARK: - Installed model detection

@@ -78,8 +78,17 @@ private func blobsDirSize(cacheBase: URL, modelID: String) -> Int64 {
 /// Maximum line length in bytes before the line is rejected (OOM prevention).
 /// The cap is enforced during accumulation — no oversize buffer is ever allocated.
 private let kMaxLineLengthBytes = 8 * 1024 * 1024  // 8 MB
-private let kIdleTimeoutSeconds: TimeInterval = 300  // 5 minutes
 private let kWatchdogIntervalSeconds: TimeInterval = 30
+
+/// Idle timeout in seconds, parsed from POPGUY_MLX_IDLE_SECONDS at startup.
+/// 0 means "never unload" (watchdog disabled). Default: 300 (5 minutes).
+private let kIdleTimeoutSeconds: TimeInterval = {
+    if let raw = ProcessInfo.processInfo.environment["POPGUY_MLX_IDLE_SECONDS"],
+       let parsed = Int(raw), parsed >= 0 {
+        return TimeInterval(parsed)
+    }
+    return 300
+}()
 
 // MARK: - ActivityTracker
 
@@ -193,13 +202,20 @@ func runMain() async {
     // Channel: background stdin reader → main actor dispatch loop.
     let (lineStream, lineContinuation) = AsyncStream<StdinLine>.makeStream()
 
-    // Watchdog: unload model after sustained inactivity.
+    // Watchdog: unload model (and exit) after sustained inactivity.
+    // Disabled when kIdleTimeoutSeconds == 0 (never unload).
     let watchdog = Task.detached {
+        guard kIdleTimeoutSeconds > 0 else { return }
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: UInt64(kWatchdogIntervalSeconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
             let idle = await activity.idleSeconds()
             if idle >= kIdleTimeoutSeconds {
                 await runner.unload()
+                // Exit so the helper process RAM is also freed.
+                // Re-launch happens automatically on next use.
+                fflush(stdout)
+                exit(0)
             }
         }
     }
@@ -236,6 +252,9 @@ func runMain() async {
             switch request {
             case .ping:
                 writeResponse(.ready)
+
+            case .status:
+                writeResponse(.status(loadedModelID: await runner.loadedModelID()))
 
             case .unload:
                 await runner.unload()

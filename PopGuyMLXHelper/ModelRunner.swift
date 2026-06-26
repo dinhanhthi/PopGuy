@@ -93,6 +93,11 @@ actor ModelRunner {
         currentModelID = nil
     }
 
+    /// Returns the id of the currently loaded model, or nil when nothing is loaded.
+    func loadedModelID() -> String? {
+        currentModelID
+    }
+
     // MARK: - Generation
 
     /// Generate a streaming response for the given input.

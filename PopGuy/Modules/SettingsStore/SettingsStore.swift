@@ -166,6 +166,7 @@ final class SettingsStore: ObservableObject {
         static let principalActionIDs         = "settings.principalActionIDs"
         static let actCount                   = "settings.actCount"
         static let completedLocalModelIDs     = "settings.completedLocalModelIDs"
+        static let localModelIdleSeconds      = "settings.localModelIdleSeconds"
     }
 
     // MARK: - Storage
@@ -211,6 +212,21 @@ final class SettingsStore: ObservableObject {
 
     /// Last download error message, or `nil` when the last download succeeded.
     @Published private(set) var localModelDownloadError: String?
+
+    /// Idle timeout in seconds for the local MLX helper process. 0 = never unload.
+    /// The UI should offer Never / 1 / 2 / 5 / 10 / 30 min options.
+    @Published var localModelIdleSeconds: Int {
+        didSet {
+            defaults.set(localModelIdleSeconds, forKey: Keys.localModelIdleSeconds)
+            let helper = mlxHelper
+            let seconds = localModelIdleSeconds
+            Task { await helper.applyIdleTimeoutChange(seconds) }
+        }
+    }
+
+    /// The catalog model id currently loaded in the helper process, or nil when idle or not running.
+    /// Updated by calling `refreshLoadedLocalModel()`.
+    @Published private(set) var loadedLocalModelID: String?
 
     /// The running download Task. Retained so `cancelLocalModelDownload()` can cancel it.
     private var activeDownloadTask: Task<Void, Never>?
@@ -497,6 +513,7 @@ final class SettingsStore: ObservableObject {
         self.mlxHelper = mlxHelper
         self.isMLXSupported = isMLXSupported
         completedLocalModelIDs = Self.load(Set<String>.self, key: Keys.completedLocalModelIDs, from: defaults) ?? []
+        localModelIdleSeconds = defaults.object(forKey: Keys.localModelIdleSeconds) as? Int ?? 300
 
         // Load persisted values or fall back to built-in defaults.
         let rawImproveConfig = Self.load(ActionConfig.self, key: Keys.improveConfig, from: defaults) ?? .defaultImprove
@@ -620,6 +637,14 @@ final class SettingsStore: ObservableObject {
         // Persist first-launch / upgrade migration (`didSet` does not run on init).
         if rawPrincipal == nil || rawPrincipal?.isEmpty == true {
             save(principalActionIDs, key: Keys.principalActionIDs)
+        }
+
+        // Push the persisted idle value to the manager (didSet does not fire on init assignment).
+        // The manager defaults to 300; push only when the persisted value differs.
+        let persistedIdleSeconds = localModelIdleSeconds
+        if persistedIdleSeconds != 300 {
+            let helper = mlxHelper
+            Task { await helper.applyIdleTimeoutChange(persistedIdleSeconds) }
         }
     }
 
@@ -1065,6 +1090,22 @@ final class SettingsStore: ObservableObject {
             return .proLocked
         }
         return .available
+    }
+
+    // MARK: - Loaded model status
+
+    /// Refresh the published `loadedLocalModelID` by querying the helper.
+    ///
+    /// Returns nil without launching the helper when it is not running.
+    /// The UI calls this on a timer and after generate/unload to keep the indicator current.
+    func refreshLoadedLocalModel() async {
+        loadedLocalModelID = await mlxHelper.loadedModelID()
+    }
+
+    /// Unload the currently loaded model from the helper, then refresh `loadedLocalModelID`.
+    func unloadLoadedLocalModel() async {
+        await mlxHelper.unloadModel()
+        await refreshLoadedLocalModel()
     }
 
     // MARK: - Local model installed-models cache

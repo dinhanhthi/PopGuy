@@ -33,6 +33,9 @@ public nonisolated enum HelperRequest: Codable, Equatable, Sendable {
     /// Unload the current model and release GPU memory.
     case unload
 
+    /// Query the currently loaded model id. The helper responds with `.status`.
+    case status
+
     // MARK: Coding
 
     private enum CodingKeys: String, CodingKey {
@@ -68,6 +71,8 @@ public nonisolated enum HelperRequest: Codable, Equatable, Sendable {
             )
         case "unload":
             self = .unload
+        case "status":
+            self = .status
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -94,6 +99,8 @@ public nonisolated enum HelperRequest: Codable, Equatable, Sendable {
             try container.encode(temperature, forKey: .temperature)
         case .unload:
             try container.encode("unload", forKey: .type)
+        case .status:
+            try container.encode("status", forKey: .type)
         }
     }
 }
@@ -118,6 +125,9 @@ public nonisolated enum HelperResponse: Codable, Equatable, Sendable {
 
     /// An error occurred. The helper remains running.
     case error(message: String)
+
+    /// The currently loaded model id, or nil when no model is loaded.
+    case status(loadedModelID: String?)
 
     // MARK: Coding
 
@@ -156,6 +166,9 @@ public nonisolated enum HelperResponse: Codable, Equatable, Sendable {
         case "error":
             let message = try container.decode(String.self, forKey: .message)
             self = .error(message: message)
+        case "status":
+            let loadedModelID = try container.decodeIfPresent(String.self, forKey: .modelID)
+            self = .status(loadedModelID: loadedModelID)
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -184,6 +197,9 @@ public nonisolated enum HelperResponse: Codable, Equatable, Sendable {
         case .error(let message):
             try container.encode("error", forKey: .type)
             try container.encode(message, forKey: .message)
+        case .status(let loadedModelID):
+            try container.encode("status", forKey: .type)
+            try container.encodeIfPresent(loadedModelID, forKey: .modelID)
         }
     }
 }
