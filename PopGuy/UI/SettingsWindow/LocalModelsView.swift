@@ -360,23 +360,21 @@ struct LocalModelsView: View {
     // MARK: - Download progress
 
     /// Only call with developer-controlled display name strings from `LocalModelCatalog`.
-    @ViewBuilder
+    /// Always shows an indeterminate animated bar so the user sees activity even when
+    /// large files download via Xet (which streams to a system temp path before moving
+    /// to the cache, giving no incremental on-disk progress). The percentage text shows
+    /// the best-known fraction when one is available.
     fileprivate func downloadProgress(name: String, fraction: Double?) -> some View {
         let clamped = fraction.map { min(max($0, 0), 1) } ?? 0
-        VStack(alignment: .leading, spacing: 3) {
-            if let f = fraction, f > 0 {
-                ProgressView(value: clamped)
-                    .progressViewStyle(.linear)
-                Text("Downloading \(name)… \(Int((clamped * 100).rounded()))%")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            } else {
-                ProgressView()
-                    .progressViewStyle(.linear)
-                Text("Preparing \(name)…")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+        let label = clamped > 0
+            ? "Downloading \(name)… \(Int((clamped * 100).rounded()))%"
+            : "Preparing \(name)…"
+        return VStack(alignment: .leading, spacing: 3) {
+            ProgressView()
+                .progressViewStyle(.linear)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 
