@@ -238,19 +238,15 @@ struct LocalModelsView: View {
         }
 
         // Progress indicator — shown below the row while this model downloads.
-        //
-        // The Hugging Face download library streams the large weights file to a
-        // system temp location and exposes no reliable sub-file byte progress on
-        // macOS, so a determinate percentage would sit near 0 then jump to 100.
-        // We show an INDETERMINATE animated bar so it clearly reads as "working".
+        // The helper streams a monotonic fraction (0–1) via the disk sampler and
+        // Foundation progress. Show a determinate % bar when fraction > 0; fall
+        // back to indeterminate "Preparing…" during the brief warm-up before the
+        // total size is known.
         if isDownloading {
-            VStack(alignment: .leading, spacing: 3) {
-                ProgressView()
-                    .progressViewStyle(.linear)
-                Text("Downloading \(model.displayName)… this can take a few minutes.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+            downloadProgress(
+                name: model.displayName,
+                fraction: settings.localModelDownloadProgress[model.id]
+            )
         }
     }
 
@@ -361,6 +357,29 @@ struct LocalModelsView: View {
         }
     }
 
+    // MARK: - Download progress
+
+    /// Only call with developer-controlled display name strings from `LocalModelCatalog`.
+    @ViewBuilder
+    fileprivate func downloadProgress(name: String, fraction: Double?) -> some View {
+        let clamped = fraction.map { min(max($0, 0), 1) } ?? 0
+        VStack(alignment: .leading, spacing: 3) {
+            if let f = fraction, f > 0 {
+                ProgressView(value: clamped)
+                    .progressViewStyle(.linear)
+                Text("Downloading \(name)… \(Int((clamped * 100).rounded()))%")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else {
+                ProgressView()
+                    .progressViewStyle(.linear)
+                Text("Preparing \(name)…")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
     // MARK: - Delete button
 
     /// Shared delete button used by both `.available` and `.proLocked` installed states.
@@ -430,4 +449,11 @@ struct LocalModelsView: View {
         .padding()
     }
     .frame(width: 520)
+}
+
+#Preview("downloadProgress — determinate 42%") {
+    let view = LocalModelsView(settings: SettingsStore(), isPro: true)
+    return view.downloadProgress(name: "Gemma 4 E2B", fraction: 0.42)
+        .frame(width: 420)
+        .padding()
 }

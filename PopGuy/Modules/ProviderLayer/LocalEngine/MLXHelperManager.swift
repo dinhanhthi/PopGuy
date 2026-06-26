@@ -69,7 +69,7 @@ enum MLXHelperError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupported(let reason):   return "Local MLX not supported: \(reason)"
-        case .helperNotFound(let path):  return "MLX helper not found at \(path)."
+        case .helperNotFound:            return "MLX helper binary not found."
         case .launchFailed(let reason):  return "Failed to launch MLX helper: \(reason)"
         case .ipcError(let detail):      return "MLX helper IPC error: \(detail)"
         case .processExited:             return "MLX helper exited unexpectedly."
