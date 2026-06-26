@@ -44,14 +44,14 @@ describe("website routes", () => {
     ]);
   });
 
-  it("presents Pro as an optional $10 one-time upgrade on the home page", () => {
+  it("presents Pro as an optional $15 one-time upgrade on the home page", () => {
     render(
       <MemoryRouter initialEntries={["/"]}>
         <AppRoutes />
       </MemoryRouter>
     );
 
-    expect(screen.getByText("$10", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("$15", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("Optional upgrade")).toBeInTheDocument();
   });
 

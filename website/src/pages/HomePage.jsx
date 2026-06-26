@@ -19,7 +19,7 @@ import {
   providerLogos
 } from "../components/ProviderLogos";
 import { releases } from "../data/changelog";
-import { DOWNLOAD_URL, GITHUB_URL } from "../constants";
+import { DOWNLOAD_URL, GITHUB_URL, PRO_CHECKOUT_URL } from "../constants";
 
 const features = [
   {
@@ -150,13 +150,14 @@ export function HomePage() {
             <ButtonLink href={DOWNLOAD_URL} icon="download">
               Download for macOS
             </ButtonLink>
+            <p className="pro-early-note">2 months of Pro, on us — for early adopters.</p>
           </article>
 
           <aside className="pro-addon">
             <span className="plan-label">Optional upgrade</span>
             <div className="pro-price">
               <h2>Pro</h2>
-              <p><strong>$10</strong> one-time</p>
+              <p><strong>$15</strong> one-time</p>
             </div>
             <p>More room for heavier use.</p>
             <ul>
@@ -164,10 +165,9 @@ export function HomePage() {
                 <li key={feature}><Check size={16} /> {feature}</li>
               ))}
             </ul>
-            <button className="button button--secondary" disabled>
-              Coming soon
-            </button>
-            <p className="pro-early-note">2 months of Pro, on us — for early adopters.</p>
+            <ButtonLink href={PRO_CHECKOUT_URL} variant="gold">
+              Get Pro
+            </ButtonLink>
           </aside>
         </div>
       </section>
