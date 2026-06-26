@@ -154,12 +154,20 @@ struct LocalModelsView: View {
             trailingControl(model: model, availability: availability, isDownloading: isDownloading, isInstalled: isInstalled)
         }
 
-        // Progress bar — shown below the row when this model is being downloaded
+        // Progress indicator — shown below the row while this model downloads.
+        //
+        // The Hugging Face download library streams the large weights file to a
+        // system temp location and exposes no reliable sub-file byte progress on
+        // macOS, so a determinate percentage would sit near 0 then jump to 100.
+        // We show an INDETERMINATE animated bar so it clearly reads as "working".
         if isDownloading {
-            let progress = settings.localModelDownloadProgress[model.id] ?? 0.0
-            ProgressView(value: progress, total: 1.0)
-                .progressViewStyle(.linear)
-                .tint(.accentColor)
+            VStack(alignment: .leading, spacing: 3) {
+                ProgressView()
+                    .progressViewStyle(.linear)
+                Text("Downloading \(model.displayName)… this can take a few minutes.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
