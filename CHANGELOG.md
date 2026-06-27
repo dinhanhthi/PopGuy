@@ -13,6 +13,29 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [0.4.0] - 2026-06-27
+
+### Added
+
+- On-device local AI: run models locally through a built-in MLX engine — no API key, fully offline.
+- Local Models manager in Settings: download, remove, and manage on-device models with live download progress.
+- Per-model memory controls to load and unload models on demand.
+- PopGuy Pro is now available to purchase. Unlock unlimited custom actions, cloud TTS voices, unlimited history, import/export, and more.
+- Free trial: every new install gets 1 month of Pro, free.
+- Global prompt: add instructions that are prepended to every AI action.
+- License management in Settings: activate a purchased key, view status, and deactivate a Mac to free an activation.
+
+### Changed
+
+- The menu bar now shows your trial status ("Free Trial — N days left") separately from an active paid Pro license.
+- You can enter a license key at any time, including during the free trial.
+
+### Fixed
+
+- Confirmation dialog before deleting a downloaded local model.
+- Floating toolbar uses an opaque background instead of a translucent material.
+- Settings slide-over panels keep a fixed header gap when the window is resized.
+
 ## [0.3.0] - 2026-06-24
 
 ### Added
