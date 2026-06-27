@@ -1,16 +1,14 @@
 name: Release
 
-# Trigger: push a tag matching v0.1.0, v1.2.3, etc.
-# Flow: build → sign → notarize → staple → GitHub Release → appcast → Pages.
-# Pages is deployed HERE, inside the tag run, so the GitHub Release and the live
-# appcast URL update together in one run. We do NOT rely on the appcast commit to
-# trigger deploy-appcast.yml: a push made with GITHUB_TOKEN cannot trigger another
-# workflow, so that hand-off silently never fires. The github-pages environment
-# must allow tag refs (deployment-branch-policy name "v*", type "tag").
+# DISABLED for automatic runs — the local release flow (docs/RELEASING.md) is now the
+# canonical path: scripts/build-and-notarize.sh → scripts/publish-release.sh → generate_appcast
+# → push appcast.xml (deploy-appcast.yml then publishes it to Pages). The local archive uses a
+# warm SPM/Metal cache, so it is far faster than this always-clean runner that recompiles MLX
+# every run. The tag trigger is removed so publish-release.sh's `git push origin vX.Y.Z` does
+# NOT also kick off this CI build (double release). Kept as workflow_dispatch only — a manual
+# emergency fallback if the local machine is unavailable.
 on:
-  push:
-    tags:
-      - 'v[0-9]*.[0-9]*.[0-9]*'
+  workflow_dispatch:
 
 permissions:
   contents: write   # create releases + push appcast commit
