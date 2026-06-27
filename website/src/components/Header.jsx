@@ -50,8 +50,7 @@ export function Header() {
               target="_blank"
               rel="noreferrer"
             >
-              <GitHubIcon size={18} />
-              GitHub
+              <GitHubIcon size={18} aria-label="GitHub" />
             </a>
             <a
               className="button button--primary button--header"
