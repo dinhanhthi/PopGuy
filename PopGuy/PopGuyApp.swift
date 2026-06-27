@@ -722,12 +722,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         )
         menu.addItem(checkItem)
 
-        // Pro / activation status.
-        if licenseGate.entitlements.isPro {
+        // Pro / trial / activation status.
+        // A paid license is the only thing that shows "Pro — Active"; an active
+        // trial grants Pro entitlements but is shown as a distinct trial status.
+        if licenseGate.activatedKeyMasked != nil {
             let proItem = NSMenuItem(title: "PopGuy Pro — Active", action: nil, keyEquivalent: "")
             proItem.image = NSImage(systemSymbolName: "checkmark.seal.fill", accessibilityDescription: nil)
             proItem.isEnabled = false
             menu.addItem(proItem)
+        } else if case .active(let daysLeft, _) = licenseGate.trialState {
+            let trialItem = NSMenuItem(
+                title: "Free Trial — \(daysLeft) \(daysLeft == 1 ? "day" : "days") left",
+                action: #selector(openLicense),
+                keyEquivalent: ""
+            )
+            trialItem.image = NSImage(systemSymbolName: "hourglass", accessibilityDescription: nil)
+            menu.addItem(trialItem)
         } else {
             let upgradeItem = NSMenuItem(
                 title: "Upgrade to Pro\u{2026}",

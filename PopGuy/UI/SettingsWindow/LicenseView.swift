@@ -40,7 +40,10 @@ struct LicenseView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
                 statusCard
-                if !licenseGate.entitlements.isPro {
+                // Show the key-entry card whenever no paid license is active —
+                // including during the trial, so a trial user who buys Pro can
+                // activate their key without waiting for the trial to expire.
+                if licenseGate.activatedKeyMasked == nil {
                     activateCard
                 }
             }

@@ -112,7 +112,7 @@ nonisolated enum ProConfig {
     static let trialEnabled = true
 
     /// Duration of the free trial in calendar months.
-    static let trialDurationMonths = 2
+    static let trialDurationMonths = 1
 
     /// Users whose first launch is strictly before this date are eligible for the trial.
     /// Built from DateComponents so the cut-off is stable in any local timezone.
