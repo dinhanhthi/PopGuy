@@ -177,7 +177,7 @@ struct LicenseGateTrialTests {
         gate.bootstrapTrial(now: laterNow)
         let stateAfterSecond = gate.trialState
 
-        // Both states should be active (trial lasts 2 months from firstNow)
+        // Both states should be active (trial runs ProConfig.trialDurationMonths from firstNow)
         // and the endDate must be identical (start date did not shift)
         guard case .active(_, let end1) = stateAfterFirst,
               case .active(_, let end2) = stateAfterSecond else {
@@ -207,7 +207,7 @@ struct LicenseGateTrialTests {
             Issue.record("Expected .active, got \(gate.trialState)")
             return
         }
-        // End date should be exactly 2 months after the first-launch date (which was `now`)
+        // End date should be exactly trialDurationMonths after the first-launch date (which was `now`)
         let expectedEnd = TrialPolicy.utcCalendar.date(
             byAdding: .month, value: ProConfig.trialDurationMonths, to: now
         )!

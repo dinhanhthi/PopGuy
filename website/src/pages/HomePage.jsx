@@ -150,7 +150,7 @@ export function HomePage() {
             <ButtonLink href={DOWNLOAD_URL} icon="download">
               Download for macOS
             </ButtonLink>
-            <p className="pro-early-note">2 months of Pro, on us — for early adopters.</p>
+            <p className="pro-early-note">1 month of Pro, on us — for early adopters.</p>
           </article>
 
           <aside className="pro-addon">
