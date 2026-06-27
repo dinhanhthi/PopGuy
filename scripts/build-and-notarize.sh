@@ -14,7 +14,6 @@
 # Prereqs (one-time — see RELEASING.md §0):
 #   - "Developer ID Application" cert in the login Keychain                  (§0.1)
 #   - notarytool credential profile (default "popguy-notary")               (§0.1 step 6)
-#   - ExportOptions.plist at the repo root (gitignored)                      (§2)
 #   - Xcode 26+ selected — REQUIRED to compile the Icon Composer .icon icon  (release.yml note)
 #   - Metal Toolchain installed (already present if you build MLX locally; otherwise run
 #     `xcodebuild -downloadComponent MetalToolchain` once — it links the PopGuyMLXHelper).
@@ -32,16 +31,28 @@ cd "$REPO_ROOT"
 
 PBXPROJ="PopGuy.xcodeproj/project.pbxproj"
 INFO_PLIST="PopGuy/Info.plist"
-EXPORT_OPTIONS="ExportOptions.plist"
 ARCHIVE="build/PopGuy.xcarchive"
 EXPORT_DIR="build/export"
 APP="$EXPORT_DIR/PopGuy.app"
 NOTARY_PROFILE="${POPGUY_NOTARY_PROFILE:-popguy-notary}"
 
+# Submit to Apple and FAIL the script on anything other than "Accepted". notarytool exits 0
+# even when the status is Invalid, so without this an Invalid result sails on into stapler and
+# surfaces as a confusing "Error 65" instead of a clear stop. On failure, print the log command.
+notarize() {  # $1 = file to submit (zip or dmg)
+  local out sid
+  out="$(xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1)"
+  echo "$out"
+  grep -q "status: Accepted" <<<"$out" && return 0
+  sid="$(grep -m1 '  id:' <<<"$out" | awk '{print $2}')"
+  echo "error: notarization not Accepted for $1 — pull the log to see which binary failed:" >&2
+  echo "       xcrun notarytool log $sid --keychain-profile $NOTARY_PROFILE" >&2
+  exit 1
+}
+
 # --- 0. Tools & prereqs ----------------------------------------------------
 command -v xcodebuild >/dev/null || { echo "error: xcodebuild not found" >&2; exit 1; }
-[[ -f "$PBXPROJ" ]]        || { echo "error: $PBXPROJ not found — run from the PopGuy repo" >&2; exit 1; }
-[[ -f "$EXPORT_OPTIONS" ]] || { echo "error: $EXPORT_OPTIONS missing at repo root (RELEASING.md §2)" >&2; exit 1; }
+[[ -f "$PBXPROJ" ]] || { echo "error: $PBXPROJ not found — run from the PopGuy repo" >&2; exit 1; }
 
 # Xcode 26+ is REQUIRED to compile the Icon Composer .icon app icon; older toolchains
 # silently ship a blank icon (the v0.1.1 regression). Fail loudly if not on 26+.
@@ -94,11 +105,51 @@ xcodebuild -project PopGuy.xcodeproj -scheme PopGuy \
   -skipMacroValidation \
   -archivePath "$ARCHIVE" archive
 
-# --- 4. Export the Developer-ID-signed app ---------------------------------
-xcodebuild -exportArchive \
-  -archivePath "$ARCHIVE" \
-  -exportOptionsPlist "$EXPORT_OPTIONS" \
-  -exportPath "$EXPORT_DIR"
+# --- 4. Extract the Developer-ID-signed app from the archive ---------------
+# The Release archive already signs PopGuy.app with Developer ID + hardened runtime + a secure
+# timestamp (the project's Release config signs directly — RELEASING.md §0.1), so it is already
+# distribution-ready. We deliberately do NOT run `xcodebuild -exportArchive`: on Xcode 26 it
+# fails for this app because IDEDistribution cannot enumerate a distribution method for a bundle
+# with an embedded helper executable (the MLX helper) and errors `expected one {}` (empty set).
+# Copy the app out with ditto (preserves bundle structure + signatures; never cp -R, which would
+# copy nested symlinks verbatim and dangle — the bug that broke the embed script).
+mkdir -p "$EXPORT_DIR"
+ditto "$ARCHIVE/Products/Applications/PopGuy.app" "$APP"
+# Sanity-gate the extracted app before the (slow) notarization round-trip. Capture codesign
+# output into a var first: piping `codesign | grep -q` trips `set -o pipefail` — grep -q exits
+# on first match, SIGPIPEs codesign (exit 141), and the pipeline is wrongly seen as failed.
+SIGN_INFO="$(codesign -dvvv "$APP" 2>&1)"
+grep -q "Authority=Developer ID Application" <<<"$SIGN_INFO" \
+  || { echo "error: extracted app is not Developer ID signed" >&2; exit 1; }
+grep -q "flags=.*runtime" <<<"$SIGN_INFO" \
+  || { echo "error: extracted app lacks the hardened runtime — notarization will reject it" >&2; exit 1; }
+if codesign -d --entitlements - "$APP" 2>/dev/null | grep -q "get-task-allow"; then
+  echo "error: app carries get-task-allow (Debug entitlement) — instant notarization reject" >&2; exit 1
+fi
+echo "==> Extracted Developer-ID-signed app from archive"
+
+# --- 4b. Re-sign Sparkle's nested helpers with Developer ID + secure timestamp ----
+# The archive signs the app, frameworks, and MLX helper, but leaves Sparkle's deeply nested code
+# (Updater.app, Autoupdate, the two XPC services) ADHOC-signed with no secure timestamp —
+# notarization rejects exactly those 4. `xcodebuild -exportArchive` would have deep-re-signed
+# them, but it is broken on Xcode 26 (see §4), so do it explicitly. Sign inside-out (nested code
+# first → framework → outer app; touching nested code breaks every seal above it).
+# --preserve-metadata=entitlements keeps each helper's entitlements while adding Developer ID +
+# secure timestamp + hardened runtime. Resolve the version letter (Current → e.g. B) so a future
+# Sparkle bump that changes it does not silently skip these paths.
+SPK="$APP/Contents/Frameworks/Sparkle.framework"
+SPKV="$SPK/Versions/$(readlink "$SPK/Versions/Current" 2>/dev/null || echo B)"
+resign() { codesign --force --options runtime --timestamp --preserve-metadata=entitlements \
+  --sign "Developer ID Application" "$1"; }
+resign "$SPKV/XPCServices/Downloader.xpc"
+resign "$SPKV/XPCServices/Installer.xpc"
+resign "$SPKV/Updater.app"
+resign "$SPKV/Autoupdate"
+resign "$SPK"        # re-seal the framework over the re-signed helpers
+resign "$APP"        # re-seal the outer app over the re-signed framework
+codesign --verify --deep --strict "$APP" \
+  || { echo "error: deep signature verification failed after re-signing Sparkle" >&2; exit 1; }
+echo "==> Re-signed Sparkle nested helpers (Developer ID + timestamp)"
 
 # --- 5. Guard against a blank-icon build (the v0.1.1 regression) -----------
 # If the .icon did not compile, actool ships the raw logo.icon folder instead of an app icon.
@@ -114,8 +165,7 @@ echo "==> App icon compiled OK"
 # The first zip is a THROWAWAY upload for notarytool; the file we ship is the re-zip AFTER
 # stapling (the staple writes the ticket into the .app, not the zip).
 ( cd "$EXPORT_DIR" && ditto -c -k --keepParent PopGuy.app "PopGuy-$VERSION.zip" )
-xcrun notarytool submit "$EXPORT_DIR/PopGuy-$VERSION.zip" \
-  --keychain-profile "$NOTARY_PROFILE" --wait
+notarize "$EXPORT_DIR/PopGuy-$VERSION.zip"
 ( cd "$EXPORT_DIR" \
   && xcrun stapler staple PopGuy.app \
   && ditto -c -k --keepParent PopGuy.app "PopGuy-$VERSION.zip" )
@@ -132,7 +182,7 @@ spctl -a -vv -t exec "$APP"
   hdiutil create -volname "PopGuy" -srcfolder dmg-stage -ov -format UDZO "PopGuy-$VERSION.dmg"
   # A DMG is a container, not an executable: --timestamp, no hardened runtime.
   codesign --force --timestamp --sign "Developer ID Application" "PopGuy-$VERSION.dmg"
-  xcrun notarytool submit "PopGuy-$VERSION.dmg" --keychain-profile "$NOTARY_PROFILE" --wait
+  notarize "PopGuy-$VERSION.dmg"
   xcrun stapler staple "PopGuy-$VERSION.dmg"
   spctl -a -t open --context context:primary-signature -v "PopGuy-$VERSION.dmg"
   xcrun stapler validate "PopGuy-$VERSION.dmg" )
