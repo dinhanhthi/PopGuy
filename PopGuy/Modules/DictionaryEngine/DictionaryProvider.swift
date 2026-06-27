@@ -73,7 +73,7 @@ extension DictionaryProviderKind {
         switch self {
         case .macOSBuiltin:      return "Installed macOS dictionaries, untargeted"
         case .minhqnd:           return "VI / EN / ZH"
-        case .freeDictionaryAPI: return "EN / FR / ES via Wiktionary"
+        case .freeDictionaryAPI: return "EN / FR / ES via Wiktionary (freedictionaryapi.com)"
         case .babylonBGL:        return "User-loaded .bgl files"
         }
     }
