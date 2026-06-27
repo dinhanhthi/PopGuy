@@ -1,9 +1,22 @@
 export const releases = [
   {
+    version: "0.4.0",
+    date: "June 2026",
+    title: "On-device AI and Pro launch.",
+    latest: true,
+    items: [
+      "On-device local AI with MLX",
+      "Runs fully offline, no API key",
+      "Download manager for local models",
+      "PopGuy Pro now available",
+      "One month of Pro, free",
+      "Global prompt for every AI action"
+    ]
+  },
+  {
     version: "0.3.0",
     date: "June 2026",
     title: "Customizable toolbar layout.",
-    latest: true,
     items: [
       "Main row plus a More overflow menu",
       "Drag-and-drop toolbar layout editor",
