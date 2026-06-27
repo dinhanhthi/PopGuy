@@ -5,8 +5,14 @@ name: Release
 # → push appcast.xml (deploy-appcast.yml then publishes it to Pages). The local archive uses a
 # warm SPM/Metal cache, so it is far faster than this always-clean runner that recompiles MLX
 # every run. The tag trigger is removed so publish-release.sh's `git push origin vX.Y.Z` does
-# NOT also kick off this CI build (double release). Kept as workflow_dispatch only — a manual
-# emergency fallback if the local machine is unavailable.
+# NOT also kick off this CI build (double release).
+#
+# NOT a working fallback: the `Export` step below still uses `xcodebuild -exportArchive`, which
+# is BROKEN on Xcode 26 for this app (the embedded MLX helper makes IDEDistribution enumerate an
+# empty distribution-method set). The local flow replaced export with a ditto extract + a manual
+# inside-out Developer-ID re-sign of Sparkle's nested helpers (scripts/build-and-notarize.sh).
+# Before this workflow could ship again it would need the same two fixes ported into the steps
+# below. Left here (workflow_dispatch only) as a reference skeleton, not a push-button release.
 on:
   workflow_dispatch:
 
