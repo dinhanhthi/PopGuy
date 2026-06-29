@@ -1,9 +1,18 @@
 export const releases = [
   {
+    version: "0.4.1",
+    date: "June 2026",
+    title: "No more beep when dragging in browsers.",
+    latest: true,
+    items: [
+      "No system beep on Chrome or Edge tab-bar drags",
+      "Clipboard capture limited to VSCode and Cursor",
+    ]
+  },
+  {
     version: "0.4.0",
     date: "June 2026",
     title: "On-device AI and Pro launch.",
-    latest: true,
     items: [
       "On-device local AI with MLX",
       "Runs fully offline, no API key",
