@@ -13,6 +13,12 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [0.4.1] - 2026-06-29
+
+### Fixed
+
+- Dragging to select text in Chrome, Edge, Brave, or other marker-readable browsers no longer causes a system beep. The synthetic ⌘C fallback is now restricted to Monaco editors (VSCode and Cursor), which cannot expose large drag-selections through the Accessibility API.
+
 ## [0.4.0] - 2026-06-27
 
 ### Added
