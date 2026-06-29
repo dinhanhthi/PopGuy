@@ -22,7 +22,7 @@ struct ClipboardFallbackGateTests {
         #expect(shouldAttemptClipboardFallback(
             fromMouseUp: true,
             mouseReleasePoint: dragPoint,
-            usesEnhancedCapture: true
+            usesClipboardFallback: true
         ) == true)
     }
 
@@ -33,7 +33,7 @@ struct ClipboardFallbackGateTests {
         #expect(shouldAttemptClipboardFallback(
             fromMouseUp: false,
             mouseReleasePoint: dragPoint,
-            usesEnhancedCapture: true
+            usesClipboardFallback: true
         ) == false)
     }
 
@@ -42,7 +42,7 @@ struct ClipboardFallbackGateTests {
         #expect(shouldAttemptClipboardFallback(
             fromMouseUp: true,
             mouseReleasePoint: nil,
-            usesEnhancedCapture: true
+            usesClipboardFallback: true
         ) == false)
     }
 
@@ -51,7 +51,7 @@ struct ClipboardFallbackGateTests {
         #expect(shouldAttemptClipboardFallback(
             fromMouseUp: true,
             mouseReleasePoint: dragPoint,
-            usesEnhancedCapture: false
+            usesClipboardFallback: false
         ) == false)
     }
 
@@ -62,7 +62,7 @@ struct ClipboardFallbackGateTests {
         #expect(shouldAttemptClipboardFallback(
             fromMouseUp: false,
             mouseReleasePoint: nil,
-            usesEnhancedCapture: false
+            usesClipboardFallback: false
         ) == false)
     }
 
@@ -74,7 +74,7 @@ struct ClipboardFallbackGateTests {
         #expect(shouldAttemptClipboardFallback(
             fromMouseUp: false,
             mouseReleasePoint: dragPoint,
-            usesEnhancedCapture: true
+            usesClipboardFallback: true
         ) == false)
     }
 }

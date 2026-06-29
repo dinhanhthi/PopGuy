@@ -100,15 +100,19 @@ func shouldSkipInconclusiveFallback(
 // MARK: - Phase 3: ⌘C clipboard fallback gate
 
 /// Returns true when the ⌘C clipboard fallback should be attempted for an
-/// AX-absent result from an allowlisted editor. ALL three conditions must hold
+/// AX-absent result from a Monaco-editor app. ALL three conditions must hold
 /// to preserve the no-phantom-⌘C invariant on bare clicks, caret moves, and
 /// keyboard selections.
 ///
 /// - Parameters:
 ///   - fromMouseUp: whether this capture was triggered by a left mouse-up.
 ///   - mouseReleasePoint: non-nil when a real drag of ≥ dragThreshold occurred.
-///   - usesEnhancedCapture: true when the source app is in the allowlisted set
-///     of Electron/Chromium editors (VSCode, Cursor, etc.).
+///   - usesClipboardFallback: true ONLY when the source app is in the narrow
+///     `clipboardFallbackBundleIDs` set (VSCode/Cursor — Monaco editors whose
+///     virtual selection AX cannot read). Browsers and other marker-readable
+///     enhanced apps are deliberately excluded: a speculative ⌘C on a non-text
+///     drag (e.g. moving a Chrome window by its tab bar) makes the host beep with
+///     nothing to copy.
 ///
 /// Returns `true` only when: mouse-up-driven AND a real drag (not a bare click)
 /// AND the source app hides its large selections from AX.
@@ -116,9 +120,9 @@ func shouldSkipInconclusiveFallback(
 func shouldAttemptClipboardFallback(
     fromMouseUp: Bool,
     mouseReleasePoint: CGPoint?,
-    usesEnhancedCapture: Bool
+    usesClipboardFallback: Bool
 ) -> Bool {
-    fromMouseUp && mouseReleasePoint != nil && usesEnhancedCapture
+    fromMouseUp && mouseReleasePoint != nil && usesClipboardFallback
 }
 
 // MARK: - Event type
@@ -480,9 +484,10 @@ final class SelectionPipeline {
     ///
     /// Phase 3 — ⌘C fallback for AX-absent drag-selections:
     ///   When the probe returns `.absent` (or the subsequent captureSelection
-    ///   returns `.emptySelection`) for an allowlisted Electron/Chromium editor
-    ///   (VSCode, Cursor, etc.) AND a real drag just ended (mouseReleasePoint != nil),
-    ///   the function falls back to a synthetic ⌘C via `ClipboardFallback`.
+    ///   returns `.emptySelection`) for a Monaco editor (VSCode/Cursor — the narrow
+    ///   `clipboardFallbackBundleIDs` set, NOT every enhanced app) AND a real drag
+    ///   just ended (mouseReleasePoint != nil), the function falls back to a
+    ///   synthetic ⌘C via `ClipboardFallback`.
     ///   This is the fix for large Monaco selections where AX returns length=0
     ///   even though text is selected. See `shouldAttemptClipboardFallback` for
     ///   the gate logic.
@@ -499,7 +504,7 @@ final class SelectionPipeline {
     ) async {
         // --- Cheap O(1) probe: gate expensive work without reading the text ---
         // .absent    → confirmed no selection per AX; return immediately for most
-        //              apps. For allowlisted Electron/Chromium editors on a real
+        //              apps. For Monaco editors (VSCode/Cursor) on a real
         //              drag-end, AX returns length=0 even when text IS selected
         //              (proven root cause: large Monaco selection). Apply the Phase 3
         //              ⌘C gate below before returning.
@@ -517,13 +522,13 @@ final class SelectionPipeline {
         let probeResult = engine.probeSelection(from: pid)
         switch probeResult {
         case .absent:
-            // Phase 3: before giving up, check whether this is a drag-end in an
-            // allowlisted editor — if so, AX may just be reporting length=0 for a
-            // large selection that it cannot expose. Attempt ⌘C capture.
+            // Phase 3: before giving up, check whether this is a drag-end in a
+            // Monaco editor (VSCode/Cursor) — if so, AX may just be reporting
+            // length=0 for a large selection that it cannot expose. Attempt ⌘C capture.
             if shouldAttemptClipboardFallback(
                 fromMouseUp: fromMouseUp,
                 mouseReleasePoint: mouseReleasePoint,
-                usesEnhancedCapture: TextCaptureEngine.usesEnhancedCapture(pid: pid)
+                usesClipboardFallback: TextCaptureEngine.usesClipboardFallback(pid: pid)
             ) {
                 await captureAndEmitViaClipboard(
                     pid: pid,
@@ -592,13 +597,15 @@ final class SelectionPipeline {
             //      speculative ⌘C there would make the host emit NSBeep and flash the Edit menu
             //      (the "phantom ⌘C" beep).
             //   2. mouseReleasePoint != nil — bare clicks are excluded (no drag, no selection).
-            //   3. usesEnhancedCapture=true — non-allowlisted apps are excluded: falling back
-            //      on them would capture whatever is already in the clipboard.
-            // Only a real drag-end in an allowlisted editor passes all three.
+            //   3. usesClipboardFallback=true — only Monaco editors (VSCode/Cursor) are
+            //      included. Browsers and other marker-readable enhanced apps are excluded:
+            //      a speculative ⌘C on a non-text drag (e.g. moving a Chrome window by its
+            //      tab bar) makes the host beep with nothing to copy.
+            // Only a real drag-end in a Monaco editor passes all three.
             if shouldAttemptClipboardFallback(
                 fromMouseUp: fromMouseUp,
                 mouseReleasePoint: mouseReleasePoint,
-                usesEnhancedCapture: TextCaptureEngine.usesEnhancedCapture(pid: pid)
+                usesClipboardFallback: TextCaptureEngine.usesClipboardFallback(pid: pid)
             ) {
                 await captureAndEmitViaClipboard(
                     pid: pid,
