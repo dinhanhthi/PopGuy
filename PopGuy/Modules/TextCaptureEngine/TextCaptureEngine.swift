@@ -428,11 +428,13 @@ struct TextCaptureEngine {
     /// Returns `.captured` on a non-empty read, or `nil` when nothing readable
     /// — including a readable-but-empty marker. Returning `nil` (not
     /// `.emptySelection`) lets the caller fall through to the clipboard
-    /// fallback: web-based editors (Monaco in VSCode/Cursor, Notion) render a
-    /// *virtual* selection the AX text-marker API does not surface, so AX reads
-    /// empty even when text is selected — only the clipboard path captures it.
-    /// When there is genuinely no selection the fallback copies nothing and
-    /// shows no toolbar, so over-reaching to `.unavailable` is harmless.
+    /// fallback — but ONLY for the Monaco editors in `clipboardFallbackBundleIDs`
+    /// (VSCode/Cursor), whose web-based editor renders a *virtual* selection the
+    /// AX text-marker API does not surface, so AX reads empty even when text is
+    /// selected. Browsers and other enhanced apps are marker-readable and are
+    /// excluded from that gate (see `clipboardFallbackBundleIDs`). When there is
+    /// genuinely no selection the fallback copies nothing and shows no toolbar, so
+    /// over-reaching to `.unavailable` is harmless.
     private func enhancedCapture(in appElement: AXUIElement) -> CaptureResult? {
         // Bound the app element's AX IPC round-trips (touchDescendants reads
         // children off it). A timeout on one element does NOT propagate to
@@ -674,6 +676,43 @@ struct TextCaptureEngine {
             return false
         }
         return usesEnhancedCapture(bundleID: bundleID)
+    }
+
+    /// Bundle IDs of editor apps whose web-based editor (Monaco) renders a
+    /// *virtual* text selection that the AX text-marker API does not surface — a
+    /// synthetic ⌘C is the ONLY way to read a large drag-selection there.
+    ///
+    /// This is a STRICT SUBSET of `enhancedCaptureBundleIDs`. The other enhanced
+    /// apps — browsers (Chrome/Brave/Edge/Arc), Slack, Discord, Notion, Figma —
+    /// expose their selections through the marker API and never need ⌘C. Firing a
+    /// synthetic ⌘C at them on a non-text drag (e.g. moving a Chrome window by its
+    /// tab bar) makes the host emit a system beep with nothing to copy, so they
+    /// are deliberately EXCLUDED from the clipboard-fallback gate. Web selections
+    /// in those apps are still captured via the marker path; only the speculative
+    /// drag-end ⌘C is withheld.
+    static let clipboardFallbackBundleIDs: Set<String> = [
+        "com.microsoft.VSCode",
+        "com.microsoft.VSCodeInsiders",
+        "com.visualstudio.code.oss",       // VSCodium
+        "com.todesktop.230313mzl4w4u92",   // Cursor
+    ]
+
+    /// Whether the app with this bundle ID needs the synthetic-⌘C clipboard
+    /// fallback for drag-selections AX cannot read (Monaco editors only — see
+    /// `clipboardFallbackBundleIDs`). Non-private so the subset contract can be
+    /// unit-tested directly.
+    static func usesClipboardFallback(bundleID: String) -> Bool {
+        clipboardFallbackBundleIDs.contains(bundleID)
+    }
+
+    /// Whether the app with this PID needs the synthetic-⌘C clipboard fallback.
+    /// Resolves the bundle ID via NSRunningApplication and delegates to
+    /// `usesClipboardFallback(bundleID:)`. Returns false when the PID is unknown.
+    static func usesClipboardFallback(pid: pid_t) -> Bool {
+        guard let bundleID = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier else {
+            return false
+        }
+        return usesClipboardFallback(bundleID: bundleID)
     }
 
     /// Upper bound on AXChildren reads during `touchDescendants` — caps the

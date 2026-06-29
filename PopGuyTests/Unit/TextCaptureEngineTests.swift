@@ -80,6 +80,74 @@ struct TextCaptureEngineTests {
         ]
         #expect(TextCaptureEngine.enhancedCaptureBundleIDs == tested)
     }
+
+    // MARK: - usesClipboardFallback matcher (narrow Monaco-only allowlist)
+
+    /// Regression guard for the "Chrome tab-bar drag beeps" bug: browsers and
+    /// other marker-readable enhanced apps must NOT trigger the synthetic ⌘C
+    /// fallback, or a non-text drag (e.g. moving a window by its tab bar) makes
+    /// the host beep with nothing to copy.
+    @Test("Only Monaco editors use the ⌘C clipboard fallback", arguments: [
+        "com.microsoft.VSCode",
+        "com.microsoft.VSCodeInsiders",
+        "com.visualstudio.code.oss",
+        "com.todesktop.230313mzl4w4u92",
+    ])
+    func monacoEditorsUseClipboardFallback(bundleID: String) {
+        #expect(TextCaptureEngine.usesClipboardFallback(bundleID: bundleID) == true)
+    }
+
+    @Test("Browsers / other enhanced apps do NOT use the ⌘C clipboard fallback", arguments: [
+        "com.google.Chrome",
+        "com.google.Chrome.beta",
+        "com.google.Chrome.dev",
+        "com.google.Chrome.canary",
+        "com.microsoft.edgemac",
+        "com.brave.Browser",
+        "company.thebrowser.Browser",
+        "com.tinyspeck.slackmacgap",
+        "com.hnc.Discord",
+        "com.hnc.DiscordCanary",
+        "com.hnc.DiscordPTB",
+        "md.obsidian",
+        "notion.id",
+        "com.figma.Desktop",
+        "com.apple.Safari",
+        "",
+    ])
+    func nonMonacoAppsSkipClipboardFallback(bundleID: String) {
+        #expect(TextCaptureEngine.usesClipboardFallback(bundleID: bundleID) == false)
+    }
+
+    /// Exact-match drift guard (mirrors `allowlistMatchesTestedIDs`): a new ID
+    /// added to `clipboardFallbackBundleIDs` without a matching entry here fails
+    /// this assertion. The subset test below cannot catch an addition of an ID
+    /// that is ALSO already in `enhancedCaptureBundleIDs` — this one can, so a new
+    /// ⌘C-eligible app can never slip in untested and re-open the beep regression.
+    @Test("clipboardFallbackBundleIDs exactly matches the tested IDs")
+    func clipboardFallbackMatchesTestedIDs() {
+        let tested: Set<String> = [
+            "com.microsoft.VSCode",
+            "com.microsoft.VSCodeInsiders",
+            "com.visualstudio.code.oss",
+            "com.todesktop.230313mzl4w4u92",
+        ]
+        #expect(TextCaptureEngine.clipboardFallbackBundleIDs == tested)
+    }
+
+    /// The clipboard-fallback set must stay a strict subset of the enhanced set:
+    /// every app that gets a ⌘C also needs the woken-AX/marker path, never the
+    /// reverse.
+    @Test("clipboardFallbackBundleIDs ⊂ enhancedCaptureBundleIDs")
+    func clipboardFallbackIsSubsetOfEnhanced() {
+        #expect(
+            TextCaptureEngine.clipboardFallbackBundleIDs
+                .isSubset(of: TextCaptureEngine.enhancedCaptureBundleIDs)
+        )
+        #expect(
+            TextCaptureEngine.clipboardFallbackBundleIDs != TextCaptureEngine.enhancedCaptureBundleIDs
+        )
+    }
 }
 
 // MARK: - assembleSelectedText (descending capture join)
