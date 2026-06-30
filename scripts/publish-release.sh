@@ -24,12 +24,20 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PBXPROJ="$REPO_ROOT/PopGuy.xcodeproj/project.pbxproj"
 CHANGELOG="$REPO_ROOT/CHANGELOG.md"
-ZIP="${1:-}"
 
 cd "$REPO_ROOT"
 
 # --- 0. Args & tools -------------------------------------------------------
-[[ -n "$ZIP" ]]        || { echo "usage: scripts/publish-release.sh <signed-zip>" >&2; exit 1; }
+YES=false
+ZIP=""
+for arg in "$@"; do
+  case "$arg" in
+    --yes|-y) YES=true ;;
+    *) ZIP="$arg" ;;
+  esac
+done
+
+[[ -n "$ZIP" ]]        || { echo "usage: scripts/publish-release.sh [--yes] <signed-zip>" >&2; exit 1; }
 [[ -f "$ZIP" ]]        || { echo "error: zip not found: $ZIP" >&2; exit 1; }
 [[ -f "$PBXPROJ" ]]    || { echo "error: $PBXPROJ not found" >&2; exit 1; }
 [[ -f "$CHANGELOG" ]]  || { echo "error: $CHANGELOG not found" >&2; exit 1; }
@@ -118,8 +126,10 @@ echo "  tag     : $TAG  (at $(git rev-parse --short HEAD) on branch $BRANCH)"
 echo "  zip     : $ZIP"
 echo "  notes   : $NOTES_FILE"
 echo
-read -r -p "Proceed? [y/N] " reply
-[[ "$reply" =~ ^[Yy]$ ]] || { echo "aborted."; exit 1; }
+if [[ "$YES" == false ]]; then
+  read -r -p "Proceed? [y/N] " reply
+  [[ "$reply" =~ ^[Yy]$ ]] || { echo "aborted."; exit 1; }
+fi
 
 # --- 6. Tag + GitHub release ----------------------------------------------
 # Write the Sparkle notes file now that the publish is confirmed.
@@ -135,6 +145,18 @@ if ! gh release create "$TAG" "$ZIP" \
   echo "       fix the issue, then re-run gh release create, or delete the tag:" >&2
   echo "         git push origin :refs/tags/$TAG && git tag -d $TAG" >&2
   exit 1
+fi
+
+# Upload the DMG as the manual-download asset if it exists next to the zip.
+# A raw .zip breaks when extracted with third-party unarchivers (._* files pollute
+# Sparkle.framework's seal → Gatekeeper warning); the DMG is always drag-to-install.
+DMG="$(dirname "$ZIP")/PopGuy-${VERSION}.dmg"
+if [[ -f "$DMG" ]]; then
+  echo "==> Uploading DMG: $DMG"
+  gh release upload "$TAG" "$DMG"
+else
+  echo "warning: DMG not found at $DMG — attach it manually:" >&2
+  echo "         gh release upload \"$TAG\" <path-to-dmg>" >&2
 fi
 
 echo
