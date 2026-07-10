@@ -187,6 +187,12 @@ final class ToolbarViewModel: ObservableObject {
     /// (Translate, Shorten, custom). Toggled via `beginEditing()` / `endEditing()`.
     @Published var isEditing: Bool = false
 
+    /// For diff results (Improve / Proofread), whether to render the inline
+    /// red/green diff (`true`) or just the plain improved text (`false`).
+    /// Deliberately NOT cleared in `reset()`, so the user's choice sticks for the
+    /// session. Defaults to `true` to preserve the original diff-first behavior.
+    @Published var showImproveDiff: Bool = true
+
     /// Drives the "close without using the result?" confirmation dialog. Set by
     /// ToolbarController when an outside-click / Escape arrives after a result is
     /// ready and the confirm-on-close setting is on.

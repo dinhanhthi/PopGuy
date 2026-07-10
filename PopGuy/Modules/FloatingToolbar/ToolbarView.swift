@@ -711,9 +711,24 @@ struct ToolbarView: View {
                         }
                     }
                 } else if !viewModel.isResultEditable {
-                    scrollableResultBody {
-                        DiffView(segments: viewModel.diffSegments, font: viewModel.resultFontSize.font(scale: effectiveFontScale))
+                    // Improve / Proofread: a top toggle switches between the inline
+                    // red/green diff and the plain improved text. Both render the same
+                    // finalized characters — the diff only adds change highlighting.
+                    VStack(alignment: .leading, spacing: z(8)) {
+                        improveDiffTabs
+                        scrollableResultBody {
+                            Group {
+                                if viewModel.showImproveDiff {
+                                    DiffView(segments: viewModel.diffSegments, font: viewModel.resultFontSize.font(scale: effectiveFontScale))
+                                } else {
+                                    resultText(viewModel.displayedResult)
+                                }
+                            }
                             .padding(.trailing, resultContentTrailing)
+                            // Extra vertical breathing room so the improved text isn't
+                            // cramped against the toggle above and the footer below.
+                            .padding(.vertical, resultBodyVerticalPadding)
+                        }
                     }
                 } else if viewModel.isEditing {
                     // Edit mode opens a taller area than the read view for comfort.
@@ -817,6 +832,26 @@ struct ToolbarView: View {
         .clipped()
     }
 
+    /// Diff / Text toggle shown above Improve & Proofread results. A custom
+    /// get/set binding (like `dictionaryProviderTabs`) avoids the segmented-picker
+    /// write-back warning that a direct `@Published` binding triggers.
+    private var improveDiffTabs: some View {
+        Picker(
+            "",
+            selection: Binding<Bool>(
+                get: { viewModel.showImproveDiff },
+                set: { viewModel.showImproveDiff = $0 }
+            )
+        ) {
+            Text("Diff").tag(true)
+            Text("Text").tag(false)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .font(footerButtonFont)
+        .fixedSize()
+    }
+
     /// Aligns result content with the action-button labels above it
     /// (card padding 4 + button horizontal padding 8 = 12). Used by the error
     /// state, which has no scroll view.
@@ -835,6 +870,11 @@ struct ToolbarView: View {
     /// Trailing inset applied to the scrolled content (text/diff) so it keeps a
     /// gap from the scrollbar (or, when no scrollbar, from the card's right edge).
     private var resultContentTrailing: CGFloat { z(12) }
+
+    /// Vertical breathing room around the improved-text body (diff / plain text)
+    /// inside its scroll view, so the text isn't cramped against the Diff/Text
+    /// toggle above or the footer buttons below.
+    private var resultBodyVerticalPadding: CGFloat { z(8) }
 
     /// Extra space above the footer button row, on top of the VStack spacing.
     private var footerTopPadding: CGFloat { z(8) }
@@ -1039,6 +1079,7 @@ struct ToolbarView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .frame(minHeight: footerButtonHeight)
                 .disabled(speakPhase == .loading)
             }
 
@@ -1063,6 +1104,7 @@ struct ToolbarView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .frame(minHeight: footerButtonHeight)
             }
 
             if !hidePasteBack, let source = viewModel.sourceElement, source.isEditable {
@@ -1084,6 +1126,7 @@ struct ToolbarView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+                .frame(minHeight: footerButtonHeight)
                 .disabled(isPastingBack)
             }
 
@@ -1096,6 +1139,7 @@ struct ToolbarView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
+                    .frame(minHeight: footerButtonHeight)
                     .disabled(isPastingBack)
                 } else {
                     Button { viewModel.beginEditing() } label: {
@@ -1104,6 +1148,7 @@ struct ToolbarView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
+                    .frame(minHeight: footerButtonHeight)
                     .disabled(isPastingBack)
                 }
             }
@@ -1120,6 +1165,7 @@ struct ToolbarView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+            .frame(minHeight: footerButtonHeight)
             .disabled(isPastingBack)
         }
 
