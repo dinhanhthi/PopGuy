@@ -832,15 +832,21 @@ struct ToolbarView: View {
         .clipped()
     }
 
-    /// Diff / Text toggle shown above Improve & Proofread results. A custom
-    /// get/set binding (like `dictionaryProviderTabs`) avoids the segmented-picker
-    /// write-back warning that a direct `@Published` binding triggers.
+    /// Diff / Text toggle shown above Improve & Proofread results. The setter
+    /// defers the `@Published` write to the next runloop tick (like
+    /// `dictionaryProviderTabs`) — assigning synchronously inside the segmented
+    /// picker's selection binding mutates state during a view update, which trips
+    /// SwiftUI's "Publishing changes from within view updates" warning.
     private var improveDiffTabs: some View {
         Picker(
             "",
             selection: Binding<Bool>(
                 get: { viewModel.showImproveDiff },
-                set: { viewModel.showImproveDiff = $0 }
+                set: { newValue in
+                    Task { @MainActor in
+                        viewModel.showImproveDiff = newValue
+                    }
+                }
             )
         ) {
             Text("Diff").tag(true)
