@@ -13,7 +13,6 @@ import {
 import { useState } from "react";
 import { ButtonLink } from "../components/ButtonLink";
 import { ChangelogModal } from "../components/ChangelogModal";
-import { InteractiveDemo } from "../components/InteractiveDemo";
 import {
   ProviderLogo,
   providerLogos
@@ -91,7 +90,16 @@ export function HomePage() {
           <p className="system-note">macOS 13+</p>
         </div>
         <div className="hero-demo">
-          <InteractiveDemo />
+          <p className="demo-eyebrow">See it in action</p>
+          <div className="video-frame">
+            <iframe
+              src="https://player.vimeo.com/video/1209095226?title=0&byline=0&portrait=0&dnt=1"
+              title="PopGuy Demo"
+              loading="lazy"
+              allow="autoplay; fullscreen; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
         </div>
       </section>
 

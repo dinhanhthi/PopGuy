@@ -1,5 +1,5 @@
 import { Download, Menu, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { DOWNLOAD_URL, GITHUB_URL } from "../constants";
 import { Brand } from "./Brand";
@@ -13,6 +13,22 @@ const navigation = [
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  useEffect(() => {
+    function updateProgress() {
+      const doc = document.documentElement;
+      const max = doc.scrollHeight - window.innerHeight;
+      setScrollProgress(max > 0 ? Math.min(1, window.scrollY / max) : 0);
+    }
+    updateProgress();
+    window.addEventListener("scroll", updateProgress, { passive: true });
+    window.addEventListener("resize", updateProgress);
+    return () => {
+      window.removeEventListener("scroll", updateProgress);
+      window.removeEventListener("resize", updateProgress);
+    };
+  }, []);
 
   return (
     <header className="site-header">
@@ -64,6 +80,11 @@ export function Header() {
           </div>
         </div>
       </div>
+      <span
+        className="scroll-progress"
+        style={{ transform: `scaleX(${scrollProgress})` }}
+        aria-hidden="true"
+      />
     </header>
   );
 }
