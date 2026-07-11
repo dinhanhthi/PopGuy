@@ -24,6 +24,7 @@ struct TriggersView: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var licenseGate: LicenseGate
     @ObservedObject var screenRecordingPermission: ScreenRecordingPermission
+    @ObservedObject var navigator: SettingsNavigator
 
     /// Navigates to the License tab when the user taps an upgrade prompt.
     let onUpgrade: () -> Void
@@ -34,7 +35,11 @@ struct TriggersView: View {
     /// Whether the OCR shortcut recorder is active.
     @State private var isRecordingOCRShortcut = false
 
+    /// ScrollViewReader anchor for the OCR section (see `navigator.focusOCRSection`).
+    private static let ocrSectionAnchor = "ocrSection"
+
     var body: some View {
+        ScrollViewReader { proxy in
         Form {
             // MARK: On text selection
             Section(header: Text("On Text Selection")) {
@@ -129,13 +134,32 @@ struct TriggersView: View {
             Section(header: ocrSectionHeader()) {
                 ocrSectionContent()
             }
+            .id(Self.ocrSectionAnchor)
 
         }
         .formStyle(.grouped)
+        .onAppear { scrollToOCRSectionIfRequested(proxy) }
+        .onChange(of: navigator.focusOCRSection) { _ in
+            scrollToOCRSectionIfRequested(proxy)
+        }
         .onDisappear {
             // Cancel any in-progress recording when the view disappears.
             isRecordingChord = false
             isRecordingOCRShortcut = false
+        }
+        }
+    }
+
+    /// Scroll to the OCR section when AppDelegate requested focus (menu-bar item
+    /// picked while OCR is disabled/locked), then clear the one-shot flag. The
+    /// scroll is deferred to the next runloop tick so the Form has laid out.
+    private func scrollToOCRSectionIfRequested(_ proxy: ScrollViewProxy) {
+        guard navigator.focusOCRSection else { return }
+        DispatchQueue.main.async {
+            withAnimation {
+                proxy.scrollTo(Self.ocrSectionAnchor, anchor: .top)
+            }
+            navigator.focusOCRSection = false
         }
     }
 

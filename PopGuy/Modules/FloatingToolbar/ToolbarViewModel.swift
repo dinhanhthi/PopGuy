@@ -13,6 +13,7 @@
 // Strict concurrency: @MainActor — all state mutation and UI updates happen
 // on the main actor.
 
+import AppKit
 import Combine
 import CoreGraphics
 import Foundation
@@ -149,6 +150,12 @@ final class ToolbarViewModel: ObservableObject {
     /// app is a supported browser. Nil for non-browser apps or when the URL could
     /// not be read.
     @Published private(set) var sourceDomain: String? = nil
+
+    /// Thumbnail of the just-captured OCR screenshot, shown above the action
+    /// bar so the user sees confirmation that a screen region was captured.
+    /// Only set on the OCR capture path (`ToolbarController.handleOCRCapture`);
+    /// every normal selection clears it via `update(...)`.
+    @Published var ocrPreviewImage: NSImage?
 
     // MARK: Action state
 
@@ -464,6 +471,9 @@ final class ToolbarViewModel: ObservableObject {
         selectionScreenRect = screenRect
         self.sourceBundleID = sourceBundleID
         self.sourceDomain = sourceDomain
+        // Clear any stale OCR thumbnail — only the OCR capture path re-sets this,
+        // after handleEvent (and thus this update) returns.
+        ocrPreviewImage = nil
         // Reset action state when a new selection arrives.
         actionState = .idle
         editedResult = ""
@@ -995,6 +1005,7 @@ final class ToolbarViewModel: ObservableObject {
         isPromptInputActive = false
         promptDraft = ""
         sourceDomain = nil
+        ocrPreviewImage = nil
         speakCoordinator?.clearReplay()
     }
 

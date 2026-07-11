@@ -362,8 +362,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // Wire the OCR capture controller: onText hands the recognized text off
         // to the toolbar (copy-only), anchored at the mouse-up point.
         let ocr = OCRCaptureController(permission: screenRecordingPermission)
-        ocr.onText = { [weak controller] text, anchor in
-            controller?.handleOCRCapture(text: text, anchorPoint: anchor)
+        ocr.onText = { [weak controller] text, anchor, image in
+            controller?.handleOCRCapture(text: text, anchorPoint: anchor, image: image)
         }
         ocrCaptureController = ocr
 
@@ -732,11 +732,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             keyEquivalent: ""
         )
         ocrItem.image = NSImage(systemSymbolName: "text.viewfinder", accessibilityDescription: nil)
-        if !licenseGate.entitlements.ocrAllowed {
-            ocrItem.isEnabled = false
-        } else {
-            ocrItem.isEnabled = popGuyEnabled
-        }
+        // Always actionable: when OCR is Pro-locked or not yet opted in, the
+        // action routes to Settings → the OCR section instead of capturing, so
+        // the item never silently does nothing.
+        ocrItem.isEnabled = true
         menu.addItem(ocrItem)
 
         menu.addItem(.separator())
@@ -837,7 +836,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     /// when the user has not opted in yet. `beginCapture()` self-guards on
     /// Screen Recording permission (prompts lazily on first use).
     @objc private func captureScreenTextOCR() {
-        guard settingsStore.ocrEnabled else {
+        // Not Pro (locked) or not opted in yet: open Settings focused on the OCR
+        // section so the user can enable it (or see the Pro upsell there).
+        guard licenseGate.entitlements.ocrAllowed, settingsStore.ocrEnabled else {
+            settingsNavigator.focusOCRSection = true
             settingsNavigator.section = .triggers
             openSettings()
             return
