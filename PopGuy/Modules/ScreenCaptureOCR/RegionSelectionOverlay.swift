@@ -6,6 +6,38 @@
 
 import AppKit
 
+/// The cursor shown while picking a region: the system crosshair with a small
+/// PopGuy app-icon badge to its right, so the user sees they're in PopGuy's
+/// capture mode. Built once and cached.
+@MainActor
+private enum CaptureCursor {
+    static let shared: NSCursor = make()
+
+    private static func make() -> NSCursor {
+        let base = NSCursor.crosshair
+        guard let appIcon = NSApp.applicationIconImage else { return base }
+
+        let crosshair = base.image
+        let cSize = crosshair.size
+        // Square icon matching the crosshair's height, placed to the right. Keeping
+        // the composite's height equal to the crosshair's — and the crosshair at
+        // x=0 — means `base.hotSpot` still points at the crosshair centre, so the
+        // click point matches the visible crosshair regardless of the hot-spot
+        // coordinate convention.
+        let iconDim = cSize.height
+        let gap: CGFloat = 1
+        let total = NSSize(width: cSize.width + gap + iconDim, height: cSize.height)
+
+        let composite = NSImage(size: total)
+        composite.lockFocus()
+        crosshair.draw(in: NSRect(x: 0, y: 0, width: cSize.width, height: cSize.height))
+        appIcon.draw(in: NSRect(x: cSize.width + gap, y: 0, width: iconDim, height: iconDim))
+        composite.unlockFocus()
+
+        return NSCursor(image: composite, hotSpot: base.hotSpot)
+    }
+}
+
 /// Result of a completed region selection.
 ///
 /// `rect` and `mouseUpPoint` are in GLOBAL QUARTZ coordinates (origin
@@ -84,12 +116,12 @@ final class RegionSelectionOverlay {
         }
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(overlayView)
-        NSCursor.crosshair.push()
+        CaptureCursor.shared.push()
         // Force the crosshair immediately even when the pointer is stationary at
         // present time (no mouseMoved/cursorUpdate would fire otherwise), and
         // refresh cursor rects now that the window is key.
         DispatchQueue.main.async {
-            NSCursor.crosshair.set()
+            CaptureCursor.shared.set()
             window.invalidateCursorRects(for: overlayView)
         }
     }
@@ -232,20 +264,20 @@ private final class OverlaySelectionView: NSView {
     // rect whenever the window is key, and (unlike `set()` in mouseMoved) does
     // not fight AppKit's own cursor pass, so it does not flicker back to arrow.
     override func resetCursorRects() {
-        addCursorRect(bounds, cursor: .crosshair)
+        addCursorRect(bounds, cursor: CaptureCursor.shared)
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if window != nil { NSCursor.crosshair.set() }
+        if window != nil { CaptureCursor.shared.set() }
     }
 
-    override func cursorUpdate(with event: NSEvent) { NSCursor.crosshair.set() }
-    override func mouseEntered(with event: NSEvent) { NSCursor.crosshair.set() }
-    override func mouseMoved(with event: NSEvent) { NSCursor.crosshair.set() }
+    override func cursorUpdate(with event: NSEvent) { CaptureCursor.shared.set() }
+    override func mouseEntered(with event: NSEvent) { CaptureCursor.shared.set() }
+    override func mouseMoved(with event: NSEvent) { CaptureCursor.shared.set() }
 
     override func mouseDown(with event: NSEvent) {
-        NSCursor.crosshair.set()
+        CaptureCursor.shared.set()
         let point = convert(event.locationInWindow, from: nil)
         startPoint = point
         currentPoint = point
@@ -253,7 +285,7 @@ private final class OverlaySelectionView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        NSCursor.crosshair.set()
+        CaptureCursor.shared.set()
         guard startPoint != nil else { return }
         currentPoint = convert(event.locationInWindow, from: nil)
         needsDisplay = true
