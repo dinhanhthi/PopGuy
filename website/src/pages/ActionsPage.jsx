@@ -85,13 +85,15 @@ export function ActionsPage() {
 
   return (
     <main>
-      <section className="page-hero actions-hero shell">
-        <div>
-          <p className="section-label">Actions</p>
-          <h1>Anything you do with text.</h1>
-          <p className="page-lede">
-            Eight action types. Built-in or custom. One toolbar, everywhere.
-          </p>
+      <section className="page-hero actions-hero section-blue">
+        <div className="shell">
+          <div>
+            <p className="section-label">Actions</p>
+            <h1>Anything you do with text.</h1>
+            <p className="page-lede">
+              Eight action types. Built-in or custom. One toolbar, everywhere.
+            </p>
+          </div>
         </div>
       </section>
 

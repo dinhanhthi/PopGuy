@@ -6,6 +6,7 @@ import {
   Clock3,
   Command,
   KeyRound,
+  ScanText,
   ShieldCheck,
   Volume2,
   WandSparkles
@@ -45,6 +46,11 @@ const features = [
     icon: BookOpen,
     title: "Dictionary",
     text: "Look up any word."
+  },
+  {
+    icon: ScanText,
+    title: "Screen OCR",
+    text: "Capture text anywhere."
   }
 ];
 
@@ -63,6 +69,7 @@ const proFeatures = [
   "Unlimited custom actions",
   "Unlimited history",
   "Unlimited ignored apps",
+  "Screen Capture OCR",
   "Cloud voices",
   "Import and export",
   "History search",
@@ -78,7 +85,7 @@ export function HomePage() {
       <section className="hero shell">
         <div className="hero-copy">
           <h1>AI where you write.</h1>
-          <p className="hero-lede">Select text. Choose an action. Done.</p>
+          <p className="hero-lede">Select text or capture screen. Choose an action. Done.</p>
           <div className="hero-actions">
             <ButtonLink href={DOWNLOAD_URL} icon="download">
               Download for macOS
