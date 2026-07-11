@@ -8,11 +8,10 @@ Select text in any app — a floating toolbar pops up so you can **improve**, **
 or run a **custom AI action** on it. Think PopClip, with a configurable AI backend.
 
 **[⬇ Download for macOS](https://github.com/dinhanhthi/PopGuy/releases/latest)**
+&nbsp;·&nbsp; **[▶ Watch the demo](https://vimeo.com/1209095226)**
 &nbsp;·&nbsp; macOS 13+ &nbsp;·&nbsp; signed &amp; notarized
 
 </div>
-
----
 
 ## Features
 
@@ -30,8 +29,6 @@ or run a **custom AI action** on it. Think PopClip, with a configurable AI backe
 - **Menu-bar app** — no Dock icon; lives in the menu bar
 - **OCR** — capture text from any screen region
 
----
-
 ## Install
 
 - **Download the app:** grab the latest signed &amp; notarized build from the
@@ -44,14 +41,10 @@ chord — grant it at **System Settings → Privacy &amp; Security → Accessibi
 prompts you on first launch). API keys are stored in the system **Keychain**, never in
 plaintext.
 
----
-
 ## Requirements
 
 - macOS 13.0 or later
 - Xcode 26.x (only to build from source)
-
----
 
 ## Build from source
 
@@ -84,8 +77,6 @@ time. To make it stick, sign with a stable local certificate:
 This is a local development cert only — **not** a Developer ID, and no Apple Developer
 Program membership is required.
 
----
-
 ## Contributing
 
 Contributions are welcome — open an issue to discuss a change, or send a pull request.
@@ -94,8 +85,6 @@ See **[CONTRIBUTING.md](CONTRIBUTING.md)** for guidelines.
 > By submitting a pull request you grant the maintainer the right to include your
 > contribution in PopGuy, including commercial/Pro versions (details in CONTRIBUTING.md).
 > This keeps the public project non-commercial while letting the maintainer sustain it.
-
----
 
 ## License
 
