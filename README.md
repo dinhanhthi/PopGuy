@@ -28,6 +28,7 @@ or run a **custom AI action** on it. Think PopClip, with a configurable AI backe
 - **Cmd+C+C chord** — double-tap Cmd+C to Improve the current selection
 - **Non-destructive** — your original text is never changed until you accept the result
 - **Menu-bar app** — no Dock icon; lives in the menu bar
+- **OCR** — capture text from any screen region
 
 ---
 
