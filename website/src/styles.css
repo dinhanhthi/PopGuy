@@ -383,7 +383,7 @@
   grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.7fr);
   gap: 24px;
   align-items: start;
-  padding-block: 24px 64px;
+  padding-block: 48px 80px;
 }
 
 .free-plan,
@@ -672,7 +672,7 @@ h3 {
 }
 
 .section-pad {
-  padding-block: 48px;
+  padding-block: 72px;
 }
 
 .section-blue {
@@ -941,7 +941,7 @@ input:focus-visible {
   grid-template-columns: 0.85fr 1.35fr;
   align-items: center;
   gap: 56px;
-  padding-block: 44px 52px;
+  padding-block: 56px 64px;
 }
 
 .hero h1 {
@@ -1478,7 +1478,7 @@ input:focus-visible {
 }
 
 .providers {
-  padding-block: 48px;
+  padding-block: 72px;
 }
 
 .providers-inner {
@@ -1558,6 +1558,11 @@ input:focus-visible {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--bg-blue-strong);
+}
+
+/* "Get PopGuy" CTA card — richer gradient; existing border + shadow untouched. */
+.download-section {
+  background: linear-gradient(135deg, #21375c 0%, #2b2b58 48%, #3d2a54 100%);
 }
 
 .page-actions.download-section {
@@ -1941,7 +1946,7 @@ input:focus-visible {
 }
 
 .page-hero {
-  padding-block: 56px 32px;
+  padding-block: 72px 40px;
 }
 
 .pricing-hero {
@@ -3058,7 +3063,7 @@ input:focus-visible {
 /* ── Actions page ── */
 
 .page-hero {
-  padding-block: 56px 32px;
+  padding-block: 72px 40px;
 }
 
 .page-lede {
@@ -3381,13 +3386,13 @@ input:focus-visible {
 }
 
 .actions-hero {
-  padding-bottom: 24px;
+  padding-bottom: 40px;
 }
 
 /* ── Changelog preview (home) ── */
 
 .changelog-preview {
-  padding-block: 64px 72px;
+  padding-block: 80px 96px;
 }
 
 .latest-release {
