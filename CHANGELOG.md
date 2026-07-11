@@ -13,6 +13,17 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [0.5.0] - 2026-07-11
+
+### Added
+
+- Screen Capture OCR (Pro): select any region of the screen and extract its text using Vision, triggered by a configurable global hotkey, a Settings toggle, or a menu bar item. Extracted text is copied to the clipboard. Press Esc to cancel capture at any time.
+- Diff/Text toggle for Improve results, to switch between the diff view and plain text.
+
+### Fixed
+
+- Improve diff view no longer triggers a SwiftUI view-update warning when opened.
+
 ## [0.4.1] - 2026-06-29
 
 ### Fixed

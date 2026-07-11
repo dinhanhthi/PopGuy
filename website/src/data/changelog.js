@@ -1,9 +1,20 @@
 export const releases = [
   {
+    version: "0.5.0",
+    date: "July 2026",
+    title: "Screen Capture OCR arrives.",
+    latest: true,
+    items: [
+      "Screen Capture OCR (Pro)",
+      "Menu bar and hotkey trigger for OCR",
+      "Extract text from any screen region",
+      "Diff/Text toggle for Improve results"
+    ]
+  },
+  {
     version: "0.4.1",
     date: "June 2026",
     title: "No more beep when dragging in browsers.",
-    latest: true,
     items: [
       "No system beep on Chrome or Edge tab-bar drags",
       "Clipboard capture limited to VSCode and Cursor",
