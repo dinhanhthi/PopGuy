@@ -72,9 +72,26 @@ final class RegionSelectionOverlay {
         window.contentView = overlayView
         self.window = window
 
-        NSCursor.crosshair.push()
+        // Activate PopGuy while the capture overlay is up (like the system
+        // screenshot tool). A non-activating panel in a non-active app does not
+        // own cursor management, so macOS keeps resetting the pointer to the
+        // previously-active app's cursor and the crosshair flickers/disappears.
+        // Activating makes this window's cursor rects authoritative.
+        if #available(macOS 14.0, *) {
+            NSApp.activate()
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+        }
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(overlayView)
+        NSCursor.crosshair.push()
+        // Force the crosshair immediately even when the pointer is stationary at
+        // present time (no mouseMoved/cursorUpdate would fire otherwise), and
+        // refresh cursor rects now that the window is key.
+        DispatchQueue.main.async {
+            NSCursor.crosshair.set()
+            window.invalidateCursorRects(for: overlayView)
+        }
     }
 
     /// `localRect`/`localMouseUpPoint` are in the overlay window's own local
@@ -154,6 +171,10 @@ private final class OverlayWindow: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         hasShadow = false
         isReleasedWhenClosed = false
+        // Needed so the selection view receives mouseMoved and can keep the
+        // crosshair cursor applied (a non-activating panel does not get cursor
+        // rects honored by the system, so we set the cursor explicitly).
+        acceptsMouseMovedEvents = true
     }
 
     /// Necessary to receive `keyDown` for `Esc` cancellation. Because the
@@ -176,11 +197,55 @@ private final class OverlaySelectionView: NSView {
     private var startPoint: NSPoint?
     private var currentPoint: NSPoint?
     private var isFinished = false
+    private var cursorTrackingArea: NSTrackingArea?
 
     override var acceptsFirstResponder: Bool { true }
     override var isFlipped: Bool { false }
 
+    // MARK: Crosshair cursor
+    //
+    // The overlay panel is non-activating, so the system does not honor cursor
+    // rects for it — `NSCursor.crosshair.push()` alone leaves the pointer as the
+    // underlying app's arrow. Instead we set the crosshair explicitly on every
+    // relevant event (matching how screenshot tools do it), backed by an
+    // always-active tracking area that delivers mouseMoved / cursorUpdate.
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let existing = cursorTrackingArea {
+            removeTrackingArea(existing)
+        }
+        // `.inVisibleRect` auto-tracks the whole visible area, so the tracking
+        // stays correct across the union-of-screens frame without depending on a
+        // fixed `bounds` snapshot that could go stale.
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved, .cursorUpdate],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        cursorTrackingArea = area
+    }
+
+    // The official cursor-management hook: AppKit shows this cursor within the
+    // rect whenever the window is key, and (unlike `set()` in mouseMoved) does
+    // not fight AppKit's own cursor pass, so it does not flicker back to arrow.
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .crosshair)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil { NSCursor.crosshair.set() }
+    }
+
+    override func cursorUpdate(with event: NSEvent) { NSCursor.crosshair.set() }
+    override func mouseEntered(with event: NSEvent) { NSCursor.crosshair.set() }
+    override func mouseMoved(with event: NSEvent) { NSCursor.crosshair.set() }
+
     override func mouseDown(with event: NSEvent) {
+        NSCursor.crosshair.set()
         let point = convert(event.locationInWindow, from: nil)
         startPoint = point
         currentPoint = point
@@ -188,6 +253,7 @@ private final class OverlaySelectionView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        NSCursor.crosshair.set()
         guard startPoint != nil else { return }
         currentPoint = convert(event.locationInWindow, from: nil)
         needsDisplay = true

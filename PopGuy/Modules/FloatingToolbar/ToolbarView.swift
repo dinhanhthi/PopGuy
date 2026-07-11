@@ -211,40 +211,15 @@ struct ToolbarView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            actionBar
-                .zIndex(1)
-            if viewModel.isPromptInputActive {
-                Divider().padding(.horizontal, z(8))
-                promptInputArea
+        VStack(alignment: .leading, spacing: z(8)) {
+            if let ocrPreviewImage = viewModel.ocrPreviewImage {
+                ocrPreview(ocrPreviewImage)
             }
-            if case .idle = viewModel.actionState { } else if !viewModel.suppressRunningPanel {
-                Divider().padding(.horizontal, z(8))
-                resultArea
-            }
-            if (viewModel.speakPhase != .idle || viewModel.canReplaySpeak) && !viewModel.isDictionaryAction {
-                Divider().padding(.horizontal, z(8))
-                speakArea
-            }
+            toolbarCard
         }
-        .background(
-            RoundedRectangle(cornerRadius: metrics.cardRadius, style: .continuous)
-                // Opaque window-background fill (not translucent material): the
-                // toolbar floats over arbitrary app content, so a vibrancy
-                // material let bright backgrounds bleed through and washed out
-                // the text. Solid fill keeps contrast and still tracks light/dark.
-                .fill(Color(nsColor: .windowBackgroundColor))
-                .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 3)
-        )
-        // Hairline edge so the material card stays defined on light backgrounds
-        // (mimics the standard macOS floating-panel border).
-        .overlay(
-            RoundedRectangle(cornerRadius: metrics.cardRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
-        )
-        // Transparent space around the card: sides/top give the shadow room to
-        // draw (the panel itself has no window shadow); the larger bottom inset
-        // additionally hosts the utility tooltips, which are overlay content
+        // Transparent space around the content: sides/top give the card shadow
+        // room to draw (the panel itself has no window shadow); the larger bottom
+        // inset additionally hosts the utility tooltips, which are overlay content
         // and would otherwise be clipped by the hosting panel.
         .padding(.top, z(8))
         .padding(.horizontal, z(12))
@@ -282,6 +257,79 @@ struct ToolbarView: View {
         } message: {
             Text("Use Copy or Paste back to keep the result, or close anyway.")
         }
+    }
+
+    // MARK: - Toolbar card
+
+    /// The toolbar's own card — action bar plus any expanded areas (prompt,
+    /// result, speak). Kept at its natural width via `.fixedSize()` so a wider
+    /// OCR thumbnail sitting above it never stretches the toolbar to match; the
+    /// card floats as its own element, left-aligned under the thumbnail.
+    private var toolbarCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            actionBar
+                .zIndex(1)
+            if viewModel.isPromptInputActive {
+                Divider().padding(.horizontal, z(8))
+                promptInputArea
+            }
+            if case .idle = viewModel.actionState { } else if !viewModel.suppressRunningPanel {
+                Divider().padding(.horizontal, z(8))
+                resultArea
+            }
+            if (viewModel.speakPhase != .idle || viewModel.canReplaySpeak) && !viewModel.isDictionaryAction {
+                Divider().padding(.horizontal, z(8))
+                speakArea
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: metrics.cardRadius, style: .continuous)
+                // Opaque window-background fill (not translucent material): the
+                // toolbar floats over arbitrary app content, so a vibrancy
+                // material let bright backgrounds bleed through and washed out
+                // the text. Solid fill keeps contrast and still tracks light/dark.
+                .fill(Color(nsColor: .windowBackgroundColor))
+                .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 3)
+        )
+        // Hairline edge so the material card stays defined on light backgrounds
+        // (mimics the standard macOS floating-panel border).
+        .overlay(
+            RoundedRectangle(cornerRadius: metrics.cardRadius, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+        )
+        // Keep the card at its intrinsic width regardless of the (wider) thumbnail.
+        .fixedSize()
+    }
+
+    // MARK: - OCR preview
+
+    /// Preview of the just-captured OCR screenshot, shown above the toolbar card
+    /// so the user sees the toolbar came from a screen capture rather than a text
+    /// selection. Sized large enough to read the captured text (aspect-ratio
+    /// preserved, fit into a generous box, small captures upscaled), as its own
+    /// floating element — independent of the toolbar card's width below it.
+    private func ocrPreview(_ image: NSImage) -> some View {
+        let maxW = z(460)
+        let maxH = z(300)
+        let ratio: CGFloat = (image.size.width > 0 && image.size.height > 0)
+            ? image.size.width / image.size.height
+            : 16.0 / 9.0
+        var w = maxW
+        var h = w / ratio
+        if h > maxH {
+            h = maxH
+            w = h * ratio
+        }
+        return Image(nsImage: image)
+            .resizable()
+            .interpolation(.medium)
+            .frame(width: w, height: h)
+            .clipShape(RoundedRectangle(cornerRadius: metrics.cardRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: metrics.cardRadius, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 3)
     }
 
     // MARK: - Action bar

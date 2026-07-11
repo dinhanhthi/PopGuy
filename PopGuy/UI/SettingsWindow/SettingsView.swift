@@ -37,6 +37,12 @@ final class SettingsNavigator: ObservableObject {
     /// Set by AppDelegate when a .popclipext or .json file is opened via Finder
     /// (double-click or drag). Cleared by ActionsView after it has consumed it.
     @Published var pendingPluginImportURL: URL? = nil
+
+    /// When true, TriggersView scrolls to the Screen Text Capture (OCR) section
+    /// on appear / on change. Set by AppDelegate when the user picks the OCR
+    /// menu-bar item before the feature is enabled, so Settings opens focused on
+    /// the option they need to turn on. Cleared by TriggersView after scrolling.
+    @Published var focusOCRSection: Bool = false
 }
 
 /// The selectable sections of the Settings window sidebar.
@@ -294,7 +300,7 @@ struct SettingsView: View {
                 case .providers:   APIKeysTab(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, onReadMore: { withAnimation(panelAnimation) { showingMemoryInfo = true } })
                 case .actions:     ActionsView(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, navigator: navigator, editingAction: $editingAction, showingLibrary: $showingLibrary)
                 case .history:     HistoryView(history: history, settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
-                case .triggers:    TriggersView(settings: settings, licenseGate: licenseGate, screenRecordingPermission: screenRecordingPermission, onUpgrade: navigateToLicense)
+                case .triggers:    TriggersView(settings: settings, licenseGate: licenseGate, screenRecordingPermission: screenRecordingPermission, navigator: navigator, onUpgrade: navigateToLicense)
                 case .appearance:  AppearanceView(settings: settings)
                 case .ignoredApps: AppsView(settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
                 case .license:     LicenseView(licenseGate: licenseGate)

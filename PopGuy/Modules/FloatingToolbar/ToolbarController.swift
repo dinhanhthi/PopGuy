@@ -351,7 +351,7 @@ final class ToolbarController {
     /// paste-back. `anchorPoint` is the capture's mouse-up location in GLOBAL
     /// QUARTZ coordinates (top-left origin, y down, as produced by the region
     /// overlay); it is converted to AppKit coords here for pointer anchoring.
-    func handleOCRCapture(text: String, anchorPoint quartzAnchor: CGPoint) {
+    func handleOCRCapture(text: String, anchorPoint quartzAnchor: CGPoint, image: CGImage) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         // Quartz point → AppKit point via the existing rect flip (zero-size rect).
@@ -366,6 +366,14 @@ final class ToolbarController {
             selectionGrewDownward: nil
         )
         handleEvent(event)
+        // handleEvent (via viewModel.update) clears any stale OCR preview first;
+        // only set it here, after the panel has actually surfaced, so a
+        // no-actions-enabled early-return in handleEvent never leaves a preview
+        // set on a toolbar that never showed.
+        guard isShowing else { return }
+        // Give the NSImage the capture's pixel dimensions as its size so the
+        // preview view can compute the correct aspect ratio.
+        viewModel.ocrPreviewImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
     }
 
     /// Synthetic-⌘C fallback capture for explicit triggers in AX-blind apps.

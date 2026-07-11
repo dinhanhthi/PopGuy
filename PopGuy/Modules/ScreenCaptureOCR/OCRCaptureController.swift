@@ -20,9 +20,10 @@ final class OCRCaptureController {
     private var isCapturing = false
     private var activeOverlay: RegionSelectionOverlay?
 
-    /// Called with the recognized text and the mouse-up point (GLOBAL Quartz
-    /// coordinates, used as the toolbar anchor) once a capture succeeds.
-    var onText: (@MainActor (String, CGPoint) -> Void)?
+    /// Called with the recognized text, the mouse-up point (GLOBAL Quartz
+    /// coordinates, used as the toolbar anchor), and the captured screenshot
+    /// image once a capture succeeds.
+    var onText: (@MainActor (String, CGPoint, CGImage) -> Void)?
 
     init(permission: ScreenRecordingPermission) {
         self.permission = permission
@@ -55,7 +56,7 @@ final class OCRCaptureController {
                 showNoTextFoundAlert()
                 return
             }
-            onText?(trimmed, result.mouseUpPoint)
+            onText?(trimmed, result.mouseUpPoint, image)
         } catch {
             showCaptureFailedAlert()
         }
