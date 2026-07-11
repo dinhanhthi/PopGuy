@@ -461,6 +461,7 @@
   margin-top: 44px;
   padding: 28px;
   background: var(--bg-blue-strong);
+  border-color: #d5bd6cb5;
 }
 
 .pro-price {
@@ -476,7 +477,6 @@
 
 .pro-price p {
   margin: 0;
-  color: var(--muted);
   font-size: 0.74rem;
 }
 
@@ -900,9 +900,9 @@ input:focus-visible {
 }
 
 .button--gold {
-  background: #faf0cf;
+  background: #ffe48a;
   border-color: #e6cf8f;
-  color: #5f470a;
+  color: #7e3503;
   font-weight: 700;
 }
 
@@ -962,6 +962,7 @@ input:focus-visible {
   margin-bottom: 0;
   color: var(--muted);
   font-size: 0.84rem;
+  margin-left: 20px;
 }
 
 .hero-demo {
@@ -2523,6 +2524,10 @@ input:focus-visible {
 @media (max-width: 900px) {
   .site-header {
     position: relative;
+  }
+
+  .system-note {
+    margin-left: 0;
   }
 
   .header-inner {
