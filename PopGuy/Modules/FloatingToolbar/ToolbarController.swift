@@ -345,6 +345,29 @@ final class ToolbarController {
         dispatchAction(for: id, customActions: customActions)
     }
 
+    /// Inject OCR-extracted text into the toolbar pipeline as if it were a fresh
+    /// selection. The source is not an editable AX element (the text came from
+    /// pixels), so `isEditable` is false — the toolbar offers Copy only, never
+    /// paste-back. `anchorPoint` is the capture's mouse-up location in GLOBAL
+    /// QUARTZ coordinates (top-left origin, y down, as produced by the region
+    /// overlay); it is converted to AppKit coords here for pointer anchoring.
+    func handleOCRCapture(text: String, anchorPoint quartzAnchor: CGPoint) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        // Quartz point → AppKit point via the existing rect flip (zero-size rect).
+        let appKitAnchor = flipToAppKit(CGRect(origin: quartzAnchor, size: .zero)).origin
+        let ref = SourceElementRef(element: AXUIElementCreateSystemWide(), isEditable: false)
+        let event = SelectionEvent(
+            text: trimmed,
+            sourceElement: ref,
+            screenRect: nil,
+            isDoubleClick: false,
+            mouseReleasePoint: appKitAnchor,
+            selectionGrewDownward: nil
+        )
+        handleEvent(event)
+    }
+
     /// Synthetic-⌘C fallback capture for explicit triggers in AX-blind apps.
     /// Returns a `SelectionEvent` (no screen rect — AX gave us no geometry) or
     /// nil when nothing was copied. Safe to synthesize ⌘C here: the caller only
