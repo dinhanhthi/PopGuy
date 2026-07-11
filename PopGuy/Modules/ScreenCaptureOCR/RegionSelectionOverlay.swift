@@ -78,6 +78,10 @@ final class RegionSelectionOverlay {
 
     private var window: OverlayWindow?
     private var completion: (@MainActor (RegionSelectionResult?) -> Void)?
+    /// Local key monitor so Esc cancels immediately, before any click — the
+    /// overlay view's `keyDown` only fires once it is the key window's first
+    /// responder, which isn't guaranteed until the first mouse interaction.
+    private var keyMonitor: Any?
 
     /// Present the overlay and drag-select a region. Calls `completion`
     /// exactly once (on MainActor) with the result, or `nil` on cancel, then
@@ -124,6 +128,16 @@ final class RegionSelectionOverlay {
             CaptureCursor.shared.set()
             window.invalidateCursorRects(for: overlayView)
         }
+
+        // Catch Esc regardless of first-responder state so the user can bail out
+        // of capture mode before clicking. Returns nil to swallow the Esc.
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == 53 else { return event } // 53 == kVK_Escape
+            MainActor.assumeIsolated {
+                self?.finish(localRect: nil, localMouseUpPoint: nil, screens: [])
+            }
+            return nil
+        }
     }
 
     /// `localRect`/`localMouseUpPoint` are in the overlay window's own local
@@ -131,6 +145,15 @@ final class RegionSelectionOverlay {
     /// points) or `nil` on cancel/zero-area click. `screens` is the snapshot
     /// taken when the overlay was presented.
     private func finish(localRect: NSRect?, localMouseUpPoint: NSPoint?, screens: [NSScreen]) {
+        // Guard against a second finish (e.g. Esc after the drag already ended):
+        // once the window is gone we've already torn down and popped the cursor.
+        guard window != nil else { return }
+
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
+        }
+
         let windowOrigin = window?.frame.origin ?? .zero
 
         NSCursor.pop()
