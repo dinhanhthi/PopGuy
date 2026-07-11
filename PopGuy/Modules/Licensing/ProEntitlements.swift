@@ -53,6 +53,9 @@ nonisolated struct ProEntitlements: Sendable, Equatable {
     /// Whether assigning a default action to the double-click trigger is allowed.
     let doubleClickActionAllowed: Bool
 
+    /// Whether the OCR Screen Text Capture feature is allowed.
+    let ocrAllowed: Bool
+
     // MARK: - Presets
 
     /// Free-tier entitlements. No Pro license required; applied at launch by default.
@@ -68,7 +71,8 @@ nonisolated struct ProEntitlements: Sendable, Equatable {
         importExportAllowed: ProConfig.freeImportExportAllowed,
         pluginImportAllowed: ProConfig.freePluginImportAllowed,
         historySearchAllowed: ProConfig.freeHistorySearchAllowed,
-        doubleClickActionAllowed: ProConfig.freeDoubleClickActionAllowed
+        doubleClickActionAllowed: ProConfig.freeDoubleClickActionAllowed,
+        ocrAllowed: ProConfig.freeOCRAllowed
     )
 
     /// Pro-tier entitlements. Applied by `LicenseGate` on successful activation.
@@ -86,6 +90,7 @@ nonisolated struct ProEntitlements: Sendable, Equatable {
         importExportAllowed: true,
         pluginImportAllowed: true,
         historySearchAllowed: true,
-        doubleClickActionAllowed: true
+        doubleClickActionAllowed: true,
+        ocrAllowed: true
     )
 }

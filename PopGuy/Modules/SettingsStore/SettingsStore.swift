@@ -150,6 +150,8 @@ final class SettingsStore: ObservableObject {
         static let doubleClickAssignedAction  = "settings.doubleClickAssignedAction"
         static let triggerChord               = "settings.triggerChord"
         static let chordReplacementShortcut   = "settings.chordReplacementShortcut"
+        static let ocrEnabled                 = "settings.ocrEnabled"
+        static let ocrShortcut                = "settings.ocrShortcut"
         static let confirmCloseAfterResult    = "settings.confirmCloseAfterResult"
         static let showDockIconWithSettings   = "settings.showDockIconWithSettings"
         static let resultFontSize             = "settings.resultFontSize"
@@ -446,6 +448,16 @@ final class SettingsStore: ObservableObject {
         didSet { saveOptional(chordReplacementShortcut, key: Keys.chordReplacementShortcut) }
     }
 
+    /// Whether the OCR Screen Text Capture trigger is opted in (default: false).
+    @Published var ocrEnabled: Bool {
+        didSet { defaults.set(ocrEnabled, forKey: Keys.ocrEnabled) }
+    }
+
+    /// Optional shortcut that starts an OCR screen-region capture (default: nil).
+    @Published var ocrShortcut: KeyboardShortcut? {
+        didSet { saveOptional(ocrShortcut, key: Keys.ocrShortcut) }
+    }
+
     /// When true, clicking outside (or pressing Escape) after a result has
     /// finished generating asks for confirmation instead of closing the toolbar,
     /// so a ready result isn't dismissed by accident (default: true).
@@ -602,6 +614,8 @@ final class SettingsStore: ObservableObject {
         historyEnabled           = defaults.object(forKey: Keys.historyEnabled)        as? Bool ?? true
         historyStoreFullText     = defaults.object(forKey: Keys.historyStoreFullText)  as? Bool ?? true
         chordReplacementShortcut = Self.load(KeyboardShortcut.self, key: Keys.chordReplacementShortcut, from: defaults)
+        ocrEnabled               = defaults.object(forKey: Keys.ocrEnabled) as? Bool ?? false
+        ocrShortcut              = Self.load(KeyboardShortcut.self, key: Keys.ocrShortcut, from: defaults)
         confirmCloseAfterResult  = defaults.object(forKey: Keys.confirmCloseAfterResult) as? Bool ?? true
         showDockIconWithSettings = defaults.object(forKey: Keys.showDockIconWithSettings) as? Bool ?? true
         resultFontSize = defaults.string(forKey: Keys.resultFontSize).flatMap(ResultFontSize.init(rawValue:)) ?? .normal

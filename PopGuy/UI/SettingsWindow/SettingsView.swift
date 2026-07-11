@@ -89,6 +89,7 @@ struct SettingsView: View {
     @ObservedObject var navigator: SettingsNavigator
     @ObservedObject var licenseGate: LicenseGate
     @ObservedObject var updater: UpdaterController
+    @ObservedObject var screenRecordingPermission: ScreenRecordingPermission
 
     /// Local mirror of the selected section that `List(selection:)` binds to.
     /// Binding the list directly to the `@Published` `navigator.section` trips
@@ -293,7 +294,7 @@ struct SettingsView: View {
                 case .providers:   APIKeysTab(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, onReadMore: { withAnimation(panelAnimation) { showingMemoryInfo = true } })
                 case .actions:     ActionsView(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, navigator: navigator, editingAction: $editingAction, showingLibrary: $showingLibrary)
                 case .history:     HistoryView(history: history, settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
-                case .triggers:    TriggersView(settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
+                case .triggers:    TriggersView(settings: settings, licenseGate: licenseGate, screenRecordingPermission: screenRecordingPermission, onUpgrade: navigateToLicense)
                 case .appearance:  AppearanceView(settings: settings)
                 case .ignoredApps: AppsView(settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
                 case .license:     LicenseView(licenseGate: licenseGate)
@@ -2362,7 +2363,8 @@ private struct KeyEntryRow: View {
         ),
         navigator: SettingsNavigator(),
         licenseGate: LicenseGate(),
-        updater: UpdaterController()
+        updater: UpdaterController(),
+        screenRecordingPermission: ScreenRecordingPermission()
     )
     .frame(width: 740, height: 480)
 }

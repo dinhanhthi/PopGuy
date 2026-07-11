@@ -23,12 +23,16 @@ struct TriggersView: View {
 
     @ObservedObject var settings: SettingsStore
     @ObservedObject var licenseGate: LicenseGate
+    @ObservedObject var screenRecordingPermission: ScreenRecordingPermission
 
     /// Navigates to the License tab when the user taps an upgrade prompt.
     let onUpgrade: () -> Void
 
     /// Whether the chord-replacement recorder is active.
     @State private var isRecordingChord = false
+
+    /// Whether the OCR shortcut recorder is active.
+    @State private var isRecordingOCRShortcut = false
 
     var body: some View {
         Form {
@@ -121,11 +125,136 @@ struct TriggersView: View {
                 }
             }
 
+            // MARK: Screen Text Capture (OCR)
+            Section(header: ocrSectionHeader()) {
+                ocrSectionContent()
+            }
+
         }
         .formStyle(.grouped)
         .onDisappear {
             // Cancel any in-progress recording when the view disappears.
             isRecordingChord = false
+            isRecordingOCRShortcut = false
+        }
+    }
+
+    // MARK: - Screen Text Capture (OCR)
+
+    @ViewBuilder
+    private func ocrSectionHeader() -> some View {
+        HStack(spacing: 6) {
+            Text("Screen Text Capture (OCR)")
+            if !licenseGate.entitlements.ocrAllowed { ProBadge() }
+        }
+    }
+
+    @ViewBuilder
+    private func ocrSectionContent() -> some View {
+        let ocrAllowed = licenseGate.entitlements.ocrAllowed
+
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(
+                "Enable Screen Text Capture",
+                isOn: Binding(
+                    get: { ocrAllowed && settings.ocrEnabled },
+                    set: { newValue in
+                        guard ocrAllowed else { return }
+                        settings.ocrEnabled = newValue
+                    }
+                )
+            )
+            .disabled(!ocrAllowed)
+
+            Text("Select any region of the screen and PopGuy recognizes the text in it, then hands it to the toolbar to copy. Useful for text you can't select normally — images, PDFs, video captions.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        if ocrAllowed {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Keyboard shortcut")
+                        .foregroundStyle(settings.ocrEnabled ? .primary : .secondary)
+
+                    Spacer()
+
+                    if isRecordingOCRShortcut {
+                        ShortcutRecorder(
+                            onCapture: { shortcut in
+                                settings.ocrShortcut = shortcut
+                                isRecordingOCRShortcut = false
+                            },
+                            onCancel: {
+                                isRecordingOCRShortcut = false
+                            }
+                        )
+                    } else {
+                        if let shortcut = settings.ocrShortcut {
+                            ShortcutBadge(text: shortcut.displayString)
+
+                            Button {
+                                settings.ocrShortcut = nil
+                            } label: {
+                                Image(systemName: "xmark.circle")
+                            }
+                            .buttonStyle(.borderless)
+                            .hoverTooltip("Remove shortcut")
+                            .disabled(!settings.ocrEnabled)
+                        } else {
+                            Text("None")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Button {
+                            isRecordingOCRShortcut = true
+                        } label: {
+                            Image(systemName: "record.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        .hoverTooltip("Record shortcut")
+                        .disabled(!settings.ocrEnabled)
+                    }
+                }
+
+                Text("Assign a shortcut to start a capture from anywhere (e.g. ⌘⇧2). Also available from the menu bar.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: screenRecordingPermission.isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(screenRecordingPermission.isGranted ? .green : .orange)
+
+                    Text(screenRecordingPermission.isGranted ? "Screen Recording permission granted" : "Screen Recording permission required")
+
+                    Spacer(minLength: 0)
+
+                    if !screenRecordingPermission.isGranted {
+                        Button("Grant\u{2026}") {
+                            screenRecordingPermission.request()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
+                        Button("Open System Settings") {
+                            screenRecordingPermission.openSystemSettings()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+
+                Text("macOS requires Screen Recording permission to capture the screen region for OCR. PopGuy only captures the region you select.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            UpgradePromptView(
+                message: "Screen Text Capture (OCR) requires a Pro plan.",
+                onUpgrade: onUpgrade
+            )
         }
     }
 

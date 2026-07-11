@@ -69,8 +69,12 @@ func makeStatusTriggerMenuItem(
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem?
     let axPermission = AccessibilityPermission()
+    /// Screen Recording permission state for the OCR feature. Safe to create at
+    /// launch — its init only preflights the current grant state, never prompts.
+    let screenRecordingPermission = ScreenRecordingPermission()
     private var selectionPipeline: SelectionPipeline?
     private var toolbarController: ToolbarController?
+    private var ocrCaptureController: OCRCaptureController?
     private var permissionObserver: NSObjectProtocol?
 
     // MARK: - Shared services (created once, injected into subsystems)
@@ -126,6 +130,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     /// Combine subscription — re-applies chord/hotkey wiring when replacement shortcut changes.
     private var chordReplacementCancellable: AnyCancellable?
+
+    /// Combine subscription — re-applies hotkey wiring when the OCR shortcut changes.
+    private var ocrShortcutCancellable: AnyCancellable?
+
+    /// Combine subscription — re-applies hotkey wiring when the OCR opt-in toggle changes.
+    private var ocrEnabledCancellable: AnyCancellable?
 
     /// Combine subscription — warms persisted Babylon BGL indexes when loaded dictionaries change.
     private var babylonIndexWarmupCancellable: AnyCancellable?
@@ -349,6 +359,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         )
         toolbarController = controller
 
+        // Wire the OCR capture controller: onText hands the recognized text off
+        // to the toolbar (copy-only), anchored at the mouse-up point.
+        let ocr = OCRCaptureController(permission: screenRecordingPermission)
+        ocr.onText = { [weak controller] text, anchor in
+            controller?.handleOCRCapture(text: text, anchorPoint: anchor)
+        }
+        ocrCaptureController = ocr
+
         // Wire ActionEngine into the toolbar via the protocol seam.
         let handler = ActionEngineHandler(
             settings: settingsStore,
@@ -437,6 +455,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             .dropFirst()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.applyShortcutBindings() }
+
+        // Re-apply when the OCR shortcut or its opt-in toggle changes.
+        ocrShortcutCancellable = settingsStore.$ocrShortcut
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.applyShortcutBindings() }
+
+        ocrEnabledCancellable = settingsStore.$ocrEnabled
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.applyShortcutBindings() }
     }
 
     /// A fixed sentinel ActionIdentifier for the chord-replacement shortcut.
@@ -448,6 +477,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     /// calls are idempotent.
     private static let chordReplacementActionID: ActionIdentifier =
         .custom(UUID(uuidString: "00000000-0000-0000-0000-000000504F50")!)
+
+    /// A fixed sentinel ActionIdentifier for the OCR screen-text-capture shortcut.
+    /// Same rationale as `chordReplacementActionID`: a stable UUID distinct from
+    /// both real custom-action UUIDs and the chord-replacement sentinel above.
+    private static let ocrCaptureActionID: ActionIdentifier =
+        .custom(UUID(uuidString: "00000000-0000-0000-0000-00004F4352AA")!)
 
     /// Build the action map from current settings and call HotkeyManager.applyBindings.
     ///
@@ -484,6 +519,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             ) { [weak controller, weak self] in
                 guard self?.settingsStore.popGuyEnabled == true else { return }
                 controller?.showToolbarForCurrentSelection()
+            }
+        }
+
+        // Register the OCR capture shortcut when set and opted in.
+        if let ocrShortcut = settingsStore.ocrShortcut {
+            hkm.register(
+                shortcut: ocrShortcut,
+                for: AppDelegate.ocrCaptureActionID
+            ) { [weak self] in
+                guard self?.settingsStore.popGuyEnabled == true else { return }
+                guard self?.settingsStore.ocrEnabled == true else { return }
+                guard self?.licenseGate.entitlements.ocrAllowed == true else { return }
+                self?.ocrCaptureController?.beginCapture()
             }
         }
     }
@@ -674,6 +722,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         doubleClickItem.isEnabled = popGuyEnabled
         menu.addItem(doubleClickItem)
 
+        // Capture Screen Text (OCR) — Pro-gated, opt-in trigger. Non-Pro users
+        // see it disabled; Pro users who have not opted in yet are routed to
+        // Settings → Triggers to enable it (and grant Screen Recording
+        // permission); once opted in, it directly starts a capture.
+        let ocrItem = NSMenuItem(
+            title: "Capture Screen Text\u{2026}",
+            action: #selector(captureScreenTextOCR),
+            keyEquivalent: ""
+        )
+        ocrItem.image = NSImage(systemSymbolName: "text.viewfinder", accessibilityDescription: nil)
+        if !licenseGate.entitlements.ocrAllowed {
+            ocrItem.isEnabled = false
+        } else {
+            ocrItem.isEnabled = popGuyEnabled
+        }
+        menu.addItem(ocrItem)
+
         menu.addItem(.separator())
 
         // Settings…
@@ -768,6 +833,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         settingsStore.triggerDoubleClickEnabled.toggle()
     }
 
+    /// Starts an OCR screen-region capture, or routes to Settings → Triggers
+    /// when the user has not opted in yet. `beginCapture()` self-guards on
+    /// Screen Recording permission (prompts lazily on first use).
+    @objc private func captureScreenTextOCR() {
+        guard settingsStore.ocrEnabled else {
+            settingsNavigator.section = .triggers
+            openSettings()
+            return
+        }
+        ocrCaptureController?.beginCapture()
+    }
+
     @objc private func performUpdateCheck() {
         updater.checkForUpdates()
     }
@@ -813,7 +890,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     @objc private func openSettings() {
         if settingsWindow == nil {
-            let view = SettingsView(settings: settingsStore, keychain: keychainManager, history: historyStore, navigator: settingsNavigator, licenseGate: licenseGate, updater: updater)
+            let view = SettingsView(settings: settingsStore, keychain: keychainManager, history: historyStore, navigator: settingsNavigator, licenseGate: licenseGate, updater: updater, screenRecordingPermission: screenRecordingPermission)
             let hosting = NSHostingController(rootView: view)
             let window = NSWindow(contentViewController: hosting)
             window.title = "PopGuy Settings"

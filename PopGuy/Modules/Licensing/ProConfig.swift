@@ -82,6 +82,9 @@ nonisolated enum ProConfig {
     /// Whether free users may assign a default action to the double-click trigger.
     static let freeDoubleClickActionAllowed = false
 
+    /// Whether free users may use the OCR Screen Text Capture feature.
+    static let freeOCRAllowed = false
+
     // MARK: Local (MLX) free-tier model set
 
     /// Model ids available on the free plan for the Local (MLX) provider.
