@@ -18,7 +18,7 @@ import {
 import { ButtonLink } from "../components/ButtonLink";
 import { ActionLibraryModal } from "../components/ActionLibraryModal";
 import { DOWNLOAD_URL, GITHUB_URL } from "../constants";
-import { libraryCategories, libraryPresets, libraryStats } from "../data/actionLibrary";
+import { libraryPresets, libraryStats } from "../data/actionLibrary";
 
 const actionTypes = [
   {
@@ -73,12 +73,25 @@ const builtIn = [
   { icon: BookOpen, name: "Look up", text: "Look up the selection." }
 ];
 
-const curatedLibrary = libraryCategories.map((category) => ({
-  category,
-  presets: libraryPresets
-    .filter((preset) => preset.category === category.id)
-    .slice(0, 3)
-}));
+// The 12 most useful, broadly appealing presets across categories.
+const featuredPresetIds = [
+  "search.google",
+  "ai.chatgpt",
+  "ai.claude",
+  "translate.deepl",
+  "web.wikipedia",
+  "web.github",
+  "maps.google",
+  "text.titlecase",
+  "dev.jsonprettyprint",
+  "dev.base64encode",
+  "dev.calculate",
+  "apps.obsidian"
+];
+
+const featuredLibrary = featuredPresetIds
+  .map((id) => libraryPresets.find((preset) => preset.id === id))
+  .filter(Boolean);
 
 export function ActionsPage() {
   const [libraryModalOpen, setLibraryModalOpen] = useState(false);
@@ -89,7 +102,7 @@ export function ActionsPage() {
         <div className="shell">
           <div>
             <p className="section-label">Actions</p>
-            <h1>Anything you do with text.</h1>
+            <h1 className="rainbow-title">Anything you do with text.</h1>
             <p className="page-lede">
               Eight action types. Built-in or custom. One toolbar, everywhere.
             </p>
@@ -144,16 +157,14 @@ export function ActionsPage() {
           <span>{libraryStats.local}</span>
         </div>
         <div className="library-grid">
-          {curatedLibrary.map(({ presets }) =>
-            presets.map((preset) => (
-              <article key={preset.id} className="library-card">
-                <preset.icon aria-hidden="true" />
-                <span className="library-name">{preset.name}</span>
-                <span className="library-description">{preset.description}</span>
-                <span className="library-type-badge">{preset.type}</span>
-              </article>
-            ))
-          )}
+          {featuredLibrary.map((preset) => (
+            <article key={preset.id} className="library-card">
+              <preset.icon aria-hidden="true" />
+              <span className="library-name">{preset.name}</span>
+              <span className="library-description">{preset.description}</span>
+              <span className="library-type-badge">{preset.type}</span>
+            </article>
+          ))}
         </div>
         <div className="library-cta">
           <button

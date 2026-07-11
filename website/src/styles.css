@@ -676,7 +676,29 @@ h3 {
 }
 
 .section-blue {
-  background: var(--bg-blue);
+  background: linear-gradient(
+    180deg,
+    var(--bg) 0,
+    var(--bg-blue) 72px,
+    var(--bg-blue) calc(100% - 72px),
+    var(--bg) 100%
+  );
+}
+
+.rainbow-title {
+  background: linear-gradient(
+    100deg,
+    #ff6b6b 0%,
+    #ffa94d 22%,
+    #ffe066 40%,
+    #51cf66 58%,
+    #4dabf7 76%,
+    #b197fc 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 .centered {
