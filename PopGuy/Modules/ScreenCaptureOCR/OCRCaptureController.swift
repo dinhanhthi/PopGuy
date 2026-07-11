@@ -97,7 +97,7 @@ final class OCRCaptureController {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = "Screen Recording Permission Required"
-        alert.informativeText = "PopGuy needs Screen Recording permission to capture screen text."
+        alert.informativeText = "PopGuy needs Screen Recording permission to capture screen text. If you just granted it, quit and reopen PopGuy for the change to take effect."
         alert.addButton(withTitle: "Open System Settings")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn {
