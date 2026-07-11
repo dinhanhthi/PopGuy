@@ -3,13 +3,26 @@
     <channel>
         <title>PopGuy</title>
         <item>
+            <title>0.5.0</title>
+            <pubDate>Sat, 11 Jul 2026 15:16:40 +0200</pubDate>
+            <sparkle:fullReleaseNotesLink>https://github.com/dinhanhthi/PopGuy/releases</sparkle:fullReleaseNotesLink>
+            <sparkle:version>13</sparkle:version>
+            <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v0.5.0/PopGuy-0.5.0.zip" length="20399764" type="application/octet-stream" sparkle:edSignature="v9AZ0LRpBueKsp3OK/7AOFRpOHGCOqbKdxJQnQ/F/0MI3Nn0yofo2lvvsCNBW+FAAjQ0T1M9JKyW0UuZ2WioDA=="/>
+            <sparkle:deltas>
+                <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v0.5.0/PopGuy13-12.delta" sparkle:deltaFrom="12" length="5578610" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="HryCi0TIUl4iOCWBmMta//tKNo/GBfekpP4PMq//uU2CVBpQ0gtr5MW7dg/R5zCWnoRqs9wJDfMezCDiURTxDQ=="/>
+                <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v0.5.0/PopGuy13-11.delta" sparkle:deltaFrom="11" length="5588066" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="S11yDceLfXvKARmFxcfrIF8tIBoGfOW+TnJCNAaLcWBdMBFfPj4KGgFFkRw4ZsWPYFSODPpOnDBQYyDjHb3kCw=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>0.4.1</title>
             <pubDate>Tue, 30 Jun 2026 14:20:18 +0200</pubDate>
             <sparkle:fullReleaseNotesLink>https://github.com/dinhanhthi/PopGuy/releases</sparkle:fullReleaseNotesLink>
             <sparkle:version>12</sparkle:version>
             <sparkle:shortVersionString>0.4.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v0.4.1/PopGuy-0.4.1.zip" length="14202384" type="application/octet-stream" sparkle:edSignature="M7TL30foJ6WpwQWm/6V/vVXoSgkkIFwK+RUMM78B89k0BDN/Cd60ThkXC64JNQTjzdAQGRreZxHeUWl7gwm0Bw=="/>
+            <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v0.5.0/PopGuy-0.4.1.zip" length="14202384" type="application/octet-stream" sparkle:edSignature="M7TL30foJ6WpwQWm/6V/vVXoSgkkIFwK+RUMM78B89k0BDN/Cd60ThkXC64JNQTjzdAQGRreZxHeUWl7gwm0Bw=="/>
             <sparkle:deltas>
                 <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v0.4.1/PopGuy12-11.delta" sparkle:deltaFrom="11" length="386770" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="u8NPOuIvF+DwriGf/ej63jmUklUT1lfcdnMzjBndkltGK35+BnC0iR7hQ8L+0CFs5dIqlkHYHegl16+2ikigBg=="/>
             </sparkle:deltas>
@@ -21,7 +34,7 @@
             <sparkle:version>11</sparkle:version>
             <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v0.4.1/PopGuy-0.4.0.zip" length="14201866" type="application/octet-stream" sparkle:edSignature="2TBYMshUEfx9eTbIqcvaQ5tYhtJuF4QVCo7Eeo7fggpD3oxV6kutr2lGZyAbROiDPgvcvdCH+3r7OOyrabwvBA=="/>
+            <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v0.5.0/PopGuy-0.4.0.zip" length="14201866" type="application/octet-stream" sparkle:edSignature="2TBYMshUEfx9eTbIqcvaQ5tYhtJuF4QVCo7Eeo7fggpD3oxV6kutr2lGZyAbROiDPgvcvdCH+3r7OOyrabwvBA=="/>
         </item>
     </channel>
 </rss>
