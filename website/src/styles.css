@@ -3233,6 +3233,67 @@ input:focus-visible {
   margin-top: 32px;
 }
 
+.library-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bg-blue);
+}
+
+.library-search:focus-within {
+  border-color: var(--blue);
+}
+
+.library-search svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.library-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.92rem;
+  outline: none;
+}
+
+.library-search-input:focus,
+.library-search-input:focus-visible {
+  outline: none;
+}
+
+.library-search-input::placeholder {
+  color: var(--muted);
+}
+
+.library-search-clear {
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.library-search-clear:hover {
+  color: var(--ink);
+}
+
+.library-search-empty {
+  margin: 0;
+  padding: 12px 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .library-modal-body {
   max-height: calc(80vh - 100px);
   overflow-y: auto;

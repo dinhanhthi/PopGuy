@@ -1,8 +1,10 @@
-import { X } from "lucide-react";
-import { useEffect } from "react";
+import { Search, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { libraryCategories, libraryPresets, libraryStats } from "../data/actionLibrary";
 
 export function ActionLibraryModal({ open, onClose }) {
+  const [query, setQuery] = useState("");
+
   useEffect(() => {
     if (!open) return;
     function onKey(event) {
@@ -13,8 +15,27 @@ export function ActionLibraryModal({ open, onClose }) {
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
+      setQuery("");
     };
   }, [open, onClose]);
+
+  const trimmedQuery = query.trim().toLowerCase();
+
+  const groups = useMemo(() => {
+    return libraryCategories
+      .map((category) => {
+        const presets = libraryPresets.filter((preset) => {
+          if (preset.category !== category.id) return false;
+          if (!trimmedQuery) return true;
+          return (
+            preset.name.toLowerCase().includes(trimmedQuery) ||
+            preset.description.toLowerCase().includes(trimmedQuery)
+          );
+        });
+        return { category, presets };
+      })
+      .filter((group) => group.presets.length > 0);
+  }, [trimmedQuery]);
 
   if (!open) return null;
 
@@ -41,11 +62,33 @@ export function ActionLibraryModal({ open, onClose }) {
             {libraryStats.total} actions · {libraryStats.categories} categories ·{" "}
             {libraryStats.local}
           </p>
+          <div className="library-search">
+            <Search size={16} aria-hidden="true" />
+            <input
+              type="text"
+              className="library-search-input"
+              placeholder="Search actions…"
+              aria-label="Search actions"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            {query && (
+              <button
+                type="button"
+                className="library-search-clear"
+                aria-label="Clear search"
+                onClick={() => setQuery("")}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
         <div className="library-modal-body">
-          {libraryCategories.map((category) => {
-            const presets = libraryPresets.filter((p) => p.category === category.id);
-            return (
+          {groups.length === 0 ? (
+            <p className="library-search-empty">No actions match "{query.trim()}".</p>
+          ) : (
+            groups.map(({ category, presets }) => (
               <section className="library-category-group" key={category.id}>
                 <h3>
                   <category.icon aria-hidden="true" />
@@ -65,8 +108,8 @@ export function ActionLibraryModal({ open, onClose }) {
                   ))}
                 </ul>
               </section>
-            );
-          })}
+            ))
+          )}
         </div>
       </div>
     </div>
