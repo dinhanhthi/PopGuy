@@ -172,7 +172,7 @@ export function HomePage() {
             <span className="plan-label">Optional upgrade</span>
             <div className="pro-price">
               <h2>Pro</h2>
-              <p><strong>$15</strong> one-time</p>
+              <p><strong>$10</strong> one-time</p>
             </div>
             <p>More room for heavier use.</p>
             <ul>
