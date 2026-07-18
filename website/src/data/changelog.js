@@ -1,9 +1,17 @@
 export const releases = [
   {
+    version: "0.5.1",
+    date: "July 2026",
+    title: "PopGuy is now open source.",
+    latest: true,
+    items: [
+      "Open sourced under AGPLv3"
+    ]
+  },
+  {
     version: "0.5.0",
     date: "July 2026",
     title: "Screen Capture OCR arrives.",
-    latest: true,
     items: [
       "Screen Capture OCR (Pro)",
       "Menu bar and hotkey trigger for OCR",

@@ -13,6 +13,12 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [0.5.1] - 2026-07-18
+
+### Changed
+
+- PopGuy is now open source under the GNU Affero General Public License v3.0 (previously source-available under the PolyForm Noncommercial License).
+
 ## [0.5.0] - 2026-07-11
 
 ### Added
