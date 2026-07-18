@@ -86,6 +86,12 @@ export function HomePage() {
         <div className="hero-copy">
           <h1 className="rainbow-title">AI where you write.</h1>
           <p className="hero-lede">Select text or capture screen. Choose an action. Done.</p>
+          <a
+            className="hero-license"
+            href="https://github.com/dinhanhthi/PopGuy/blob/main/LICENSE"
+          >
+            Now open source under AGPLv3.
+          </a>
           <div className="hero-actions">
             <ButtonLink href={DOWNLOAD_URL} icon="download">
               Download for macOS

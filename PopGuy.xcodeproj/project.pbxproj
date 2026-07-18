@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A6F3C8D429E54B1F8D7C6A5B /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = B7E4D9C52AF64C2E9B8D7A6C /* LICENSE */; };
 		67371C126C704661A587 /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 650B6D4AF28B434E9D1C /* HuggingFace */; };
 		903BE62C47B3A159E67B114F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B605796E047F0B1A8CAEB221 /* Sparkle */; };
 		A043BAE1603803A839C0CB52 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = A5534EA92B26FA8ADC30543F /* Yams */; };
@@ -64,6 +65,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B7E4D9C52AF64C2E9B8D7A6C /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = SOURCE_ROOT; };
 		D34244462FD4A56C001600A8 /* PopGuy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PopGuy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D34244532FD4A56D001600A8 /* PopGuyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PopGuyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D342445D2FD4A56D001600A8 /* PopGuyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PopGuyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -148,6 +150,7 @@
 		D342443D2FD4A56C001600A8 = {
 			isa = PBXGroup;
 			children = (
+				B7E4D9C52AF64C2E9B8D7A6C /* LICENSE */,
 				D34244482FD4A56C001600A8 /* PopGuy */,
 				D34244562FD4A56D001600A8 /* PopGuyTests */,
 				D34244602FD4A56D001600A8 /* PopGuyUITests */,
@@ -330,6 +333,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A6F3C8D429E54B1F8D7C6A5B /* LICENSE in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -563,7 +567,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PopGuy/Info.plist;
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Anh-Thi DINH. Licensed under GNU AGPLv3.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -602,7 +606,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PopGuy/Info.plist;
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Anh-Thi DINH. Licensed under GNU AGPLv3.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

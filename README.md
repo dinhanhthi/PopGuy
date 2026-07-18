@@ -82,13 +82,9 @@ Program membership is required.
 Contributions are welcome — open an issue to discuss a change, or send a pull request.
 See **[CONTRIBUTING.md](CONTRIBUTING.md)** for guidelines.
 
-> By submitting a pull request you grant the maintainer the right to include your
-> contribution in PopGuy, including commercial/Pro versions (details in CONTRIBUTING.md).
-> This keeps the public project non-commercial while letting the maintainer sustain it.
-
 ## License
 
-PopGuy is **source-available, not open-source**, under the
-[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/).
-You may use, modify, and share it for **any non-commercial purpose** — but **commercial
-use is not permitted**. See the [LICENSE](LICENSE) file for the full terms.
+PopGuy is open source under the
+[GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.html).
+You may use, modify, and distribute it under its terms. See [LICENSE](LICENSE) for
+the full license text.

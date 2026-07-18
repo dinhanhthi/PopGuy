@@ -951,10 +951,23 @@ input:focus-visible {
 
 .hero-lede {
   max-width: 540px;
-  margin-bottom: 28px;
+  margin-bottom: 12px;
   color: var(--text);
   font-size: 1.02rem;
   line-height: 1.65;
+}
+
+.hero-license {
+  display: inline-block;
+  margin-bottom: 28px;
+  color: var(--blue);
+  font-size: 0.92rem;
+  font-weight: 680;
+}
+
+.hero-license:hover {
+  color: var(--blue-dark);
+  text-decoration: underline;
 }
 
 .system-note {
@@ -2593,6 +2606,10 @@ input:focus-visible {
 
   .hero h1,
   .hero-lede {
+    margin-inline: auto;
+  }
+
+  .hero-license {
     margin-inline: auto;
   }
 

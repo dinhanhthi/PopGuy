@@ -55,6 +55,21 @@ describe("website routes", () => {
     expect(screen.getByText("Optional upgrade")).toBeInTheDocument();
   });
 
+  it("identifies PopGuy as open source under AGPLv3 on the home page", () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <AppRoutes />
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Now open source under AGPLv3." })
+    ).toHaveAttribute(
+      "href",
+      "https://github.com/dinhanhthi/PopGuy/blob/main/LICENSE"
+    );
+  });
+
   it("uses provider logos and no repository preview", () => {
     render(
       <MemoryRouter initialEntries={["/"]}>
