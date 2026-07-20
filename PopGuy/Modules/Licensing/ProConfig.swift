@@ -145,5 +145,5 @@ nonisolated enum ProConfig {
     static let purchaseComingSoonNote = "Pro purchases are coming soon."
 
     /// Lemon Squeezy product checkout URL (public buy link).
-    static let checkoutURL = URL(string: "https://dinhanhthi.lemonsqueezy.com/checkout/buy/d2dd34c0-d3c7-4be8-9b17-b3f2cbf6c5f8")!
+    static let checkoutURL = URL(string: "https://dinhanhthi.lemonsqueezy.com/checkout/buy/ea521c18-178e-4aaa-a479-af053e38285e")!
 }
