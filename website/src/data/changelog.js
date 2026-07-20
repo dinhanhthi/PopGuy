@@ -1,9 +1,17 @@
 export const releases = [
   {
+    version: "0.5.2",
+    date: "July 2026",
+    title: "Checkout link fix.",
+    latest: true,
+    items: [
+      "Fixed Pro purchase checkout link"
+    ]
+  },
+  {
     version: "0.5.1",
     date: "July 2026",
     title: "PopGuy is now open source.",
-    latest: true,
     items: [
       "Open sourced under AGPLv3"
     ]

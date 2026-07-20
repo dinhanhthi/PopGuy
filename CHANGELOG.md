@@ -13,6 +13,12 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [0.5.2] - 2026-07-20
+
+### Fixed
+
+- The "Get Pro" checkout link now points to the live Lemon Squeezy product. v0.5.1 shipped with a test-mode checkout URL by mistake, so purchases made through that version were not processed as real orders.
+
 ## [0.5.1] - 2026-07-18
 
 ### Changed
