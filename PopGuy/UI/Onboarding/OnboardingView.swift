@@ -3,11 +3,12 @@
 //
 // Shown ONCE on first launch (guarded by SettingsStore.hasOnboarded).
 // Steps:
-//   1. Welcome — what PopGuy does.
-//   2. Accessibility permission — reuses AccessibilityPermission from Phase 1.
-//   3. Provider setup hint — opens the Settings window.
-//   4. Start at login — optional SMAppService registration.
-//   5. Feature tour — brief description of core gestures.
+//   0. Welcome — what PopGuy does (trial-aware).
+//   1. Accessibility permission.
+//   2. Provider setup — placeholder until the functional page lands.
+//   3. Triggers — placeholder.
+//   4. Actions — placeholder.
+//   5. Finish — launch at login + feature tour.
 //
 // Isolation: @MainActor — all UI.
 // Plain static text only; no untrusted external content is rendered here.
@@ -21,6 +22,8 @@ import SwiftUI
 ///
 /// Callers inject:
 ///   - `axPermission`: the shared `AccessibilityPermission` object (do NOT create a new one).
+///   - `settings`: the shared `SettingsStore` (do NOT create a new one).
+///   - `keychain`: the shared `KeychainManager` (API keys stay in Keychain only).
 ///   - `trialState`: the current trial state computed by `LicenseGate.bootstrapTrial()` before
 ///     onboarding is shown. Determines which welcome-page variant is rendered.
 ///   - `onOpenSettings`: closure that opens the existing Settings window.
@@ -30,6 +33,8 @@ import SwiftUI
 struct OnboardingView: View {
 
     @ObservedObject var axPermission: AccessibilityPermission
+    @ObservedObject var settings: SettingsStore
+    let keychain: KeychainManager
     let trialState: TrialState
     let onOpenSettings: () -> Void
     let onGetPro: () -> Void
@@ -40,22 +45,26 @@ struct OnboardingView: View {
     @State private var launchAtLogin = false
     @State private var loginItemError: String? = nil
 
-    private let pageCount = 5
+    private let pageCount = 6
 
     var body: some View {
         VStack(spacing: 0) {
             // Page content
-            Group {
-                switch page {
-                case 0: welcomePage
-                case 1: accessibilityPage
-                case 2: providerPage
-                case 3: loginPage
-                default: tourPage
+            ScrollView {
+                Group {
+                    switch page {
+                    case 0: welcomePage
+                    case 1: accessibilityPage
+                    case 2: providerPage
+                    case 3: triggersPage
+                    case 4: actionsPage
+                    default: finishPage
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(28)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(28)
 
             Divider()
 
@@ -95,7 +104,7 @@ struct OnboardingView: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 14)
         }
-        .frame(width: 480, height: 340)
+        .frame(width: 560, height: 560)
     }
 
     /// Label for the footer's primary advance button.
@@ -201,12 +210,44 @@ struct OnboardingView: View {
         }
     }
 
-    private var loginPage: some View {
+    private var triggersPage: some View {
         VStack(alignment: .leading, spacing: 16) {
             OnboardingHeader(
-                systemImage: "arrow.up.right.square",
-                title: "Start at Login",
-                subtitle: "PopGuy can launch automatically every time you log in so it's always ready."
+                systemImage: "command",
+                title: "How PopGuy Appears",
+                subtitle: "Trigger PopGuy with Cmd+C+C, or show the toolbar when you select text."
+            )
+
+            Text("You can change these anytime in Settings → Triggers.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+    }
+
+    private var actionsPage: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            OnboardingHeader(
+                systemImage: "slider.horizontal.3",
+                title: "Choose Your Actions",
+                subtitle: "Pick which actions appear on the toolbar."
+            )
+
+            Text("Free accounts can keep up to five actions active. You can change this later in Settings → Actions.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+    }
+
+    private var finishPage: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            OnboardingHeader(
+                systemImage: "sparkles",
+                title: "You're All Set",
+                subtitle: "Launch at login so PopGuy is always ready. You can change anything later in Settings."
             )
 
             Toggle("Launch PopGuy at login", isOn: $launchAtLogin)
@@ -224,6 +265,14 @@ struct OnboardingView: View {
             Text("You can change this later in Settings → General.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                TourRow(icon: "selection.pin.in.out", text: "Select text in any app — the toolbar appears automatically near your selection.")
+                TourRow(icon: "wand.and.stars", text: "Tap Improve to rewrite selected text with AI; a diff shows what changed before you apply.")
+                TourRow(icon: "globe", text: "Tap Translate to convert text to your target language.")
+                TourRow(icon: "command", text: "Press Cmd+C+C (double-tap) to trigger the Improve action without using the toolbar.")
+                TourRow(icon: "slider.horizontal.3", text: "Create custom AI actions in Settings with your own system prompt.")
+            }
 
             Spacer()
         }
@@ -250,26 +299,6 @@ struct OnboardingView: View {
         } catch {
             launchAtLogin = !enable
             loginItemError = "Could not \(enable ? "enable" : "disable") launch at login: \(error.localizedDescription)"
-        }
-    }
-
-    private var tourPage: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            OnboardingHeader(
-                systemImage: "sparkles",
-                title: "How to Use PopGuy",
-                subtitle: "You're all set. Here's a quick reference:"
-            )
-
-            VStack(alignment: .leading, spacing: 8) {
-                TourRow(icon: "selection.pin.in.out", text: "Select text in any app — the toolbar appears automatically near your selection.")
-                TourRow(icon: "wand.and.stars", text: "Tap Improve to rewrite selected text with AI; a diff shows what changed before you apply.")
-                TourRow(icon: "globe", text: "Tap Translate to convert text to your target language.")
-                TourRow(icon: "command", text: "Press Cmd+C+C (double-tap) to trigger the Improve action without using the toolbar.")
-                TourRow(icon: "slider.horizontal.3", text: "Create custom AI actions in Settings with your own system prompt.")
-            }
-
-            Spacer()
         }
     }
 }

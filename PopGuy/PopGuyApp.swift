@@ -237,6 +237,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private func presentOnboarding() {
         let view = OnboardingView(
             axPermission: axPermission,
+            settings: settingsStore,
+            keychain: keychainManager,
             trialState: licenseGate.trialState,
             onOpenSettings: { [weak self] in self?.openSettings() },
             onGetPro: { NSWorkspace.shared.open(ProConfig.checkoutURL) },
@@ -246,6 +248,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let window = NSWindow(contentViewController: hosting)
         window.title = "Welcome to PopGuy"
         window.styleMask = [.titled, .closable]
+        // SwiftUI `.frame` on OnboardingView is 560×560, but NSWindow + ScrollView
+        // often ignores that intrinsic size and keeps a smaller default.
+        window.setContentSize(NSSize(width: 560, height: 560))
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.center()
