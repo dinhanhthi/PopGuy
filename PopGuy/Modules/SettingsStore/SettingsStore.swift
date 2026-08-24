@@ -33,6 +33,8 @@
 //   - localModelDownloadProgress: [String: Double]  — transient, cleared on completion
 //   - activeLocalModelDownloadID: String?  — which model is being downloaded
 //   - localModelDownloadError: String?  — last download error message
+//   - pendingOnboardingLocalMapID: String?  — in-memory; onboarding maps AI
+//     actions to `.mlxLocal` only after this download succeeds
 
 import Foundation
 import Combine
@@ -241,6 +243,12 @@ final class SettingsStore: ObservableObject {
     /// null out a replacement download's `activeLocalModelDownloadID`, progress,
     /// or error.
     private var downloadToken: Int = 0
+
+    /// Catalog id the onboarding flow wants mapped to `.mlxLocal` after a
+    /// successful download. Nil when nothing is pending. Survives the
+    /// onboarding window closing; cleared on cancel, failure, cloud commit,
+    /// or a download of a different model.
+    private(set) var pendingOnboardingLocalMapID: String?
 
     // MARK: - Published properties
 
@@ -1166,6 +1174,39 @@ final class SettingsStore: ObservableObject {
 
     // MARK: - Local model download
 
+    /// Remember that onboarding wants Improve / Shorten / Proofread / Prompt
+    /// pointed at this catalog id after a successful download. In-memory only.
+    func markPendingOnboardingLocalMap(modelID: String) {
+        pendingOnboardingLocalMapID = modelID
+    }
+
+    /// Drop any in-flight onboarding local-map request (cancel, failure, cloud
+    /// commit, or a different download).
+    func clearPendingOnboardingLocalMap() {
+        pendingOnboardingLocalMapID = nil
+    }
+
+    /// Point Improve / Shorten / Proofread / Prompt at `.mlxLocal` + `modelID`.
+    /// Preserves `customPrompt` and `tone`. Does not touch Translate.
+    func pointAIActionsAtLocalModel(_ modelID: String) {
+        for kind in [ActionKind.improve, .shorten, .proofread, .prompt] {
+            let current = config(for: kind)
+            if current.providerKind == .mlxLocal, current.model == modelID {
+                continue
+            }
+            setConfig(
+                ActionConfig(
+                    id: kind,
+                    providerKind: .mlxLocal,
+                    model: modelID,
+                    customPrompt: current.customPrompt,
+                    tone: current.tone
+                ),
+                for: kind
+            )
+        }
+    }
+
     /// Download the model with the given catalog id.
     ///
     /// - Checks capability and Pro gate via `availability(for:isPro:)`; refuses and
@@ -1201,6 +1242,10 @@ final class SettingsStore: ObservableObject {
 
         localModelDownloadError = nil
         activeLocalModelDownloadID = id
+
+        if let pending = pendingOnboardingLocalMapID, pending != id {
+            clearPendingOnboardingLocalMap()
+        }
 
         // Bump the monotonic token. The Task captures `myToken` and guards every
         // state write so a cancelled/superseded Task A's teardown cannot clobber
@@ -1246,6 +1291,12 @@ final class SettingsStore: ObservableObject {
             // Record the model as installed only on a verified successful completion.
             if completedSuccessfully {
                 completedLocalModelIDs.insert(id)
+                if pendingOnboardingLocalMapID == id {
+                    pointAIActionsAtLocalModel(id)
+                    clearPendingOnboardingLocalMap()
+                }
+            } else if pendingOnboardingLocalMapID == id {
+                clearPendingOnboardingLocalMap()
             }
             localModelDownloadProgress.removeValue(forKey: id)
             activeLocalModelDownloadID = nil

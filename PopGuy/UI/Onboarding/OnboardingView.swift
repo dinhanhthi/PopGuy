@@ -5,7 +5,7 @@
 // Steps:
 //   0. Welcome — what PopGuy does (trial-aware).
 //   1. Accessibility permission.
-//   2. Provider setup — placeholder until the functional page lands.
+//   2. Provider setup — Local AI vs Cloud API key chooser.
 //   3. Triggers — placeholder.
 //   4. Actions — placeholder.
 //   5. Finish — launch at login + feature tour.
@@ -41,6 +41,11 @@ struct OnboardingView: View {
     let onFinish: () -> Void
 
     @State private var page: Int = 0
+
+    /// Owned here so Back/Next does not reset Local vs Cloud, and so
+    /// already-installed local-action mapping can run after the provider page
+    /// is off-screen. In-flight download mapping is owned by SettingsStore.
+    @State private var providerMode: ProviderMode = MLXCapability.isSupported ? .local : .cloud
 
     @State private var launchAtLogin = false
     @State private var loginItemError: String? = nil
@@ -105,6 +110,25 @@ struct OnboardingView: View {
             .padding(.vertical, 14)
         }
         .frame(width: 560, height: 560)
+        .task {
+            await settings.refreshInstalledLocalModels()
+            pointAIActionsAtLocalIfReady()
+        }
+        .onChange(of: settings.installedLocalModels) { _ in
+            pointAIActionsAtLocalIfReady()
+        }
+        .onChange(of: providerMode) { newMode in
+            switch newMode {
+            case .cloud:
+                settings.clearPendingOnboardingLocalMap()
+            case .local:
+                if let modelID = freeLocalModelID,
+                   settings.activeLocalModelDownloadID == modelID {
+                    settings.markPendingOnboardingLocalMap(modelID: modelID)
+                }
+            }
+            pointAIActionsAtLocalIfReady()
+        }
     }
 
     /// Label for the footer's primary advance button.
@@ -198,13 +222,14 @@ struct OnboardingView: View {
             OnboardingHeader(
                 systemImage: "key.fill",
                 title: "Set Up a Provider",
-                subtitle: "PopGuy supports OpenAI, Anthropic (Claude), Ollama / LM Studio, DeepL, and Google Translate. Enter an API key for at least one provider to use AI actions."
+                subtitle: "Choose Local AI to run privately on your Mac, or a Cloud API key for the best quality."
             )
 
-            Button("Open Settings\u{2026}") {
-                onOpenSettings()
-            }
-            .buttonStyle(.bordered)
+            OnboardingProviderPage(
+                settings: settings,
+                keychain: keychain,
+                mode: $providerMode
+            )
 
             Spacer()
         }
@@ -300,6 +325,22 @@ struct OnboardingView: View {
             launchAtLogin = !enable
             loginItemError = "Could not \(enable ? "enable" : "disable") launch at login: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Local AI action mapping
+
+    /// Free-tier catalog entry offered in onboarding (`ProConfig.freeLocalModelIDs`).
+    private var freeLocalModelID: String? {
+        LocalModelCatalog.all.first { ProConfig.freeLocalModelIDs.contains($0.id) }?.id
+    }
+
+    /// Point Improve / Shorten / Proofread / Prompt at the free local model.
+    /// Translate is left untouched. No-op unless Local is selected and the model is installed.
+    private func pointAIActionsAtLocalIfReady() {
+        guard providerMode == .local else { return }
+        guard let modelID = freeLocalModelID else { return }
+        guard settings.installedLocalModels.contains(modelID) else { return }
+        settings.pointAIActionsAtLocalModel(modelID)
     }
 }
 
