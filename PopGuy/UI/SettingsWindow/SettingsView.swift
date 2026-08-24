@@ -96,6 +96,7 @@ struct SettingsView: View {
     @ObservedObject var licenseGate: LicenseGate
     @ObservedObject var updater: UpdaterController
     @ObservedObject var screenRecordingPermission: ScreenRecordingPermission
+    let onReplayOnboarding: () -> Void
 
     /// Local mirror of the selected section that `List(selection:)` binds to.
     /// Binding the list directly to the `@Published` `navigator.section` trips
@@ -296,7 +297,7 @@ struct SettingsView: View {
             // `.id(section)` makes every switch a fresh instance — see the type doc.
             DeferredSectionContent {
                 switch section {
-                case .general:     GeneralView(settings: settings)
+                case .general:     GeneralView(settings: settings, onReplayOnboarding: onReplayOnboarding)
                 case .providers:   APIKeysTab(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, onReadMore: { withAnimation(panelAnimation) { showingMemoryInfo = true } })
                 case .actions:     ActionsView(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, navigator: navigator, editingAction: $editingAction, showingLibrary: $showingLibrary)
                 case .history:     HistoryView(history: history, settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
@@ -2370,7 +2371,8 @@ private struct KeyEntryRow: View {
         navigator: SettingsNavigator(),
         licenseGate: LicenseGate(),
         updater: UpdaterController(),
-        screenRecordingPermission: ScreenRecordingPermission()
+        screenRecordingPermission: ScreenRecordingPermission(),
+        onReplayOnboarding: {}
     )
     .frame(width: 740, height: 480)
 }

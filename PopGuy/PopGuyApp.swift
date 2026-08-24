@@ -234,7 +234,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     // MARK: - Onboarding
 
-    private func presentOnboarding() {
+    @objc private func presentOnboarding() {
+        if let existing = onboardingWindow {
+            existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
         let view = OnboardingView(
             axPermission: axPermission,
             settings: settingsStore,
@@ -777,6 +782,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         )
         menu.addItem(aboutItem)
 
+        menu.addItem(NSMenuItem(
+            title: "Setup Guide\u{2026}",
+            action: #selector(presentOnboarding),
+            keyEquivalent: ""
+        ))
+
         menu.addItem(.separator())
 
         // Check for Updates — always present; enabled only when Sparkle allows it.
@@ -898,7 +909,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     @objc private func openSettings() {
         if settingsWindow == nil {
-            let view = SettingsView(settings: settingsStore, keychain: keychainManager, history: historyStore, navigator: settingsNavigator, licenseGate: licenseGate, updater: updater, screenRecordingPermission: screenRecordingPermission)
+            let view = SettingsView(settings: settingsStore, keychain: keychainManager, history: historyStore, navigator: settingsNavigator, licenseGate: licenseGate, updater: updater, screenRecordingPermission: screenRecordingPermission, onReplayOnboarding: { [weak self] in self?.presentOnboarding() })
             let hosting = NSHostingController(rootView: view)
             let window = NSWindow(contentViewController: hosting)
             window.title = "PopGuy Settings"

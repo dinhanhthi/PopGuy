@@ -6,6 +6,7 @@ import SwiftUI
 
 struct GeneralView: View {
     @ObservedObject var settings: SettingsStore
+    let onReplayOnboarding: () -> Void
 
     @State private var launchAtLogin = false
     @State private var loginItemError: String? = nil
@@ -38,6 +39,16 @@ struct GeneralView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Show app icon on the Dock while Settings is open", isOn: $settings.showDockIconWithSettings)
                     Text("Normally PopGuy lives in the menu bar only. Turn this on to also show a Dock icon while the Settings window is open.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Button("Setup Guide\u{2026}") {
+                        onReplayOnboarding()
+                    }
+                    .hoverTooltip("Replay the first-run setup guide")
+                    Text("Opens the first-run walkthrough again. Settings stays open.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

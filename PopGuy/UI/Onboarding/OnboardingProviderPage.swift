@@ -112,12 +112,12 @@ struct OnboardingProviderPage: View {
                     Text(title)
                         .font(.headline)
                     Text(caption)
-                        .font(.subheadline)
+                        .font(.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     if let disabledReason {
                         Text(disabledReason)
-                            .font(.caption)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -168,7 +168,7 @@ struct OnboardingProviderPage: View {
             localModelCard(model)
         } else {
             Text("The free on-device model is unavailable.")
-                .font(.subheadline)
+                .font(.body)
                 .foregroundStyle(.secondary)
         }
     }
@@ -323,7 +323,7 @@ struct OnboardingProviderPage: View {
             }
 
             Text(cloudActionNote)
-                .font(.subheadline)
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -340,7 +340,7 @@ struct OnboardingProviderPage: View {
                 .hoverTooltip("Open \(cloudProvider.displayName) to create an API key")
 
                 Text("Register an account, create a new API key, then paste it below.")
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -379,7 +379,7 @@ struct OnboardingProviderPage: View {
             if cloudHasSavedKey, !cloudDidSave {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("A key is already saved. Paste a new one to replace it.")
-                        .font(.subheadline)
+                        .font(.body)
                         .foregroundStyle(.secondary)
                     if let cloudKeyPreview {
                         Text(cloudKeyPreview)
@@ -410,7 +410,7 @@ struct OnboardingProviderPage: View {
             }
 
             Text("For everyday selections, usage costs only a few cents per month — most users spend under a dollar. You pay the provider directly; PopGuy adds nothing.")
-                .font(.subheadline)
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

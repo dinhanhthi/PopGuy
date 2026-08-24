@@ -94,24 +94,26 @@ struct OnboardingView: View {
 
                 Spacer()
 
-                if page > 0 {
-                    Button("Back") { page -= 1 }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                }
+                HStack(spacing: 20) {
+                    if page > 0 {
+                        Button("Back") { page -= 1 }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.secondary)
+                    }
 
-                if page == 0 {
-                    // Welcome page: trial-aware label, prominent style.
-                    Button(welcomePrimaryLabel) { page += 1 }
-                        .modifier(OnboardingDefaultActionModifier(enabled: !isRecordingChord))
-                        .buttonStyle(.borderedProminent)
-                } else if page < pageCount - 1 {
-                    Button("Next") { page += 1 }
-                        .modifier(OnboardingDefaultActionModifier(enabled: !isRecordingChord))
-                } else {
-                    Button("Get Started") { onFinish() }
-                        .modifier(OnboardingDefaultActionModifier(enabled: !isRecordingChord))
-                        .buttonStyle(.borderedProminent)
+                    if page == 0 {
+                        // Welcome page: trial-aware label, prominent style.
+                        Button(welcomePrimaryLabel) { page += 1 }
+                            .modifier(OnboardingDefaultActionModifier(enabled: !isRecordingChord))
+                            .buttonStyle(.borderedProminent)
+                    } else if page < pageCount - 1 {
+                        Button("Next") { page += 1 }
+                            .modifier(OnboardingDefaultActionModifier(enabled: !isRecordingChord))
+                    } else {
+                        Button("Get Started") { onFinish() }
+                            .modifier(OnboardingDefaultActionModifier(enabled: !isRecordingChord))
+                            .buttonStyle(.borderedProminent)
+                    }
                 }
             }
             .padding(.horizontal, 24)
@@ -174,7 +176,7 @@ struct OnboardingView: View {
                         subtitle: "All Pro features are free for 2 months."
                     )
                     Text("When it ends, your settings revert to the Free limits.")
-                        .font(.subheadline)
+                        .font(.body)
                         .foregroundStyle(.secondary)
                     Spacer()
                 }
@@ -196,7 +198,7 @@ struct OnboardingView: View {
                             .buttonStyle(.bordered)
                             .disabled(true)
                         Text(ProConfig.purchaseComingSoonNote)
-                            .font(.subheadline)
+                            .font(.body)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -224,7 +226,7 @@ struct OnboardingView: View {
                         .font(.subheadline.weight(.medium))
 
                     Text("Click the button below, then enable PopGuy in:\nSystem Settings → Privacy & Security → Accessibility")
-                        .font(.caption)
+                        .font(.body)
                         .foregroundStyle(.secondary)
 
                     Button("Grant Accessibility\u{2026}") {
@@ -267,7 +269,7 @@ struct OnboardingView: View {
             OnboardingTriggersPage(settings: settings, isRecordingChord: $isRecordingChord)
 
             Text("You can change these anytime in Settings → Triggers.")
-                .font(.subheadline)
+                .font(.body)
                 .foregroundStyle(.secondary)
 
             Spacer()
@@ -293,7 +295,7 @@ struct OnboardingView: View {
             OnboardingHeader(
                 systemImage: "sparkles",
                 title: "You're All Set",
-                subtitle: "Launch at login so PopGuy is always ready. You can change anything later in Settings."
+                subtitle: "Launch at login so PopGuy is always ready."
             )
 
             Toggle("Launch PopGuy at login", isOn: $launchAtLogin)
@@ -308,16 +310,24 @@ struct OnboardingView: View {
                     .foregroundStyle(.orange)
             }
 
-            Text("You can change this later in Settings → General.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
             VStack(alignment: .leading, spacing: 8) {
-                TourRow(icon: "selection.pin.in.out", text: "Select text in any app — the toolbar appears automatically near your selection.")
+                TourRow(icon: "selection.pin.in.out", text: "Select text and press Cmd+C+C, or turn on Show on text selection in Settings.")
                 TourRow(icon: "wand.and.stars", text: "Tap Improve to rewrite selected text with AI; a diff shows what changed before you apply.")
                 TourRow(icon: "globe", text: "Tap Translate to convert text to your target language.")
-                TourRow(icon: "command", text: "Press Cmd+C+C (double-tap) to trigger the Improve action without using the toolbar.")
+                TourRow(icon: "command", text: "Press Cmd+C+C (double-tap) on selected text to show the toolbar.")
                 TourRow(icon: "slider.horizontal.3", text: "Create custom AI actions in Settings with your own system prompt.")
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("You can change everything — providers, shortcuts, actions, and more — anytime in Settings.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button("Open Settings\u{2026}") {
+                    onOpenSettings()
+                }
+                .buttonStyle(.bordered)
             }
 
             Spacer()
@@ -356,8 +366,12 @@ struct OnboardingView: View {
     }
 
     /// Point Improve / Shorten / Proofread / Prompt at the free local model.
-    /// Translate is left untouched. No-op unless Local is selected and the model is installed.
+    /// Translate is left untouched. No-op unless first-launch (`!hasOnboarded`),
+    /// Local is selected, and the model is installed. Re-opening Setup Guide
+    /// must not remap Cloud actions. Download-this-session mapping uses
+    /// `pendingOnboardingLocalMapID` in SettingsStore instead.
     private func pointAIActionsAtLocalIfReady() {
+        guard !settings.hasOnboarded else { return }
         guard providerMode == .local else { return }
         guard let modelID = freeLocalModelID else { return }
         guard settings.installedLocalModels.contains(modelID) else { return }
@@ -384,7 +398,7 @@ private struct OnboardingHeader: View {
                 Text(title)
                     .font(.title3.weight(.semibold))
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -433,7 +447,7 @@ private struct OnboardingTriggersPage: View {
                 .font(.subheadline)
 
             Text("Press Cmd+C twice quickly on selected text to show the toolbar.")
-                .font(.subheadline)
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -449,7 +463,7 @@ private struct OnboardingTriggersPage: View {
             .disabled(!settings.triggerChordEnabled)
 
             Text("You can pick a different shortcut instead of Cmd+C+C (for example ⌘⇧Space).")
-                .font(.caption)
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -510,7 +524,7 @@ private struct OnboardingTriggersPage: View {
                 .font(.subheadline)
 
             Text("Shows the toolbar the moment you select text. That can feel busy, so it's off by default.")
-                .font(.subheadline)
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -521,7 +535,7 @@ private struct OnboardingTriggersPage: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .font(.caption)
+            .font(.body)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -575,30 +589,36 @@ private struct OnboardingActionsPage: View {
             Text(isPro
                  ? "You can enable all of these. You can change this later in Settings → Actions."
                  : "Free accounts can keep up to \(ProConfig.freeMaxActiveActions) actions active. You can change this later in Settings → Actions.")
-                .font(.subheadline)
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Self.builtins) { item in
-                    Toggle(isOn: enabledBinding(for: item.identifier)) {
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: item.icon)
-                                .font(.system(size: 16))
-                                .foregroundStyle(.tint)
-                                .frame(width: 24)
+                    HStack(alignment: .center, spacing: 12) {
+                        Image(systemName: item.icon)
+                            .font(.system(size: 18))
+                            .foregroundStyle(.tint)
+                            .frame(width: 24)
+                            .accessibilityHidden(true)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.title)
-                                    .font(.subheadline)
-                                Text(item.description)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.title)
+                                .font(.body.weight(.medium))
+                            Text(item.description)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
+                        .accessibilityHidden(true)
+
+                        Spacer(minLength: 8)
+
+                        Toggle(item.title, isOn: enabledBinding(for: item.identifier))
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
                     }
-                    .toggleStyle(.switch)
                 }
             }
             .padding(12)
@@ -614,7 +634,7 @@ private struct OnboardingActionsPage: View {
 
             if let capLimitNote {
                 Text(capLimitNote)
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -679,7 +699,7 @@ private struct TourRow: View {
                 .frame(width: 18)
                 .foregroundStyle(.secondary)
             Text(text)
-                .font(.subheadline)
+                .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
