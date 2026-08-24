@@ -6,8 +6,8 @@
 //   0. Welcome — what PopGuy does (trial-aware).
 //   1. Accessibility permission.
 //   2. Provider setup — Local AI vs Cloud API key chooser.
-//   3. Triggers — placeholder.
-//   4. Actions — placeholder.
+//   3. Triggers — Cmd+C+C chord + optional replacement + show-on-select.
+//   4. Actions — pick built-in toolbar actions (free-tier cap).
 //   5. Finish — launch at login + feature tour.
 //
 // Isolation: @MainActor — all UI.
@@ -26,6 +26,8 @@ import SwiftUI
 ///   - `keychain`: the shared `KeychainManager` (API keys stay in Keychain only).
 ///   - `trialState`: the current trial state computed by `LicenseGate.bootstrapTrial()` before
 ///     onboarding is shown. Determines which welcome-page variant is rendered.
+///   - `isPro`: `LicenseGate.entitlements.isPro` (true for Pro and an active trial).
+///     Used only to gate the free active-action cap on the Choose Actions page.
 ///   - `onOpenSettings`: closure that opens the existing Settings window.
 ///   - `onGetPro`: closure that opens the checkout URL (trial-ineligible variant only).
 ///   - `onFinish`: closure called when the user taps "Get Started" (or the window closes).
@@ -36,6 +38,7 @@ struct OnboardingView: View {
     @ObservedObject var settings: SettingsStore
     let keychain: KeychainManager
     let trialState: TrialState
+    let isPro: Bool
     let onOpenSettings: () -> Void
     let onGetPro: () -> Void
     let onFinish: () -> Void
@@ -49,6 +52,11 @@ struct OnboardingView: View {
 
     @State private var launchAtLogin = false
     @State private var loginItemError: String? = nil
+
+    /// Lifted so the footer can drop `.keyboardShortcut(.defaultAction)` while
+    /// the Triggers page is recording a chord replacement (bare Return would
+    /// otherwise fire Next and skip the page).
+    @State private var isRecordingChord = false
 
     private let pageCount = 6
 
@@ -95,19 +103,32 @@ struct OnboardingView: View {
                 if page == 0 {
                     // Welcome page: trial-aware label, prominent style.
                     Button(welcomePrimaryLabel) { page += 1 }
-                        .keyboardShortcut(.defaultAction)
+                        .modifier(OnboardingDefaultActionModifier(enabled: !isRecordingChord))
                         .buttonStyle(.borderedProminent)
                 } else if page < pageCount - 1 {
                     Button("Next") { page += 1 }
-                        .keyboardShortcut(.defaultAction)
+                        .modifier(OnboardingDefaultActionModifier(enabled: !isRecordingChord))
                 } else {
                     Button("Get Started") { onFinish() }
-                        .keyboardShortcut(.defaultAction)
+                        .modifier(OnboardingDefaultActionModifier(enabled: !isRecordingChord))
                         .buttonStyle(.borderedProminent)
                 }
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 14)
+            // While recording, Return/Enter cancels instead of advancing.
+            // Hidden so it does not steal layout; `.defaultAction` still fires.
+            .background {
+                if isRecordingChord {
+                    Button("Cancel recording") {
+                        isRecordingChord = false
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .opacity(0)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
+            }
         }
         .frame(width: 560, height: 560)
         .task {
@@ -243,6 +264,8 @@ struct OnboardingView: View {
                 subtitle: "Trigger PopGuy with Cmd+C+C, or show the toolbar when you select text."
             )
 
+            OnboardingTriggersPage(settings: settings, isRecordingChord: $isRecordingChord)
+
             Text("You can change these anytime in Settings → Triggers.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -259,9 +282,7 @@ struct OnboardingView: View {
                 subtitle: "Pick which actions appear on the toolbar."
             )
 
-            Text("Free accounts can keep up to five actions active. You can change this later in Settings → Actions.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            OnboardingActionsPage(settings: settings, isPro: isPro)
 
             Spacer()
         }
@@ -367,6 +388,282 @@ private struct OnboardingHeader: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+}
+
+/// Applies Return/Enter as the window default action, unless a chord
+/// replacement is being recorded (bare Return must not fire Next).
+private struct OnboardingDefaultActionModifier: ViewModifier {
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.keyboardShortcut(.defaultAction)
+        } else {
+            content
+        }
+    }
+}
+
+@MainActor
+private struct OnboardingTriggersPage: View {
+    @ObservedObject var settings: SettingsStore
+
+    /// Whether the chord-replacement recorder is active. Owned by `OnboardingView`
+    /// so the footer can disable `.keyboardShortcut(.defaultAction)` while recording.
+    @Binding var isRecordingChord: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            chordCard
+            selectCard
+        }
+        .onChange(of: settings.triggerChordEnabled) { enabled in
+            if !enabled { isRecordingChord = false }
+        }
+        .onDisappear {
+            isRecordingChord = false
+        }
+    }
+
+    private var chordCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle("Show toolbar with Cmd+C+C", isOn: $settings.triggerChordEnabled)
+                .font(.subheadline)
+
+            Text("Press Cmd+C twice quickly on selected text to show the toolbar.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack {
+                Text("Use a different shortcut")
+                    .font(.subheadline)
+                    .foregroundStyle(settings.triggerChordEnabled ? .primary : .secondary)
+
+                Spacer()
+
+                chordShortcutEditor
+            }
+            .disabled(!settings.triggerChordEnabled)
+
+            Text("You can pick a different shortcut instead of Cmd+C+C (for example ⌘⇧Space).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+        )
+    }
+
+    @ViewBuilder
+    private var chordShortcutEditor: some View {
+        if isRecordingChord {
+            ShortcutRecorder(
+                onCapture: { shortcut in
+                    settings.chordReplacementShortcut = shortcut
+                    isRecordingChord = false
+                },
+                onCancel: {
+                    isRecordingChord = false
+                }
+            )
+        } else {
+            if let shortcut = settings.chordReplacementShortcut {
+                ShortcutBadge(text: shortcut.displayString)
+
+                Button {
+                    settings.chordReplacementShortcut = nil
+                } label: {
+                    Image(systemName: "xmark.circle")
+                }
+                .buttonStyle(.borderless)
+                .hoverTooltip("Clear — revert to Cmd+C+C")
+                .disabled(!settings.triggerChordEnabled)
+            } else {
+                ShortcutBadge(text: "⌘C+C")
+            }
+
+            Button {
+                isRecordingChord = true
+            } label: {
+                Image(systemName: "record.circle")
+            }
+            .buttonStyle(.borderless)
+            .hoverTooltip("Record a replacement shortcut (e.g. ⌘⇧Space)")
+            .disabled(!settings.triggerChordEnabled)
+        }
+    }
+
+    private var selectCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle("Show toolbar when text is selected", isOn: $settings.triggerOnSelectEnabled)
+                .font(.subheadline)
+
+            Text("Shows the toolbar the moment you select text. That can feel busy, so it's off by default.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text("May not work well in some editors (for example Cursor, VS Code, or Notion). Use Cmd+C+C there instead.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(.caption)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Choose actions
+
+private struct OnboardingBuiltinAction: Identifiable {
+    var id: ActionIdentifier { identifier }
+    let identifier: ActionIdentifier
+    let icon: String
+    let title: String
+    let description: String
+}
+
+@MainActor
+private struct OnboardingActionsPage: View {
+    @ObservedObject var settings: SettingsStore
+    let isPro: Bool
+
+    @State private var capLimitNote: String?
+
+    private static let builtins: [OnboardingBuiltinAction] = [
+        .init(identifier: .builtin(.improve), icon: "wand.and.stars", title: "Improve",
+              description: "Fix grammar and improve clarity"),
+        .init(identifier: .builtin(.shorten), icon: "text.badge.minus", title: "Shorten",
+              description: "Make the text more concise"),
+        .init(identifier: .builtin(.proofread), icon: "checkmark.bubble", title: "Proofread",
+              description: "Fix spelling and grammar"),
+        .init(identifier: .builtin(.translate), icon: "character.bubble", title: "Translate",
+              description: "Translate into your chosen language"),
+        .init(identifier: .builtin(.prompt), icon: "bubble.and.pencil", title: "Prompt",
+              description: "Type a one-off prompt for the selected text"),
+        .init(identifier: .speak, icon: "speaker.wave.2", title: "Speak",
+              description: "Speak the selected text"),
+        .init(identifier: .dictionary, icon: "character.book.closed", title: "Dictionary",
+              description: "Look up the selected word"),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(isPro
+                 ? "You can enable all of these. You can change this later in Settings → Actions."
+                 : "Free accounts can keep up to \(ProConfig.freeMaxActiveActions) actions active. You can change this later in Settings → Actions.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Self.builtins) { item in
+                    Toggle(isOn: enabledBinding(for: item.identifier)) {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: item.icon)
+                                .font(.system(size: 16))
+                                .foregroundStyle(.tint)
+                                .frame(width: 24)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.title)
+                                    .font(.subheadline)
+                                Text(item.description)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .toggleStyle(.switch)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.primary.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+            )
+
+            if let capLimitNote {
+                Text(capLimitNote)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func enabledBinding(for id: ActionIdentifier) -> Binding<Bool> {
+        Binding(
+            get: { settings.isEnabled(id) },
+            set: { setEnabled(id, $0) }
+        )
+    }
+
+    /// Persist the toggle. Turning off is always allowed. Turning on is rejected
+    /// for free users already at `ProConfig.freeMaxActiveActions`.
+    ///
+    /// `setPrincipal` is best-effort after a successful enable — a false return
+    /// means the principal row is full, not the free cap.
+    private func setEnabled(_ id: ActionIdentifier, _ enabled: Bool) {
+        if enabled {
+            if !settings.isEnabled(id),
+               !isPro,
+               settings.enabledToolbarActionCount >= ProConfig.freeMaxActiveActions {
+                capLimitNote = "Free plan shows up to \(ProConfig.freeMaxActiveActions) actions — turn one off first, or upgrade to Pro"
+                return
+            }
+            writeEnabled(id, true)
+            settings.setPrincipal(id, true)
+            capLimitNote = nil
+        } else {
+            writeEnabled(id, false)
+            capLimitNote = nil
+        }
+    }
+
+    private func writeEnabled(_ id: ActionIdentifier, _ enabled: Bool) {
+        switch id {
+        case .builtin(.improve):   settings.improveEnabled = enabled
+        case .builtin(.shorten):   settings.shortenEnabled = enabled
+        case .builtin(.proofread): settings.proofreadEnabled = enabled
+        case .builtin(.translate): settings.translateEnabled = enabled
+        case .builtin(.prompt):    settings.promptEnabled = enabled
+        case .speak:               settings.speakEnabled = enabled
+        case .dictionary:
+            var config = settings.dictionaryConfig
+            config.isEnabled = enabled
+            settings.dictionaryConfig = config
+        case .custom:
+            break
         }
     }
 }

@@ -240,6 +240,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             settings: settingsStore,
             keychain: keychainManager,
             trialState: licenseGate.trialState,
+            isPro: licenseGate.entitlements.isPro,
             onOpenSettings: { [weak self] in self?.openSettings() },
             onGetPro: { NSWorkspace.shared.open(ProConfig.checkoutURL) },
             onFinish: { [weak self] in self?.onboardingWindow?.close() }
