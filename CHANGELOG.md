@@ -13,6 +13,13 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [0.5.3] - 2026-08-25
+
+### Added
+
+- A first-run setup guide that walks through Accessibility permission, provider setup (Local AI or Cloud API key), trigger configuration (Cmd+C+C chord and show-on-select), and which toolbar actions to enable.
+- "Setup Guide…" item in the menu bar and in Settings → General to reopen the first-run walkthrough anytime.
+
 ## [0.5.2] - 2026-07-20
 
 ### Fixed

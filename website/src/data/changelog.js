@@ -1,9 +1,19 @@
 export const releases = [
   {
+    version: "0.5.3",
+    date: "August 2026",
+    title: "First-run setup guide.",
+    latest: true,
+    items: [
+      "Guided first-run setup flow",
+      "Configure provider, triggers, and actions on first launch",
+      "Replay setup guide from Settings or menu bar"
+    ]
+  },
+  {
     version: "0.5.2",
     date: "July 2026",
     title: "Checkout link fix.",
-    latest: true,
     items: [
       "Fixed Pro purchase checkout link"
     ]
