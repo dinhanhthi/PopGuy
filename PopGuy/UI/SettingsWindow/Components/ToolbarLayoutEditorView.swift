@@ -357,8 +357,8 @@ struct ToolbarLayoutEditorView: View {
         }
 
         rejectionMessage = session.targetPrincipal
-            ? "Toolbar row is full (\(ProConfig.maxPrincipalActions)/\(ProConfig.maxPrincipalActions)). Free a slot first."
-            : "More menu is full (\(ProConfig.maxBurgerActions)/\(ProConfig.maxBurgerActions)). Free a slot first."
+            ? "Toolbar row is full (\(ToolbarLimits.maxPrincipalActions)/\(ToolbarLimits.maxPrincipalActions)). Free a slot first."
+            : "More menu is full (\(ToolbarLimits.maxBurgerActions)/\(ToolbarLimits.maxBurgerActions)). Free a slot first."
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)

@@ -44,19 +44,14 @@ if [[ -n "$APP" ]]; then
   echo "==> Using existing app: $APP"
   [[ -d "$APP" ]] || { echo "error: $APP not found" >&2; exit 1; }
 else
-  echo "==> Archiving $SCHEME (Release, unsigned, DEV_MOCK_PRO)..."
+  echo "==> Archiving $SCHEME (Release, unsigned)..."
   # CODE_SIGNING_ALLOWED=NO: archive without Apple signing so this never
   # depends on the Apple Development cert / personal-team provisioning
   # (which expires after ~7 days). We apply our own signature in step 3.
-  #
-  # SWIFT_ACTIVE_COMPILATION_CONDITIONS += DEV_MOCK_PRO: compiles in the mock
-  # license validator so testers unlock Pro with any key. This flag is set ONLY
-  # here — never in the project — so official Release builds stay license-gated.
   rm -rf "$ARCHIVE"
   xcodebuild -scheme "$SCHEME" -configuration Release \
     -archivePath "$ARCHIVE" \
     CODE_SIGNING_ALLOWED=NO \
-    SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) DEV_MOCK_PRO' \
     archive >/dev/null
   APP="$DIST/PopGuy.app"
   rm -rf "$APP"

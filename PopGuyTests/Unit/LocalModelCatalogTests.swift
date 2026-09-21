@@ -10,24 +10,6 @@ import Testing
 @Suite("LocalModelCatalog")
 struct LocalModelCatalogTests {
 
-    // MARK: - Free-tier (via ProConfig — single source of truth)
-
-    @Test("exactly one model is free per ProConfig")
-    func exactlyOneFreeTierModel() {
-        let freeTier = LocalModelCatalog.all.filter { ProConfig.isLocalModelFree($0.id) }
-        #expect(freeTier.count == 1)
-        #expect(freeTier.first?.id == "gemma-4-e2b",
-                "Expected gemma-4-e2b to be the free model; ProConfig.freeLocalModelIDs = \(ProConfig.freeLocalModelIDs)")
-    }
-
-    @Test("isFreeTier property delegates to ProConfig")
-    func isFreeTierDelegatesToProConfig() {
-        for model in LocalModelCatalog.all {
-            #expect(model.isFreeTier == ProConfig.isLocalModelFree(model.id),
-                    "isFreeTier mismatch for \(model.id)")
-        }
-    }
-
     // MARK: - Unique ids
 
     @Test("all model ids are unique")

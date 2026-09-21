@@ -6,6 +6,7 @@
 // action has already been dispatched) from resetting the view model and
 // repositioning the panel. A genuinely different selection still re-shows.
 
+import Foundation
 import Testing
 @testable import PopGuy
 
@@ -45,41 +46,60 @@ struct ReentrantSelectionGuardTests {
     }
 }
 
-// MARK: - effectiveIgnoredApps tests
+// MARK: - ignored apps — full list (no prefix cap)
 
-@Suite("effectiveIgnoredApps")
-struct EffectiveIgnoredAppsTests {
+@Suite("ignored apps — full list")
+@MainActor
+struct IgnoredAppsIdentityTests {
 
-    private let apps = ["com.a", "com.b", "com.c", "com.d", "com.e"]
-
-    @Test("Pro returns the full list regardless of maxAllowed")
-    func proReturnsAll() {
-        let result = effectiveIgnoredApps(apps, maxAllowed: 2, isPro: true)
-        #expect(result == apps)
+    private func makeSuite() -> (UserDefaults, String) {
+        let name = "com.popguy.test.ignoredapps.\(UUID().uuidString)"
+        return (UserDefaults(suiteName: name)!, name)
     }
 
-    @Test("non-Pro caps to the first maxAllowed by insertion order")
-    func nonProCapsToPrefix() {
-        let result = effectiveIgnoredApps(apps, maxAllowed: 3, isPro: false)
-        #expect(result == ["com.a", "com.b", "com.c"])
+    private func removeSuite(_ name: String) {
+        UserDefaults.standard.removePersistentDomain(forName: name)
     }
 
-    @Test("non-Pro with count below cap returns all")
-    func nonProBelowCapReturnsAll() {
-        let short = ["com.x", "com.y"]
-        let result = effectiveIgnoredApps(short, maxAllowed: 8, isPro: false)
-        #expect(result == short)
+    @Test("isIgnored matches every stored bundle id — no prefix cap")
+    func fullListUsed() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        let apps = ["com.a", "com.b", "com.c", "com.d", "com.e"]
+        for id in apps { store.addIgnoredApp(bundleID: id) }
+
+        #expect(store.ignoredAppBundleIDs == apps)
+        for id in apps {
+            #expect(store.isIgnored(bundleID: id))
+        }
     }
 
-    @Test("empty list is safe for both Pro and non-Pro")
+    @Test("empty list ignores no bundle")
     func emptyListIsSafe() {
-        #expect(effectiveIgnoredApps([], maxAllowed: 5, isPro: true) == [])
-        #expect(effectiveIgnoredApps([], maxAllowed: 5, isPro: false) == [])
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        #expect(store.ignoredAppBundleIDs.isEmpty)
+        #expect(store.isIgnored(bundleID: "com.a") == false)
     }
 
-    @Test("non-Pro maxAllowed=0 returns empty")
-    func zeroCap() {
-        let result = effectiveIgnoredApps(apps, maxAllowed: 0, isPro: false)
-        #expect(result.isEmpty)
+    @Test("list identity is preserved after add and remove")
+    func addRemoveIdentity() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        store.addIgnoredApp(bundleID: "com.a")
+        store.addIgnoredApp(bundleID: "com.b")
+        store.addIgnoredApp(bundleID: "com.c")
+        store.removeIgnoredApp(bundleID: "com.b")
+
+        #expect(store.ignoredAppBundleIDs == ["com.a", "com.c"])
+        #expect(store.isIgnored(bundleID: "com.a"))
+        #expect(store.isIgnored(bundleID: "com.b") == false)
+        #expect(store.isIgnored(bundleID: "com.c"))
     }
 }

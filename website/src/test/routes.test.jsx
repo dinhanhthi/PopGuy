@@ -44,15 +44,19 @@ describe("website routes", () => {
     ]);
   });
 
-  it("presents Pro as an optional $10 one-time upgrade on the home page", () => {
+  it("presents Download on the home page without a Pro checkout", () => {
     render(
       <MemoryRouter initialEntries={["/"]}>
         <AppRoutes />
       </MemoryRouter>
     );
 
-    expect(screen.getByText("$10", { exact: true })).toBeInTheDocument();
-    expect(screen.getByText("Optional upgrade")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Download$/ })).toBeInTheDocument();
+    expect(
+      screen.queryByText(["Get", "Pro"].join(" "))
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("$10")).not.toBeInTheDocument();
+    expect(screen.queryByText("Optional upgrade")).not.toBeInTheDocument();
   });
 
   it("identifies PopGuy as open source under AGPLv3 on the home page", () => {

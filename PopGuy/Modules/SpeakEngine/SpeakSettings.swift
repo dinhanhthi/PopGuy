@@ -307,9 +307,8 @@ nonisolated struct SpeakSettings: Sendable, Codable, Equatable {
     /// `.system` when `cloudAllowed` is `false`. When `cloudAllowed` is `true`,
     /// returns `self` unchanged.
     ///
-    /// This is the single authoritative gate consumed by every speak entry point
-    /// so that a user who downgrades (or the public build with a planted engine
-    /// value) never silently routes audio to a locked cloud provider.
+    /// This is the single authoritative gate consumed by every speak entry point.
+    /// Production always passes `cloudAllowed: true`; API keys are still required.
     nonisolated func resolvingCloudGate(cloudAllowed: Bool) -> SpeakSettings {
         guard !cloudAllowed else { return self }
         if case .cloud = selectedEngine {

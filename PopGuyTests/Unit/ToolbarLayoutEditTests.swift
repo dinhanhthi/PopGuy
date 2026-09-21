@@ -64,7 +64,7 @@ struct ToolbarLayoutEditTests {
         store.promptEnabled = true
         _ = store.setPrincipal(.builtin(.prompt), true)
         store.dictionaryConfig.isEnabled = true
-        #expect(store.principalActionCount == ProConfig.maxPrincipalActions)
+        #expect(store.principalActionCount == ToolbarLimits.maxPrincipalActions)
 
         #expect(!store.moveAction(.dictionary, toZone: true, atIndex: 0))
         #expect(!store.isPrincipal(.dictionary))

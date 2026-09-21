@@ -16,8 +16,6 @@ import AppKit
 struct HistoryView: View {
     @ObservedObject var history: HistoryStore
     @ObservedObject var settings: SettingsStore
-    @ObservedObject var licenseGate: LicenseGate
-    var onUpgrade: () -> Void = {}
 
     /// IDs of rows currently expanded to show input/output detail.
     @State private var expandedIDs: Set<UUID> = []
@@ -51,7 +49,7 @@ struct HistoryView: View {
                        pinnedViews: [.sectionHeaders]) {
                 settingsCard
 
-                if cappedRecords.isEmpty {
+                if history.records.isEmpty {
                     emptyState
                 } else {
                     Section {
@@ -95,28 +93,16 @@ struct HistoryView: View {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Whether full-text search is available for this tier.
-    private var searchAllowed: Bool { licenseGate.entitlements.historySearchAllowed }
-
-    /// Records capped to the tier's retention limit (view-layer only — store is never trimmed).
-    private var cappedRecords: [HistoryRecord] {
-        let cap = licenseGate.entitlements.maxHistoryRetained
-        return Array(history.records.prefix(cap))
-    }
-
-    /// Distinct action names present in the capped records, sorted for the filter menu.
+    /// Distinct action names present in the records, sorted for the filter menu.
     private var availableActions: [String] {
-        Array(Set(cappedRecords.map(\.actionName))).sorted()
+        Array(Set(history.records.map(\.actionName))).sorted()
     }
 
     /// Records narrowed by the action filter and a fuzzy search query that
     /// matches against the input and output text.
     private var filteredRecords: [HistoryRecord] {
-        // Search is Pro-only — ignore the query when not allowed.
-        let query = searchAllowed
-            ? searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            : ""
-        return cappedRecords.filter { record in
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return history.records.filter { record in
             if let actionFilter, record.actionName != actionFilter { return false }
             if !query.isEmpty {
                 return Self.fuzzyMatches(query, in: record.input)
@@ -143,60 +129,35 @@ struct HistoryView: View {
     private var filterBar: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                if searchAllowed {
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.secondary)
-                        TextField("Search input & output", text: $searchText)
-                            .textFieldStyle(.plain)
-                        if !searchText.isEmpty {
-                            Button {
-                                searchText = ""
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.borderless)
-                            .hoverTooltip("Clear search")
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Search input & output", text: $searchText)
+                        .textFieldStyle(.plain)
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
                         }
+                        .buttonStyle(.borderless)
+                        .hoverTooltip("Clear search")
                     }
-                    .padding(.leading, 10)
-                    .padding(.trailing, 4)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.primary.opacity(0.05))
-                    )
-                } else {
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.tertiary)
-                        Text("Search input & output")
-                            .foregroundStyle(.tertiary)
-                        ProBadge()
-                    }
-                    .padding(.leading, 10)
-                    .padding(.trailing, 4)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.primary.opacity(0.03))
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .padding(.leading, 10)
+                .padding(.trailing, 4)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.primary.opacity(0.05))
+                )
 
                 SettingsInlinePickerMenu(
                     selection: $actionFilter,
                     displayTitle: actionFilter ?? "All actions",
                     options: [(.none, "All actions")]
                         + availableActions.map { (Optional.some($0), $0) }
-                )
-            }
-
-            if !searchAllowed {
-                UpgradePromptView(
-                    message: "History search requires a Pro plan. Upgrade to search across all recorded actions.",
-                    onUpgrade: onUpgrade
                 )
             }
         }
@@ -249,12 +210,8 @@ struct HistoryView: View {
     private var settingsCard: some View {
         SettingsCard(title: "History", accessory: {
             HStack(spacing: 8) {
-                let shown = cappedRecords.count
-                let total = history.records.count
-                let countText = licenseGate.entitlements.isPro || shown == total
-                    ? "\(shown) record\(shown == 1 ? "" : "s")"
-                    : "\(shown) of \(total) record\(total == 1 ? "" : "s")"
-                Text(countText)
+                let shown = history.records.count
+                Text("\(shown) record\(shown == 1 ? "" : "s")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -518,8 +475,7 @@ private struct HistoryRow: View {
         history: store,
         settings: SettingsStore(
             defaults: UserDefaults(suiteName: "preview.PopGuy.HistoryView") ?? .standard
-        ),
-        licenseGate: LicenseGate()
+        )
     )
     .frame(width: 740, height: 520)
 }

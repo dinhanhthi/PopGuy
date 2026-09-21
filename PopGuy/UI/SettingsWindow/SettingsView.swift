@@ -54,7 +54,6 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     case triggers
     case appearance
     case ignoredApps
-    case license
     case about
 
     var id: String { rawValue }
@@ -68,7 +67,6 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         case .triggers:    return "Triggers"
         case .appearance:  return "Appearance"
         case .ignoredApps: return "Ignore"
-        case .license:     return "License"
         case .about:       return "About"
         }
     }
@@ -82,7 +80,6 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         case .triggers:    return "cursorarrow.rays"
         case .appearance:  return "paintbrush"
         case .ignoredApps: return "app.badge"
-        case .license:     return "checkmark.seal"
         case .about:       return "info.circle"
         }
     }
@@ -93,7 +90,6 @@ struct SettingsView: View {
     let keychain: KeychainManager
     let history: HistoryStore
     @ObservedObject var navigator: SettingsNavigator
-    @ObservedObject var licenseGate: LicenseGate
     @ObservedObject var updater: UpdaterController
     @ObservedObject var screenRecordingPermission: ScreenRecordingPermission
     let onReplayOnboarding: () -> Void
@@ -176,7 +172,7 @@ struct SettingsView: View {
             }
             .frame(maxHeight: .infinity)
 
-            SettingsFooter(updater: updater, licenseGate: licenseGate)
+            SettingsFooter(updater: updater)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Track the window width so the slide-over panel can size itself to 2/3.
@@ -210,8 +206,6 @@ struct SettingsView: View {
                         action: action,
                         settings: settings,
                         keychain: keychain,
-                        licenseGate: licenseGate,
-                        onUpgrade: { navigator.section = .license },
                         onSave: { saved in
                             let clamped: Bool
                             if settings.customActions.contains(where: { $0.id == saved.id }) {
@@ -230,9 +224,8 @@ struct SettingsView: View {
             }
 
             // Action Library gallery — slides in from the right edge as a 2/3-width
-            // slide-over, matching the Add/Edit Action panel. Browsing is free;
-            // install routes through sanitizeImported → addCustomAction and counts
-            // toward maxCustomActions (the gallery disables Install at the limit).
+            // slide-over, matching the Add/Edit Action panel. Install routes
+            // through sanitizeImported → addCustomAction.
             SlideOverPanel(
                 isPresented: showingLibrary,
                 containerWidth: containerWidth,
@@ -241,14 +234,14 @@ struct SettingsView: View {
                 onDismiss: { showingLibrary = false }
             ) {
                 ActionLibraryView(
-                    canInstall: settings.customActions.count < licenseGate.entitlements.maxCustomActions,
+                    canInstall: true,
                     isInstalled: { preset in
                         ActionLibrary.isInstalled(preset, in: settings.customActions)
                     },
                     onInstall: { preset in
                         guard let sanitized = CustomAction.sanitizeImported(
                             preset.make(),
-                            cloudAllowed: licenseGate.entitlements.cloudTTSPremiumAllowed
+                            cloudAllowed: true
                         ) else {
                             assertionFailure("sanitizeImported returned nil for library preset '\(preset.id)' — the preset violates the import contract")
                             Self.galleryLog.warning("sanitizeImported returned nil for library preset '\(preset.id, privacy: .public)' — preset skipped")
@@ -281,7 +274,7 @@ struct SettingsView: View {
         .alert("Toolbar Limit Reached", isPresented: $showSaveLimitAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("PopGuy supports at most \(SettingsStore.maxToolbarActions) enabled actions (\(ProConfig.maxPrincipalActions) on the toolbar and \(ProConfig.maxBurgerActions) in the More menu). Turn off another action first.")
+            Text("PopGuy supports at most \(SettingsStore.maxToolbarActions) enabled actions (\(ToolbarLimits.maxPrincipalActions) on the toolbar and \(ToolbarLimits.maxBurgerActions) in the More menu). Turn off another action first.")
         }
     }
 
@@ -290,7 +283,6 @@ struct SettingsView: View {
         let section = section ?? .general
         // Each tab gets a fixed header pinned to the top; its own ScrollView /
         // Form scrolls in the area below the header divider.
-        let navigateToLicense = { navigator.section = .license }
         SettingsTabScaffold(title: section.title, systemImage: section.systemImage) {
             // Build the (heavy) tab content one runloop turn after a loading
             // placeholder paints, so the panel responds to the tab click instantly.
@@ -298,13 +290,12 @@ struct SettingsView: View {
             DeferredSectionContent {
                 switch section {
                 case .general:     GeneralView(settings: settings, onReplayOnboarding: onReplayOnboarding)
-                case .providers:   APIKeysTab(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, onReadMore: { withAnimation(panelAnimation) { showingMemoryInfo = true } })
-                case .actions:     ActionsView(settings: settings, keychain: keychain, licenseGate: licenseGate, onUpgrade: navigateToLicense, navigator: navigator, editingAction: $editingAction, showingLibrary: $showingLibrary)
-                case .history:     HistoryView(history: history, settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
-                case .triggers:    TriggersView(settings: settings, licenseGate: licenseGate, screenRecordingPermission: screenRecordingPermission, navigator: navigator, onUpgrade: navigateToLicense)
+                case .providers:   APIKeysTab(settings: settings, keychain: keychain, onReadMore: { withAnimation(panelAnimation) { showingMemoryInfo = true } })
+                case .actions:     ActionsView(settings: settings, keychain: keychain, navigator: navigator, editingAction: $editingAction, showingLibrary: $showingLibrary)
+                case .history:     HistoryView(history: history, settings: settings)
+                case .triggers:    TriggersView(settings: settings, screenRecordingPermission: screenRecordingPermission, navigator: navigator)
                 case .appearance:  AppearanceView(settings: settings)
-                case .ignoredApps: AppsView(settings: settings, licenseGate: licenseGate, onUpgrade: navigateToLicense)
-                case .license:     LicenseView(licenseGate: licenseGate)
+                case .ignoredApps: AppsView(settings: settings)
                 case .about:       AboutView(updater: updater)
                 }
             }
@@ -365,49 +356,10 @@ func formatVersionLabel(version: String, build: String?) -> String {
     return "PopGuy v\(version)"
 }
 
-/// Formats a trial end date as `dd-MMM-yyyy` with English month abbreviations,
-/// rendered in the given timezone (defaults to the user's local timezone).
-///
-/// Extracted as a free function so it is unit-testable without touching SwiftUI
-/// views, and shared by the footer suffix and the License view date display.
-///
-/// `endDate` carries the user's first-launch time-of-day (it is NOT a
-/// midnight-UTC boundary), so the displayed calendar day is rendered in the
-/// user's local timezone to match when the trial actually ends for them.
-///
-/// - Parameters:
-///   - endDate:  The trial end date, as computed by `TrialPolicy` (first-launch
-///               instant plus `trialDurationMonths` in a UTC Gregorian calendar).
-///   - timeZone: The timezone used to resolve the calendar day. Defaults to
-///               `.current` (the user's local timezone). Pass an explicit value
-///               in tests for determinism.
-/// - Returns: A string of the form `"21-Aug-2026"`.
-func trialEndDateString(_ endDate: Date, timeZone: TimeZone = .current) -> String {
-    let fmt = DateFormatter()
-    fmt.locale = Locale(identifier: "en_US_POSIX")
-    fmt.timeZone = timeZone
-    fmt.dateFormat = "dd-MMM-yyyy"
-    return fmt.string(from: endDate)
-}
-
-/// Returns the trial-suffix string appended to the footer version label when a
-/// free trial is active. Extracted as a free function so it is unit-testable
-/// without touching SwiftUI views.
-///
-/// The end date is rendered in the user's local timezone so the displayed
-/// calendar day matches when the trial ends for them (see `trialEndDateString`).
-///
-/// - Parameter endDate: The trial end date, as computed by `TrialPolicy`.
-/// - Returns: A string of the form `" — Trial use until 21-Aug-2026"`.
-func trialFooterSuffix(endDate: Date) -> String {
-    " — Trial use until \(trialEndDateString(endDate))"
-}
-
 /// A full-width footer pinned to the bottom of the Settings window showing the
 /// app version, build number, auto-check toggle, check button, author, and GitHub link.
 private struct SettingsFooter: View {
     @ObservedObject var updater: UpdaterController
-    @ObservedObject var licenseGate: LicenseGate
 
     /// Marketing version from the bundle (CFBundleShortVersionString).
     private var version: String {
@@ -420,13 +372,7 @@ private struct SettingsFooter: View {
     }
 
     private var versionLabel: String {
-        var label = formatVersionLabel(version: version, build: build)
-        // Append trial suffix only when a trial is active and no paid license is held.
-        if case .active(_, let endDate) = licenseGate.trialState,
-           licenseGate.activatedKeyMasked == nil {
-            label += trialFooterSuffix(endDate: endDate)
-        }
-        return label
+        formatVersionLabel(version: version, build: build)
     }
 
     private static let authorURL = URL(string: "https://dinhanhthi.com")!
@@ -508,8 +454,6 @@ private struct SettingsTabScaffold<Content: View>: View {
 private struct APIKeysTab: View {
     @ObservedObject var settings: SettingsStore
     let keychain: KeychainManager
-    @ObservedObject var licenseGate: LicenseGate
-    var onUpgrade: () -> Void = {}
     /// Called when the user taps "Read more: how models use memory" in LocalModelsView.
     var onReadMore: () -> Void = {}
 
@@ -747,8 +691,6 @@ private struct APIKeysTab: View {
     private var localProviderCards: some View {
         LocalModelsView(
             settings: settings,
-            isPro: licenseGate.entitlements.isPro,
-            onUpgrade: onUpgrade,
             onReadMore: onReadMore
         )
     }
@@ -1295,7 +1237,6 @@ struct VoiceTestButton: View {
     let languageCode: String
     /// Unique identifier for this row, e.g. "openai_tts:voice" or "google_cloud_tts:en-US".
     let rowID: String
-    let cloudAllowed: Bool
     @ObservedObject var settings: SettingsStore
     @ObservedObject var coordinator: SpeakCoordinator
     @Binding var activeID: String?
@@ -1346,7 +1287,6 @@ struct VoiceTestButton: View {
     }
 
     private func play() {
-        guard cloudAllowed else { return }
         var s = settings.speakSettings
         s.selectedEngine = .cloud(kind)
         let accent = SpeakAccent.allCases.first { $0.bcp47 == languageCode }
@@ -2369,7 +2309,6 @@ private struct KeyEntryRow: View {
                 .appendingPathComponent("preview.PopGuy.SettingsView.history.json")
         ),
         navigator: SettingsNavigator(),
-        licenseGate: LicenseGate(),
         updater: UpdaterController(),
         screenRecordingPermission: ScreenRecordingPermission(),
         onReplayOnboarding: {}

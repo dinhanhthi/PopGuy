@@ -2,7 +2,7 @@
 // PopGuy — UI/Onboarding
 //
 // Provider chooser for first-launch onboarding: Local AI vs Cloud API key.
-// Local branch downloads the free on-device model via SettingsStore (app-lifetime
+// Local branch downloads an on-device model via SettingsStore (app-lifetime
 // Task — this view only observes progress). Cloud branch picks a provider,
 // validates the API key, stores it in Keychain, and maps matching actions.
 //
@@ -50,9 +50,9 @@ struct OnboardingProviderPage: View {
     @State private var cloudKeyPreview: String?
     @State private var cloudVerifyTask: Task<Void, Never>?
 
-    /// Free-tier catalog entry offered here (`ProConfig.freeLocalModelIDs`).
-    private var freeLocalModel: LocalModel? {
-        LocalModelCatalog.all.first { ProConfig.freeLocalModelIDs.contains($0.id) }
+    /// First catalog entry offered here for the onboarding download.
+    private var onboardingLocalModel: LocalModel? {
+        LocalModelCatalog.all.first
     }
 
     var body: some View {
@@ -164,10 +164,10 @@ struct OnboardingProviderPage: View {
 
     @ViewBuilder
     private var localBranch: some View {
-        if let model = freeLocalModel {
+        if let model = onboardingLocalModel {
             localModelCard(model)
         } else {
-            Text("The free on-device model is unavailable.")
+            Text("No on-device model is available.")
                 .font(.body)
                 .foregroundStyle(.secondary)
         }
@@ -236,7 +236,7 @@ struct OnboardingProviderPage: View {
         } else {
             let anyDownloadActive = settings.activeLocalModelDownloadID != nil
             Button("Download") {
-                settings.downloadLocalModel(model.id, isPro: false)
+                settings.downloadLocalModel(model.id)
                 if settings.activeLocalModelDownloadID == model.id {
                     settings.markPendingOnboardingLocalMap(modelID: model.id)
                 }

@@ -265,6 +265,29 @@ struct SettingsStoreTests {
         #expect(store2.hasOnboarded == true)
     }
 
+    // MARK: - hasSeenNowFreeAnnouncement
+
+    @Test("hasSeenNowFreeAnnouncement defaults to false on a fresh suite")
+    func hasSeenNowFreeAnnouncementDefaultsFalse() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        #expect(store.hasSeenNowFreeAnnouncement == false)
+    }
+
+    @Test("hasSeenNowFreeAnnouncement round-trips through UserDefaults")
+    func hasSeenNowFreeAnnouncementRoundTrip() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store1 = SettingsStore(defaults: suite)
+        store1.hasSeenNowFreeAnnouncement = true
+
+        let store2 = SettingsStore(defaults: suite)
+        #expect(store2.hasSeenNowFreeAnnouncement == true)
+    }
+
     // MARK: - config(for:) / setConfig(_:for:) helpers
 
     @Test("config(for: .improve) returns improveConfig")
@@ -474,7 +497,7 @@ struct SettingsStoreTests {
     @Test("maxToolbarActions is 11 (6 principal + 5 burger)")
     func maxToolbarActionsIs11() {
         #expect(SettingsStore.maxToolbarActions == 11)
-        #expect(SettingsStore.maxToolbarActions == ProConfig.maxPrincipalActions + ProConfig.maxBurgerActions)
+        #expect(SettingsStore.maxToolbarActions == ToolbarLimits.maxPrincipalActions + ToolbarLimits.maxBurgerActions)
     }
 
     @Test("enabledToolbarActionCount counts enabled built-ins and custom actions")

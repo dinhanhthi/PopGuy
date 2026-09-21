@@ -40,9 +40,9 @@ struct PrincipalActionsTests {
         defer { removeSuite(name) }
 
         let store = SettingsStore(defaults: suite)
-        let expectedPrincipal = Set(store.enabledOrderedIdentifiers.prefix(ProConfig.maxPrincipalActions))
+        let expectedPrincipal = Set(store.enabledOrderedIdentifiers.prefix(ToolbarLimits.maxPrincipalActions))
         #expect(store.principalActionIDs == expectedPrincipal)
-        #expect(store.principalActionCount <= ProConfig.maxPrincipalActions)
+        #expect(store.principalActionCount <= ToolbarLimits.maxPrincipalActions)
     }
 
     @Test("setPrincipal rejects when enabled principal zone is full")
@@ -54,7 +54,7 @@ struct PrincipalActionsTests {
         store.promptEnabled = true
         _ = store.setPrincipal(.builtin(.prompt), true)
         store.dictionaryConfig.isEnabled = true
-        #expect(store.principalActionCount == ProConfig.maxPrincipalActions)
+        #expect(store.principalActionCount == ToolbarLimits.maxPrincipalActions)
 
         #expect(!store.setPrincipal(.dictionary, true))
         #expect(!store.isPrincipal(.dictionary))
@@ -73,7 +73,7 @@ struct PrincipalActionsTests {
         for i in 0..<4 {
             store.addCustomAction(CustomAction(title: "Burger \(i)", systemPrompt: "p", isEnabled: true))
         }
-        #expect(store.overflowActionCount == ProConfig.maxBurgerActions)
+        #expect(store.overflowActionCount == ToolbarLimits.maxBurgerActions)
 
         guard let principalID = store.principalOrderedIdentifiers.first else {
             Issue.record("Expected a principal action")
@@ -110,7 +110,7 @@ struct PrincipalActionsTests {
 
         let disabledOverflow = store.actionOrder.filter { !store.isPrincipal($0) }.count
         #expect(disabledOverflow >= 2)
-        #expect(store.overflowActionCount < ProConfig.maxBurgerActions)
+        #expect(store.overflowActionCount < ToolbarLimits.maxBurgerActions)
 
         guard let principalID = store.principalOrderedIdentifiers.first else {
             Issue.record("Expected a principal action")
@@ -118,7 +118,7 @@ struct PrincipalActionsTests {
         }
         #expect(store.setPrincipal(principalID, false))
         #expect(!store.isPrincipal(principalID))
-        #expect(store.overflowActionCount <= ProConfig.maxBurgerActions)
+        #expect(store.overflowActionCount <= ToolbarLimits.maxBurgerActions)
     }
 
     @Test("migration persists principalActionIDs across reload")
@@ -155,7 +155,7 @@ struct PrincipalActionsTests {
 
         let store = SettingsStore(defaults: suite)
         #expect(!store.principalActionIDs.contains(.custom(stale)))
-        #expect(store.principalActionIDs.count <= ProConfig.maxPrincipalActions)
+        #expect(store.principalActionIDs.count <= ToolbarLimits.maxPrincipalActions)
         let ordered = store.actionOrder.filter { store.isPrincipal($0) }
         #expect(ordered.count == store.principalActionIDs.count)
     }
