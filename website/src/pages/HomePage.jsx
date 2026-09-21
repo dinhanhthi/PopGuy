@@ -1,7 +1,6 @@
 import {
   ArrowRight,
   BookOpen,
-  Check,
   CheckCircle2,
   Clock3,
   Command,
@@ -19,7 +18,7 @@ import {
   providerLogos
 } from "../components/ProviderLogos";
 import { releases } from "../data/changelog";
-import { DOWNLOAD_URL, GITHUB_URL, PRO_CHECKOUT_URL } from "../constants";
+import { DOWNLOAD_URL, GITHUB_URL } from "../constants";
 
 const features = [
   {
@@ -52,28 +51,6 @@ const features = [
     title: "Screen OCR",
     text: "Capture text anywhere."
   }
-];
-
-const freeFeatures = [
-  "Built-in actions",
-  "8 custom actions",
-  "35 recent results",
-  "8 ignored apps",
-  "5 active toolbar actions",
-  "System speech",
-  "Every supported provider",
-  "Plugin import"
-];
-
-const proFeatures = [
-  "Unlimited custom actions",
-  "Unlimited history",
-  "Unlimited ignored apps",
-  "Screen Capture OCR",
-  "Cloud voices",
-  "Import and export",
-  "History search",
-  "Double-click action"
 ];
 
 export function HomePage() {
@@ -150,46 +127,6 @@ export function HomePage() {
               <p>{text}</p>
             </article>
           ))}
-        </div>
-      </section>
-
-      <section className="pricing section-blue">
-        <div className="shell pricing-focus">
-          <article className="free-plan">
-            <div className="pricing-title-row">
-              <div>
-                <span className="plan-label">Free</span>
-                <h2>Free and fully capable.</h2>
-              </div>
-              <strong>$0</strong>
-            </div>
-            <ul>
-              {freeFeatures.map((feature) => (
-                <li key={feature}><Check size={17} /> {feature}</li>
-              ))}
-            </ul>
-            <ButtonLink href={DOWNLOAD_URL} icon="download">
-              Download for macOS
-            </ButtonLink>
-            <p className="pro-early-note">1 month of Pro, on us — for early adopters.</p>
-          </article>
-
-          <aside className="pro-addon">
-            <span className="plan-label">Optional upgrade</span>
-            <div className="pro-price">
-              <h2>Pro</h2>
-              <p><strong>$10</strong> one-time</p>
-            </div>
-            <p>More room for heavier use.</p>
-            <ul>
-              {proFeatures.map((feature) => (
-                <li key={feature}><Check size={16} /> {feature}</li>
-              ))}
-            </ul>
-            <ButtonLink href={PRO_CHECKOUT_URL} variant="gold">
-              Get Pro
-            </ButtonLink>
-          </aside>
         </div>
       </section>
 

@@ -149,7 +149,7 @@ echo "$POPGUY_TEXT" | base64`
           "Pick the actions to bundle (or export a single action).",
           "Save the .json file. Share it anywhere."
         ],
-        body: "Export is a Pro feature; importing plugins is free. The exported file is plain JSON — no binary, no signature — so anyone can read it before installing."
+        body: "Export is available to everyone, as is importing plugins. The exported file is plain JSON — no binary, no signature — so anyone can read it before installing."
       },
       {
         title: "Import a plugin",

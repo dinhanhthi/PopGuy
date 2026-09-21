@@ -16,6 +16,5 @@ npm test
 npm run build
 ```
 
-The site includes Home, Docs, Pricing, and Changelog routes. Download buttons
-point to the latest GitHub release, and Get Pro opens the configured Lemon
-Squeezy checkout.
+The site includes Home (`/`), Actions (`/actions`), and Docs (`/docs`) routes.
+Download buttons point to the latest GitHub release.
