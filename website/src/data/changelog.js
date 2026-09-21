@@ -1,9 +1,20 @@
 export const releases = [
   {
+    version: "1.0.0",
+    date: "September 2026",
+    title: "PopGuy is now free.",
+    latest: true,
+    items: [
+      "Every feature unlocked",
+      "No license or Pro plan",
+      "One-time free announcement",
+      "Pricing removed from the site"
+    ]
+  },
+  {
     version: "0.5.3",
     date: "August 2026",
     title: "First-run setup guide.",
-    latest: true,
     items: [
       "Guided first-run setup flow",
       "Configure provider, triggers, and actions on first launch",
