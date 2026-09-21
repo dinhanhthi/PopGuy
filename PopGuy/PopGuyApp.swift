@@ -82,7 +82,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let settingsStore = SettingsStore()
     private let keychainManager = KeychainManager()
     private let historyStore = HistoryStore()
-    private let licenseGate = LicenseGate()
     private var actionEngineHandler: ActionEngineHandler?
     private var settingsWindow: NSWindow?
 
@@ -103,13 +102,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private var onboardingWindow: NSWindow?
 
-    // MARK: - Upgrade nag
-
-    private var upgradeNagWindow: NSWindow?
-
-    // MARK: - Trial expiry warning
-
-    private var trialExpiryWindow: NSWindow?
+    /// One-time “now free” announcement. Flag is set before the window appears.
+    private var nowFreeAnnouncementWindow: NSWindow?
 
     // MARK: - Phase 5: Hotkeys and double-tap chord
 
@@ -148,30 +142,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // the preview host. The env var is only set while previewing.
         if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" { return }
 
-        #if DEV_MOCK_PRO
-        // Dev-distribution build only: scripts/sign-and-share.sh passes the
-        // DEV_MOCK_PRO compilation condition so any key unlocks Pro for testers
-        // on another Mac. This flag lives ONLY in that script — never add it to
-        // the project's build settings, or an official release would ship the
-        // mock validator. No env var needed: the validator is forced on.
-        licenseGate.validator = MockLicenseValidator()
-        #elseif DEBUG
-        // DEBUG escape hatch: set POPGUY_MOCK_PRO=1 in the Run scheme to use a
-        // fake validator (any non-empty key → Pro) while the Lemon Squeezy
-        // account is unverified. Never compiled into Release.
-        if ProcessInfo.processInfo.environment["POPGUY_MOCK_PRO"] != nil {
-            licenseGate.validator = MockLicenseValidator()
-        } else {
-            licenseGate.validator = LemonSqueezyLicenseValidator()
-        }
-        #else
-        licenseGate.validator = LemonSqueezyLicenseValidator()
-        #endif
-        licenseGate.restoreCachedEntitlement()
-        licenseGate.bootstrapTrial()
-        if licenseGate.shouldPresentTrialExpiryWarning {
-            presentTrialExpiryWarning()
-        }
         buildStatusMenu()
         Self.warmBabylonIndexes(settingsStore.babylonDictionaries)
         babylonIndexWarmupCancellable = settingsStore.$babylonDictionaries
@@ -230,6 +200,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if !settingsStore.hasOnboarded {
             presentOnboarding()
         }
+
+        // One-time “now free” announcement for users who already onboarded
+        // (they updated). Fresh installs skip it so they never see a Pro mention.
+        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" {
+            if !settingsStore.hasSeenNowFreeAnnouncement && settingsStore.hasOnboarded {
+                settingsStore.hasSeenNowFreeAnnouncement = true
+                presentNowFreeAnnouncement()
+            } else if !settingsStore.hasOnboarded {
+                settingsStore.hasSeenNowFreeAnnouncement = true
+            }
+        }
     }
 
     // MARK: - Onboarding
@@ -244,10 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             axPermission: axPermission,
             settings: settingsStore,
             keychain: keychainManager,
-            trialState: licenseGate.trialState,
-            isPro: licenseGate.entitlements.isPro,
             onOpenSettings: { [weak self] in self?.openSettings() },
-            onGetPro: { NSWorkspace.shared.open(ProConfig.checkoutURL) },
             onFinish: { [weak self] in self?.onboardingWindow?.close() }
         )
         let hosting = NSHostingController(rootView: view)
@@ -265,68 +243,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    // MARK: - Upgrade nag popup
-
-    /// Present a soft, dismissable upgrade prompt when a free-tier act milestone is hit.
-    ///
-    /// Guards: only shown at runtime (no-op in Xcode Previews), only to non-Pro
-    /// users, and only when no nag window is already open (no stacking).
-    private func presentUpgradeNag() {
-        guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
-        guard !licenseGate.entitlements.isPro else { return }
-        guard upgradeNagWindow == nil else { return }
-
-        let actCount = settingsStore.actCount
-        let view = UpgradeNagView(
-            actCount: actCount,
-            onClose: { [weak self] in
-                self?.upgradeNagWindow?.close()
-            },
-            onGetPro: { [weak self] in
-                guard let self else { return }
-                self.upgradeNagWindow?.close()
-                self.settingsNavigator.section = .license
-                self.openSettings()
-            }
+    private func presentNowFreeAnnouncement() {
+        if let existing = nowFreeAnnouncementWindow {
+            existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let view = NowFreeAnnouncementView(
+            onContinue: { [weak self] in self?.nowFreeAnnouncementWindow?.close() }
         )
         let hosting = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hosting)
-        window.title = "Enjoying PopGuy?"
+        window.title = "PopGuy is now free"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.center()
-        upgradeNagWindow = window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    // MARK: - Trial expiry warning popup
-
-    /// Present a one-time warning that the free trial has ended.
-    ///
-    /// Acknowledgement is recorded immediately before the window appears so a
-    /// crash-before-dismiss never triggers a second presentation.
-    private func presentTrialExpiryWarning() {
-        guard trialExpiryWindow == nil else { return }
-        licenseGate.acknowledgeTrialExpiry()
-        let view = TrialExpiryWarningView(
-            onGetPro: { [weak self] in
-                NSWorkspace.shared.open(ProConfig.checkoutURL)
-                self?.trialExpiryWindow?.close()
-            },
-            onContinue: { [weak self] in
-                self?.trialExpiryWindow?.close()
-            }
-        )
-        let hosting = NSHostingController(rootView: view)
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "Free Trial Ended"
-        window.styleMask = [.titled, .closable]
-        window.isReleasedWhenClosed = false
-        window.delegate = self
-        window.center()
-        trialExpiryWindow = window
+        nowFreeAnnouncementWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -339,11 +272,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             settingsStore.hasOnboarded = true
             onboardingWindow = nil
         }
-        if window === upgradeNagWindow {
-            upgradeNagWindow = nil
-        }
-        if window === trialExpiryWindow {
-            trialExpiryWindow = nil
+        if window === nowFreeAnnouncementWindow {
+            nowFreeAnnouncementWindow = nil
         }
         if window === settingsWindow {
             NSApp.setActivationPolicy(.accessory)
@@ -365,7 +295,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             pipeline: pipeline,
             settings: settingsStore,
             keychain: keychainManager,
-            licenseGate: licenseGate,
             onOpenSettings: { [weak self] in self?.openSettings() }
         )
         toolbarController = controller
@@ -386,11 +315,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         )
         actionEngineHandler = handler
         controller.setActionHandler(handler)
-
-        // Wire upgrade nag: shown when free-tier act count hits 101, 111, 121, …
-        controller.onUpgradeNagDue = { [weak self] in
-            self?.presentUpgradeNag()
-        }
 
         controller.start()
 
@@ -541,7 +465,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             ) { [weak self] in
                 guard self?.settingsStore.popGuyEnabled == true else { return }
                 guard self?.settingsStore.ocrEnabled == true else { return }
-                guard self?.licenseGate.entitlements.ocrAllowed == true else { return }
                 self?.ocrCaptureController?.beginCapture()
             }
         }
@@ -733,19 +656,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         doubleClickItem.isEnabled = popGuyEnabled
         menu.addItem(doubleClickItem)
 
-        // Capture Screen Text (OCR) — Pro-gated, opt-in trigger. Non-Pro users
-        // see it disabled; Pro users who have not opted in yet are routed to
-        // Settings → Triggers to enable it (and grant Screen Recording
-        // permission); once opted in, it directly starts a capture.
+        // Capture Screen Text (OCR) — opt-in trigger. Users who have not opted
+        // in yet are routed to Settings → Triggers to enable it (and grant
+        // Screen Recording permission); once opted in, it directly starts a
+        // capture.
         let ocrItem = NSMenuItem(
             title: "Capture Screen Text\u{2026}",
             action: #selector(captureScreenTextOCR),
             keyEquivalent: ""
         )
         ocrItem.image = NSImage(systemSymbolName: "text.viewfinder", accessibilityDescription: nil)
-        // Always actionable: when OCR is Pro-locked or not yet opted in, the
-        // action routes to Settings → the OCR section instead of capturing, so
-        // the item never silently does nothing.
+        // Always actionable: when OCR is not yet opted in, the action routes
+        // to Settings → the OCR section instead of capturing, so the item
+        // never silently does nothing.
         ocrItem.isEnabled = true
         menu.addItem(ocrItem)
 
@@ -803,32 +726,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         )
         menu.addItem(checkItem)
 
-        // Pro / trial / activation status.
-        // A paid license is the only thing that shows "Pro — Active"; an active
-        // trial grants Pro entitlements but is shown as a distinct trial status.
-        if licenseGate.activatedKeyMasked != nil {
-            let proItem = NSMenuItem(title: "PopGuy Pro — Active", action: nil, keyEquivalent: "")
-            proItem.image = NSImage(systemSymbolName: "checkmark.seal.fill", accessibilityDescription: nil)
-            proItem.isEnabled = false
-            menu.addItem(proItem)
-        } else if case .active(let daysLeft, _) = licenseGate.trialState {
-            let trialItem = NSMenuItem(
-                title: "Free Trial — \(daysLeft) \(daysLeft == 1 ? "day" : "days") left",
-                action: #selector(openLicense),
-                keyEquivalent: ""
-            )
-            trialItem.image = NSImage(systemSymbolName: "hourglass", accessibilityDescription: nil)
-            menu.addItem(trialItem)
-        } else {
-            let upgradeItem = NSMenuItem(
-                title: "Upgrade to Pro\u{2026}",
-                action: #selector(openLicense),
-                keyEquivalent: ""
-            )
-            upgradeItem.image = NSImage(systemSymbolName: "crown", accessibilityDescription: nil)
-            menu.addItem(upgradeItem)
-        }
-
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(
             title: "Quit PopGuy",
@@ -853,9 +750,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     /// when the user has not opted in yet. `beginCapture()` self-guards on
     /// Screen Recording permission (prompts lazily on first use).
     @objc private func captureScreenTextOCR() {
-        // Not Pro (locked) or not opted in yet: open Settings focused on the OCR
-        // section so the user can enable it (or see the Pro upsell there).
-        guard licenseGate.entitlements.ocrAllowed, settingsStore.ocrEnabled else {
+        guard settingsStore.ocrEnabled else {
             settingsNavigator.focusOCRSection = true
             settingsNavigator.section = .triggers
             openSettings()
@@ -877,12 +772,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     /// Opens Settings on the History tab.
     @objc private func openHistory() {
         settingsNavigator.section = .history
-        openSettings()
-    }
-
-    /// Opens Settings on the License tab (called from the "Upgrade to Pro…" menu item).
-    @objc private func openLicense() {
-        settingsNavigator.section = .license
         openSettings()
     }
 
@@ -909,7 +798,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     @objc private func openSettings() {
         if settingsWindow == nil {
-            let view = SettingsView(settings: settingsStore, keychain: keychainManager, history: historyStore, navigator: settingsNavigator, licenseGate: licenseGate, updater: updater, screenRecordingPermission: screenRecordingPermission, onReplayOnboarding: { [weak self] in self?.presentOnboarding() })
+            let view = SettingsView(settings: settingsStore, keychain: keychainManager, history: historyStore, navigator: settingsNavigator, updater: updater, screenRecordingPermission: screenRecordingPermission, onReplayOnboarding: { [weak self] in self?.presentOnboarding() })
             let hosting = NSHostingController(rootView: view)
             let window = NSWindow(contentViewController: hosting)
             window.title = "PopGuy Settings"

@@ -28,8 +28,7 @@ private struct ResolvedPreset: Identifiable {
 
 struct ActionLibraryView: View {
 
-    /// False when the user is at the Pro custom-action limit.
-    /// Browsing stays enabled; only the Install button is disabled.
+    /// When false, the Install button is disabled (browsing stays enabled).
     let canInstall: Bool
 
     /// Returns true when a preset is already installed.
@@ -71,10 +70,6 @@ struct ActionLibraryView: View {
             headerBar
             Divider()
             searchBar
-            if !canInstall {
-                Divider()
-                proLimitBanner
-            }
             Divider()
             scrollContent
         }
@@ -131,22 +126,6 @@ struct ActionLibraryView: View {
         }
         .padding(.horizontal, SettingsMetrics.pagePadding)
         .padding(.vertical, 10)
-    }
-
-    // MARK: - Pro limit banner
-
-    private var proLimitBanner: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "crown")
-                .foregroundStyle(Color.proGold)
-                .font(.caption.weight(.semibold))
-            Text("Free plan limit reached — upgrade to Pro to install more custom actions.")
-                .font(.caption)
-                .foregroundStyle(Color.proGold)
-        }
-        .padding(.horizontal, SettingsMetrics.pagePadding)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Scrollable content
@@ -348,12 +327,10 @@ private struct LibraryPresetRow: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
         } else {
-            // Limit reached — disabled button with explanation tooltip.
             Button("Install") {}
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(true)
-                .hoverTooltip("Free plan limit reached. Upgrade to Pro to install more actions.")
         }
     }
 

@@ -297,12 +297,9 @@ final class ToolbarViewModel: ObservableObject {
     @Published var customActions: [CustomAction] = []
 
     /// Whether the cloud TTS engine is allowed for this session.
-    /// Set by ToolbarController from `licenseGate.entitlements.cloudTTSPremiumAllowed`
-    /// on each presentation, co-located with the `customActions` push.
-    /// Defaults to `false` (safe direction: non-Pro) so any unforeseen path that
-    /// pushes customActions without updating this flag still falls back to system
-    /// voice for speech custom actions.
-    var cloudTTSAllowed: Bool = false
+    /// Always true in production (API keys are still required). ToolbarController
+    /// sets this on each presentation, co-located with the `customActions` push.
+    var cloudTTSAllowed: Bool = true
 
     // MARK: Appearance
 
@@ -394,9 +391,7 @@ final class ToolbarViewModel: ObservableObject {
     // MARK: Act counter seam
 
     /// Called by each trigger method immediately before dispatching an action.
-    /// Set by `ToolbarController` to record a free-tier act and surface the nag
-    /// when due. The view model fires the closure but never checks Pro status —
-    /// that guard lives in the controller.
+    /// Optional hook; unused in production after the usage-nag path was removed.
     var onActPerformed: (() -> Void)?
 
     /// Asks the controller to dismiss (hide) the toolbar. Used by scriptable actions
@@ -749,8 +744,6 @@ final class ToolbarViewModel: ObservableObject {
             }
             // Count the act only when speech actually starts (not on stop).
             onActPerformed?()
-            // Apply the cloud gate: if the user is not Pro, resolvingCloudGate
-            // forces the engine to .system, preventing non-Pro access to cloud TTS.
             let gatedSettings = action.speakSettings.resolvingCloudGate(cloudAllowed: cloudTTSAllowed)
             speakCoordinator?.speak(
                 capturedText,

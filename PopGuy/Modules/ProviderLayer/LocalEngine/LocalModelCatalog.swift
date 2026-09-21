@@ -5,9 +5,6 @@
 // This catalog is the authoritative source for model metadata: family,
 // approximate size, and RAM requirements.
 //
-// Free-tier eligibility is NOT stored here — it is determined by ProConfig.isLocalModelFree(_:),
-// the single source of truth for all Pro/Free decisions (see CLAUDE.md).
-//
 // All types and members are nonisolated to remain accessible from nonisolated
 // contexts (ProviderKind.curatedModels, MLXLocalProvider.stream, tests) under
 // SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor.
@@ -52,10 +49,6 @@ public struct LocalModel: Sendable {
 
     /// Minimum recommended RAM in bytes to run this model.
     public nonisolated let minRAMBytes: Int64
-
-    /// Whether this model is available on the Free plan.
-    /// Delegates to `ProConfig.isLocalModelFree(_:)` — the single source of truth.
-    public nonisolated var isFreeTier: Bool { ProConfig.isLocalModelFree(id) }
 }
 
 // MARK: - LocalModelCatalog

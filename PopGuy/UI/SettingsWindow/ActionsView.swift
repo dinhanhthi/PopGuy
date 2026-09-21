@@ -59,8 +59,6 @@ struct ActionsView: View {
 
     @ObservedObject var settings: SettingsStore
     let keychain: KeychainManager
-    @ObservedObject var licenseGate: LicenseGate
-    var onUpgrade: () -> Void = {}
 
     /// Optional navigator — used to consume `pendingPluginImportURL` set by
     /// AppDelegate when a .popclipext/.json file is opened via Finder.
@@ -94,10 +92,6 @@ struct ActionsView: View {
     /// Drives the import error alert.
     @State private var importError: String? = nil
     @State private var showImportError = false
-
-    /// Drives the import-capped informational alert (free cap reached mid-import).
-    @State private var importCappedCount: Int = 0
-    @State private var showImportCappedAlert = false
 
     /// Drives the import-skipped alert (actions with disallowed providers were dropped).
     @State private var importSkippedCount: Int = 0
@@ -151,9 +145,6 @@ struct ActionsView: View {
                 ToolbarLayoutEditorView(settings: settings)
 
                 // MARK: Add Custom Action button
-                let atCustomActionLimit = !licenseGate.entitlements.isPro
-                    && settings.customActions.count >= licenseGate.entitlements.maxCustomActions
-
                 HStack {
                     Button {
                         withAnimation(.easeInOut(duration: 0.28)) {
@@ -163,96 +154,50 @@ struct ActionsView: View {
                         Text("Add Action")
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(atCustomActionLimit)
 
-                    Text("\(settings.principalActionCount)/\(ProConfig.maxPrincipalActions) toolbar · \(settings.overflowActionCount)/\(ProConfig.maxBurgerActions) More")
+                    Text("\(settings.principalActionCount)/\(ToolbarLimits.maxPrincipalActions) toolbar · \(settings.overflowActionCount)/\(ToolbarLimits.maxBurgerActions) More")
                         .font(.body)
                         .foregroundStyle(.secondary)
 
                     Spacer()
 
-                    // Export / Import — Pro-gated, icon-only with hover tooltip
-                    let importExportAllowed = licenseGate.entitlements.importExportAllowed
-                    if importExportAllowed {
-                        Button {
-                            exportActions()
-                        } label: {
-                            Image(systemName: "square.and.arrow.up")
-                                .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                        }
-                        .buttonStyle(ToolbarIconButtonStyle())
-                        .disabled(settings.customActions.isEmpty)
-                        .hoverTooltip("Export custom actions")
-
-                        Button {
-                            importActions()
-                        } label: {
-                            Image(systemName: "square.and.arrow.down")
-                                .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                        }
-                        .buttonStyle(ToolbarIconButtonStyle())
-                        .hoverTooltip("Import custom actions")
-                    } else {
-                        Button {
-                            onUpgrade()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "square.and.arrow.up")
-                                ProBadge()
-                            }
-                            .frame(height: SettingsMetrics.toolbarIconHeight)
-                        }
-                        .buttonStyle(ToolbarIconButtonStyle())
-                        .hoverTooltip("Export custom actions — Pro feature")
-
-                        Button {
-                            onUpgrade()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "square.and.arrow.down")
-                                ProBadge()
-                            }
-                            .frame(height: SettingsMetrics.toolbarIconHeight)
-                        }
-                        .buttonStyle(ToolbarIconButtonStyle())
-                        .hoverTooltip("Import custom actions — Pro feature")
+                    Button {
+                        exportActions()
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
                     }
+                    .buttonStyle(ToolbarIconButtonStyle())
+                    .disabled(settings.customActions.isEmpty)
+                    .hoverTooltip("Export custom actions")
 
-                    // Import Plugin — available to all users (free + Pro)
-                    let pluginImportAllowed = licenseGate.entitlements.pluginImportAllowed
-                    if pluginImportAllowed {
-                        SettingsInlineMenu(borderedToolbarTrigger: true) {
-                            Image(systemName: "puzzlepiece.extension")
-                                .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                        } menuContent: {
-                            Button {
-                                importPluginFromFile()
-                            } label: {
-                                Label("Choose file\u{2026}", systemImage: "folder")
-                            }
-                            Button {
-                                snippetText = ""
-                                showSnippetSheet = true
-                            } label: {
-                                Label("Paste snippet\u{2026}", systemImage: "doc.on.clipboard")
-                            }
-                        }
-                        .hoverTooltip("Import plugin")
-                    } else {
-                        Button {
-                            onUpgrade()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "puzzlepiece.extension")
-                                ProBadge()
-                            }
-                            .frame(height: SettingsMetrics.toolbarIconHeight)
-                        }
-                        .buttonStyle(ToolbarIconButtonStyle())
-                        .hoverTooltip("Import plugin — Pro feature")
+                    Button {
+                        importActions()
+                    } label: {
+                        Image(systemName: "square.and.arrow.down")
+                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
                     }
+                    .buttonStyle(ToolbarIconButtonStyle())
+                    .hoverTooltip("Import custom actions")
 
-                    // Browse Library — always available (free + Pro); install is gated inside.
+                    SettingsInlineMenu(borderedToolbarTrigger: true) {
+                        Image(systemName: "puzzlepiece.extension")
+                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
+                    } menuContent: {
+                        Button {
+                            importPluginFromFile()
+                        } label: {
+                            Label("Choose file\u{2026}", systemImage: "folder")
+                        }
+                        Button {
+                            snippetText = ""
+                            showSnippetSheet = true
+                        } label: {
+                            Label("Paste snippet\u{2026}", systemImage: "doc.on.clipboard")
+                        }
+                    }
+                    .hoverTooltip("Import plugin")
+
                     // Slides the gallery panel in from the right (owned by SettingsView).
                     Button {
                         withAnimation(.easeInOut(duration: 0.28)) {
@@ -299,13 +244,6 @@ struct ActionsView: View {
                         tooltip: "Filter actions by type"
                     )
                 }
-
-                if atCustomActionLimit {
-                    UpgradePromptView(
-                        message: "Free plan is limited to \(licenseGate.entitlements.maxCustomActions) custom actions and shows \(licenseGate.entitlements.maxActiveActions) actions in the toolbar. Upgrade to Pro for unlimited actions.",
-                        onUpgrade: onUpgrade
-                    )
-                }
             }
             .padding(.horizontal, SettingsMetrics.pagePadding)
             .padding(.top, SettingsMetrics.pagePadding)
@@ -325,26 +263,17 @@ struct ActionsView: View {
         .alert("Toolbar Limit Reached", isPresented: $showLimitAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("PopGuy supports at most \(SettingsStore.maxToolbarActions) enabled actions (\(ProConfig.maxPrincipalActions) on the toolbar and \(ProConfig.maxBurgerActions) in the More menu). Turn off another action first.")
+            Text("PopGuy supports at most \(SettingsStore.maxToolbarActions) enabled actions (\(ToolbarLimits.maxPrincipalActions) on the toolbar and \(ToolbarLimits.maxBurgerActions) in the More menu). Turn off another action first.")
         }
         .alert("Toolbar Layout Full", isPresented: $showPrincipalLimitAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("The toolbar row holds up to \(ProConfig.maxPrincipalActions) actions and the More menu holds up to \(ProConfig.maxBurgerActions). Free a slot in that zone before moving this action.")
+            Text("The toolbar row holds up to \(ToolbarLimits.maxPrincipalActions) actions and the More menu holds up to \(ToolbarLimits.maxBurgerActions). Free a slot in that zone before moving this action.")
         }
         .alert("Import Failed", isPresented: $showImportError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(importError ?? "The file could not be imported.")
-        }
-        .alert("Import Complete", isPresented: $showImportCappedAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            let cappedMsg = "Imported \(importCappedCount) action\(importCappedCount == 1 ? "" : "s"). The free plan limit was reached — upgrade to Pro to import more actions."
-            let skippedMsg = importSkippedCount > 0
-                ? " Also skipped \(importSkippedCount) action\(importSkippedCount == 1 ? "" : "s") whose provider is not valid for its action type."
-                : ""
-            Text(cappedMsg + skippedMsg)
         }
         .alert("Unsupported Provider", isPresented: $showImportSkippedAlert) {
             Button("OK", role: .cancel) {}
@@ -418,12 +347,6 @@ struct ActionsView: View {
         guard let url = navigator?.pendingPluginImportURL else { return }
         // Clear immediately to avoid re-triggering.
         navigator?.pendingPluginImportURL = nil
-
-        // Pro-gate: plugin import is a Pro-gated feature.
-        guard licenseGate.entitlements.pluginImportAllowed else {
-            onUpgrade()
-            return
-        }
 
         let ext = url.pathExtension.lowercased()
         if ext == "popclipext" {
@@ -537,7 +460,7 @@ struct ActionsView: View {
         let safeSlice = Array(decoded.prefix(100))
 
         // Route through consent sheet so the user can review actions before they are added.
-        // sanitizeImported + free-cap enforcement run in handleConsentConfirm on confirm.
+        // sanitizeImported runs in handleConsentConfirm on confirm.
         let sourceName = url.deletingPathExtension().lastPathComponent
         let result = PluginImportResult(sourceName: sourceName, imported: safeSlice, skipped: [])
         presentConsent(for: result)
@@ -611,30 +534,19 @@ struct ActionsView: View {
         pendingConsent = result
     }
 
-    /// Processes the confirmed import: sanitize → free-cap check → addCustomAction.
+    /// Processes the confirmed import: sanitize → addCustomAction.
     /// Single site shared by all import paths (native JSON, PopClip bundle, snippet).
     private func handleConsentConfirm(_ actions: [CustomAction]) {
-        let isPro = licenseGate.entitlements.isPro
-        let maxAllowed = licenseGate.entitlements.maxCustomActions
-        let cloudAllowed = licenseGate.entitlements.cloudTTSPremiumAllowed
-        var importedCount = 0
         var skippedCount = 0
 
         for action in actions {
-            guard var fresh = CustomAction.sanitizeImported(action, cloudAllowed: cloudAllowed) else {
+            guard var fresh = CustomAction.sanitizeImported(action, cloudAllowed: true) else {
                 skippedCount += 1
                 continue
-            }
-            if !isPro && settings.customActions.count >= maxAllowed {
-                importCappedCount = importedCount
-                importSkippedCount = skippedCount   // 0 when nothing was skipped
-                showImportCappedAlert = true
-                return
             }
             // Mark as plugin-imported so the action shows a "From plugin" badge.
             fresh.isFromPlugin = true
             _ = settings.addCustomAction(fresh)
-            importedCount += 1
         }
 
         if skippedCount > 0 {
@@ -773,8 +685,6 @@ struct ActionsView: View {
             SpeakCardView(
                 settings: settings,
                 keychain: keychain,
-                licenseGate: licenseGate,
-                onUpgrade: onUpgrade,
                 enabled: guardedEnableBinding(for: $settings.speakEnabled),
                 isPrincipal: principalBinding(for: id),
                 recordingID: $recordingID
@@ -783,8 +693,6 @@ struct ActionsView: View {
         case .dictionary:
             DictionaryCardView(
                 settings: settings,
-                licenseGate: licenseGate,
-                onUpgrade: onUpgrade,
                 enabled: guardedEnableBinding(for: $settings.dictionaryConfig.isEnabled),
                 isPrincipal: principalBinding(for: id)
             )
@@ -1239,9 +1147,7 @@ struct ActionsView: View {
                 CustomSpeechFields(
                     actionID: id,
                     settings: settings,
-                    keychain: keychain,
-                    licenseGate: licenseGate,
-                    onUpgrade: onUpgrade
+                    keychain: keychain
                 )
 
             case .dictionary:
@@ -1253,9 +1159,7 @@ struct ActionsView: View {
                             c.dictionaryConfig = newConfig
                             settings.updateCustomAction(c)
                         }
-                    ),
-                    licenseGate: licenseGate,
-                    onUpgrade: onUpgrade
+                    )
                 )
 
             case .openURL, .runShortcut, .appleScript, .shellScript:
@@ -1532,8 +1436,6 @@ private struct ActionCard<Content: View>: View {
 private struct DictionaryCardView: View {
 
     @ObservedObject var settings: SettingsStore
-    @ObservedObject var licenseGate: LicenseGate
-    var onUpgrade: () -> Void = {}
     @Binding var enabled: Bool
     @Binding var isPrincipal: Bool
 
@@ -1547,9 +1449,7 @@ private struct DictionaryCardView: View {
             isBuiltin: true
         ) {
             DictionaryConfigFields(
-                config: $settings.dictionaryConfig,
-                licenseGate: licenseGate,
-                onUpgrade: onUpgrade
+                config: $settings.dictionaryConfig
             )
         }
     }
@@ -1562,25 +1462,12 @@ private struct DictionaryCardView: View {
 struct DictionaryConfigFields: View {
 
     @Binding var config: DictionaryConfig
-    @ObservedObject var licenseGate: LicenseGate
-    var onUpgrade: () -> Void = {}
-
-    private var cloudAllowed: Bool {
-        licenseGate.entitlements.cloudTTSPremiumAllowed
-    }
 
     var body: some View {
         let voices = VoiceCatalog.voices(for: config.accent)
         let engineBinding = Binding<SpeakEngineSelection>(
-            get: {
-                let engine = config.speakSettings.selectedEngine
-                if case .cloud = engine, !cloudAllowed { return .system }
-                return engine
-            },
-            set: { newEngine in
-                guard cloudAllowed || newEngine == .system else { return }
-                config.speakSettings.selectedEngine = newEngine
-            }
+            get: { config.speakSettings.selectedEngine },
+            set: { config.speakSettings.selectedEngine = $0 }
         )
 
         VStack(alignment: .leading, spacing: 16) {
@@ -1612,23 +1499,12 @@ struct DictionaryConfigFields: View {
                     Text(SpeakEngineSelection.system.displayName).tag(SpeakEngineSelection.system)
                     Divider()
                     ForEach(TTSProviderKind.implemented.map { SpeakEngineSelection.cloud($0) }) { engine in
-                        HStack(spacing: 4) {
-                            Text(engine.displayName)
-                            if !cloudAllowed { ProBadge() }
-                        }
-                        .tag(engine)
+                        Text(engine.displayName).tag(engine)
                     }
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
                 .fixedSize()
-            }
-
-            if !cloudAllowed {
-                UpgradePromptView(
-                    message: "Cloud TTS voices require a Pro plan. System voice and source-native dictionary audio remain available for free.",
-                    onUpgrade: onUpgrade
-                )
             }
 
             LabeledContent("Accent") {
@@ -1719,8 +1595,6 @@ struct DictionaryConfigFields: View {
 private struct SpeakCardView: View {
 
     @ObservedObject var settings: SettingsStore
-    @ObservedObject var licenseGate: LicenseGate
-    var onUpgrade: () -> Void = {}
     @Binding var enabled: Bool
     @Binding var isPrincipal: Bool
     @Binding var recordingID: ActionIdentifier?
@@ -1737,15 +1611,11 @@ private struct SpeakCardView: View {
     init(
         settings: SettingsStore,
         keychain: KeychainManager,
-        licenseGate: LicenseGate,
-        onUpgrade: @escaping () -> Void = {},
         enabled: Binding<Bool>,
         isPrincipal: Binding<Bool>,
         recordingID: Binding<ActionIdentifier?>
     ) {
         self.settings = settings
-        self.licenseGate = licenseGate
-        self.onUpgrade = onUpgrade
         self._enabled = enabled
         self._isPrincipal = isPrincipal
         self._recordingID = recordingID
@@ -1768,19 +1638,9 @@ private struct SpeakCardView: View {
         ) {
             VStack(alignment: .leading, spacing: 16) {
 
-            // Speech engine picker
-            // When not Pro, cloud engines are disabled with a ProBadge.
-            // If a cloud engine is already selected and the user is not Pro,
-            // fall back to .system so audio never silently routes to a locked engine.
-            let cloudAllowed = licenseGate.entitlements.cloudTTSPremiumAllowed
             let engineBinding = Binding<SpeakEngineSelection>(
-                get: {
-                    let engine = settings.speakSettings.selectedEngine
-                    if case .cloud = engine, !cloudAllowed { return .system }
-                    return engine
-                },
+                get: { settings.speakSettings.selectedEngine },
                 set: { newEngine in
-                    guard cloudAllowed || newEngine == .system else { return }
                     var s = settings.speakSettings
                     s.selectedEngine = newEngine
                     settings.speakSettings = s
@@ -1791,23 +1651,12 @@ private struct SpeakCardView: View {
                     Text(SpeakEngineSelection.system.displayName).tag(SpeakEngineSelection.system)
                     Divider()
                     ForEach(TTSProviderKind.implemented.map { SpeakEngineSelection.cloud($0) }) { engine in
-                        HStack(spacing: 4) {
-                            Text(engine.displayName)
-                            if !cloudAllowed { ProBadge() }
-                        }
-                        .tag(engine)
+                        Text(engine.displayName).tag(engine)
                     }
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
                 .fixedSize()
-                // Cloud enforcement is via the binding set-guard (line above) and ProBadge.
-            }
-            if !cloudAllowed {
-                UpgradePromptView(
-                    message: "Cloud TTS voices (OpenAI, Google, Azure) require a Pro plan. System voice and dictionary audio remain available for free.",
-                    onUpgrade: onUpgrade
-                )
             }
             if case .cloud = engineBinding.wrappedValue {
                 Text("Falls back to the System voice when the cloud key is missing, offline, or the text exceeds the cloud limit.")
@@ -1918,7 +1767,6 @@ private struct SpeakCardView: View {
                             kind: kind,
                             languageCode: settings.speakSettings.defaultAccent.bcp47,
                             rowID: "\(kind.rawValue):voice",
-                            cloudAllowed: cloudAllowed,
                             settings: settings,
                             coordinator: coordinator,
                             activeID: $activeVoicePreviewID
@@ -1974,7 +1822,6 @@ private struct SpeakCardView: View {
                                 kind: kind,
                                 languageCode: bcp47,
                                 rowID: "\(kind.rawValue):\(bcp47)",
-                                cloudAllowed: cloudAllowed,
                                 settings: settings,
                                 coordinator: coordinator,
                                 activeID: $activeVoicePreviewID
@@ -2122,7 +1969,7 @@ private struct SpeakCardView: View {
 
             // Preview — shares the card coordinator so voice tests and preview
             // can't play at the same time.
-            SpeakPreviewRow(settings: settings, coordinator: coordinator, licenseGate: licenseGate)
+            SpeakPreviewRow(settings: settings, coordinator: coordinator)
 
             // Shortcut
             ShortcutRecorderRow(
@@ -2164,13 +2011,11 @@ private struct SpeakPreviewRow: View {
 
     @ObservedObject var settings: SettingsStore
     @ObservedObject var coordinator: SpeakCoordinator
-    @ObservedObject var licenseGate: LicenseGate
     @State private var sampleText: String
 
-    init(settings: SettingsStore, coordinator: SpeakCoordinator, licenseGate: LicenseGate) {
+    init(settings: SettingsStore, coordinator: SpeakCoordinator) {
         self.settings = settings
         self.coordinator = coordinator
-        self.licenseGate = licenseGate
         _sampleText = State(initialValue: settings.speakSettings.defaultAccent.previewSample)
     }
 
@@ -2226,7 +2071,7 @@ private struct SpeakPreviewRow: View {
 
     private func play() {
         let s = settings.speakSettings
-            .resolvingCloudGate(cloudAllowed: licenseGate.entitlements.cloudTTSPremiumAllowed)
+            .resolvingCloudGate(cloudAllowed: true)
         let accent = s.defaultAccent
         let ttsConfig: TTSProviderConfig
         if case .cloud(let kind) = s.selectedEngine {
@@ -2290,8 +2135,6 @@ private struct CustomSpeechFields: View {
 
     let actionID: UUID
     @ObservedObject var settings: SettingsStore
-    @ObservedObject var licenseGate: LicenseGate
-    var onUpgrade: () -> Void = {}
 
     @StateObject private var coordinator: SpeakCoordinator
 
@@ -2303,14 +2146,10 @@ private struct CustomSpeechFields: View {
     init(
         actionID: UUID,
         settings: SettingsStore,
-        keychain: KeychainManager,
-        licenseGate: LicenseGate,
-        onUpgrade: @escaping () -> Void = {}
+        keychain: KeychainManager
     ) {
         self.actionID = actionID
         self.settings = settings
-        self.licenseGate = licenseGate
-        self.onUpgrade = onUpgrade
         _coordinator = StateObject(wrappedValue: SpeakCoordinator(keychain: keychain))
     }
 
@@ -2330,19 +2169,12 @@ private struct CustomSpeechFields: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            let cloudAllowed = licenseGate.entitlements.cloudTTSPremiumAllowed
             let speakSettings = currentAction()?.speakSettings ?? .default
             let ttsConfig = currentAction()?.ttsConfig ?? .default
 
-            // Engine picker: System + cloud options (Pro-gated).
             let engineBinding = Binding<SpeakEngineSelection>(
-                get: {
-                    let engine = (currentAction()?.speakSettings ?? .default).selectedEngine
-                    if case .cloud = engine, !cloudAllowed { return .system }
-                    return engine
-                },
+                get: { (currentAction()?.speakSettings ?? .default).selectedEngine },
                 set: { newEngine in
-                    guard cloudAllowed || newEngine == .system else { return }
                     mutate { $0.speakSettings.selectedEngine = newEngine }
                 }
             )
@@ -2351,22 +2183,12 @@ private struct CustomSpeechFields: View {
                     Text(SpeakEngineSelection.system.displayName).tag(SpeakEngineSelection.system)
                     Divider()
                     ForEach(TTSProviderKind.implemented.map { SpeakEngineSelection.cloud($0) }) { engine in
-                        HStack(spacing: 4) {
-                            Text(engine.displayName)
-                            if !cloudAllowed { ProBadge() }
-                        }
-                        .tag(engine)
+                        Text(engine.displayName).tag(engine)
                     }
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
                 .fixedSize()
-            }
-            if !cloudAllowed {
-                UpgradePromptView(
-                    message: "Cloud TTS voices (OpenAI, Google, Azure) require a Pro plan. System voice remains available for free.",
-                    onUpgrade: onUpgrade
-                )
             }
             if case .cloud = engineBinding.wrappedValue {
                 Text("Falls back to the System voice when the cloud key is missing or offline.")
@@ -2476,7 +2298,6 @@ private struct CustomSpeechFields: View {
                             kind: kind,
                             languageCode: speakSettings.defaultAccent.bcp47,
                             rowID: "\(actionID.uuidString):\(kind.rawValue):voice",
-                            cloudAllowed: cloudAllowed,
                             settings: settings,
                             coordinator: coordinator,
                             activeID: $activeVoicePreviewID,
@@ -2570,8 +2391,7 @@ private struct CustomSpeechFields: View {
             CustomSpeechPreviewRow(
                 actionID: actionID,
                 settings: settings,
-                coordinator: coordinator,
-                licenseGate: licenseGate
+                coordinator: coordinator
             )
         }
         .onAppear {
@@ -2609,8 +2429,6 @@ struct DraftSpeechFields: View {
     @Binding var ttsConfig: TTSProviderConfig
     @ObservedObject var settings: SettingsStore
     let keychain: KeychainManager
-    @ObservedObject var licenseGate: LicenseGate
-    var onUpgrade: () -> Void = {}
 
     @StateObject private var coordinator: SpeakCoordinator
 
@@ -2623,56 +2441,32 @@ struct DraftSpeechFields: View {
         speakSettings: Binding<SpeakSettings>,
         ttsConfig: Binding<TTSProviderConfig>,
         settings: SettingsStore,
-        keychain: KeychainManager,
-        licenseGate: LicenseGate,
-        onUpgrade: @escaping () -> Void = {}
+        keychain: KeychainManager
     ) {
         _speakSettings = speakSettings
         _ttsConfig = ttsConfig
         self.settings = settings
         self.keychain = keychain
-        self.licenseGate = licenseGate
-        self.onUpgrade = onUpgrade
         _coordinator = StateObject(wrappedValue: SpeakCoordinator(keychain: keychain))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            let cloudAllowed = licenseGate.entitlements.cloudTTSPremiumAllowed
-
-            // Engine picker: System + cloud options (Pro-gated).
             let engineBinding = Binding<SpeakEngineSelection>(
-                get: {
-                    let engine = speakSettings.selectedEngine
-                    if case .cloud = engine, !cloudAllowed { return .system }
-                    return engine
-                },
-                set: { newEngine in
-                    guard cloudAllowed || newEngine == .system else { return }
-                    speakSettings.selectedEngine = newEngine
-                }
+                get: { speakSettings.selectedEngine },
+                set: { speakSettings.selectedEngine = $0 }
             )
             LabeledContent("Speech engine") {
                 Picker("", selection: engineBinding) {
                     Text(SpeakEngineSelection.system.displayName).tag(SpeakEngineSelection.system)
                     Divider()
                     ForEach(TTSProviderKind.implemented.map { SpeakEngineSelection.cloud($0) }) { engine in
-                        HStack(spacing: 4) {
-                            Text(engine.displayName)
-                            if !cloudAllowed { ProBadge() }
-                        }
-                        .tag(engine)
+                        Text(engine.displayName).tag(engine)
                     }
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
                 .fixedSize()
-            }
-            if !cloudAllowed {
-                UpgradePromptView(
-                    message: "Cloud TTS voices (OpenAI, Google, Azure) require a Pro plan. System voice remains available for free.",
-                    onUpgrade: onUpgrade
-                )
             }
             if case .cloud = engineBinding.wrappedValue {
                 Text("Falls back to the System voice when the cloud key is missing or offline.")
@@ -2774,7 +2568,6 @@ struct DraftSpeechFields: View {
                             kind: kind,
                             languageCode: speakSettings.defaultAccent.bcp47,
                             rowID: "draft:\(kind.rawValue):voice",
-                            cloudAllowed: cloudAllowed,
                             settings: settings,
                             coordinator: coordinator,
                             activeID: $activeVoicePreviewID,
@@ -2866,8 +2659,7 @@ struct DraftSpeechFields: View {
             DraftSpeechPreviewRow(
                 speakSettings: speakSettings,
                 ttsConfig: ttsConfig,
-                coordinator: coordinator,
-                cloudAllowed: cloudAllowed
+                coordinator: coordinator
             )
         }
         .onAppear {
@@ -2899,19 +2691,16 @@ private struct DraftSpeechPreviewRow: View {
     let speakSettings: SpeakSettings
     let ttsConfig: TTSProviderConfig
     @ObservedObject var coordinator: SpeakCoordinator
-    let cloudAllowed: Bool
     @State private var sampleText: String
 
     init(
         speakSettings: SpeakSettings,
         ttsConfig: TTSProviderConfig,
-        coordinator: SpeakCoordinator,
-        cloudAllowed: Bool
+        coordinator: SpeakCoordinator
     ) {
         self.speakSettings = speakSettings
         self.ttsConfig = ttsConfig
         self.coordinator = coordinator
-        self.cloudAllowed = cloudAllowed
         _sampleText = State(initialValue: speakSettings.defaultAccent.previewSample)
     }
 
@@ -2962,7 +2751,7 @@ private struct DraftSpeechPreviewRow: View {
     }
 
     private func play() {
-        let gated = speakSettings.resolvingCloudGate(cloudAllowed: cloudAllowed)
+        let gated = speakSettings.resolvingCloudGate(cloudAllowed: true)
         let accent = gated.defaultAccent
         let resolvedConfig: TTSProviderConfig
         if case .cloud = gated.selectedEngine {
@@ -2985,14 +2774,12 @@ private struct CustomSpeechPreviewRow: View {
     let actionID: UUID
     @ObservedObject var settings: SettingsStore
     @ObservedObject var coordinator: SpeakCoordinator
-    @ObservedObject var licenseGate: LicenseGate
     @State private var sampleText: String
 
-    init(actionID: UUID, settings: SettingsStore, coordinator: SpeakCoordinator, licenseGate: LicenseGate) {
+    init(actionID: UUID, settings: SettingsStore, coordinator: SpeakCoordinator) {
         self.actionID = actionID
         self.settings = settings
         self.coordinator = coordinator
-        self.licenseGate = licenseGate
         let speakSettings = settings.customActions.first(where: { $0.id == actionID })?.speakSettings ?? .default
         _sampleText = State(initialValue: speakSettings.defaultAccent.previewSample)
     }
@@ -3047,7 +2834,7 @@ private struct CustomSpeechPreviewRow: View {
 
     private func play(speakSettings: SpeakSettings) {
         let gated = speakSettings.resolvingCloudGate(
-            cloudAllowed: licenseGate.entitlements.cloudTTSPremiumAllowed
+            cloudAllowed: true
         )
         let accent = gated.defaultAccent
         let ttsConfig: TTSProviderConfig

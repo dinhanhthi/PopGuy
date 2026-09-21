@@ -29,21 +29,9 @@ import UniformTypeIdentifiers
 struct AppsView: View {
 
     @ObservedObject var settings: SettingsStore
-    @ObservedObject var licenseGate: LicenseGate
-    var onUpgrade: () -> Void = {}
 
     @State private var newDomain = ""
     @State private var domainValidationError: String? = nil
-
-    private var atIgnoredAppLimit: Bool {
-        !licenseGate.entitlements.isPro
-            && settings.ignoredAppBundleIDs.count >= licenseGate.entitlements.maxIgnoredApps
-    }
-
-    private var atIgnoredDomainLimit: Bool {
-        !licenseGate.entitlements.isPro
-            && settings.ignoredDomains.count >= licenseGate.entitlements.maxIgnoredDomains
-    }
 
     var body: some View {
         Form {
@@ -66,15 +54,7 @@ struct AppsView: View {
                     Label("Add App…", systemImage: "plus")
                 }
                 .buttonStyle(.bordered)
-                .disabled(atIgnoredAppLimit)
                 .padding(.vertical, 4)
-
-                if atIgnoredAppLimit {
-                    UpgradePromptView(
-                        message: "Free plan is limited to \(licenseGate.entitlements.maxIgnoredApps) ignored apps. Upgrade to Pro for unlimited ignored apps.",
-                        onUpgrade: onUpgrade
-                    )
-                }
 
             } header: {
                 Text("Ignored Apps")
@@ -133,20 +113,12 @@ struct AppsView: View {
                         Button("Add") { commitNewDomain() }
                             .buttonStyle(.bordered)
                     }
-                    .disabled(atIgnoredDomainLimit)
                     .padding(.vertical, 4)
 
                     if let err = domainValidationError {
                         Text(err)
                             .font(.caption)
                             .foregroundStyle(.red)
-                    }
-
-                    if atIgnoredDomainLimit {
-                        UpgradePromptView(
-                            message: "Free plan is limited to \(licenseGate.entitlements.maxIgnoredDomains) ignored domains. Upgrade to Pro for unlimited ignored domains.",
-                            onUpgrade: onUpgrade
-                        )
                     }
                 }
             } header: {
@@ -163,7 +135,7 @@ struct AppsView: View {
 
     private func commitNewDomain() {
         let trimmed = newDomain.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !atIgnoredDomainLimit else { return }
+        guard !trimmed.isEmpty else { return }
         let countBefore = settings.ignoredDomains.count
         settings.addIgnoredDomain(trimmed)
         if settings.ignoredDomains.count > countBefore {

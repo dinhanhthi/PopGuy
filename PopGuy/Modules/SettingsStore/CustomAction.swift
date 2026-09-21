@@ -477,7 +477,7 @@ extension CustomAction {
     ///   allowed set for their type (returns `nil`).
     /// - Accepts `.speech` / `.dictionary` actions unconditionally — they have no
     ///   ProviderKind constraint — but clamps cloud speech engines to `.system`
-    ///   when the importing user is not Pro.
+    ///   when `cloudAllowed` is false.
     /// - Regenerates the `id` so an imported action never collides with an existing one.
     /// - Bounds all unbounded string fields to prevent UserDefaults bloat.
     ///   String fields are bounded regardless of type — a tampered file can attach
@@ -485,8 +485,7 @@ extension CustomAction {
     ///
     /// - Parameters:
     ///   - action:       The decoded (untrusted) action.
-    ///   - cloudAllowed: Whether the importing user's entitlements permit cloud TTS.
-    ///                   Pass `licenseGate.entitlements.cloudTTSPremiumAllowed`.
+    ///   - cloudAllowed: Whether cloud TTS is permitted. Production always passes `true`.
     /// - Returns: A sanitised copy with a fresh UUID, or `nil` when the action
     ///            has a provider that is disallowed for its type.
     nonisolated static func sanitizeImported(

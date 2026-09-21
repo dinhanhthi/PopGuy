@@ -94,19 +94,14 @@ nonisolated enum ToolbarZoom: String, CaseIterable, Identifiable, Codable {
 
 // MARK: - LocalModelAvailability
 
-/// Decision returned by `SettingsStore.availability(for:isPro:)`.
+/// Decision returned by `SettingsStore.availability(for:)`.
 ///
-/// Checked in this priority order:
-///  1. Capability (MLX supported on this Mac?)
-///  2. Licensing (Pro model but user is not Pro?)
-///  3. Available (all clear)
+/// Capability-only: MLX supported on this Mac, or available.
 ///
 /// `nonisolated` so views can pattern-match on it without an actor hop.
 nonisolated enum LocalModelAvailability: Sendable {
     /// MLX is not supported on this Mac (e.g. Intel or macOS < 14).
     case unsupported(reason: String)
-    /// The model requires Pro and the user is on the free plan.
-    case proLocked
     /// The model can be downloaded or used.
     case available
 }
@@ -143,6 +138,7 @@ final class SettingsStore: ObservableObject {
         static let customActions              = "settings.customActions"
         static let shortcutBindings           = "settings.shortcutBindings"
         static let hasOnboarded               = "settings.hasOnboarded"
+        static let hasSeenNowFreeAnnouncement = "settings.hasSeenNowFreeAnnouncement"
         static let ignoredAppBundleIDs        = "settings.ignoredAppBundleIDs"
         static let ignoredDomains             = "settings.ignoredDomains"
         static let ignoredDomainsEnabled      = "settings.ignoredDomainsEnabled"
@@ -169,7 +165,6 @@ final class SettingsStore: ObservableObject {
         static let historyStoreFullText       = "settings.historyStoreFullText"
         static let actionOrder                = "settings.actionOrder"
         static let principalActionIDs         = "settings.principalActionIDs"
-        static let actCount                   = "settings.actCount"
         static let completedLocalModelIDs     = "settings.completedLocalModelIDs"
         static let localModelIdleSeconds      = "settings.localModelIdleSeconds"
     }
@@ -390,6 +385,13 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(hasOnboarded, forKey: Keys.hasOnboarded) }
     }
 
+    /// Whether the one-time “PopGuy is now free” announcement has been shown
+    /// (or skipped for a fresh install). Defaults to `false` when the key is
+    /// absent so existing users see the window once.
+    @Published var hasSeenNowFreeAnnouncement: Bool {
+        didSet { defaults.set(hasSeenNowFreeAnnouncement, forKey: Keys.hasSeenNowFreeAnnouncement) }
+    }
+
     /// Bundle IDs of apps in which the floating popup is suppressed.
     @Published var ignoredAppBundleIDs: [String] {
         didSet { save(ignoredAppBundleIDs, key: Keys.ignoredAppBundleIDs) }
@@ -508,13 +510,6 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(zoomIncludesFontSize, forKey: Keys.zoomIncludesFontSize) }
     }
 
-    /// Running count of toolbar actions performed by free-tier users.
-    /// Persisted across launches. Pro users are never counted (the closure in
-    /// ToolbarController guards on `!licenseGate.entitlements.isPro`).
-    @Published private(set) var actCount: Int {
-        didSet { defaults.set(actCount, forKey: Keys.actCount) }
-    }
-
     /// Action identifiers assigned to the principal (inline) toolbar row.
     /// Overflow actions are enabled identifiers not in this set. Persisted via
     /// `didSet` on mutation; `didSet` does NOT fire on init assignment.
@@ -611,6 +606,7 @@ final class SettingsStore: ObservableObject {
         customActions       = loadedCustomActions
         shortcutBindings = Self.load([ShortcutBinding].self, key: Keys.shortcutBindings, from: defaults) ?? ShortcutBinding.defaultBuiltins
         hasOnboarded     = defaults.object(forKey: Keys.hasOnboarded) as? Bool ?? false
+        hasSeenNowFreeAnnouncement = defaults.object(forKey: Keys.hasSeenNowFreeAnnouncement) as? Bool ?? false
         ignoredAppBundleIDs      = Self.load([String].self, key: Keys.ignoredAppBundleIDs, from: defaults) ?? []
         ignoredDomains           = Self.load([String].self, key: Keys.ignoredDomains, from: defaults) ?? []
         ignoredDomainsEnabled    = defaults.object(forKey: Keys.ignoredDomainsEnabled) as? Bool ?? false
@@ -631,7 +627,6 @@ final class SettingsStore: ObservableObject {
         globalPrompt = defaults.string(forKey: Keys.globalPrompt) ?? ""
         toolbarZoom = defaults.string(forKey: Keys.toolbarZoom).flatMap(ToolbarZoom.init(rawValue:)) ?? .x1
         zoomIncludesFontSize = defaults.object(forKey: Keys.zoomIncludesFontSize) == nil ? true : defaults.bool(forKey: Keys.zoomIncludesFontSize)
-        actCount = defaults.object(forKey: Keys.actCount) as? Int ?? 0
         // Reconcile actionOrder and principal partition using locals only — `self`
         // is not fully initialized until both assignments below complete.
         let rawOrder = Self.load([ActionIdentifier].self, key: Keys.actionOrder, from: defaults)
@@ -660,7 +655,7 @@ final class SettingsStore: ObservableObject {
                 dictionaryEnabled: dictConfig.isEnabled,
                 customActions: loadedCustomActions
             )
-            let migrated = Set(enabled.prefix(ProConfig.maxPrincipalActions))
+            let migrated = Set(enabled.prefix(ToolbarLimits.maxPrincipalActions))
             resolvedPrincipal = Self.reconcilePrincipal(persisted: migrated, actionOrder: reconciledOrder)
         }
 
@@ -684,7 +679,7 @@ final class SettingsStore: ObservableObject {
 
     /// Maximum number of enabled actions that may be active on the toolbar at once
     /// (principal row + burger menu combined).
-    static let maxToolbarActions = ProConfig.maxPrincipalActions + ProConfig.maxBurgerActions
+    static let maxToolbarActions = ToolbarLimits.maxPrincipalActions + ToolbarLimits.maxBurgerActions
 
     /// Canonical default order for the six built-in actions.
     /// Custom actions are appended after these in `customActions` array order.
@@ -891,21 +886,6 @@ final class SettingsStore: ObservableObject {
         ignoredDomains.contains { BrowserURLReader.hostMatches(host: host, domain: $0) }
     }
 
-    // MARK: - Act counter
-
-    /// Increment the free-tier act counter and return whether a nag is due.
-    ///
-    /// Called by `ToolbarController` after confirming the user is not Pro.
-    /// The `@discardableResult` allows callers that only want the side effect.
-    ///
-    /// - Returns: `true` when the new `actCount` satisfies `UsagePolicy.isNagDue`,
-    ///   i.e. exactly at counts 101, 111, 121, …
-    @discardableResult
-    func recordAct() -> Bool {
-        actCount += 1
-        return UsagePolicy.isNagDue(actCount: actCount)
-    }
-
     // MARK: - Action order
 
     /// Compute the reconciled actionOrder from a persisted snapshot and the current custom actions.
@@ -1008,12 +988,12 @@ final class SettingsStore: ObservableObject {
         if value {
             // Enabled actions count toward the principal cap; disabled actions may
             // be assigned freely and only block once enabled.
-            if isEnabled(id), principalActionCount >= ProConfig.maxPrincipalActions {
+            if isEnabled(id), principalActionCount >= ToolbarLimits.maxPrincipalActions {
                 return false
             }
             principalActionIDs.insert(id)
         } else {
-            if isEnabled(id), overflowActionCount >= ProConfig.maxBurgerActions {
+            if isEnabled(id), overflowActionCount >= ToolbarLimits.maxBurgerActions {
                 return false
             }
             principalActionIDs.remove(id)
@@ -1062,20 +1042,20 @@ final class SettingsStore: ObservableObject {
 
     /// Reconcile a persisted principal set against the current `actionOrder`.
     ///
-    /// Drops stale identifiers, trims to `ProConfig.maxPrincipalActions` by
+    /// Drops stale identifiers, trims to `ToolbarLimits.maxPrincipalActions` by
     /// `actionOrder`, and leaves actions not in the set in the burger zone.
     private static func reconcilePrincipal(
         persisted: Set<ActionIdentifier>,
         actionOrder: [ActionIdentifier]
     ) -> Set<ActionIdentifier> {
         var ordered = actionOrder.filter { persisted.contains($0) }
-        if ordered.count > ProConfig.maxPrincipalActions {
-            ordered = Array(ordered.prefix(ProConfig.maxPrincipalActions))
+        if ordered.count > ToolbarLimits.maxPrincipalActions {
+            ordered = Array(ordered.prefix(ToolbarLimits.maxPrincipalActions))
         }
         var principalSet = Set(ordered)
         var burger = actionOrder.filter { !principalSet.contains($0) }
-        while burger.count > ProConfig.maxBurgerActions,
-              principalSet.count < ProConfig.maxPrincipalActions {
+        while burger.count > ToolbarLimits.maxBurgerActions,
+              principalSet.count < ToolbarLimits.maxPrincipalActions {
             let promote = burger.removeFirst()
             principalSet.insert(promote)
         }
@@ -1110,16 +1090,13 @@ final class SettingsStore: ObservableObject {
 
     // MARK: - Local model availability
 
-    /// Returns the availability status for `model` given whether the user is Pro.
+    /// Returns the availability status for `model`.
     ///
-    /// Checks in priority order: capability → licensing → available.
+    /// Capability-only: unsupported on this Mac, or available.
     /// Callers (UI + download enforcement) should call this before any download or use.
-    nonisolated func availability(for model: LocalModel, isPro: Bool) -> LocalModelAvailability {
+    nonisolated func availability(for model: LocalModel) -> LocalModelAvailability {
         guard isMLXSupported else {
             return .unsupported(reason: MLXCapability.unsupportedReason)
-        }
-        if !model.isFreeTier && !isPro {
-            return .proLocked
         }
         return .available
     }
@@ -1209,7 +1186,7 @@ final class SettingsStore: ObservableObject {
 
     /// Download the model with the given catalog id.
     ///
-    /// - Checks capability and Pro gate via `availability(for:isPro:)`; refuses and
+    /// - Checks capability via `availability(for:)`; refuses and
     ///   sets `localModelDownloadError` when not `.available`.
     /// - Streams progress updates to `localModelDownloadProgress[id]`.
     /// - On completion clears progress, clears `activeLocalModelDownloadID`, and
@@ -1217,18 +1194,15 @@ final class SettingsStore: ObservableObject {
     /// - On error clears progress, clears `activeLocalModelDownloadID`, and sets
     ///   `localModelDownloadError`.
     /// - The work runs in a stored `Task` that `cancelLocalModelDownload()` cancels.
-    func downloadLocalModel(_ id: String, isPro: Bool) {
+    func downloadLocalModel(_ id: String) {
         guard let model = LocalModelCatalog.model(for: id) else {
             localModelDownloadError = "Unknown model id: \(id)"
             return
         }
 
-        switch availability(for: model, isPro: isPro) {
+        switch availability(for: model) {
         case .unsupported(let reason):
             localModelDownloadError = reason
-            return
-        case .proLocked:
-            localModelDownloadError = "This model requires a Pro license."
             return
         case .available:
             break

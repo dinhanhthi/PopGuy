@@ -25,8 +25,6 @@ struct CustomActionEditSheet: View {
     @State private var suppressAfterRunReset = false
     @ObservedObject var settings: SettingsStore
     let keychain: KeychainManager
-    @ObservedObject var licenseGate: LicenseGate
-    var onUpgrade: () -> Void = {}
     let onSave: (CustomAction) -> Void
     let onCancel: () -> Void
 
@@ -48,16 +46,12 @@ struct CustomActionEditSheet: View {
         action: CustomAction,
         settings: SettingsStore,
         keychain: KeychainManager,
-        licenseGate: LicenseGate,
-        onUpgrade: @escaping () -> Void = {},
         onSave: @escaping (CustomAction) -> Void,
         onCancel: @escaping () -> Void
     ) {
         _draft = State(initialValue: action)
         self.settings = settings
         self.keychain = keychain
-        self.licenseGate = licenseGate
-        self.onUpgrade = onUpgrade
         self.onSave = onSave
         self.onCancel = onCancel
     }
@@ -113,10 +107,10 @@ struct CustomActionEditSheet: View {
                 Button("Save") {
                     var saved = draft
                     saved.speakSettings = saved.speakSettings.resolvingCloudGate(
-                        cloudAllowed: licenseGate.entitlements.cloudTTSPremiumAllowed
+                        cloudAllowed: true
                     )
                     saved.dictionaryConfig.speakSettings = saved.dictionaryConfig.speakSettings.resolvingCloudGate(
-                        cloudAllowed: licenseGate.entitlements.cloudTTSPremiumAllowed
+                        cloudAllowed: true
                     )
                     onSave(saved)
                 }
@@ -391,9 +385,7 @@ struct CustomActionEditSheet: View {
                 speakSettings: $draft.speakSettings,
                 ttsConfig: $draft.ttsConfig,
                 settings: settings,
-                keychain: keychain,
-                licenseGate: licenseGate,
-                onUpgrade: onUpgrade
+                keychain: keychain
             )
         }
     }
@@ -592,9 +584,7 @@ struct CustomActionEditSheet: View {
             Divider()
 
             DictionaryConfigFields(
-                config: $draft.dictionaryConfig,
-                licenseGate: licenseGate,
-                onUpgrade: onUpgrade
+                config: $draft.dictionaryConfig
             )
         }
     }

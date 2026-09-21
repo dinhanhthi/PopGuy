@@ -17,13 +17,13 @@ struct ToolbarActionAllocationTests {
         .custom(UUID()), .custom(UUID()), .custom(UUID()),
     ]
 
-    @Test("Pro caps principal at 6 and overflow at 5")
-    func proCapsZones() {
+    @Test("7 principal + 6 overflow is layout-capped at 6 + 5")
+    func capsZones() {
+        #expect(principal.count == 7)
+        #expect(overflow.count == 6)
         let result = ToolbarController.allocate(
             principal: principal,
             overflow: overflow,
-            isPro: true,
-            freeMaxActive: 5,
             maxPrincipal: 6,
             maxBurger: 5
         )
@@ -31,33 +31,17 @@ struct ToolbarActionAllocationTests {
         #expect(result.overflow.count == 5)
     }
 
-    @Test("Free allocates principal-first within freeMaxActive")
-    func freePrincipalFirst() {
-        let result = ToolbarController.allocate(
-            principal: principal,
-            overflow: overflow,
-            isPro: false,
-            freeMaxActive: 5,
-            maxPrincipal: 6,
-            maxBurger: 5
-        )
-        #expect(result.principal.count == 5)
-        #expect(result.overflow.count == 0)
-    }
-
-    @Test("Free leaves remainder for burger when principal is smaller than budget")
-    func freeRemainderForBurger() {
+    @Test("principal shorter than maxPrincipal is kept in full; overflow still capped")
+    func shortPrincipalKeepsAll() {
         let smallPrincipal: [ActionIdentifier] = [.builtin(.improve), .builtin(.shorten)]
         let result = ToolbarController.allocate(
             principal: smallPrincipal,
             overflow: overflow,
-            isPro: false,
-            freeMaxActive: 5,
             maxPrincipal: 6,
             maxBurger: 5
         )
         #expect(result.principal.count == 2)
-        #expect(result.overflow.count == 3)
+        #expect(result.overflow.count == 5)
     }
 
     @Test("Empty overflow yields empty burger list")
@@ -65,11 +49,10 @@ struct ToolbarActionAllocationTests {
         let result = ToolbarController.allocate(
             principal: principal,
             overflow: [],
-            isPro: true,
-            freeMaxActive: 5,
             maxPrincipal: 6,
             maxBurger: 5
         )
         #expect(result.overflow.isEmpty)
+        #expect(result.principal.count == 6)
     }
 }

@@ -30,16 +30,6 @@ func shouldIgnoreReentrantSelection(isShowing: Bool, actionInProgress: Bool, new
     isShowing && actionInProgress && newText == currentText
 }
 
-/// Returns the effective set of ignored app bundle IDs to enforce at runtime.
-///
-/// Pro users get the full list. Non-Pro users only honor the first `maxAllowed`
-/// entries by stable insertion order — apps beyond the cap are no longer ignored
-/// until Pro is active (the toolbar reappears there). Nothing is removed from
-/// storage; this is a display-time cap only. Pure/testable.
-func effectiveIgnoredApps(_ all: [String], maxAllowed: Int, isPro: Bool) -> [String] {
-    isPro ? all : Array(all.prefix(maxAllowed))
-}
-
 @MainActor
 final class ToolbarController {
 
@@ -50,7 +40,6 @@ final class ToolbarController {
     private let pipeline: SelectionPipeline
     private let settings: SettingsStore
     private let keychain: KeychainManager
-    private let licenseGate: LicenseGate
     private let panel: FloatingPanel
     private let viewModel: ToolbarViewModel
     let outputHandler: OutputHandler   // Internal so AppDelegate can reach it if needed.
@@ -73,9 +62,6 @@ final class ToolbarController {
 
     /// Called when the user taps the Settings button. Provided by AppDelegate.
     private let onOpenSettings: (() -> Void)?
-
-    /// Called when a free-tier act count triggers a soft nag. Wired by AppDelegate.
-    var onUpgradeNagDue: (() -> Void)?
 
     // MARK: - State
 
@@ -105,13 +91,11 @@ final class ToolbarController {
         pipeline: SelectionPipeline,
         settings: SettingsStore,
         keychain: KeychainManager = KeychainManager(),
-        licenseGate: LicenseGate = LicenseGate(),
         onOpenSettings: (() -> Void)? = nil
     ) {
         self.pipeline = pipeline
         self.settings = settings
         self.keychain = keychain
-        self.licenseGate = licenseGate
         self.onOpenSettings = onOpenSettings
         self.viewModel = ToolbarViewModel()
         self.outputHandler = OutputHandler()
@@ -209,16 +193,6 @@ final class ToolbarController {
         // dismiss the toolbar once they finish — nothing is left to interact with.
         viewModel.onRequestDismiss = { [weak self] in
             self?.hide()
-        }
-
-        // Wire the act counter: fires on every toolbar action run. Pro users are
-        // never counted (guard on isPro). When recordAct() returns true the nag
-        // is signalled to the AppDelegate via onUpgradeNagDue.
-        viewModel.onActPerformed = { [weak self] in
-            guard let self, !self.licenseGate.entitlements.isPro else { return }
-            if self.settings.recordAct() {
-                self.onUpgradeNagDue?()
-            }
         }
     }
 
@@ -434,12 +408,11 @@ final class ToolbarController {
                 // run its assigned default action directly — reusing the captured
                 // event, no re-capture — or show the toolbar when none is assigned.
                 if event.isDoubleClick && self.settings.triggerDoubleClickEnabled {
-                    // Assigning a default action is feature-flagged + Pro-gated —
+                    // Assigning a default action is feature-flagged —
                     // otherwise fall back to showing the toolbar regardless of any
                     // stored assignment.
-                    if ProConfig.doubleClickActionFeatureEnabled,
-                       let assigned = self.settings.doubleClickAssignedAction,
-                       self.licenseGate.entitlements.doubleClickActionAllowed {
+                    if ToolbarLimits.doubleClickActionFeatureEnabled,
+                       let assigned = self.settings.doubleClickAssignedAction {
                         self.showThenDispatch(event, id: assigned, customActions: self.settings.customActions)
                     } else {
                         self.handleEvent(event)
@@ -499,17 +472,7 @@ final class ToolbarController {
         // Never treat PopGuy itself as the source app (e.g. when the Settings window is
         // frontmost and the chord fires) — that would let "Ignore this app" disable PopGuy.
         let sourceBundleID = (frontmostBundleID == Bundle.main.bundleIdentifier) ? nil : frontmostBundleID
-        // Apply free-tier cap: non-Pro users only honor the first maxIgnoredApps
-        // entries by stable insertion order. Apps beyond that cap are no longer
-        // ignored until Pro is active — the toolbar reappears in those apps.
-        // Nothing is deleted from storage; the cap is a runtime-only suppression.
-        let appEnt = licenseGate.entitlements
-        let effective = effectiveIgnoredApps(
-            settings.ignoredAppBundleIDs,
-            maxAllowed: appEnt.maxIgnoredApps,
-            isPro: appEnt.isPro
-        )
-        if let bundleID = sourceBundleID, effective.contains(bundleID) {
+        if let bundleID = sourceBundleID, settings.ignoredAppBundleIDs.contains(bundleID) {
             return
         }
 
@@ -527,14 +490,6 @@ final class ToolbarController {
             sourceDomain = BrowserURLReader.currentHost(forBundleID: bundleID)
             if let host = sourceDomain, settings.isIgnoredDomain(host: host) {
                 return
-            }
-            // Enforce the free-tier ignored-domains cap on this path too: when the
-            // user is at the limit, hide the "Ignore this site" button (Settings
-            // disables its add field the same way) so the toolbar cannot bypass the
-            // Pro gate. Suppression above still uses the real host.
-            let ent = licenseGate.entitlements
-            if !ent.isPro, settings.ignoredDomains.count >= ent.maxIgnoredDomains {
-                sourceDomain = nil
             }
         }
 
@@ -569,35 +524,11 @@ final class ToolbarController {
         viewModel.promptEnabled       = promptEnabled
         viewModel.dictionaryEnabled   = settings.dictionaryConfig.isEnabled
 
-        // Phase 5: thread enabled custom actions into the view model.
-        // Cap at maxCustomActions when not Pro so a downgraded user cannot access
-        // more enabled custom actions than their tier permits.
-        let cloudAllowed = licenseGate.entitlements.cloudTTSPremiumAllowed
-        // Push the cloud-TTS entitlement into the view model so speech custom
-        // actions apply the same gate as the built-in Speak button. Co-located
-        // with the customActions push so both are always updated together.
-        viewModel.cloudTTSAllowed = cloudAllowed
+        // Thread enabled custom actions into the view model. Cloud TTS is always
+        // allowed here; the provider still requires a configured API key.
+        viewModel.cloudTTSAllowed = true
         let enabledCustom = settings.customActions.filter(\.isEnabled)
-        if licenseGate.entitlements.isPro {
-            viewModel.customActions = CustomAction.visible(enabledCustom, forSelection: event.text)
-        } else {
-            // Cap by DISPLAY order (actionOrder), not storage order: keep the first
-            // N enabled custom actions as the user ordered them, so reordering a
-            // 4th action to the front shows it instead of silently dropping it.
-            let cap = licenseGate.entitlements.maxCustomActions
-            let allowedIDs = Set(
-                settings.enabledOrderedIdentifiers
-                    .compactMap { id -> UUID? in
-                        if case .custom(let uuid) = id { return uuid }
-                        return nil
-                    }
-                    .prefix(cap)
-            )
-            viewModel.customActions = CustomAction.visible(
-                enabledCustom.filter { allowedIDs.contains($0.id) },
-                forSelection: event.text
-            )
-        }
+        viewModel.customActions = CustomAction.visible(enabledCustom, forSelection: event.text)
 
         // Push the result font size so ToolbarView renders at the configured scale.
         viewModel.resultFontSize = settings.resultFontSize
@@ -606,10 +537,8 @@ final class ToolbarController {
         viewModel.preserveFormatting = settings.preserveFormatting
 
         // Speak: copy enabled flag, settings, and cloud TTS config per presentation.
-        // Pass the gated copy of speakSettings (engine forced to .system for non-Pro)
-        // so that ToolbarViewModel.triggerSpeak always uses the resolved engine.
         viewModel.speakEnabled  = settings.speakEnabled
-        let gatedSpeak = settings.speakSettings.resolvingCloudGate(cloudAllowed: cloudAllowed)
+        let gatedSpeak = settings.speakSettings.resolvingCloudGate(cloudAllowed: true)
         viewModel.speakSettings = gatedSpeak
         viewModel.selectedSpeakAccent = gatedSpeak.defaultAccent
         if case .cloud(let kind) = gatedSpeak.selectedEngine {
@@ -618,9 +547,9 @@ final class ToolbarController {
             viewModel.ttsConfig = .default
         }
 
-        // Dictionary: copy dedicated speech config (gated for cloud TTS).
+        // Dictionary: copy dedicated speech config (cloud TTS always allowed).
         let gatedDictionarySpeak = settings.dictionaryConfig.speakSettings
-            .resolvingCloudGate(cloudAllowed: cloudAllowed)
+            .resolvingCloudGate(cloudAllowed: true)
         viewModel.dictionarySpeakSettings = gatedDictionarySpeak
         viewModel.dictionaryAccent = settings.dictionaryConfig.accent
         if case .cloud(let kind) = gatedDictionarySpeak.selectedEngine {
@@ -630,11 +559,10 @@ final class ToolbarController {
         }
 
         // Drive the action bar from the user's saved order (enabled identifiers only).
-        // Free tier: cap the total actions shown in the toolbar (built-in + custom)
-        // to maxActiveActions, by display order. Pro is uncapped (Int.max).
-        // Additionally, remove any .custom entries that were filtered out by the
-        // appliesWhenRegex visibility check so dividers and compactActions counts
-        // reflect only the actions that are actually rendered.
+        // Zone caps come from ToolbarLimits. Additionally, remove any .custom
+        // entries that were filtered out by the appliesWhenRegex visibility check
+        // so dividers and compactActions counts reflect only the actions that
+        // are actually rendered.
         let visibleCustomIDs = Set(viewModel.customActions.map(\.id))
         func filterVisible(_ ids: [ActionIdentifier]) -> [ActionIdentifier] {
             ids.filter { id in
@@ -647,10 +575,8 @@ final class ToolbarController {
         let allocated = Self.allocate(
             principal: principalIDs,
             overflow: overflowIDs,
-            isPro: licenseGate.entitlements.isPro,
-            freeMaxActive: licenseGate.entitlements.maxActiveActions,
-            maxPrincipal: ProConfig.maxPrincipalActions,
-            maxBurger: ProConfig.maxBurgerActions
+            maxPrincipal: ToolbarLimits.maxPrincipalActions,
+            maxBurger: ToolbarLimits.maxBurgerActions
         )
         viewModel.orderedActions = allocated.principal
         viewModel.overflowActions = allocated.overflow
@@ -659,25 +585,17 @@ final class ToolbarController {
         show(for: event)
     }
 
-    /// Apply universal zone caps and the free-tier display budget.
+    /// Apply universal zone caps from ToolbarLimits (or the caller-supplied values).
     nonisolated static func allocate(
         principal: [ActionIdentifier],
         overflow: [ActionIdentifier],
-        isPro: Bool,
-        freeMaxActive: Int,
         maxPrincipal: Int,
         maxBurger: Int
     ) -> (principal: [ActionIdentifier], overflow: [ActionIdentifier]) {
-        if isPro {
-            return (
-                Array(principal.prefix(maxPrincipal)),
-                Array(overflow.prefix(maxBurger))
-            )
-        }
-        let cappedPrincipal = Array(principal.prefix(min(maxPrincipal, freeMaxActive)))
-        let remaining = max(0, freeMaxActive - cappedPrincipal.count)
-        let cappedOverflow = Array(overflow.prefix(min(maxBurger, remaining)))
-        return (cappedPrincipal, cappedOverflow)
+        (
+            Array(principal.prefix(maxPrincipal)),
+            Array(overflow.prefix(maxBurger))
+        )
     }
 
     // MARK: - Show / Hide

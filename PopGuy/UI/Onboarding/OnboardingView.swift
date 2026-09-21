@@ -3,11 +3,11 @@
 //
 // Shown ONCE on first launch (guarded by SettingsStore.hasOnboarded).
 // Steps:
-//   0. Welcome — what PopGuy does (trial-aware).
+//   0. Welcome — what PopGuy does.
 //   1. Accessibility permission.
 //   2. Provider setup — Local AI vs Cloud API key chooser.
 //   3. Triggers — Cmd+C+C chord + optional replacement + show-on-select.
-//   4. Actions — pick built-in toolbar actions (free-tier cap).
+//   4. Actions — pick built-in toolbar actions.
 //   5. Finish — launch at login + feature tour.
 //
 // Isolation: @MainActor — all UI.
@@ -24,12 +24,7 @@ import SwiftUI
 ///   - `axPermission`: the shared `AccessibilityPermission` object (do NOT create a new one).
 ///   - `settings`: the shared `SettingsStore` (do NOT create a new one).
 ///   - `keychain`: the shared `KeychainManager` (API keys stay in Keychain only).
-///   - `trialState`: the current trial state computed by `LicenseGate.bootstrapTrial()` before
-///     onboarding is shown. Determines which welcome-page variant is rendered.
-///   - `isPro`: `LicenseGate.entitlements.isPro` (true for Pro and an active trial).
-///     Used only to gate the free active-action cap on the Choose Actions page.
 ///   - `onOpenSettings`: closure that opens the existing Settings window.
-///   - `onGetPro`: closure that opens the checkout URL (trial-ineligible variant only).
 ///   - `onFinish`: closure called when the user taps "Get Started" (or the window closes).
 @MainActor
 struct OnboardingView: View {
@@ -37,10 +32,7 @@ struct OnboardingView: View {
     @ObservedObject var axPermission: AccessibilityPermission
     @ObservedObject var settings: SettingsStore
     let keychain: KeychainManager
-    let trialState: TrialState
-    let isPro: Bool
     let onOpenSettings: () -> Void
-    let onGetPro: () -> Void
     let onFinish: () -> Void
 
     @State private var page: Int = 0
@@ -102,8 +94,7 @@ struct OnboardingView: View {
                     }
 
                     if page == 0 {
-                        // Welcome page: trial-aware label, prominent style.
-                        Button(welcomePrimaryLabel) { page += 1 }
+                        Button("Get started") { page += 1 }
                             .modifier(OnboardingDefaultActionModifier(enabled: !isRecordingChord))
                             .buttonStyle(.borderedProminent)
                     } else if page < pageCount - 1 {
@@ -145,7 +136,7 @@ struct OnboardingView: View {
             case .cloud:
                 settings.clearPendingOnboardingLocalMap()
             case .local:
-                if let modelID = freeLocalModelID,
+                if let modelID = onboardingLocalModelID,
                    settings.activeLocalModelDownloadID == modelID {
                     settings.markPendingOnboardingLocalMap(modelID: modelID)
                 }
@@ -154,56 +145,16 @@ struct OnboardingView: View {
         }
     }
 
-    /// Label for the footer's primary advance button.
-    ///
-    /// On the welcome page (page 0): varies by trial variant.
-    /// On all other pages: "Next" (standard label).
-    private var welcomePrimaryLabel: String {
-        guard page == 0 else { return "Next" }
-        return trialState.isActive ? "Start free trial" : "Get started"
-    }
-
     // MARK: - Pages
 
     private var welcomePage: some View {
-        Group {
-            if trialState.isActive {
-                // Trial-active variant: user is eligible and trial is already running.
-                VStack(alignment: .leading, spacing: 16) {
-                    OnboardingHeader(
-                        systemImage: "sparkles",
-                        title: "Welcome to PopGuy",
-                        subtitle: "All Pro features are free for 2 months."
-                    )
-                    Text("When it ends, your settings revert to the Free limits.")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-            } else {
-                // Ineligible variant: post-cutoff or kill-switch off.
-                VStack(alignment: .leading, spacing: 16) {
-                    OnboardingHeader(
-                        systemImage: "text.cursor",
-                        title: "Welcome to PopGuy",
-                        subtitle: "Free to use with limits on custom actions, history, and active toolbar slots. Upgrade to Pro for unlimited."
-                    )
-                    if ProConfig.purchaseEnabled {
-                        Button("Get Pro\u{2026}") {
-                            onGetPro()
-                        }
-                        .buttonStyle(.bordered)
-                    } else {
-                        Button("Get Pro\u{2026}") {}
-                            .buttonStyle(.bordered)
-                            .disabled(true)
-                        Text(ProConfig.purchaseComingSoonNote)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
-            }
+        VStack(alignment: .leading, spacing: 16) {
+            OnboardingHeader(
+                systemImage: "text.cursor",
+                title: "Welcome to PopGuy",
+                subtitle: "Select text in any app. A toolbar appears nearby with Improve, Translate, and your own actions."
+            )
+            Spacer()
         }
     }
 
@@ -284,7 +235,7 @@ struct OnboardingView: View {
                 subtitle: "Pick which actions appear on the toolbar."
             )
 
-            OnboardingActionsPage(settings: settings, isPro: isPro)
+            OnboardingActionsPage(settings: settings)
 
             Spacer()
         }
@@ -360,12 +311,12 @@ struct OnboardingView: View {
 
     // MARK: - Local AI action mapping
 
-    /// Free-tier catalog entry offered in onboarding (`ProConfig.freeLocalModelIDs`).
-    private var freeLocalModelID: String? {
-        LocalModelCatalog.all.first { ProConfig.freeLocalModelIDs.contains($0.id) }?.id
+    /// First catalog entry offered in onboarding.
+    private var onboardingLocalModelID: String? {
+        LocalModelCatalog.all.first?.id
     }
 
-    /// Point Improve / Shorten / Proofread / Prompt at the free local model.
+    /// Point Improve / Shorten / Proofread / Prompt at the onboarding local model.
     /// Translate is left untouched. No-op unless first-launch (`!hasOnboarded`),
     /// Local is selected, and the model is installed. Re-opening Setup Guide
     /// must not remap Cloud actions. Download-this-session mapping uses
@@ -373,7 +324,7 @@ struct OnboardingView: View {
     private func pointAIActionsAtLocalIfReady() {
         guard !settings.hasOnboarded else { return }
         guard providerMode == .local else { return }
-        guard let modelID = freeLocalModelID else { return }
+        guard let modelID = onboardingLocalModelID else { return }
         guard settings.installedLocalModels.contains(modelID) else { return }
         settings.pointAIActionsAtLocalModel(modelID)
     }
@@ -563,9 +514,6 @@ private struct OnboardingBuiltinAction: Identifiable {
 @MainActor
 private struct OnboardingActionsPage: View {
     @ObservedObject var settings: SettingsStore
-    let isPro: Bool
-
-    @State private var capLimitNote: String?
 
     private static let builtins: [OnboardingBuiltinAction] = [
         .init(identifier: .builtin(.improve), icon: "wand.and.stars", title: "Improve",
@@ -586,9 +534,7 @@ private struct OnboardingActionsPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(isPro
-                 ? "You can enable all of these. You can change this later in Settings → Actions."
-                 : "Free accounts can keep up to \(ProConfig.freeMaxActiveActions) actions active. You can change this later in Settings → Actions.")
+            Text("You can enable all of these. You can change this later in Settings → Actions.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -631,13 +577,6 @@ private struct OnboardingActionsPage: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
             )
-
-            if let capLimitNote {
-                Text(capLimitNote)
-                    .font(.subheadline)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
     }
 
@@ -648,25 +587,16 @@ private struct OnboardingActionsPage: View {
         )
     }
 
-    /// Persist the toggle. Turning off is always allowed. Turning on is rejected
-    /// for free users already at `ProConfig.freeMaxActiveActions`.
+    /// Persist the toggle. Turning off is always allowed.
     ///
     /// `setPrincipal` is best-effort after a successful enable — a false return
-    /// means the principal row is full, not the free cap.
+    /// means the principal row is full.
     private func setEnabled(_ id: ActionIdentifier, _ enabled: Bool) {
         if enabled {
-            if !settings.isEnabled(id),
-               !isPro,
-               settings.enabledToolbarActionCount >= ProConfig.freeMaxActiveActions {
-                capLimitNote = "Free plan shows up to \(ProConfig.freeMaxActiveActions) actions — turn one off first, or upgrade to Pro"
-                return
-            }
             writeEnabled(id, true)
             settings.setPrincipal(id, true)
-            capLimitNote = nil
         } else {
             writeEnabled(id, false)
-            capLimitNote = nil
         }
     }
 

@@ -141,75 +141,34 @@ struct LocalMLXSettingsTests {
         UserDefaults.standard.removePersistentDomain(forName: name)
     }
 
-    // MARK: - availability(for:isPro:) — licensing branches
+    /// Former free-tier catalog id — still the default onboarding model.
+    private var gemmaE2B: LocalModel {
+        LocalModelCatalog.model(for: "gemma-4-e2b")!
+    }
 
-    @Test("free model + non-Pro user → .available")
-    func freeModelNonProUser() {
+    /// Any catalog model that used to be Pro-gated.
+    private var formerProModel: LocalModel {
+        LocalModelCatalog.all.first { $0.id != "gemma-4-e2b" }!
+    }
+
+    // MARK: - availability(for:) — capability only
+
+    @Test("every catalog model is .available when MLX is supported")
+    func allCatalogModelsAvailableWhenSupported() {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
         let store = SettingsStore(defaults: suite, isMLXSupported: true)
-        let freeModel = LocalModelCatalog.all.first { $0.isFreeTier }!
-
-        if case .available = store.availability(for: freeModel, isPro: false) {
-            // pass
-        } else {
-            Issue.record("Expected .available for free model + non-Pro user")
+        for model in LocalModelCatalog.all {
+            if case .available = store.availability(for: model) {
+                // pass
+            } else {
+                Issue.record("Expected .available for \(model.id) on supported hardware")
+            }
         }
     }
 
-    @Test("Pro model + non-Pro user → .proLocked")
-    func proModelNonProUser() {
-        let (suite, name) = makeSuite()
-        defer { removeSuite(name) }
-
-        let store = SettingsStore(defaults: suite, isMLXSupported: true)
-        guard let proModel = LocalModelCatalog.all.first(where: { !$0.isFreeTier }) else {
-            Issue.record("No Pro-only model found in LocalModelCatalog — test cannot run")
-            return
-        }
-
-        if case .proLocked = store.availability(for: proModel, isPro: false) {
-            // pass
-        } else {
-            Issue.record("Expected .proLocked for Pro model + non-Pro user")
-        }
-    }
-
-    @Test("Pro model + Pro user → .available")
-    func proModelProUser() {
-        let (suite, name) = makeSuite()
-        defer { removeSuite(name) }
-
-        let store = SettingsStore(defaults: suite, isMLXSupported: true)
-        guard let proModel = LocalModelCatalog.all.first(where: { !$0.isFreeTier }) else {
-            Issue.record("No Pro-only model found in LocalModelCatalog — test cannot run")
-            return
-        }
-
-        if case .available = store.availability(for: proModel, isPro: true) {
-            // pass
-        } else {
-            Issue.record("Expected .available for Pro model + Pro user")
-        }
-    }
-
-    @Test("free model + Pro user → .available")
-    func freeModelProUser() {
-        let (suite, name) = makeSuite()
-        defer { removeSuite(name) }
-
-        let store = SettingsStore(defaults: suite, isMLXSupported: true)
-        let freeModel = LocalModelCatalog.all.first { $0.isFreeTier }!
-
-        if case .available = store.availability(for: freeModel, isPro: true) {
-            // pass
-        } else {
-            Issue.record("Expected .available for free model + Pro user")
-        }
-    }
-
-    @Test("unsupported hardware → .unsupported regardless of tier or Pro status")
+    @Test("unsupported hardware → .unsupported for every catalog model")
     func unsupportedHardware() {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
@@ -217,39 +176,19 @@ struct LocalMLXSettingsTests {
         let store = SettingsStore(defaults: suite, isMLXSupported: false)
 
         for model in LocalModelCatalog.all {
-            for isPro in [true, false] {
-                if case .unsupported = store.availability(for: model, isPro: isPro) {
-                    // pass
-                } else {
-                    Issue.record("Expected .unsupported for \(model.id) isPro=\(isPro) on unsupported hardware")
-                }
+            if case .unsupported = store.availability(for: model) {
+                // pass
+            } else {
+                Issue.record("Expected .unsupported for \(model.id) on unsupported hardware")
             }
-        }
-    }
-
-    @Test("capability is checked before licensing (unsupported beats proLocked)")
-    func capabilityBeforeLicensing() {
-        let (suite, name) = makeSuite()
-        defer { removeSuite(name) }
-
-        let store = SettingsStore(defaults: suite, isMLXSupported: false)
-        guard let proModel = LocalModelCatalog.all.first(where: { !$0.isFreeTier }) else {
-            Issue.record("No Pro-only model found in LocalModelCatalog — test cannot run")
-            return
-        }
-
-        if case .unsupported = store.availability(for: proModel, isPro: false) {
-            // pass: capability gate fires before the Pro gate
-        } else {
-            Issue.record("Expected .unsupported (not .proLocked) when hardware is unsupported")
         }
     }
 
     // MARK: - Download enforcement
 
-    @Test("proLocked model is refused without touching the helper")
-    func downloadRefusesProLockedModel() async throws {
-        let stubURL = try writeStubHelper()
+    @Test("former Pro model download starts instead of refusing")
+    func downloadStartsForFormerProModel() async throws {
+        let stubURL = try writeStubHelper(mode: .slow)
         defer { try? FileManager.default.removeItem(at: stubURL) }
 
         let (suite, name) = makeSuite()
@@ -258,17 +197,15 @@ struct LocalMLXSettingsTests {
         let manager = MLXHelperManager(helperURL: stubURL, supported: true)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
-        guard let proModel = LocalModelCatalog.all.first(where: { !$0.isFreeTier }) else {
-            Issue.record("No Pro-only model found in LocalModelCatalog — test cannot run")
-            await manager.shutdown()
-            return
-        }
-        store.downloadLocalModel(proModel.id, isPro: false)
+        let model = formerProModel
+        store.downloadLocalModel(model.id)
 
-        // Error should be set synchronously (no await needed for the guard path).
-        #expect(store.localModelDownloadError != nil, "Expected an error for proLocked download attempt")
-        #expect(store.activeLocalModelDownloadID == nil, "Expected no active download for proLocked model")
+        #expect(store.activeLocalModelDownloadID == model.id,
+                "Expected download of \(model.id) to start")
+        #expect(store.localModelDownloadError == nil,
+                "Expected no error when starting a former Pro model download")
 
+        store.cancelLocalModelDownload()
         await manager.shutdown()
     }
 
@@ -283,8 +220,7 @@ struct LocalMLXSettingsTests {
         let manager = MLXHelperManager(helperURL: stubURL, supported: false)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: false)
 
-        let freeModel = LocalModelCatalog.all.first { $0.isFreeTier }!
-        store.downloadLocalModel(freeModel.id, isPro: false)
+        store.downloadLocalModel(gemmaE2B.id)
 
         #expect(store.localModelDownloadError != nil, "Expected an error for unsupported hardware")
         #expect(store.activeLocalModelDownloadID == nil, "Expected no active download on unsupported hardware")
@@ -303,7 +239,7 @@ struct LocalMLXSettingsTests {
         let manager = MLXHelperManager(helperURL: stubURL, supported: true)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
-        store.downloadLocalModel("this-id-does-not-exist", isPro: true)
+        store.downloadLocalModel("this-id-does-not-exist")
 
         #expect(store.localModelDownloadError != nil, "Expected error for unknown model id")
         #expect(store.activeLocalModelDownloadID == nil, "Expected no active download for unknown id")
@@ -326,7 +262,7 @@ struct LocalMLXSettingsTests {
             .appendingPathComponent("LocalMLXHub-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: tempHub) }
 
-        let freeModel = LocalModelCatalog.all.first { $0.isFreeTier }!
+        let freeModel = gemmaE2B
         try seedInstalledModel(hubDir: tempHub, repoID: freeModel.repoID)
 
         let manager = MLXHelperManager(helperURL: stubURL, supported: true, hubCacheBaseURL: tempHub)
@@ -341,8 +277,7 @@ struct LocalMLXSettingsTests {
             .sink { observedProgress.append($0) }
         defer { progressToken.cancel() }
 
-        // Trigger the download (non-Pro user, free model → allowed).
-        store.downloadLocalModel(freeModel.id, isPro: false)
+        store.downloadLocalModel(freeModel.id)
         #expect(store.activeLocalModelDownloadID == freeModel.id, "Expected active download id to be set")
 
         // Wait for the Task to complete (poll with timeout).
@@ -376,8 +311,8 @@ struct LocalMLXSettingsTests {
         let manager = MLXHelperManager(helperURL: stubURL, supported: true)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
-        let freeModel = LocalModelCatalog.all.first { $0.isFreeTier }!
-        store.downloadLocalModel(freeModel.id, isPro: false)
+        let freeModel = gemmaE2B
+        store.downloadLocalModel(freeModel.id)
 
         // Wait briefly for the first progress update so the Task is definitely running.
         try await withTimeout(seconds: 5) {
@@ -419,8 +354,8 @@ struct LocalMLXSettingsTests {
         let manager = MLXHelperManager(helperURL: stubURL, supported: true)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
-        let freeModel = LocalModelCatalog.all.first { $0.isFreeTier }!
-        store.downloadLocalModel(freeModel.id, isPro: false)
+        let freeModel = gemmaE2B
+        store.downloadLocalModel(freeModel.id)
 
         // Wait for the Task to settle (either error set or activeID cleared).
         try await withTimeout(seconds: 10) {
@@ -464,7 +399,7 @@ struct LocalMLXSettingsTests {
         let modelB = allModels[1]
 
         // Start download A (slow).
-        store.downloadLocalModel(modelA.id, isPro: true)
+        store.downloadLocalModel(modelA.id)
 
         // Wait for A's first progress update so the Task is definitely in flight.
         // We poll until progress appears OR the activeID changes (Task already finished).
@@ -475,7 +410,7 @@ struct LocalMLXSettingsTests {
         }
 
         // Start download B — this cancels A and replaces it.
-        store.downloadLocalModel(modelB.id, isPro: true)
+        store.downloadLocalModel(modelB.id)
 
         // B should immediately own activeLocalModelDownloadID.
         #expect(store.activeLocalModelDownloadID == modelB.id,
@@ -511,10 +446,10 @@ struct LocalMLXSettingsTests {
         let manager = MLXHelperManager(helperURL: slowStubURL, supported: true)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
-        let freeModel = LocalModelCatalog.all.first { $0.isFreeTier }!
+        let freeModel = gemmaE2B
 
         // Start download A (slow).
-        store.downloadLocalModel(freeModel.id, isPro: false)
+        store.downloadLocalModel(freeModel.id)
 
         // Wait for A's first progress update so the Task is definitely in flight.
         try await withTimeout(seconds: 5) {
@@ -524,7 +459,7 @@ struct LocalMLXSettingsTests {
         }
 
         // Start download B for the SAME model id — cancels A, replaces it.
-        store.downloadLocalModel(freeModel.id, isPro: false)
+        store.downloadLocalModel(freeModel.id)
 
         #expect(store.activeLocalModelDownloadID == freeModel.id,
                 "Expected activeID still set to freeModel.id after re-download start")
@@ -564,7 +499,7 @@ struct LocalMLXSettingsTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        let freeModel = LocalModelCatalog.all.first { $0.isFreeTier }!
+        let freeModel = gemmaE2B
         // Seed the model directory so modelDirExists returns true during the download.
         try seedInstalledModel(hubDir: tempHub, repoID: freeModel.repoID)
 
@@ -572,7 +507,7 @@ struct LocalMLXSettingsTests {
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
         // Complete a download so the model ends up in completedLocalModelIDs.
-        store.downloadLocalModel(freeModel.id, isPro: false)
+        store.downloadLocalModel(freeModel.id)
         try await withTimeout(seconds: 10) {
             while await store.activeLocalModelDownloadID != nil {
                 try await Task.sleep(nanoseconds: 20_000_000)
@@ -603,7 +538,7 @@ struct LocalMLXSettingsTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        let freeModel = LocalModelCatalog.all.first { $0.isFreeTier }!
+        let freeModel = gemmaE2B
         // Seed the directory on disk — but do NOT record it in completedLocalModelIDs.
         try seedInstalledModel(hubDir: tempHub, repoID: freeModel.repoID)
 

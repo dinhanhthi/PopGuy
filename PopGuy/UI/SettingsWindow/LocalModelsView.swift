@@ -5,15 +5,15 @@
 //
 // Displayed inside the Providers tab (AI segment) as a SettingsCard at the
 // bottom of the AI provider list. Shows the full LocalModelCatalog, gated by
-// MLXCapability and the user's Pro status.
+// MLXCapability.
 //
 // API consumed (all from Phase 3 / Phase 4 — no new logic here):
 //   - MLXCapability.isSupported / .unsupportedReason
 //   - LocalModelCatalog.all
 //   - SettingsStore.installedLocalModels, .localModelDownloadProgress,
 //     .activeLocalModelDownloadID, .localModelDownloadError
-//   - SettingsStore.availability(for:isPro:) → LocalModelAvailability
-//   - SettingsStore.downloadLocalModel(_:isPro:)   (sync)
+//   - SettingsStore.availability(for:) → LocalModelAvailability
+//   - SettingsStore.downloadLocalModel(_:)         (sync)
 //   - SettingsStore.cancelLocalModelDownload()     (sync)
 //   - SettingsStore.deleteLocalModel(_:)           (async — wrapped in Task)
 //   - SettingsStore.refreshInstalledLocalModels()  (async — wrapped in Task)
@@ -26,14 +26,10 @@ import SwiftUI
 // MARK: - LocalModelsView
 
 /// Full Local (MLX) model manager card: capability check, catalog list,
-/// download / cancel / delete controls, and Pro-lock state.
+/// and download / cancel / delete controls.
 struct LocalModelsView: View {
 
     @ObservedObject var settings: SettingsStore
-    /// True when the user holds a Pro license or an active trial.
-    let isPro: Bool
-    /// Navigates to the License tab when the user taps "Get Pro" on a locked model.
-    var onUpgrade: () -> Void = {}
     /// Called when the user taps "Read more: how models use memory".
     var onReadMore: () -> Void = {}
 
@@ -208,7 +204,7 @@ struct LocalModelsView: View {
 
     @ViewBuilder
     private func modelRow(_ model: LocalModel) -> some View {
-        let availability = settings.availability(for: model, isPro: isPro)
+        let availability = settings.availability(for: model)
         let isDownloading = settings.activeLocalModelDownloadID == model.id
         let isInstalled = settings.installedLocalModels.contains(model.id)
         let isInMemory = settings.loadedLocalModelID == model.id
@@ -220,11 +216,6 @@ struct LocalModelsView: View {
                     Text(model.displayName)
                         .font(.callout)
                         .lineLimit(1)
-
-                    if !model.isFreeTier && !isPro {
-                        ProBadge()
-                            .hoverTooltip("Requires a Pro license")
-                    }
 
                     // "In memory" indicator — shown when this model is currently
                     // loaded in the helper process and consuming RAM.
@@ -290,49 +281,6 @@ struct LocalModelsView: View {
             // Should not reach here (whole list is hidden), but guard anyway.
             EmptyView()
 
-        case .proLocked:
-            // Pro-locked model.
-            //
-            // Delete is ALWAYS allowed when a model is already on disk — the user
-            // must be able to reclaim space even after downgrading from Pro.
-            //
-            // Download/use stays gated behind the upgrade flow.
-            if isInstalled {
-                HStack(spacing: 8) {
-                    // Lock badge signals the model can't be re-downloaded without Pro.
-                    Button {
-                        onUpgrade()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "lock.fill")
-                                .font(.caption)
-                            Text("Pro")
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .tint(.proGold)
-                    .hoverTooltip("Requires Pro to download or use. Tap to upgrade.")
-
-                    deleteButton(for: model)
-                }
-            } else {
-                // Not installed: upgrade button only.
-                Button {
-                    onUpgrade()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "lock.fill")
-                            .font(.caption)
-                        Text("Pro")
-                    }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .tint(.proGold)
-                .hoverTooltip("This model requires a Pro license. Tap to upgrade.")
-            }
-
         case .available:
             if isDownloading {
                 // Downloading: progress is shown below the row; Cancel button here.
@@ -370,7 +318,7 @@ struct LocalModelsView: View {
                 let anyDownloadActive = settings.activeLocalModelDownloadID != nil
                 Button("Download") {
                     deleteError = nil
-                    settings.downloadLocalModel(model.id, isPro: isPro)
+                    settings.downloadLocalModel(model.id)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -405,7 +353,7 @@ struct LocalModelsView: View {
 
     // MARK: - Delete button
 
-    /// Shared delete button used by both `.available` and `.proLocked` installed states.
+    /// Shared delete button for installed models.
     @ViewBuilder
     private func deleteButton(for model: LocalModel) -> some View {
         Button("Delete") {
@@ -439,24 +387,10 @@ struct LocalModelsView: View {
 
 // MARK: - Preview
 
-#Preview("LocalModelsView — supported Mac, Pro") {
+#Preview("LocalModelsView — supported Mac") {
     ScrollView {
         LocalModelsView(
-            settings: SettingsStore(),
-            isPro: true,
-            onUpgrade: {}
-        )
-        .padding()
-    }
-    .frame(width: 520)
-}
-
-#Preview("LocalModelsView — supported Mac, Free") {
-    ScrollView {
-        LocalModelsView(
-            settings: SettingsStore(),
-            isPro: false,
-            onUpgrade: {}
+            settings: SettingsStore()
         )
         .padding()
     }
@@ -464,7 +398,7 @@ struct LocalModelsView: View {
 }
 
 #Preview("downloadProgress — determinate 42%") {
-    let view = LocalModelsView(settings: SettingsStore(), isPro: true)
+    let view = LocalModelsView(settings: SettingsStore())
     return view.downloadProgress(name: "Gemma 4 E2B", fraction: 0.42)
         .frame(width: 420)
         .padding()

@@ -913,13 +913,15 @@ struct GoogleCloudTTSProviderTests {
         #expect(audioConfig["pitch"] == nil)
     }
 
-    @Test("semitones(forPitchMultiplier:) maps 1.0 to 0.0 and clamps to [-20, 20]")
+    @Test("semitones(forPitchMultiplier:) maps 1.0 to 0.0 and clamps the multiplier to [0.5, 2.0]")
     func semitoneMapping() {
         #expect(GoogleCloudTTSProvider.semitones(forPitchMultiplier: 1.0) == 0.0)
         #expect(GoogleCloudTTSProvider.semitones(forPitchMultiplier: 2.0) == 12.0)
         #expect(GoogleCloudTTSProvider.semitones(forPitchMultiplier: 0.5) == -12.0)
-        #expect(GoogleCloudTTSProvider.semitones(forPitchMultiplier: 4.0) == 20.0)
-        #expect(GoogleCloudTTSProvider.semitones(forPitchMultiplier: 0.25) == -20.0)
+        // Multiplier is clamped to [0.5, 2.0] before the log2 mapping, so
+        // 4.0 and 0.25 land on the same ±12.0 as the clamp endpoints.
+        #expect(GoogleCloudTTSProvider.semitones(forPitchMultiplier: 4.0) == 12.0)
+        #expect(GoogleCloudTTSProvider.semitones(forPitchMultiplier: 0.25) == -12.0)
     }
 
     @Test("makeSynthesisRequest voice.languageCode matches the passed languageCode")
@@ -1200,9 +1202,9 @@ struct AzureTTSProviderTests {
         )
         let bodyData = try #require(req.httpBody)
         let body = try #require(String(data: bodyData, encoding: .utf8))
-        // Speed 1.5 → +50% rate; pitch 2.0 → +12.0st.
+        // Speed 1.5 → +50.0% rate; pitch 2.0 → +12.0st.
         #expect(body.contains("<prosody"))
-        #expect(body.contains("rate='+50%'"))
+        #expect(body.contains("rate='+50.0%'"))
         #expect(body.contains("pitch='+12.0st'"))
         #expect(body.contains("Hello</prosody>"))
     }
