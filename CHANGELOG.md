@@ -13,6 +13,14 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+### Changed
+
+- PopGuy is now completely free. Every former Pro feature is unlocked — no license key, no trial, and no usage nag. Existing users see a one-time announcement on first launch of this version.
+
+### Removed
+
+- License tab, Get Pro / upgrade prompts, and the Lemon Squeezy client. The app no longer talks to Lemon Squeezy. Already-shipped versions can still activate a previously purchased key.
+
 ## [0.5.3] - 2026-08-25
 
 ### Added
