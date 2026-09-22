@@ -1,9 +1,17 @@
 export const releases = [
   {
+    version: "1.0.1",
+    date: "September 2026",
+    title: "The now-free announcement is gone.",
+    latest: true,
+    items: [
+      "No leftover Pro announcement on launch"
+    ]
+  },
+  {
     version: "1.0.0",
     date: "September 2026",
     title: "PopGuy is now free.",
-    latest: true,
     items: [
       "Every feature unlocked",
       "No license or Pro plan",
