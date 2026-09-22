@@ -39,18 +39,9 @@ export const providerLogos = [
   { name: "Wiktionary", src: "/providers/wiktionary.png" }
 ];
 
-// Dark theme: near-black / grey brand marks (OpenAI-Compatible, Dictionaries)
-// are invisible on the dark surface, so render those light. Saturated brand
-// colours have enough contrast and are kept as-is.
 function displayColor(hex) {
   if (!hex) return undefined;
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  const saturation = Math.max(r, g, b) - Math.min(r, g, b);
-  const isDim = (saturation < 28 && luminance < 150) || luminance < 45;
-  return isDim ? "#e5e7eb" : `#${hex}`;
+  return `#${hex}`;
 }
 
 export function ProviderLogo({ name, icon, src }) {

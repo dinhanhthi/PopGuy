@@ -95,3 +95,4 @@ docs/warm/
 
 **/node_modules/
 .xcode-cache/
+website/.hallmark/
