@@ -146,8 +146,8 @@ struct LocalMLXSettingsTests {
         LocalModelCatalog.model(for: "gemma-4-e2b")!
     }
 
-    /// Any catalog model that used to be Pro-gated.
-    private var formerProModel: LocalModel {
+    /// Any catalog model other than the onboarding default.
+    private var otherCatalogModel: LocalModel {
         LocalModelCatalog.all.first { $0.id != "gemma-4-e2b" }!
     }
 
@@ -186,8 +186,8 @@ struct LocalMLXSettingsTests {
 
     // MARK: - Download enforcement
 
-    @Test("former Pro model download starts instead of refusing")
-    func downloadStartsForFormerProModel() async throws {
+    @Test("any catalog model download starts on supported hardware")
+    func downloadStartsForCatalogModel() async throws {
         let stubURL = try writeStubHelper(mode: .slow)
         defer { try? FileManager.default.removeItem(at: stubURL) }
 
@@ -197,13 +197,13 @@ struct LocalMLXSettingsTests {
         let manager = MLXHelperManager(helperURL: stubURL, supported: true)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
-        let model = formerProModel
+        let model = otherCatalogModel
         store.downloadLocalModel(model.id)
 
         #expect(store.activeLocalModelDownloadID == model.id,
                 "Expected download of \(model.id) to start")
         #expect(store.localModelDownloadError == nil,
-                "Expected no error when starting a former Pro model download")
+                "Expected no error when starting a catalog model download")
 
         store.cancelLocalModelDownload()
         await manager.shutdown()

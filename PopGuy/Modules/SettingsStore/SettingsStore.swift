@@ -138,7 +138,6 @@ final class SettingsStore: ObservableObject {
         static let customActions              = "settings.customActions"
         static let shortcutBindings           = "settings.shortcutBindings"
         static let hasOnboarded               = "settings.hasOnboarded"
-        static let hasSeenNowFreeAnnouncement = "settings.hasSeenNowFreeAnnouncement"
         static let ignoredAppBundleIDs        = "settings.ignoredAppBundleIDs"
         static let ignoredDomains             = "settings.ignoredDomains"
         static let ignoredDomainsEnabled      = "settings.ignoredDomainsEnabled"
@@ -385,13 +384,6 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(hasOnboarded, forKey: Keys.hasOnboarded) }
     }
 
-    /// Whether the one-time “PopGuy is now free” announcement has been shown
-    /// (or skipped for a fresh install). Defaults to `false` when the key is
-    /// absent so existing users see the window once.
-    @Published var hasSeenNowFreeAnnouncement: Bool {
-        didSet { defaults.set(hasSeenNowFreeAnnouncement, forKey: Keys.hasSeenNowFreeAnnouncement) }
-    }
-
     /// Bundle IDs of apps in which the floating popup is suppressed.
     @Published var ignoredAppBundleIDs: [String] {
         didSet { save(ignoredAppBundleIDs, key: Keys.ignoredAppBundleIDs) }
@@ -606,7 +598,6 @@ final class SettingsStore: ObservableObject {
         customActions       = loadedCustomActions
         shortcutBindings = Self.load([ShortcutBinding].self, key: Keys.shortcutBindings, from: defaults) ?? ShortcutBinding.defaultBuiltins
         hasOnboarded     = defaults.object(forKey: Keys.hasOnboarded) as? Bool ?? false
-        hasSeenNowFreeAnnouncement = defaults.object(forKey: Keys.hasSeenNowFreeAnnouncement) as? Bool ?? false
         ignoredAppBundleIDs      = Self.load([String].self, key: Keys.ignoredAppBundleIDs, from: defaults) ?? []
         ignoredDomains           = Self.load([String].self, key: Keys.ignoredDomains, from: defaults) ?? []
         ignoredDomainsEnabled    = defaults.object(forKey: Keys.ignoredDomainsEnabled) as? Bool ?? false

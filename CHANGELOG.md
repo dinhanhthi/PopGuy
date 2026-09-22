@@ -13,6 +13,10 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+### Removed
+
+- The one-time “PopGuy is now free” announcement shown to users who updated from a paid build.
+
 ## [1.0.0] - 2026-09-21
 
 ### Changed

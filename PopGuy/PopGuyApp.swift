@@ -102,9 +102,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private var onboardingWindow: NSWindow?
 
-    /// One-time “now free” announcement. Flag is set before the window appears.
-    private var nowFreeAnnouncementWindow: NSWindow?
-
     // MARK: - Phase 5: Hotkeys and double-tap chord
 
     /// Global shortcut manager. Started once when AX is first trusted.
@@ -200,17 +197,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if !settingsStore.hasOnboarded {
             presentOnboarding()
         }
-
-        // One-time “now free” announcement for users who already onboarded
-        // (they updated). Fresh installs skip it so they never see a Pro mention.
-        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" {
-            if !settingsStore.hasSeenNowFreeAnnouncement && settingsStore.hasOnboarded {
-                settingsStore.hasSeenNowFreeAnnouncement = true
-                presentNowFreeAnnouncement()
-            } else if !settingsStore.hasOnboarded {
-                settingsStore.hasSeenNowFreeAnnouncement = true
-            }
-        }
     }
 
     // MARK: - Onboarding
@@ -243,27 +229,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    private func presentNowFreeAnnouncement() {
-        if let existing = nowFreeAnnouncementWindow {
-            existing.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-        let view = NowFreeAnnouncementView(
-            onContinue: { [weak self] in self?.nowFreeAnnouncementWindow?.close() }
-        )
-        let hosting = NSHostingController(rootView: view)
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "PopGuy is now free"
-        window.styleMask = [.titled, .closable]
-        window.isReleasedWhenClosed = false
-        window.delegate = self
-        window.center()
-        nowFreeAnnouncementWindow = window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
@@ -271,9 +236,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if window === onboardingWindow {
             settingsStore.hasOnboarded = true
             onboardingWindow = nil
-        }
-        if window === nowFreeAnnouncementWindow {
-            nowFreeAnnouncementWindow = nil
         }
         if window === settingsWindow {
             NSApp.setActivationPolicy(.accessory)

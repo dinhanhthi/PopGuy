@@ -391,7 +391,7 @@ final class ToolbarViewModel: ObservableObject {
     // MARK: Act counter seam
 
     /// Called by each trigger method immediately before dispatching an action.
-    /// Optional hook; unused in production after the usage-nag path was removed.
+    /// Optional hook for tests; unused in production.
     var onActPerformed: (() -> Void)?
 
     /// Asks the controller to dismiss (hide) the toolbar. Used by scriptable actions

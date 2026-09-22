@@ -2,7 +2,6 @@
 // PopGuy — SettingsStore
 //
 // Compile-time toolbar layout caps and the double-click assignment feature flag.
-// These are universal hard limits, not paywall / Pro-tier gates.
 //
 // Isolation: nonisolated — pure constants, usable from any context.
 
