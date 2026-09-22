@@ -5,6 +5,7 @@
  * audience: macOS writers · use: download · paper: light / geometric-sans / neutral
  */
 :root {
+  color-scheme: light;
   --color-paper: oklch(99% 0.003 264);
   --color-paper-2: oklch(97% 0.004 264);
   --color-paper-3: oklch(94.5% 0.006 264);
@@ -61,4 +62,21 @@
   --radius-lg: 1rem;
 
   --rule: 1px solid var(--color-rule);
+}
+
+/* Dark theme — set on <html data-theme="dark"> (index.html picks the saved or system theme). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-paper: oklch(15% 0.005 264);
+  --color-paper-2: oklch(19% 0.006 264);
+  --color-paper-3: oklch(24% 0.008 264);
+  --color-ink: oklch(96% 0.004 264);
+  --color-ink-2: oklch(88% 0.006 264);
+  --color-muted: oklch(70% 0.01 264);
+  --color-rule: oklch(28% 0.008 264);
+  --color-rule-strong: oklch(36% 0.01 264);
+  --color-accent: oklch(96% 0.004 264);
+  --color-accent-ink: oklch(15% 0.005 264);
+  --color-focus: oklch(72% 0.14 264);
+  --color-hover: oklch(21% 0.006 264);
 }

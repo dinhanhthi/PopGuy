@@ -10,6 +10,13 @@
     <meta name="theme-color" content="#f7f7f8" />
     <link rel="icon" type="image/png" href="/popguy-logo.png" />
     <title>PopGuy — AI where you write</title>
+    <script>
+      try {
+        const saved = localStorage.getItem("theme");
+        const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.theme = saved || (dark ? "dark" : "light");
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -26,7 +26,7 @@ export function AppRoutes() {
   }, [location.pathname]);
 
   return (
-    <>
+    <div className="page">
       <a className="skip-link" href="#main-content">Skip to content</a>
       <Header />
       <div id="main-content">
@@ -38,7 +38,7 @@ export function AppRoutes() {
         </Routes>
       </div>
       <Footer />
-    </>
+    </div>
   );
 }
 

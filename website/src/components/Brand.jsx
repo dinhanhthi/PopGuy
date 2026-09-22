@@ -5,6 +5,7 @@ export function Brand({ compact = false }) {
     <Link className={`brand ${compact ? "brand--compact" : ""}`} to="/">
       <img src="/popguy-logo.png" alt="" />
       <span>PopGuy</span>
+      {__APP_VERSION__ && <span className="brand-version">v{__APP_VERSION__}</span>}
     </Link>
   );
 }

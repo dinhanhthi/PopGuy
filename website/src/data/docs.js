@@ -44,7 +44,7 @@ export const docsContent = {
       },
       {
         title: "Your keys stay in Keychain",
-        body: "API keys for AI and translation providers are stored only in macOS Keychain under the app bundle id. They are never written to UserDefaults, plist files, or any plaintext store."
+        body: "API keys for AI and translation providers are stored only in macOS Keychain under the app bundle id. They are never written to `UserDefaults`, plist files, or any plaintext store."
       },
       {
         title: "Clipboard is restored",
@@ -71,9 +71,9 @@ export const docsContent = {
       {
         title: "Scriptable",
         bullets: [
-          "Open URL — build a URL with {text}, auto percent-encoded",
-          "Shell Script — text arrives via $POPGUY_TEXT, never interpolated",
-          "AppleScript — {text} becomes a safely-quoted string literal",
+          "Open URL — build a URL with `{text}`, auto percent-encoded",
+          "Shell Script — text arrives via `$POPGUY_TEXT`, never interpolated",
+          "AppleScript — `{text}` becomes a safely-quoted string literal",
           "Run Shortcut — trigger a macOS Shortcut with the selection"
         ]
       }
@@ -93,7 +93,7 @@ export const docsContent = {
       },
       {
         title: "From a JSON file",
-        body: "Export any action as a .json file via Settings → Actions → Export. Edit it by hand, share it, and others import it via Import Plugin → Choose file. This is the native PopGuy plugin format.",
+        body: "Export any action as a `.json` file via Settings → Actions → Export. Edit it by hand, share it, and others import it via Import Plugin → Choose file. This is the native PopGuy plugin format.",
         code: `{
   "name": "Base64 Encode",
   "icon": "square.and.arrow.up",
@@ -112,7 +112,7 @@ export const docsContent = {
       },
       {
         title: "Limits to know",
-        body: "Actions are declarative: a URL template, a shortcut name, an AppleScript, or a shell command. There is no JavaScript engine or SDK. Anything PopClip expresses in JavaScript must be rewritten as a shell script. Shell actions should rely on tools that ship with macOS — awk, sed, tr, base64, shasum — since python3 is not guaranteed on a clean install.",
+        body: "Actions are declarative: a URL template, a shortcut name, an AppleScript, or a shell command. There is no JavaScript engine or SDK. Anything PopClip expresses in JavaScript must be rewritten as a shell script. Shell actions should rely on tools that ship with macOS — `awk`, `sed`, `tr`, `base64`, `shasum` — since `python3` is not guaranteed on a clean install.",
         code: `# Selection is passed via env var — never interpolated.
 echo "$POPGUY_TEXT" | base64`
       }
@@ -147,7 +147,7 @@ echo "$POPGUY_TEXT" | base64`
         steps: [
           "Open Settings → Actions → Export.",
           "Pick the actions to bundle (or export a single action).",
-          "Save the .json file. Share it anywhere."
+          "Save the `.json` file. Share it anywhere."
         ],
         body: "Export is available to everyone, as is importing plugins. The exported file is plain JSON — no binary, no signature — so anyone can read it before installing."
       },
@@ -155,7 +155,7 @@ echo "$POPGUY_TEXT" | base64`
         title: "Import a plugin",
         steps: [
           "Open Settings → Actions → Import Plugin → Choose file.",
-          "Select a .json (native) or .popclipext (PopClip) file.",
+          "Select a `.json` (native) or `.popclipext` (PopClip) file.",
           "Review the consent sheet — it shows every action's full source.",
           "Confirm. Imported actions appear on the toolbar immediately."
         ],
@@ -169,8 +169,8 @@ echo "$POPGUY_TEXT" | base64`
         title: "Limitations",
         bullets: [
           "Declarative only — a URL template, a Shortcut name, an AppleScript, or a shell command. No JavaScript engine or SDK.",
-          "Shell actions receive the selection via the $POPGUY_TEXT environment variable — never string-interpolated.",
-          "Use only tools that ship with macOS (awk, sed, tr, base64, shasum, md5, date, bc, wc, perl). python3 is not guaranteed on a clean install.",
+          "Shell actions receive the selection via the `$POPGUY_TEXT` environment variable — never string-interpolated.",
+          "Use only tools that ship with macOS (`awk`, `sed`, `tr`, `base64`, `shasum`, `md5`, `date`, `bc`, `wc`, `perl`). `python3` is not guaranteed on a clean install.",
           "No digital signature verification — the consent preview is the safety boundary.",
           "Apple has indicated Perl and Ruby runtimes may be removed in a future macOS — a long-term risk for interpreter-dependent shell actions."
         ]
@@ -179,44 +179,44 @@ echo "$POPGUY_TEXT" | base64`
   },
   "PopClip Extensions": {
     summary:
-      "PopGuy imports PopClip extensions (.popclipext) and PopClip snippets — URL, shell, AppleScript, and Shortcut actions map directly.",
+      "PopGuy imports PopClip extensions (`.popclipext`) and PopClip snippets — URL, shell, AppleScript, and Shortcut actions map directly.",
     notice:
       "PopClip is a separate product by PilotPop Ltd. PopGuy is not affiliated with or endorsed by PilotPop.",
     sections: [
       {
         title: "What imports",
         bullets: [
-          "URL actions → Open URL (with {text} placeholder rewriting)",
-          "Shell script actions → Shell Script ($POPCLIP_TEXT → $POPGUY_TEXT)",
+          "URL actions → Open URL (with `{text}` placeholder rewriting)",
+          "Shell script actions → Shell Script (`$POPCLIP_TEXT` → `$POPGUY_TEXT`)",
           "AppleScript actions → AppleScript",
           "Shortcut actions → Run Shortcut",
-          "Config in Config.plist, Config.json, Config.yaml, or Config.yml",
-          "PopClip snippet strings (#popclip + fenced YAML/JSON)"
+          "Config in `Config.plist`, `Config.json`, `Config.yaml`, or `Config.yml`",
+          "PopClip snippet strings (`#popclip` + fenced YAML/JSON)"
         ]
       },
       {
         title: "What does NOT import",
         bullets: [
-          "JavaScript actions — PopClip's JS uses a proprietary popclip.* API and module system that PopGuy does not implement. Rewrite them as shell scripts.",
+          "JavaScript actions — PopClip's JS uses a proprietary `popclip.*` API and module system that PopGuy does not implement. Rewrite them as shell scripts.",
           "Key-combo and Service actions — skipped.",
           "Plugin options — actions import without their option sheets.",
           "Requirements other than regex — only regex filters are enforced.",
-          "Icons in text:, shape:, image:, or iconify: formats — only symbol: and emoji map; others fall back to a default icon."
+          "Icons in `text:`, `shape:`, `image:`, or `iconify:` formats — only `symbol:` and emoji map; others fall back to a default icon."
         ]
       },
       {
         title: "How to import",
         steps: [
-          "Download or unzip the .popclipext bundle.",
+          "Download or unzip the `.popclipext` bundle.",
           "In PopGuy: Settings → Actions → Import Plugin → Choose file.",
-          "Select the .popclipext folder or its Config file.",
+          "Select the `.popclipext` folder or its Config file.",
           "Review the consent sheet — note any skipped actions.",
           "Confirm. Imported actions appear on the toolbar immediately."
         ]
       },
       {
         title: "Snippet import",
-        body: "PopClip snippet strings start with #popclip. Paste one into the Import Plugin snippet box and the adapter converts it to a PopGuy action on the same consent flow.",
+        body: "PopClip snippet strings start with `#popclip`. Paste one into the Import Plugin snippet box and the adapter converts it to a PopGuy action on the same consent flow.",
         code: `#popclip
 name: Uppercase
 icon: symbol:characters.uppercase

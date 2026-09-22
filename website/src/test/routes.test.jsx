@@ -5,36 +5,36 @@ import { AppRoutes } from "../App";
 
 const pages = [
   ["/", "AI where you write."],
-  ["/actions", "Anything you do with text."],
-  ["/docs", "Installation"]
+  ["/actions", "Actions"],
+  ["/docs", "Docs"]
 ];
+
+function renderAt(path) {
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <AppRoutes />
+    </MemoryRouter>
+  );
+}
 
 describe("website routes", () => {
   it.each(pages)("renders %s", (path, heading) => {
-    render(
-      <MemoryRouter initialEntries={[path]}>
-        <AppRoutes />
-      </MemoryRouter>
-    );
+    renderAt(path);
 
     expect(
       screen.getByRole("heading", { name: heading, level: 1 })
     ).toBeInTheDocument();
   });
 
-  it("renders the docs sidebar with the six main sections", () => {
-    render(
-      <MemoryRouter initialEntries={["/docs"]}>
-        <AppRoutes />
-      </MemoryRouter>
-    );
+  it("renders the docs table of contents with the six main sections", () => {
+    renderAt("/docs");
 
     const docsNavigation = screen.getByRole("navigation", {
       name: "Documentation"
     });
-    const pageButtons = within(docsNavigation).getAllByRole("button");
+    const links = within(docsNavigation).getAllByRole("link");
 
-    expect(pageButtons.map((button) => button.textContent)).toEqual([
+    expect(links.map((link) => link.textContent)).toEqual([
       "Installation",
       "Privacy",
       "Action Types",
@@ -42,88 +42,67 @@ describe("website routes", () => {
       "Create a Plugin",
       "PopClip Extensions"
     ]);
+    expect(links[2]).toHaveAttribute("href", "#action-types");
+    expect(
+      links.filter((link) => link.getAttribute("aria-current") === "true")
+    ).toHaveLength(1);
   });
 
-  it("presents Download on the home page without a Pro checkout", () => {
-    render(
-      <MemoryRouter initialEntries={["/"]}>
-        <AppRoutes />
-      </MemoryRouter>
-    );
+  it("renders backticked docs text as inline code", () => {
+    renderAt("/docs");
 
-    expect(screen.getByRole("link", { name: /^Download$/ })).toBeInTheDocument();
+    const codes = screen.getAllByText("$POPGUY_TEXT", { selector: "code" });
+    expect(codes.length).toBeGreaterThan(0);
+    expect(screen.queryByText(/`/)).not.toBeInTheDocument();
+  });
+
+  it("shows a single Download link on the home page without a Pro checkout", () => {
+    renderAt("/");
+
+    expect(screen.getAllByRole("link", { name: /Download/ })).toHaveLength(1);
     expect(
       screen.queryByText(["Get", "Pro"].join(" "))
     ).not.toBeInTheDocument();
     expect(screen.queryByText("$10")).not.toBeInTheDocument();
-    expect(screen.queryByText("Optional upgrade")).not.toBeInTheDocument();
   });
 
-  it("identifies PopGuy as open source under AGPLv3 on the home page", () => {
-    render(
-      <MemoryRouter initialEntries={["/"]}>
-        <AppRoutes />
-      </MemoryRouter>
-    );
+  it("links the AGPLv3 license and GitHub releases in the footer", () => {
+    renderAt("/");
 
-    expect(
-      screen.getByRole("link", { name: "Now open source under AGPLv3." })
-    ).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "AGPLv3" })).toHaveAttribute(
       "href",
       "https://github.com/dinhanhthi/PopGuy/blob/main/LICENSE"
     );
+    expect(screen.getByRole("link", { name: "Changelog" })).toHaveAttribute(
+      "href",
+      "https://github.com/dinhanhthi/PopGuy/releases"
+    );
   });
 
-  it("uses provider logos and no repository preview", () => {
-    render(
-      <MemoryRouter initialEntries={["/"]}>
-        <AppRoutes />
-      </MemoryRouter>
-    );
+  it("filters the action library with search", () => {
+    renderAt("/actions");
 
-    expect(
-      screen.queryByLabelText("PopGuy GitHub repository preview")
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "OpenAI" })).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Anthropic" })).toBeInTheDocument();
-  });
-
-  it("opens the changelog modal when See more is clicked", () => {
-    render(
-      <MemoryRouter initialEntries={["/"]}>
-        <AppRoutes />
-      </MemoryRouter>
-    );
-
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /See more/ }));
-
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    // The latest version is shown inside the opened changelog modal.
-    expect(
-      screen.getAllByText("0.3.0").length
-    ).toBeGreaterThanOrEqual(1);
-  });
-
-  it("shows short descriptions for Action Library cards and modal rows", () => {
-    render(
-      <MemoryRouter initialEntries={["/actions"]}>
-        <AppRoutes />
-      </MemoryRouter>
-    );
-
-    expect(
-      screen.getByText("Search the selection with Google.")
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /View all 93/ }));
-
-    const modal = screen.getByRole("dialog", {
-      name: "Action Library — all presets"
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search actions" }), {
+      target: { value: "apple maps" }
     });
+
     expect(
-      within(modal).getByText("Open the selected place in Apple Maps.")
+      screen.getByText("Open the selected place in Apple Maps.", { exact: false })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Search the selection with Google.", { exact: false })
+    ).not.toBeInTheDocument();
+  });
+
+  it("toggles the color theme from the header", () => {
+    renderAt("/");
+
+    document.documentElement.dataset.theme = "light";
+    fireEvent.click(screen.getByRole("button", { name: "Switch to dark theme" }));
+
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(
+      screen.getByRole("button", { name: "Switch to light theme" })
     ).toBeInTheDocument();
   });
 });
