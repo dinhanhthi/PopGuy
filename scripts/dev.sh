@@ -32,11 +32,14 @@ echo "==> Stopping any running PopGuy…"
 killall PopGuy 2>/dev/null || true
 
 echo "==> Building (Debug)…"
+# -skipMacroValidation: mlx-swift-lm's MLXHuggingFace uses a Swift macro that otherwise needs
+# a one-time "Trust & Enable" click in Xcode after every dependency bump.
 xcodebuild \
   -project PopGuy.xcodeproj \
   -scheme PopGuy \
   -configuration Debug \
   -derivedDataPath "$DERIVED" \
+  -skipMacroValidation \
   $CLEAN_ACTION build
 
 echo "==> Launching $APP"

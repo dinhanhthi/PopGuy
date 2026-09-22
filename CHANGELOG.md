@@ -13,6 +13,10 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+### Fixed
+
+- On-device Gemma 4 models failed to run with a "Key … self_attn.v_proj.weight not found" error. Gemma 4 2B and 4B share attention keys/values across their upper layers, so those layers ship no `k_proj`/`v_proj` weights — the bundled MLX runtime still expected them. Gemma 4 12B failed for a related reason: its architecture was not recognised at all. Updated the MLX runtime (mlx-swift-lm 3.31.3 → 3.31.4), which fixes both.
+
 ## [1.0.1] - 2026-09-22
 
 ### Removed
