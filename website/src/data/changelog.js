@@ -1,9 +1,19 @@
 export const releases = [
   {
+    version: "1.0.2",
+    date: "September 2026",
+    title: "Fix the working of Local AI models.",
+    latest: true,
+    items: [
+      "Gemma 4 models load on-device",
+      "Accurate on-disk model sizes",
+      "Reliable long model downloads"
+    ]
+  },
+  {
     version: "1.0.1",
     date: "September 2026",
     title: "The now-free announcement is gone.",
-    latest: true,
     items: [
       "No leftover Pro announcement on launch"
     ]
