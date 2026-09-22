@@ -316,6 +316,11 @@ func runMain() async {
                     while !Task.isCancelled {
                         try? await Task.sleep(nanoseconds: 1_000_000_000)  // 1 s
                         guard !Task.isCancelled else { break }
+                        // Keep the idle watchdog at bay: the dispatch loop is blocked
+                        // awaiting the download, so no stdin line can touch activity.
+                        // Without this, a download longer than the idle timeout is
+                        // killed mid-flight by the watchdog's exit(0).
+                        await activity.touch()
                         let expectedTotal = state.expectedTotal
                         guard expectedTotal > 0 else { continue }
                         let blobBytes = blobsDirSize(cacheBase: sharedHubCacheDir, modelID: modelID)
