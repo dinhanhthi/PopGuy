@@ -69,7 +69,7 @@ public nonisolated enum LocalModelCatalog {
             repoID: "mlx-community/gemma-4-e2b-it-4bit",
             displayName: "Gemma 4 2B (4-bit)",
             family: .gemma,
-            approxSizeBytes: 1_000_000_000,
+            approxSizeBytes: 3_600_000_000,
             minRAMBytes: 4_294_967_296
         ),
         LocalModel(
@@ -77,7 +77,7 @@ public nonisolated enum LocalModelCatalog {
             repoID: "mlx-community/gemma-4-e4b-it-4bit",
             displayName: "Gemma 4 4B (4-bit)",
             family: .gemma,
-            approxSizeBytes: 2_200_000_000,
+            approxSizeBytes: 5_200_000_000,
             minRAMBytes: 6_442_450_944
         ),
         LocalModel(
@@ -85,7 +85,7 @@ public nonisolated enum LocalModelCatalog {
             repoID: "mlx-community/gemma-4-12B-it-4bit",
             displayName: "Gemma 4 12B (4-bit)",
             family: .gemma,
-            approxSizeBytes: 7_000_000_000,
+            approxSizeBytes: 6_800_000_000,
             minRAMBytes: 12_884_901_888
         ),
         LocalModel(
@@ -93,7 +93,7 @@ public nonisolated enum LocalModelCatalog {
             repoID: "mlx-community/Qwen3-1.7B-4bit-DWQ",
             displayName: "Qwen3 1.7B (4-bit)",
             family: .qwen,
-            approxSizeBytes: 1_200_000_000,
+            approxSizeBytes: 1_000_000_000,
             minRAMBytes: 4_294_967_296
         ),
         LocalModel(
@@ -101,7 +101,7 @@ public nonisolated enum LocalModelCatalog {
             repoID: "mlx-community/Qwen3.5-4B-MLX-4bit",
             displayName: "Qwen3.5 4B (4-bit)",
             family: .qwen,
-            approxSizeBytes: 2_400_000_000,
+            approxSizeBytes: 3_100_000_000,
             minRAMBytes: 6_442_450_944
         ),
     ]
