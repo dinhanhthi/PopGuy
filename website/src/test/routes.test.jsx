@@ -6,7 +6,8 @@ import { AppRoutes } from "../App";
 const pages = [
   ["/", "AI where you write."],
   ["/actions", "Actions"],
-  ["/docs", "Docs"]
+  ["/docs", "Docs"],
+  ["/privacy", "Privacy"]
 ];
 
 function renderAt(path) {
@@ -26,7 +27,7 @@ describe("website routes", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the docs table of contents with the six main sections", () => {
+  it("renders the docs table of contents with the five main sections", () => {
     renderAt("/docs");
 
     const docsNavigation = screen.getByRole("navigation", {
@@ -36,13 +37,12 @@ describe("website routes", () => {
 
     expect(links.map((link) => link.textContent)).toEqual([
       "Installation",
-      "Privacy",
       "Action Types",
       "Create an Action",
       "Create a Plugin",
       "PopClip Extensions"
     ]);
-    expect(links[2]).toHaveAttribute("href", "#action-types");
+    expect(links[1]).toHaveAttribute("href", "#action-types");
     expect(
       links.filter((link) => link.getAttribute("aria-current") === "true")
     ).toHaveLength(1);
@@ -76,6 +76,10 @@ describe("website routes", () => {
     expect(screen.getByRole("link", { name: "Changelog" })).toHaveAttribute(
       "href",
       "https://github.com/dinhanhthi/PopGuy/releases"
+    );
+    expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute(
+      "href",
+      "/privacy"
     );
   });
 

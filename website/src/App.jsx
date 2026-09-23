@@ -11,11 +11,13 @@ import { Header } from "./components/Header";
 import { ActionsPage } from "./pages/ActionsPage";
 import { DocsPage } from "./pages/DocsPage";
 import { HomePage } from "./pages/HomePage";
+import { PrivacyPage } from "./pages/PrivacyPage";
 
 const titles = {
   "/": "PopGuy — AI where you write",
   "/actions": "Actions — PopGuy",
-  "/docs": "Docs — PopGuy"
+  "/docs": "Docs — PopGuy",
+  "/privacy": "Privacy — PopGuy"
 };
 
 export function AppRoutes() {
@@ -34,6 +36,7 @@ export function AppRoutes() {
           <Route path="/" element={<HomePage />} />
           <Route path="/actions" element={<ActionsPage />} />
           <Route path="/docs" element={<DocsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

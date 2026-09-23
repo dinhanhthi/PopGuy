@@ -380,14 +380,7 @@ section p {
 }
 
 .doc {
-  padding-top: var(--space-lg);
-  border-top: var(--rule);
   scroll-margin-top: var(--space-md);
-}
-
-.docs-content > .doc:first-child {
-  padding-top: 0;
-  border-top: 0;
 }
 
 /* Wide screens: TOC hangs in the right margin; content column stays aligned with the header. */

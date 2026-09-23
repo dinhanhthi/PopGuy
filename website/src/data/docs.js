@@ -1,6 +1,5 @@
 export const docsSections = [
   "Installation",
-  "Privacy",
   "Action Types",
   "Create an Action",
   "Create a Plugin",
@@ -25,34 +24,6 @@ export const docsContent = {
       {
         title: "Requirements",
         bullets: ["macOS 13+", "Apple Silicon or Intel"]
-      }
-    ]
-  },
-  Privacy: {
-    summary:
-      "PopGuy works across apps, so it needs the Accessibility permission. It is not sandboxed.",
-    notice:
-      "PopGuy is not sandboxed. Cross-app text capture requires direct Accessibility API access, which the App Store sandbox blocks.",
-    sections: [
-      {
-        title: "Grant Accessibility",
-        steps: [
-          "Open System Settings.",
-          "Go to Privacy & Security → Accessibility.",
-          "Enable PopGuy."
-        ]
-      },
-      {
-        title: "Your keys stay in Keychain",
-        body: "API keys for AI and translation providers are stored only in macOS Keychain under the app bundle id. They are never written to `UserDefaults`, plist files, or any plaintext store."
-      },
-      {
-        title: "Clipboard is restored",
-        body: "When PopGuy falls back to simulating Cmd+C to capture text, it reads the pasteboard then immediately restores whatever you had there before. Your clipboard is never left clobbered."
-      },
-      {
-        title: "Plugins are reviewed before they run",
-        body: "Installing a plugin shows a mandatory preview of every script body. Nothing runs until you click an action in the toolbar. There is no signature check — only install plugins you trust."
       }
     ]
   },

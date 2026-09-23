@@ -16,5 +16,5 @@ npm test
 npm run build
 ```
 
-The site includes Home (`/`), Actions (`/actions`), and Docs (`/docs`) routes.
+The site includes Home (`/`), Actions (`/actions`), Docs (`/docs`), and Privacy (`/privacy`) routes.
 Download buttons point to the latest GitHub release.

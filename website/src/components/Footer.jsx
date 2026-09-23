@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { GITHUB_URL, RELEASES_URL } from "../constants";
 
 export function Footer() {
@@ -8,6 +9,8 @@ export function Footer() {
       <a href="https://dinhanhthi.com" target="_blank" rel="noreferrer">Thi</a>
       {" · "}
       <a href={RELEASES_URL} target="_blank" rel="noreferrer">Changelog</a>
+      {" · "}
+      <Link to="/privacy">Privacy</Link>
     </footer>
   );
 }
