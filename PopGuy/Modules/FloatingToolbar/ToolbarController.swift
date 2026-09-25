@@ -796,7 +796,7 @@ final class ToolbarController {
         // Global monitor: hide on any left/right mouse-down outside the panel.
         globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown]
-        ) { event in
+        ) { [weak self] event in
             // NSEvent global monitors deliver on the main thread when the event
             // loop is running. Dispatch to @MainActor to satisfy the compiler.
             Task { @MainActor [weak self] in
