@@ -772,3 +772,35 @@ struct ActionEngineTests {
         #expect(prompt == improveSystemPromptBase)
     }
 }
+
+// MARK: - Wrapping-quote cleanup
+
+@Suite("ActionEngine.stripWrappingQuotes")
+struct StripWrappingQuotesTests {
+
+    @Test("straight quotes wrapping the whole output are removed")
+    func straightQuotes() {
+        #expect(ActionEngine.stripWrappingQuotes(from: "\"Bonjour le monde\"", input: "Hello world") == "Bonjour le monde")
+    }
+
+    @Test("curly quotes with surrounding whitespace are removed")
+    func curlyQuotes() {
+        #expect(ActionEngine.stripWrappingQuotes(from: "\n\u{201C}Hello there\u{201D}\n", input: "hello ther") == "Hello there")
+    }
+
+    @Test("quotes are kept when the selection itself was quoted")
+    func inputQuoted() {
+        #expect(ActionEngine.stripWrappingQuotes(from: "\"Bonjour\"", input: "\"Hello\"") == "\"Bonjour\"")
+    }
+
+    @Test("separate quoted phrases are not treated as a wrapper")
+    func innerQuotes() {
+        let output = "\"a\" and \"b\""
+        #expect(ActionEngine.stripWrappingQuotes(from: output, input: "x") == output)
+    }
+
+    @Test("unquoted output is returned unchanged")
+    func unquoted() {
+        #expect(ActionEngine.stripWrappingQuotes(from: "Plain text", input: "x") == "Plain text")
+    }
+}

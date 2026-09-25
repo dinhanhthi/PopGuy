@@ -226,9 +226,10 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     viewModel.appendProgress(token)
                 }
                 guard myGen == self.generation else { return }
-                viewModel.finishWith(result: accumulated)
+                let output = ActionEngine.stripWrappingQuotes(from: accumulated, input: text)
+                viewModel.finishWith(result: output)
                 recordHistory(actionName: "Improve", providerKind: config.providerKind, model: config.model,
-                              input: text, output: accumulated, success: true, errorMessage: nil,
+                              input: text, output: output, success: true, errorMessage: nil,
                               startedAt: startedAt, sourceBundleID: sourceBundleID)
             } catch {
                 guard myGen == self.generation else { return }
@@ -274,9 +275,10 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     viewModel.appendProgress(token)
                 }
                 guard myGen == self.generation else { return }
-                viewModel.finishWith(result: accumulated)
+                let output = ActionEngine.stripWrappingQuotes(from: accumulated, input: text)
+                viewModel.finishWith(result: output)
                 recordHistory(actionName: "Shorten", providerKind: config.providerKind, model: config.model,
-                              input: text, output: accumulated, success: true, errorMessage: nil,
+                              input: text, output: output, success: true, errorMessage: nil,
                               startedAt: startedAt, sourceBundleID: sourceBundleID)
             } catch {
                 guard myGen == self.generation else { return }
@@ -322,9 +324,10 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     viewModel.appendProgress(token)
                 }
                 guard myGen == self.generation else { return }
-                viewModel.finishWith(result: accumulated)
+                let output = ActionEngine.stripWrappingQuotes(from: accumulated, input: text)
+                viewModel.finishWith(result: output)
                 recordHistory(actionName: "Proofread", providerKind: config.providerKind, model: config.model,
-                              input: text, output: accumulated, success: true, errorMessage: nil,
+                              input: text, output: output, success: true, errorMessage: nil,
                               startedAt: startedAt, sourceBundleID: sourceBundleID)
             } catch {
                 guard myGen == self.generation else { return }
@@ -408,9 +411,10 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     viewModel.appendProgress(token)
                 }
                 guard myGen == self.generation else { return }
-                viewModel.finishWith(result: accumulated)
+                let output = ActionEngine.stripWrappingQuotes(from: accumulated, input: text)
+                viewModel.finishWith(result: output)
                 recordHistory(actionName: action.title, providerKind: action.providerKind, model: action.model,
-                              input: text, output: accumulated, success: true, errorMessage: nil,
+                              input: text, output: output, success: true, errorMessage: nil,
                               startedAt: startedAt, sourceBundleID: sourceBundleID)
             } catch {
                 guard myGen == self.generation else { return }
@@ -455,9 +459,10 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     viewModel.appendProgress(token)
                 }
                 guard myGen == self.generation else { return }
-                viewModel.finishWith(result: accumulated)
+                let output = ActionEngine.stripWrappingQuotes(from: accumulated, input: text)
+                viewModel.finishWith(result: output)
                 recordHistory(actionName: "Prompt", providerKind: config.providerKind, model: config.model,
-                              input: text, output: accumulated, success: true, errorMessage: nil,
+                              input: text, output: output, success: true, errorMessage: nil,
                               startedAt: startedAt, sourceBundleID: sourceBundleID)
             } catch {
                 guard myGen == self.generation else { return }
@@ -506,9 +511,10 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     viewModel.appendProgress(token)
                 }
                 guard myGen == self.generation else { return }
-                viewModel.finishWith(result: accumulated)
+                let output = ActionEngine.stripWrappingQuotes(from: accumulated, input: text)
+                viewModel.finishWith(result: output)
                 recordHistory(actionName: "Translate", providerKind: config.providerKind, model: config.model,
-                              input: text, output: accumulated, success: true, errorMessage: nil,
+                              input: text, output: output, success: true, errorMessage: nil,
                               startedAt: startedAt, sourceBundleID: sourceBundleID)
             } catch {
                 guard myGen == self.generation else { return }

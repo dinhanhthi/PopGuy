@@ -365,6 +365,34 @@ nonisolated struct ActionEngine: Sendable {
         let substituted = prompt.replacingOccurrences(of: "{{text}}", with: input)
         return (nil, substituted)
     }
+
+    // MARK: - Wrapping-quote cleanup
+
+    /// Opening/closing double-quote pairs a model may wrap its whole reply in.
+    private static let wrappingQuotePairs: [(open: Character, close: Character)] = [
+        ("\"", "\""), ("\u{201C}", "\u{201D}"), ("\u{201E}", "\u{201C}")
+    ]
+
+    /// Remove one pair of double quotes wrapping the entire model output.
+    ///
+    /// Models often reply with `"result"` even when told to return only the text.
+    /// The quotes are kept when the selected input was itself wrapped in double
+    /// quotes (the model is then echoing the user's own quotes), and when the
+    /// quote characters also appear inside (e.g. `"a" and "b"` is not a wrapper).
+    static func stripWrappingQuotes(from output: String, input: String) -> String {
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let pair = wrappingQuotePair(of: trimmed),
+              wrappingQuotePair(of: input.trimmingCharacters(in: .whitespacesAndNewlines)) == nil
+        else { return output }
+        let inner = trimmed.dropFirst().dropLast()
+        guard !inner.contains(pair.open), !inner.contains(pair.close) else { return output }
+        return String(inner)
+    }
+
+    private static func wrappingQuotePair(of text: String) -> (open: Character, close: Character)? {
+        guard text.count >= 2, let first = text.first, let last = text.last else { return nil }
+        return wrappingQuotePairs.first { $0.open == first && $0.close == last }
+    }
 }
 
 // MARK: - Default factory
