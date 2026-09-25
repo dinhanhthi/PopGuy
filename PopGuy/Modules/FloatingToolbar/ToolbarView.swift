@@ -717,16 +717,14 @@ struct ToolbarView: View {
     /// Stop — outside-click / Escape are ignored mid-stream, so this is the
     /// explicit exit. Dismissing cancels the in-flight task.
     private var stopRow: some View {
-        HStack {
-            Button(action: onDismiss) {
-                Label("Stop", systemImage: "stop.fill")
-                    .font(footerButtonFont)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .frame(minHeight: footerButtonHeight)
-            Spacer()
+        Button(action: onDismiss) {
+            Label("Stop", systemImage: "stop.fill")
+                .font(footerButtonFont)
         }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .frame(minHeight: footerButtonHeight)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     // MARK: - Result / error area
