@@ -276,6 +276,11 @@ struct ToolbarView: View {
             if case .idle = viewModel.actionState { } else if !viewModel.suppressRunningPanel {
                 Divider().padding(.horizontal, z(8))
                 resultArea
+            } else {
+                // Scriptable action with no result panel: still offer Stop.
+                Divider().padding(.horizontal, z(8))
+                stopRow
+                    .padding(resultPaddingNoTrailing)
             }
             if (viewModel.speakPhase != .idle || viewModel.canReplaySpeak) && !viewModel.isDictionaryAction {
                 Divider().padding(.horizontal, z(8))
@@ -709,6 +714,21 @@ struct ToolbarView: View {
         isActionRunning && viewModel.activeActionKind == kind
     }
 
+    /// Stop — outside-click / Escape are ignored mid-stream, so this is the
+    /// explicit exit. Dismissing cancels the in-flight task.
+    private var stopRow: some View {
+        HStack {
+            Button(action: onDismiss) {
+                Label("Stop", systemImage: "stop.fill")
+                    .font(footerButtonFont)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .frame(minHeight: footerButtonHeight)
+            Spacer()
+        }
+    }
+
     // MARK: - Result / error area
 
     @ViewBuilder
@@ -734,6 +754,7 @@ struct ToolbarView: View {
                             .padding(.trailing, resultContentTrailing)
                     }
                 }
+                stopRow
             }
             .padding(resultPaddingNoTrailing)
             .frame(width: resultWidth, alignment: .leading)
