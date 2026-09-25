@@ -13,6 +13,17 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.0.3] - 2026-09-25
+
+### Added
+
+- A Stop button appears below the spinner while an AI action is running, letting you cancel it mid-stream.
+
+### Fixed
+
+- The AI action result sometimes came back wrapped in double quotes ("like this") even when the selected text wasn't. Quotes are now stripped unless your own selection was quoted.
+- A rare crash could occur from the toolbar's global mouse monitor.
+
 ## [1.0.2] - 2026-09-22
 
 ### Fixed
