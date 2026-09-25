@@ -10,6 +10,7 @@ import CoreGraphics
 @testable import PopGuy
 
 @Suite("shouldAttemptClipboardFallback()")
+@MainActor
 struct ClipboardFallbackGateTests {
 
     // Release point for a real drag — non-nil satisfies the drag check.

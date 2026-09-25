@@ -444,6 +444,7 @@ struct ActionEngineTests {
     // MARK: - makeDefaultFactory: CLI kind mapping
 
     @Test("makeDefaultFactory returns ClaudeCLIProvider for .claudeCLI")
+    @MainActor
     func makeDefaultFactoryClaudeCLI() {
         let factory = ActionEngine.makeDefaultFactory()
         let provider = factory(.claudeCLI, "")
@@ -451,6 +452,7 @@ struct ActionEngineTests {
     }
 
     @Test("makeDefaultFactory returns CodexCLIProvider for .codexCLI")
+    @MainActor
     func makeDefaultFactoryCodexCLI() {
         let factory = ActionEngine.makeDefaultFactory()
         let provider = factory(.codexCLI, "")
@@ -458,6 +460,7 @@ struct ActionEngineTests {
     }
 
     @Test("makeDefaultFactory returns GeminiCLIProvider for .geminiCLI")
+    @MainActor
     func makeDefaultFactoryGeminiCLI() {
         let factory = ActionEngine.makeDefaultFactory()
         let provider = factory(.geminiCLI, "")

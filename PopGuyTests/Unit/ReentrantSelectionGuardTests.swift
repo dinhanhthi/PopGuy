@@ -11,6 +11,7 @@ import Testing
 @testable import PopGuy
 
 @Suite("shouldIgnoreReentrantSelection")
+@MainActor
 struct ReentrantSelectionGuardTests {
 
     @Test("showing + action in progress + same text → ignore")

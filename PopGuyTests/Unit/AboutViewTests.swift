@@ -8,6 +8,7 @@ import Testing
 @testable import PopGuy
 
 @Suite("AboutView.makeVersionLine")
+@MainActor
 struct AboutViewTests {
 
     @Test("version only — no build or date")

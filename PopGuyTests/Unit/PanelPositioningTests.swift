@@ -10,6 +10,7 @@ import CoreGraphics
 @testable import PopGuy
 
 @Suite("PanelPositioning — panelOrigin()")
+@MainActor
 struct PanelPositioningTests {
 
     // Shared screen and panel sizes used across tests.

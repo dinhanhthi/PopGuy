@@ -296,6 +296,7 @@ struct HelperResponseTests {
 // MARK: - clampMaxTokens
 
 @Suite("clampMaxTokens input policy")
+@MainActor
 struct ClampMaxTokensTests {
 
     @Test("0 clamps to 1")
@@ -327,6 +328,7 @@ struct ClampMaxTokensTests {
 // MARK: - sanitizeTemperature
 
 @Suite("sanitizeTemperature input policy")
+@MainActor
 struct SanitizeTemperatureTests {
 
     @Test("NaN → 0.7")
@@ -363,6 +365,7 @@ struct SanitizeTemperatureTests {
 // MARK: - isQwenFamily detection
 
 @Suite("isQwenFamily detection")
+@MainActor
 struct IsQwenFamilyTests {
 
     // Positive: repos that MUST trigger no-think injection

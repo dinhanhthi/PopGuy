@@ -7,6 +7,7 @@
 import Testing
 @testable import PopGuy
 
+@MainActor
 struct VersionLabelFormatTests {
 
     @Test func buildPresent() {

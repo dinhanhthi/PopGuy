@@ -156,6 +156,7 @@ struct MarkdownResultViewTests {
 // MARK: - strippedAttributedString tests
 
 @Suite("MarkdownResultView — strippedAttributedString")
+@MainActor
 struct StrippedAttributedStringTests {
 
     @Test("link attribute is removed from link markdown")

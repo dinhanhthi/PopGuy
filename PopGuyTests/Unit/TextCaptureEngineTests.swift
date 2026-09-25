@@ -233,6 +233,7 @@ struct ProbeHelperTests {
 /// double-click reschedules within the 80ms debounce window, causing
 /// `scheduleCapture` to recompute the anchor from already-zeroed state.
 @Suite("mergeGestureAnchor() — Finding 1 double-click race fix")
+@MainActor
 struct MergeGestureAnchorTests {
 
     let somePoint = CGPoint(x: 200, y: 300)
@@ -316,6 +317,7 @@ struct MergeGestureAnchorTests {
 /// prevents the expensive `touchDescendants` path from running on every bare
 /// click in Electron apps when `probeSelection` returns `.inconclusive`.
 @Suite("shouldSkipInconclusiveFallback() — Finding 2 Electron bare-click guard")
+@MainActor
 struct SkipInconclusiveFallbackTests {
 
     let somePoint = CGPoint(x: 100, y: 200)

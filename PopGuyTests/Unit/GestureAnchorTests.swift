@@ -11,6 +11,7 @@ import Foundation
 @testable import PopGuy
 
 @Suite("gestureAnchor()")
+@MainActor
 struct GestureAnchorTests {
 
     // Shared constants matching SelectionPipeline's internal values.
