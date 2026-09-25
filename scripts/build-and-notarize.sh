@@ -34,6 +34,7 @@ INFO_PLIST="PopGuy/Info.plist"
 ARCHIVE="build/PopGuy.xcarchive"
 EXPORT_DIR="build/export"
 APP="$EXPORT_DIR/PopGuy.app"
+MIN_MACOS="13.0"   # PopGuy's hard minimum (CLAUDE.md) — guarded below
 NOTARY_PROFILE="${POPGUY_NOTARY_PROFILE:-popguy-notary}"
 
 # Submit to Apple and FAIL the script on anything other than "Accepted". notarytool exits 0
@@ -96,6 +97,20 @@ if /usr/libexec/PlistBuddy -c "Print :PGReleaseDate" "$INFO_PLIST" >/dev/null 2>
   echo "==> Stamped PGReleaseDate = $(date -u +%Y-%m-%d) (will be restored on exit)"
 fi
 
+# --- 2b. Guard the app target's Release settings (fail before the slow archive) --------------
+# Xcode's "Update to recommended settings" sweep has twice rewritten these in the pbxproj:
+# Release CODE_SIGN_IDENTITY → "Apple Development" (breaks notarization) and
+# MACOSX_DEPLOYMENT_TARGET → $(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET) (14.0 on Xcode 27 — drops
+# macOS 13 users silently). Check, don't override: a command-line override would apply to every
+# target, including PopGuyMLXHelper (intentionally 14.6) and the SPM packages.
+APP_SETTINGS="$(xcodebuild -project PopGuy.xcodeproj -target PopGuy -configuration Release -showBuildSettings 2>/dev/null)"
+APP_SIGN_ID="$(sed -n 's/^ *CODE_SIGN_IDENTITY = //p' <<<"$APP_SETTINGS" | head -1)"
+APP_MIN_OS="$(sed -n 's/^ *MACOSX_DEPLOYMENT_TARGET = //p' <<<"$APP_SETTINGS" | head -1)"
+[[ "$APP_SIGN_ID" == "Developer ID Application" ]] \
+  || { echo "error: PopGuy Release CODE_SIGN_IDENTITY is '${APP_SIGN_ID:-unset}', expected 'Developer ID Application' (Xcode recommended-settings sweep?)." >&2; exit 1; }
+[[ "$APP_MIN_OS" == "$MIN_MACOS" ]] \
+  || { echo "error: PopGuy Release MACOSX_DEPLOYMENT_TARGET is '${APP_MIN_OS:-unset}', expected '$MIN_MACOS' (Xcode recommended-settings sweep?)." >&2; exit 1; }
+
 # --- 3. Archive (the heavy MLX/Metal build) --------------------------------
 # -skipMacroValidation: mlx-swift-lm's MLXHuggingFace uses a Swift macro that otherwise needs
 # a one-time GUI "Trust & Enable"; skip the fingerprint check so the build never blocks.
@@ -126,6 +141,9 @@ grep -q "flags=.*runtime" <<<"$SIGN_INFO" \
 if codesign -d --entitlements - "$APP" 2>/dev/null | grep -q "get-task-allow"; then
   echo "error: app carries get-task-allow (Debug entitlement) — instant notarization reject" >&2; exit 1
 fi
+BUILT_MIN_OS="$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$APP/Contents/Info.plist" 2>/dev/null || true)"
+[[ "$BUILT_MIN_OS" == "$MIN_MACOS" ]] \
+  || { echo "error: built app LSMinimumSystemVersion is '${BUILT_MIN_OS:-unset}', expected '$MIN_MACOS'" >&2; exit 1; }
 echo "==> Extracted Developer-ID-signed app from archive"
 
 # --- 4b. Re-sign Sparkle's nested helpers with Developer ID + secure timestamp ----
