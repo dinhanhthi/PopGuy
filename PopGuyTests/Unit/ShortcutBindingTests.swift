@@ -17,7 +17,7 @@ struct ShortcutBindingTests {
     // MARK: - Helpers
 
     private func makeSuite() -> (UserDefaults, String) {
-        let name = "com.popguy.test.shortcuts.\(UUID().uuidString)"
+        let name = UserDefaults.testSuiteDirectory + "/com.popguy.test.shortcuts.\(UUID().uuidString)"
         return (UserDefaults(suiteName: name)!, name)
     }
 

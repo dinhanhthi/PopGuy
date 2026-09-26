@@ -54,7 +54,7 @@ struct ReentrantSelectionGuardTests {
 struct IgnoredAppsIdentityTests {
 
     private func makeSuite() -> (UserDefaults, String) {
-        let name = "com.popguy.test.ignoredapps.\(UUID().uuidString)"
+        let name = UserDefaults.testSuiteDirectory + "/com.popguy.test.ignoredapps.\(UUID().uuidString)"
         return (UserDefaults(suiteName: name)!, name)
     }
 

@@ -138,7 +138,7 @@ struct LocalMLXSettingsTests {
         .appendingPathComponent("LocalMLXHub-isolated-\(UUID().uuidString)")
 
     private func makeSuite() -> (UserDefaults, String) {
-        let name = "com.popguy.test.localmlx.\(UUID().uuidString)"
+        let name = UserDefaults.testSuiteDirectory + "/com.popguy.test.localmlx.\(UUID().uuidString)"
         return (UserDefaults(suiteName: name)!, name)
     }
 

@@ -1623,7 +1623,7 @@ struct AzureTTSCuratedLanguageVoicesTests {
 struct VoiceOverridesRoundTripTests {
 
     private func makeSuite() -> (UserDefaults, String) {
-        let name = "com.popguy.test.\(UUID().uuidString)"
+        let name = UserDefaults.testSuiteDirectory + "/com.popguy.test.\(UUID().uuidString)"
         return (UserDefaults(suiteName: name)!, name)
     }
 

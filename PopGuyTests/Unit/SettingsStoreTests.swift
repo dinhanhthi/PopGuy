@@ -20,7 +20,7 @@ struct SettingsStoreTests {
     /// Create a fresh UserDefaults suite with a unique name for this test run.
     /// The caller is responsible for removing it (use `defer`).
     private func makeSuite() -> (UserDefaults, String) {
-        let name = "com.popguy.test.\(UUID().uuidString)"
+        let name = UserDefaults.testSuiteDirectory + "/com.popguy.test.\(UUID().uuidString)"
         // UserDefaults(suiteName:) returns non-nil for any non-empty name.
         return (UserDefaults(suiteName: name)!, name)
     }

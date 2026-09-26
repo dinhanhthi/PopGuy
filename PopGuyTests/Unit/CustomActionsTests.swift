@@ -22,7 +22,7 @@ struct CustomActionsTests {
     // MARK: - Helpers
 
     private func makeSuite() -> (UserDefaults, String) {
-        let name = "com.popguy.test.customactions.\(UUID().uuidString)"
+        let name = UserDefaults.testSuiteDirectory + "/com.popguy.test.customactions.\(UUID().uuidString)"
         return (UserDefaults(suiteName: name)!, name)
     }
 
