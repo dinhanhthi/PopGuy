@@ -13,6 +13,13 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.0.4] - 2026-09-26
+
+### Fixed
+
+- Quitting PopGuy during a local model download now stops the download instead of letting it finish silently in the background.
+- Model files left over from interrupted or cancelled downloads are now cleaned up automatically when you open Local models, freeing the disk space they used.
+
 ## [1.0.3] - 2026-09-25
 
 ### Added
