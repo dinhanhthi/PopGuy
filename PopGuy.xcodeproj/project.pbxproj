@@ -7,10 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A6F3C8D429E54B1F8D7C6A5B /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = B7E4D9C52AF64C2E9B8D7A6C /* LICENSE */; };
 		67371C126C704661A587 /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 650B6D4AF28B434E9D1C /* HuggingFace */; };
 		903BE62C47B3A159E67B114F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B605796E047F0B1A8CAEB221 /* Sparkle */; };
 		A043BAE1603803A839C0CB52 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = A5534EA92B26FA8ADC30543F /* Yams */; };
+		A6F3C8D429E54B1F8D7C6A5B /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = B7E4D9C52AF64C2E9B8D7A6C /* LICENSE */; };
 		D3132B4DA6DB4860A6AC /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = 946417FD3A4347A6B0AB /* Tokenizers */; };
 		D3BD085B2FED9B1800078DEB /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = D3BD085A2FED9B1800078DEB /* MLXHuggingFace */; };
 		D3BD085D2FED9B1800078DEB /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = D3BD085C2FED9B1800078DEB /* MLXLLM */; };
@@ -281,7 +281,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2650;
-				LastUpgradeCheck = 2660;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					D34244452FD4A56C001600A8 = {
 						CreatedOnToolsVersion = 26.5;
