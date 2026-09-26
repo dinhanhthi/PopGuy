@@ -132,6 +132,11 @@ struct LocalMLXSettingsTests {
 
     // MARK: - Helpers
 
+    /// Per-test hub dir so stub downloads never touch (or garbage-collect) the real
+    /// ~/Library/Application Support/PopGuy/models cache.
+    private let isolatedHub = FileManager.default.temporaryDirectory
+        .appendingPathComponent("LocalMLXHub-isolated-\(UUID().uuidString)")
+
     private func makeSuite() -> (UserDefaults, String) {
         let name = "com.popguy.test.localmlx.\(UUID().uuidString)"
         return (UserDefaults(suiteName: name)!, name)
@@ -194,7 +199,7 @@ struct LocalMLXSettingsTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        let manager = MLXHelperManager(helperURL: stubURL, supported: true)
+        let manager = MLXHelperManager(helperURL: stubURL, supported: true, hubCacheBaseURL: isolatedHub)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
         let model = otherCatalogModel
@@ -217,7 +222,7 @@ struct LocalMLXSettingsTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        let manager = MLXHelperManager(helperURL: stubURL, supported: false)
+        let manager = MLXHelperManager(helperURL: stubURL, supported: false, hubCacheBaseURL: isolatedHub)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: false)
 
         store.downloadLocalModel(gemmaE2B.id)
@@ -236,7 +241,7 @@ struct LocalMLXSettingsTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        let manager = MLXHelperManager(helperURL: stubURL, supported: true)
+        let manager = MLXHelperManager(helperURL: stubURL, supported: true, hubCacheBaseURL: isolatedHub)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
         store.downloadLocalModel("this-id-does-not-exist")
@@ -308,7 +313,7 @@ struct LocalMLXSettingsTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        let manager = MLXHelperManager(helperURL: stubURL, supported: true)
+        let manager = MLXHelperManager(helperURL: stubURL, supported: true, hubCacheBaseURL: isolatedHub)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
         let freeModel = gemmaE2B
@@ -351,7 +356,7 @@ struct LocalMLXSettingsTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        let manager = MLXHelperManager(helperURL: stubURL, supported: true)
+        let manager = MLXHelperManager(helperURL: stubURL, supported: true, hubCacheBaseURL: isolatedHub)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
         let freeModel = gemmaE2B
@@ -385,7 +390,7 @@ struct LocalMLXSettingsTests {
         defer { removeSuite(name) }
 
         // Both downloads go through the same manager instance.
-        let manager = MLXHelperManager(helperURL: slowStubURL, supported: true)
+        let manager = MLXHelperManager(helperURL: slowStubURL, supported: true, hubCacheBaseURL: isolatedHub)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
         // Pick two different free/pro models as A and B.
@@ -443,7 +448,7 @@ struct LocalMLXSettingsTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        let manager = MLXHelperManager(helperURL: slowStubURL, supported: true)
+        let manager = MLXHelperManager(helperURL: slowStubURL, supported: true, hubCacheBaseURL: isolatedHub)
         let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
 
         let freeModel = gemmaE2B

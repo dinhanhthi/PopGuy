@@ -257,6 +257,19 @@ func runMain() async {
         }
     }
 
+    // Parent watch: exit as soon as PopGuy dies (quit, crash, `killall PopGuy`). The dispatch
+    // loop only sees stdin EOF between requests, so without this an orphaned helper keeps
+    // downloading to completion and leaves model files the app never recorded as installed.
+    let parentWatch = Task.detached {
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            if getppid() == 1 {
+                fflush(stdout)
+                exit(0)
+            }
+        }
+    }
+
     // Stdin reader: runs on a background thread so the blocking byte loop does not block @MainActor.
     let stdinReader = Task.detached {
         readStdinLines(into: lineContinuation)
@@ -270,6 +283,7 @@ func runMain() async {
         switch stdinLine {
         case .eof:
             watchdog.cancel()
+            parentWatch.cancel()
             stdinReader.cancel()
             return
 
@@ -394,6 +408,7 @@ func runMain() async {
     }
 
     watchdog.cancel()
+    parentWatch.cancel()
     stdinReader.cancel()
 }
 

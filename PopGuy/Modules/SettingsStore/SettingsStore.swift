@@ -1123,6 +1123,9 @@ final class SettingsStore: ObservableObject {
     /// - NEVER adds an id just because disk files exist — only successful
     ///   downloads (tracked in completedLocalModelIDs) count as installed.
     /// - Writes back any pruned ids to keep the persisted set consistent with disk.
+    /// - Deletes orphaned model directories: catalog models on disk that never completed
+    ///   (cancelled download, or a helper that outlived a quit/killed app) and are not
+    ///   downloading now. They are invisible in the UI, so nothing else could remove them.
     ///
     /// Call on Settings view appear and after any download or delete completes.
     func refreshInstalledLocalModels() async {
@@ -1138,6 +1141,14 @@ final class SettingsStore: ObservableObject {
             completedLocalModelIDs = reconciled
         }
         installedLocalModels = reconciled
+
+        for model in LocalModelCatalog.all {
+            guard await helper.modelDirExists(modelID: model.id) else { continue }
+            // Checked after the await: a download may have started or completed meanwhile.
+            guard !completedLocalModelIDs.contains(model.id),
+                  activeLocalModelDownloadID != model.id else { continue }
+            await helper.delete(modelID: model.id)
+        }
     }
 
     // MARK: - Local model download
