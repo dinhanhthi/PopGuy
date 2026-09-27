@@ -40,10 +40,11 @@ export function HomePage() {
 
       <div className="video-frame">
         <iframe
-          src="https://player.vimeo.com/video/1209095226?title=0&byline=0&portrait=0&dnt=1"
+          src="https://www.youtube-nocookie.com/embed/-ctYYSC4bWM?rel=0"
           title="PopGuy Demo"
           loading="lazy"
-          allow="autoplay; fullscreen; picture-in-picture"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerPolicy="strict-origin-when-cross-origin"
           allowFullScreen
         />
       </div>

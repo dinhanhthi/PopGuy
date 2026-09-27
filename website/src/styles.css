@@ -1,6 +1,6 @@
 /* Hallmark · pre-emit critique: P4 H4 E5 S4 R5 V3
  * macrostructure: Long Document (user-specified, dotlore-style) · theme: Coral (zinc · Geist)
- * tone: utilitarian · enrichment: Vimeo demo · nav: brand + 2 links · footer: one line
+ * tone: utilitarian · enrichment: YouTube demo · nav: brand + 2 links · footer: one line
  */
 @import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap");
 @import "../tokens.css";
@@ -257,7 +257,7 @@ section p {
 }
 
 .video-frame {
-  aspect-ratio: 1280 / 874;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
   border: var(--rule);
   border-radius: var(--radius-card);
