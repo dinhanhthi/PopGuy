@@ -8,7 +8,7 @@ Select text in any app — a floating toolbar pops up so you can **improve**, **
 or run a **custom AI action** on it. Think PopClip, with a configurable AI backend.
 
 **[⬇ Download for macOS](https://github.com/dinhanhthi/PopGuy/releases/latest)**
-&nbsp;·&nbsp; **[▶ Watch the demo](https://vimeo.com/1209095226)**
+&nbsp;·&nbsp; **[▶ Watch the demo](https://www.youtube.com/watch?v=-ctYYSC4bWM)**
 &nbsp;·&nbsp; macOS 13+ &nbsp;·&nbsp; signed &amp; notarized
 
 </div>
