@@ -13,6 +13,12 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.0.5] - 2026-10-03
+
+### Added
+
+- New "Hide logo" option in Settings → Appearance removes the PopGuy logo from the toolbar to save space. With the logo hidden, the toolbar row can hold up to 7 actions instead of 6. Showing the logo again moves any extra action to the More menu, or is blocked if the More menu is full.
+
 ## [1.0.4] - 2026-09-26
 
 ### Fixed
