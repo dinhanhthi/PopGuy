@@ -7,7 +7,8 @@
 # so you never need Xcode running.
 #
 # No re-approval of Accessibility on each rebuild:
-#   - Fixed output path (build/dev) → stable app path, so macOS TCC keeps the grant.
+#   - Xcode's default DerivedData (shared with Xcode's Run, so ▶ reuses this build)
+#     → stable app path, so macOS TCC keeps the grant.
 #   - Project's own signing (Apple Development, Team 86H6CNLN4C, bundle
 #     dinh.thi.PopGuy) → stable code-signature identity, which is what TCC keys
 #     the Accessibility permission on. Same cert + same bundle id + same path
@@ -22,9 +23,6 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-DERIVED="build/dev"
-APP="$DERIVED/Build/Products/Debug/PopGuy.app"
-
 CLEAN_ACTION=""
 [[ "${1:-}" == "--clean" ]] && CLEAN_ACTION="clean"
 
@@ -38,9 +36,13 @@ xcodebuild \
   -project PopGuy.xcodeproj \
   -scheme PopGuy \
   -configuration Debug \
-  -derivedDataPath "$DERIVED" \
   -skipMacroValidation \
   $CLEAN_ACTION build
+
+PRODUCTS="$(xcodebuild -project PopGuy.xcodeproj -scheme PopGuy -configuration Debug \
+  -skipMacroValidation -showBuildSettings 2>/dev/null \
+  | awk -F' = ' '/^ *BUILT_PRODUCTS_DIR = /{print $2; exit}')"
+APP="$PRODUCTS/PopGuy.app"
 
 echo "==> Launching $APP"
 open "$APP"
