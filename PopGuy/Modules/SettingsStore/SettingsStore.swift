@@ -144,6 +144,7 @@ final class SettingsStore: ObservableObject {
         static let popGuyEnabled              = "settings.popGuyEnabled"
         static let triggerOnSelect            = "settings.triggerOnSelect"
         static let triggerDoubleClick         = "settings.triggerDoubleClick"
+        static let hideToolbarLogo            = "settings.hideToolbarLogo"
         static let doubleClickAssignedAction  = "settings.doubleClickAssignedAction"
         static let triggerChord               = "settings.triggerChord"
         static let chordReplacementShortcut   = "settings.chordReplacementShortcut"
@@ -414,6 +415,13 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(triggerOnSelectEnabled, forKey: Keys.triggerOnSelect) }
     }
 
+    /// Hides the PopGuy logo on the toolbar to save space (default: false).
+    /// Raises the principal-row cap by one; use `setHideToolbarLogo(_:)` to change it
+    /// so re-showing the logo can be rejected when the extra action has nowhere to go.
+    @Published private(set) var hideToolbarLogo: Bool {
+        didSet { defaults.set(hideToolbarLogo, forKey: Keys.hideToolbarLogo) }
+    }
+
     /// Whether to trigger the popup on double-clicking a single word (default: false).
     /// Works alongside `triggerOnSelectEnabled`: a double-click fires when either
     /// trigger is on, while range selections use `triggerOnSelectEnabled`.
@@ -604,6 +612,8 @@ final class SettingsStore: ObservableObject {
         popGuyEnabled            = defaults.object(forKey: Keys.popGuyEnabled) as? Bool ?? true
         triggerOnSelectEnabled   = defaults.object(forKey: Keys.triggerOnSelect) as? Bool ?? false
         triggerDoubleClickEnabled = defaults.object(forKey: Keys.triggerDoubleClick) as? Bool ?? false
+        let hideLogo = defaults.object(forKey: Keys.hideToolbarLogo) as? Bool ?? false
+        hideToolbarLogo = hideLogo
         doubleClickAssignedAction = Self.load(ActionIdentifier.self, key: Keys.doubleClickAssignedAction, from: defaults)
         triggerChordEnabled      = defaults.object(forKey: Keys.triggerChord)    as? Bool ?? true
         historyEnabled           = defaults.object(forKey: Keys.historyEnabled)        as? Bool ?? true
@@ -626,7 +636,7 @@ final class SettingsStore: ObservableObject {
         let rawPrincipal = Self.load(Set<ActionIdentifier>.self, key: Keys.principalActionIDs, from: defaults)
         let resolvedPrincipal: Set<ActionIdentifier>
         if let rawPrincipal, !rawPrincipal.isEmpty {
-            resolvedPrincipal = Self.reconcilePrincipal(persisted: rawPrincipal, actionOrder: reconciledOrder)
+            resolvedPrincipal = Self.reconcilePrincipal(persisted: rawPrincipal, actionOrder: reconciledOrder, maxPrincipal: Self.maxPrincipal(hideLogo: hideLogo))
         } else {
             let impEnabled = defaults.object(forKey: Keys.improveEnabled) as? Bool ?? true
             let shEnabled = defaults.object(forKey: Keys.shortenEnabled) as? Bool ?? true
@@ -646,8 +656,8 @@ final class SettingsStore: ObservableObject {
                 dictionaryEnabled: dictConfig.isEnabled,
                 customActions: loadedCustomActions
             )
-            let migrated = Set(enabled.prefix(ToolbarLimits.maxPrincipalActions))
-            resolvedPrincipal = Self.reconcilePrincipal(persisted: migrated, actionOrder: reconciledOrder)
+            let migrated = Set(enabled.prefix(Self.maxPrincipal(hideLogo: hideLogo)))
+            resolvedPrincipal = Self.reconcilePrincipal(persisted: migrated, actionOrder: reconciledOrder, maxPrincipal: Self.maxPrincipal(hideLogo: hideLogo))
         }
 
         actionOrder = reconciledOrder
@@ -671,6 +681,34 @@ final class SettingsStore: ObservableObject {
     /// Maximum number of enabled actions that may be active on the toolbar at once
     /// (principal row + burger menu combined).
     static let maxToolbarActions = ToolbarLimits.maxPrincipalActions + ToolbarLimits.maxBurgerActions
+
+    private static func maxPrincipal(hideLogo: Bool) -> Int {
+        hideLogo ? ToolbarLimits.maxPrincipalActionsLogoHidden : ToolbarLimits.maxPrincipalActions
+    }
+
+    /// Principal-row cap for the current logo visibility.
+    var maxPrincipalActions: Int { Self.maxPrincipal(hideLogo: hideToolbarLogo) }
+
+    /// Combined toolbar cap (principal row + burger) for the current logo visibility.
+    var maxToolbarActionsCurrent: Int { maxPrincipalActions + ToolbarLimits.maxBurgerActions }
+
+    /// Show or hide the toolbar logo. Hiding always succeeds. Showing lowers the
+    /// principal cap, so surplus principal actions move to the burger menu; returns
+    /// `false` (and changes nothing) when the burger menu has no room for them.
+    @discardableResult
+    func setHideToolbarLogo(_ hide: Bool) -> Bool {
+        guard hide != hideToolbarLogo else { return true }
+        if !hide {
+            let newCap = ToolbarLimits.maxPrincipalActions
+            let surplus = max(0, principalActionCount - newCap)
+            guard overflowActionCount + surplus <= ToolbarLimits.maxBurgerActions else { return false }
+            for id in principalOrderedIdentifiers.suffix(surplus) {
+                principalActionIDs.remove(id)
+            }
+        }
+        hideToolbarLogo = hide
+        return true
+    }
 
     /// Canonical default order for the six built-in actions.
     /// Custom actions are appended after these in `customActions` array order.
@@ -743,7 +781,7 @@ final class SettingsStore: ObservableObject {
     /// - Returns: `true` if the enable flag was clamped to `false`; `false` otherwise.
     @discardableResult
     func addCustomAction(_ action: CustomAction) -> Bool {
-        let wouldExceed = action.isEnabled && (enabledToolbarActionCount + 1 > Self.maxToolbarActions)
+        let wouldExceed = action.isEnabled && (enabledToolbarActionCount + 1 > maxToolbarActionsCurrent)
         if wouldExceed {
             var clamped = action
             clamped.isEnabled = false
@@ -772,7 +810,7 @@ final class SettingsStore: ObservableObject {
             // Count excluding the old version of this action.
             let oldWasEnabled = customActions[index].isEnabled
             let countWithoutOld = enabledToolbarActionCount - (oldWasEnabled ? 1 : 0)
-            if countWithoutOld + 1 > Self.maxToolbarActions {
+            if countWithoutOld + 1 > maxToolbarActionsCurrent {
                 var clamped = action
                 clamped.isEnabled = false
                 customActions[index] = clamped
@@ -979,7 +1017,7 @@ final class SettingsStore: ObservableObject {
         if value {
             // Enabled actions count toward the principal cap; disabled actions may
             // be assigned freely and only block once enabled.
-            if isEnabled(id), principalActionCount >= ToolbarLimits.maxPrincipalActions {
+            if isEnabled(id), principalActionCount >= maxPrincipalActions {
                 return false
             }
             principalActionIDs.insert(id)
@@ -1033,20 +1071,21 @@ final class SettingsStore: ObservableObject {
 
     /// Reconcile a persisted principal set against the current `actionOrder`.
     ///
-    /// Drops stale identifiers, trims to `ToolbarLimits.maxPrincipalActions` by
+    /// Drops stale identifiers, trims to `maxPrincipal` by
     /// `actionOrder`, and leaves actions not in the set in the burger zone.
     private static func reconcilePrincipal(
         persisted: Set<ActionIdentifier>,
-        actionOrder: [ActionIdentifier]
+        actionOrder: [ActionIdentifier],
+        maxPrincipal: Int
     ) -> Set<ActionIdentifier> {
         var ordered = actionOrder.filter { persisted.contains($0) }
-        if ordered.count > ToolbarLimits.maxPrincipalActions {
-            ordered = Array(ordered.prefix(ToolbarLimits.maxPrincipalActions))
+        if ordered.count > maxPrincipal {
+            ordered = Array(ordered.prefix(maxPrincipal))
         }
         var principalSet = Set(ordered)
         var burger = actionOrder.filter { !principalSet.contains($0) }
         while burger.count > ToolbarLimits.maxBurgerActions,
-              principalSet.count < ToolbarLimits.maxPrincipalActions {
+              principalSet.count < maxPrincipal {
             let promote = burger.removeFirst()
             principalSet.insert(promote)
         }

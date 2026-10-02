@@ -343,11 +343,13 @@ struct ToolbarView: View {
         HStack(spacing: metrics.groupSpacing) {
             // Brand mark — decorative, spans the full control height so
             // it reads at the same visual weight as the action buttons.
-            Image("ToolbarLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: metrics.controlHeight, height: metrics.controlHeight)
-                .accessibilityHidden(true)
+            if viewModel.showsLogo {
+                Image("ToolbarLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: metrics.controlHeight, height: metrics.controlHeight)
+                    .accessibilityHidden(true)
+            }
 
             // Ordered action buttons — one divider between consecutive actions;
             // none before the first. Bookends (logo, utilities) are outside this loop.

@@ -173,6 +173,70 @@ struct PrincipalActionsTests {
         store.deleteCustomAction(id: action.id)
         #expect(!store.principalActionIDs.contains(.custom(action.id)))
     }
+
+    @Test("logo is shown by default with the base principal cap")
+    func logoShownByDefault() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        #expect(!store.hideToolbarLogo)
+        #expect(store.maxPrincipalActions == ToolbarLimits.maxPrincipalActions)
+    }
+
+    @Test("hiding the logo raises the principal cap and persists")
+    func hideLogoRaisesCap() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        #expect(store.setHideToolbarLogo(true))
+        #expect(store.maxPrincipalActions == ToolbarLimits.maxPrincipalActionsLogoHidden)
+        #expect(SettingsStore(defaults: suite).hideToolbarLogo)
+    }
+
+    @Test("showing the logo moves surplus principal actions to the burger menu")
+    func showLogoDemotesSurplus() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        store.setHideToolbarLogo(true)
+        store.promptEnabled = true
+        _ = store.setPrincipal(.builtin(.prompt), true)
+        store.dictionaryConfig.isEnabled = true
+        _ = store.setPrincipal(.dictionary, true)
+        #expect(store.principalActionCount == ToolbarLimits.maxPrincipalActionsLogoHidden)
+
+        #expect(store.setHideToolbarLogo(false))
+        #expect(store.principalActionCount == ToolbarLimits.maxPrincipalActions)
+    }
+
+    @Test("showing the logo is rejected when the burger menu cannot take the surplus")
+    func showLogoRejectedWhenBurgerFull() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        store.setHideToolbarLogo(true)
+        store.promptEnabled = true
+        _ = store.setPrincipal(.builtin(.prompt), true)
+        store.dictionaryConfig.isEnabled = true
+        for i in 0..<5 {
+            store.addCustomAction(CustomAction(title: "Burger \(i)", systemPrompt: "p", isEnabled: true))
+        }
+        guard let burgerID = store.overflowOrderedIdentifiers.first else {
+            Issue.record("Expected a burger action")
+            return
+        }
+        _ = store.setPrincipal(burgerID, true)
+        #expect(store.principalActionCount == ToolbarLimits.maxPrincipalActionsLogoHidden)
+        #expect(store.overflowActionCount == ToolbarLimits.maxBurgerActions)
+
+        #expect(!store.setHideToolbarLogo(false))
+        #expect(store.hideToolbarLogo)
+        #expect(store.principalActionCount == ToolbarLimits.maxPrincipalActionsLogoHidden)
+    }
 }
 
 // MARK: - Test helpers

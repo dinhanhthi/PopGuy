@@ -55,6 +55,7 @@ struct ToolbarPreviewView: View {
         } else {
             viewModel.ttsConfig = .default
         }
+        viewModel.showsLogo = !settings.hideToolbarLogo
         viewModel.orderedActions = settings.principalOrderedIdentifiers
         viewModel.overflowActions = settings.overflowOrderedIdentifiers
 

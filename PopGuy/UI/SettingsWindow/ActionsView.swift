@@ -155,7 +155,7 @@ struct ActionsView: View {
                     }
                     .buttonStyle(.borderedProminent)
 
-                    Text("\(settings.principalActionCount)/\(ToolbarLimits.maxPrincipalActions) toolbar · \(settings.overflowActionCount)/\(ToolbarLimits.maxBurgerActions) More")
+                    Text("\(settings.principalActionCount)/\(settings.maxPrincipalActions) toolbar · \(settings.overflowActionCount)/\(ToolbarLimits.maxBurgerActions) More")
                         .font(.body)
                         .foregroundStyle(.secondary)
 
@@ -263,12 +263,12 @@ struct ActionsView: View {
         .alert("Toolbar Limit Reached", isPresented: $showLimitAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("PopGuy supports at most \(SettingsStore.maxToolbarActions) enabled actions (\(ToolbarLimits.maxPrincipalActions) on the toolbar and \(ToolbarLimits.maxBurgerActions) in the More menu). Turn off another action first.")
+            Text("PopGuy supports at most \(settings.maxToolbarActionsCurrent) enabled actions (\(settings.maxPrincipalActions) on the toolbar and \(ToolbarLimits.maxBurgerActions) in the More menu). Turn off another action first.")
         }
         .alert("Toolbar Layout Full", isPresented: $showPrincipalLimitAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("The toolbar row holds up to \(ToolbarLimits.maxPrincipalActions) actions and the More menu holds up to \(ToolbarLimits.maxBurgerActions). Free a slot in that zone before moving this action.")
+            Text("The toolbar row holds up to \(settings.maxPrincipalActions) actions and the More menu holds up to \(ToolbarLimits.maxBurgerActions). Free a slot in that zone before moving this action.")
         }
         .alert("Import Failed", isPresented: $showImportError) {
             Button("OK", role: .cancel) {}
@@ -718,7 +718,7 @@ struct ActionsView: View {
         Binding(
             get: { binding.wrappedValue },
             set: { newValue in
-                if newValue && settings.enabledToolbarActionCount >= SettingsStore.maxToolbarActions {
+                if newValue && settings.enabledToolbarActionCount >= settings.maxToolbarActionsCurrent {
                     showLimitAlert = true
                 } else {
                     binding.wrappedValue = newValue

@@ -14,6 +14,9 @@ nonisolated enum ToolbarLimits {
     /// Max actions shown inline on the floating toolbar (outside the burger menu).
     static let maxPrincipalActions = 6
 
+    /// Max inline actions when the PopGuy logo is hidden (frees one slot).
+    static let maxPrincipalActionsLogoHidden = 7
+
     /// Max actions inside the burger overflow menu.
     static let maxBurgerActions = 5
 

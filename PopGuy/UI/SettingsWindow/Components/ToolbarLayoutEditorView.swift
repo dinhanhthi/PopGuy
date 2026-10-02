@@ -55,11 +55,13 @@ struct ToolbarLayoutEditorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Image("ToolbarLogo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: logoSize, height: logoSize)
-                    .accessibilityHidden(true)
+                if !settings.hideToolbarLogo {
+                    Image("ToolbarLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: logoSize, height: logoSize)
+                        .accessibilityHidden(true)
+                }
 
                 principalChipStrip
 
@@ -357,7 +359,7 @@ struct ToolbarLayoutEditorView: View {
         }
 
         rejectionMessage = session.targetPrincipal
-            ? "Toolbar row is full (\(ToolbarLimits.maxPrincipalActions)/\(ToolbarLimits.maxPrincipalActions)). Free a slot first."
+            ? "Toolbar row is full (\(settings.maxPrincipalActions)/\(settings.maxPrincipalActions)). Free a slot first."
             : "More menu is full (\(ToolbarLimits.maxBurgerActions)/\(ToolbarLimits.maxBurgerActions)). Free a slot first."
 
         Task { @MainActor in

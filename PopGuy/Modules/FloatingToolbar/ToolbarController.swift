@@ -575,9 +575,10 @@ final class ToolbarController {
         let allocated = Self.allocate(
             principal: principalIDs,
             overflow: overflowIDs,
-            maxPrincipal: ToolbarLimits.maxPrincipalActions,
+            maxPrincipal: settings.maxPrincipalActions,
             maxBurger: ToolbarLimits.maxBurgerActions
         )
+        viewModel.showsLogo = !settings.hideToolbarLogo
         viewModel.orderedActions = allocated.principal
         viewModel.overflowActions = allocated.overflow
 

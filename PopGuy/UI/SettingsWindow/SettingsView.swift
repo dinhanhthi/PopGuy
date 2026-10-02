@@ -274,7 +274,7 @@ struct SettingsView: View {
         .alert("Toolbar Limit Reached", isPresented: $showSaveLimitAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("PopGuy supports at most \(SettingsStore.maxToolbarActions) enabled actions (\(ToolbarLimits.maxPrincipalActions) on the toolbar and \(ToolbarLimits.maxBurgerActions) in the More menu). Turn off another action first.")
+            Text("PopGuy supports at most \(settings.maxToolbarActionsCurrent) enabled actions (\(settings.maxPrincipalActions) on the toolbar and \(ToolbarLimits.maxBurgerActions) in the More menu). Turn off another action first.")
         }
     }
 
@@ -1316,6 +1316,8 @@ private struct AppearanceView: View {
     @State private var preserveFormatting: Bool = false
     @State private var toolbarZoom: ToolbarZoom = .x1
     @State private var zoomIncludesFontSize: Bool = true
+    @State private var hideLogo: Bool = false
+    @State private var showLogoRejectedAlert = false
 
     var body: some View {
         Form {
@@ -1346,6 +1348,21 @@ private struct AppearanceView: View {
                         }
 
                     Text("Turn off to keep the result text at its chosen size while everything else grows.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Hide logo", isOn: $hideLogo)
+                        .onChange(of: hideLogo) { newValue in
+                            guard newValue != settings.hideToolbarLogo else { return }
+                            if !settings.setHideToolbarLogo(newValue) {
+                                hideLogo = settings.hideToolbarLogo
+                                showLogoRejectedAlert = true
+                            }
+                        }
+
+                    Text("Hide the PopGuy logo to save space. Allows up to \(ToolbarLimits.maxPrincipalActionsLogoHidden) actions on the toolbar instead of \(ToolbarLimits.maxPrincipalActions).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1402,6 +1419,12 @@ private struct AppearanceView: View {
             preserveFormatting = settings.preserveFormatting
             toolbarZoom = settings.toolbarZoom
             zoomIncludesFontSize = settings.zoomIncludesFontSize
+            hideLogo = settings.hideToolbarLogo
+        }
+        .alert("Can't Show Logo", isPresented: $showLogoRejectedAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Showing the logo lowers the toolbar row to \(ToolbarLimits.maxPrincipalActions) actions, and the More menu has no room for the extra one. Free a slot in the More menu first.")
         }
     }
 }

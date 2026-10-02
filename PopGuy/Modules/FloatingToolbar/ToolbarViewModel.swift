@@ -286,6 +286,9 @@ final class ToolbarViewModel: ObservableObject {
     /// customActions array below.
     @Published var orderedActions: [ActionIdentifier] = []
 
+    /// Whether the PopGuy logo is shown at the start of the action bar.
+    @Published var showsLogo: Bool = true
+
     /// Enabled overflow actions shown in the burger menu.
     @Published var overflowActions: [ActionIdentifier] = []
 
