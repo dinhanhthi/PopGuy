@@ -20,6 +20,12 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "error: commit or remove working-tree changes before building a release" >&2
+  exit 1
+fi
+release_sha="$(git rev-parse HEAD)"
+
 # Derive version from the committed pbxproj
 PBXPROJ="PopGuy.xcodeproj/project.pbxproj"
 VERSION="$(grep -Eo 'MARKETING_VERSION = [^;]+;' "$PBXPROJ" \
@@ -35,6 +41,11 @@ echo
 
 # Step 1 — Build, sign, notarize, DMG (~15-25 min; Keychain prompt → Always Allow)
 scripts/build-and-notarize.sh
+
+if [[ "$(git rev-parse HEAD)" != "$release_sha" || -n "$(git status --porcelain)" ]]; then
+  echo "error: source changed during build; release was not published" >&2
+  exit 1
+fi
 
 # Step 2 — Tag + GitHub Release (zip + DMG auto-uploaded)
 scripts/publish-release.sh --yes "$ZIP"
