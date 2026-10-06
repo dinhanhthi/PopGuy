@@ -46,7 +46,8 @@ sparkle_private_key.txt
 ExportOptions.plist
 
 ## Local-only — kept out of the public repo (maintainer notes, AI tooling)
-docs/
+docs/*
+!docs/RELEASING.md
 CLAUDE.md
 AGENTS.md
 .claude/

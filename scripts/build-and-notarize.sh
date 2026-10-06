@@ -2,9 +2,9 @@
 #
 # build-and-notarize.sh — Build → sign → notarize → staple a release locally (RELEASING.md §2).
 #
-# The local equivalent of the heavy build steps in .github/workflows/release.yml. On your
-# Mac the SPM + DerivedData cache persists, so the MLX/Metal compile is only slow the FIRST
-# time — far faster than CI's always-clean runner (which recompiles MLX + Metal every run).
+# Releases are built locally only (there is no CI release workflow). On your Mac the SPM +
+# DerivedData cache persists, so the MLX/Metal compile is only slow the FIRST time — far
+# faster than an always-clean CI runner (which would recompile MLX + Metal every run).
 #
 # Produces, under build/export/:
 #   - PopGuy-<version>.zip   notarized + stapled  → Sparkle auto-update asset
@@ -14,7 +14,7 @@
 # Prereqs (one-time — see RELEASING.md §0):
 #   - "Developer ID Application" cert in the login Keychain                  (§0.1)
 #   - notarytool credential profile (default "popguy-notary")               (§0.1 step 6)
-#   - Xcode 26+ selected — REQUIRED to compile the Icon Composer .icon icon  (release.yml note)
+#   - Xcode 26+ selected — REQUIRED to compile the Icon Composer .icon icon  (blank-icon guard, §5)
 #   - Metal Toolchain installed (already present if you build MLX locally; otherwise run
 #     `xcodebuild -downloadComponent MetalToolchain` once — it links the PopGuyMLXHelper).
 #
@@ -88,7 +88,7 @@ echo "==> Building PopGuy $VERSION (notary profile: $NOTARY_PROFILE)"
 # PGReleaseDate is a manual Info.plist key (not derived from build settings), so without
 # this it goes stale and the About tab shows the previous release's date. Bake it into the
 # build, then restore the file on exit so the working tree is never left dirty (the stamp is
-# never committed — matches release.yml's ephemeral edit on the clean runner).
+# never committed).
 if /usr/libexec/PlistBuddy -c "Print :PGReleaseDate" "$INFO_PLIST" >/dev/null 2>&1; then
   INFO_BACKUP="$(mktemp)"
   cp "$INFO_PLIST" "$INFO_BACKUP"

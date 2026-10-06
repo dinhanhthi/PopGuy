@@ -2,9 +2,9 @@
 
 This is a **version bump + changelog + ship** workflow for PopGuy. The release runs
 **entirely on this machine** (the local flow, `docs/RELEASING.md`): build → sign → notarize
-→ DMG → GitHub Release → appcast → Pages. CI no longer releases — `.github/workflows/release.yml`
-is `workflow_dispatch`-only (a manual emergency fallback). The local archive uses a warm
-SPM/Metal cache, so it is far faster than the always-clean CI runner.
+→ DMG → GitHub Release → appcast → Pages. There is no CI release workflow; the only
+workflow is `deploy-appcast.yml`, which publishes `appcast.xml` to Pages. The local archive
+uses a warm SPM/Metal cache, so it is far faster than an always-clean CI runner.
 
 This **Before** section handles prep (commits → version → changelogs → file updates). The
 **After** section runs the actual local release.
@@ -174,7 +174,7 @@ Shipped (local flow):
 
 - **Never auto-bump MAJOR** — always ask the user to confirm before a MAJOR bump.
 - **Release locally, not via CI** — run `build-and-notarize.sh` + `publish-release.sh` on this
-  machine. Do **not** push tags expecting CI to release; `release.yml` is `workflow_dispatch`-only.
+  machine. Do **not** push tags expecting CI to release; there is no release workflow.
 - **Never push tags before committing** — the tag must point to the version-bumped commit.
   `publish-release.sh` creates + pushes the tag itself, so do not pre-create it.
 - **DMG is auto-uploaded** — `publish-release.sh --yes` uploads both zip and DMG. If DMG is
