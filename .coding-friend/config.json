@@ -1,0 +1,20 @@
+{
+  "tdd": true,
+  "autoApprove": true,
+  "autoApproveAllowExtra": [
+    "xcodebuild",
+    "npm run dev",
+    "npm run test",
+    "npm test"
+  ],
+  "memory": {
+    "tier": "auto",
+    "embedding": {
+      "provider": "transformers"
+    },
+    "autoCapture": true,
+    "autoStart": true
+  },
+  "disableGUIPlan": false,
+  "guiPlanFormat": "html"
+}
