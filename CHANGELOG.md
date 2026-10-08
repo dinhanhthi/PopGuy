@@ -13,6 +13,19 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.1.0] - 2026-10-08
+
+### Added
+
+- Regenerate and Refine for AI results. Two new buttons under a result re-run the action on your original text, or revise the result with an instruction such as "shorter" or "more formal". Refine can be chained, and the diff always compares against your original text. Available for Improve, Shorten, Proofread, Prompt, Translate (when using an AI model) and custom AI actions; DeepL and Google Translate offer Regenerate only.
+- Click a highlighted change in the Improve or Proofread diff to revert or restore it. Copy and Paste back use the text with your choices applied.
+- Prompts now support {{app}}, {{date}}, {{language}} and {{domain}} placeholders alongside {{text}}. {{domain}} is only filled when Ignored Domains is turned on in Settings → Apps.
+
+### Fixed
+
+- The menu bar menu shows its icons again on macOS 27.
+- The diff view no longer scrolls inside a scroll area.
+
 ## [1.0.5] - 2026-10-03
 
 ### Added
