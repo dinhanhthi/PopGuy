@@ -670,7 +670,7 @@ struct ActionsView: View {
                 kind: .prompt,
                 icon: "bubble.and.pencil",
                 title: "Prompt",
-                subtitle: "Type a one-off prompt for the selected text. Use {{text}} to place the selection; it's added automatically if omitted.",
+                subtitle: "Type a one-off prompt for the selected text. Use {{text}} to place the selection; it's added automatically if omitted. Also available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on).",
                 enabled: guardedEnableBinding(for: $settings.promptEnabled),
                 isPrincipal: principalBinding(for: id),
                 config: $settings.promptConfig,
@@ -1208,7 +1208,7 @@ struct ActionsView: View {
         label: String = "Prompt",
         infoText: String? = nil,
         placeholder: String = "Custom prompt",
-        caption: String = "Use {{text}} for the selected text.",
+        caption: String = "Use {{text}} for the selected text. Also available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on).",
         allowsPredefined: Bool = false
     ) -> some View {
         CustomPromptField(

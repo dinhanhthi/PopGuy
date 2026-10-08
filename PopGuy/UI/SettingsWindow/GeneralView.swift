@@ -63,7 +63,7 @@ struct GeneralView: View {
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
                                 .stroke(.separator, lineWidth: 1)
                         )
-                    Text("Added to the beginning of every AI action's prompt — Improve, Shorten, Proofread, Translate, the Prompt action, and custom actions — so you don't repeat the same instruction in each one. Leave empty to disable.")
+                    Text("Added to the beginning of every AI action's prompt — Improve, Shorten, Proofread, Translate, the Prompt action, and custom actions — so you don't repeat the same instruction in each one. Leave empty to disable. Available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

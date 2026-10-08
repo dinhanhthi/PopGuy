@@ -771,6 +771,139 @@ struct ActionEngineTests {
         let prompt = try #require(mock.capturedSystemPrompt)
         #expect(prompt == improveSystemPromptBase)
     }
+
+    // MARK: - Context tokens ({{app}}, {{domain}}, {{date}}, {{language}})
+
+    private let sampleContext = PromptContext(
+        appName: "Mail", domain: "example.com", date: "2026-10-08", language: "French"
+    )
+
+    @Test("Context tokens: custom prompt expands in systemPrompt, input stays the selection")
+    func contextTokensExpandInSystemPrompt() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .custom(prompt: "Reply as {{app}} on {{date}} for {{domain}} in {{language}}."),
+            input:  "Hello",
+            config: improveConfig,
+            apiKey: "sk-test",
+            promptContext: sampleContext
+        )
+        #expect(mock.capturedSystemPrompt == "Reply as Mail on 2026-10-08 for example.com in French.")
+        #expect(mock.capturedInput == "Hello")
+    }
+
+    @Test("Context tokens: {{text}} template expands into the user message, systemPrompt nil")
+    func contextTokensWithTextPlaceholder() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .custom(prompt: "{{text}} from {{app}}"),
+            input:  "Hi",
+            config: improveConfig,
+            apiKey: "sk-test",
+            promptContext: sampleContext
+        )
+        #expect(mock.capturedInput == "Hi from Mail")
+        #expect(mock.capturedSystemPrompt == nil)
+    }
+
+    @Test("Context tokens: tokens inside the selection stay literal")
+    func contextTokensInSelectionStayLiteral() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .custom(prompt: "Echo: {{text}}"),
+            input:  "{{app}}",
+            config: improveConfig,
+            apiKey: "sk-test",
+            promptContext: sampleContext
+        )
+        #expect(mock.capturedInput == "Echo: {{app}}")
+    }
+
+    @Test("Context tokens: an app name containing {{text}} is not spliced with the selection")
+    func appNameContainingTextTokenIsNotSpliced() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+        let context = PromptContext(appName: "{{text}}", domain: "", date: "", language: "")
+
+        _ = try await engine.dispatch(
+            action: .custom(prompt: "App: {{app}}"),
+            input:  "SECRET",
+            config: improveConfig,
+            apiKey: "sk-test",
+            promptContext: context
+        )
+        #expect(mock.capturedSystemPrompt == "App: {{text}}")
+        #expect(mock.capturedInput == "SECRET")
+    }
+
+    @Test("Context tokens: globalPrompt expands {{date}} and keeps {{text}} literal")
+    func globalPromptExpandsContextTokens() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .custom(prompt: "Summarize."),
+            input:  "Hello",
+            config: improveConfig,
+            apiKey: "sk-test",
+            globalPrompt: "Today is {{date}}. Keep {{text}}.",
+            promptContext: sampleContext
+        )
+        #expect(mock.capturedSystemPrompt == "Today is 2026-10-08. Keep {{text}}.\n\nSummarize.")
+        #expect(mock.capturedInput == "Hello")
+    }
+
+    @Test("Context tokens: Improve customPrompt override expands tokens")
+    func improveCustomPromptExpandsContextTokens() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .improve(customPrompt: "Polish this for {{app}}.", tone: .neutral),
+            input:  "Hello",
+            config: improveConfig,
+            apiKey: "sk-test",
+            promptContext: sampleContext
+        )
+        #expect(mock.capturedSystemPrompt == "Polish this for Mail.")
+    }
+
+    @Test("Context tokens: Translate customPrompt expands tokens")
+    func translateCustomPromptExpandsContextTokens() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .translate(targetLanguage: "French", customPrompt: "Context: {{domain}}", tone: .neutral),
+            input:  "Hello",
+            config: translateConfig,
+            apiKey: "key-deepl",
+            promptContext: sampleContext
+        )
+        let prompt = try #require(mock.capturedSystemPrompt)
+        #expect(prompt.contains("Context: example.com"))
+        #expect(!prompt.contains("{{domain}}"))
+    }
+
+    @Test("Context tokens: without a context, tokens expand to empty strings")
+    func contextTokensDefaultToEmpty() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .custom(prompt: "App=[{{app}}] Date=[{{date}}]"),
+            input:  "Hello",
+            config: improveConfig,
+            apiKey: "sk-test"
+        )
+        #expect(mock.capturedSystemPrompt == "App=[] Date=[]")
+    }
 }
 
 // MARK: - Wrapping-quote cleanup

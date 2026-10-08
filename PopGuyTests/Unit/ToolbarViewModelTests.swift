@@ -300,4 +300,91 @@ struct ToolbarViewModelComputedTests {
         #expect(vm.editedResult == "my edits")
         #expect(vm.isEditing == false)
     }
+    // MARK: - Rejected hunks (per-hunk diff accept)
+
+    private func improvedVM(original: String = "a b c d", result: String = "a B c D") -> ToolbarViewModel {
+        let vm = ToolbarViewModel()
+        let ref = SourceElementRef(element: AXUIElementCreateSystemWide())
+        vm.update(text: original, sourceElement: ref, screenRect: nil, sourceBundleID: nil)
+        vm.triggerImprove()
+        vm.finishWith(result: result)
+        return vm
+    }
+
+    @Test("Improve result with no rejected hunks displays the full result")
+    func rejectedHunksEmptyShowsResult() {
+        let vm = improvedVM()
+        #expect(vm.rejectedHunks.isEmpty)
+        #expect(vm.displayedResult == "a B c D")
+    }
+
+    @Test("toggleHunk reverts one hunk in displayedResult")
+    func toggleHunkRevertsOne() {
+        let vm = improvedVM()
+        vm.toggleHunk(0)
+        #expect(vm.rejectedHunks == [0])
+        #expect(vm.displayedResult == "a b c D")
+    }
+
+    @Test("toggling a hunk twice restores the full result")
+    func toggleHunkTwiceRestores() {
+        let vm = improvedVM()
+        vm.toggleHunk(1)
+        vm.toggleHunk(1)
+        #expect(vm.rejectedHunks.isEmpty)
+        #expect(vm.displayedResult == "a B c D")
+    }
+
+    @Test("toggleHunk ignores out-of-range indices")
+    func toggleHunkOutOfRange() {
+        let vm = improvedVM()
+        vm.toggleHunk(2)
+        vm.toggleHunk(-1)
+        #expect(vm.rejectedHunks.isEmpty)
+        #expect(vm.displayedResult == "a B c D")
+    }
+
+    @Test("reset clears rejectedHunks")
+    func resetClearsRejectedHunks() {
+        let vm = improvedVM()
+        vm.toggleHunk(0)
+        vm.reset()
+        #expect(vm.rejectedHunks.isEmpty)
+    }
+
+    @Test("update clears rejectedHunks")
+    func updateClearsRejectedHunks() {
+        let vm = improvedVM()
+        vm.toggleHunk(0)
+        let ref = SourceElementRef(element: AXUIElementCreateSystemWide())
+        vm.update(text: "new", sourceElement: ref, screenRect: nil, sourceBundleID: nil)
+        #expect(vm.rejectedHunks.isEmpty)
+    }
+
+    @Test("a second finishWith clears rejectedHunks")
+    func secondFinishClearsRejectedHunks() {
+        let vm = improvedVM()
+        vm.toggleHunk(0)
+        vm.finishWith(result: "a B c D")
+        #expect(vm.rejectedHunks.isEmpty)
+        #expect(vm.displayedResult == "a B c D")
+    }
+
+    @Test("translate and shorten displayedResult are unaffected by hunk state")
+    func nonDiffActionsUnaffected() {
+        let vm = ToolbarViewModel()
+        let ref = SourceElementRef(element: AXUIElementCreateSystemWide())
+        vm.update(text: "a b c d", sourceElement: ref, screenRect: nil, sourceBundleID: nil)
+        vm.triggerTranslate()
+        vm.finishWith(result: "x y")
+        vm.toggleHunk(0)
+        #expect(vm.rejectedHunks.isEmpty)
+        #expect(vm.displayedResult == "x y")
+
+        vm.update(text: "a b c d", sourceElement: ref, screenRect: nil, sourceBundleID: nil)
+        vm.triggerShorten()
+        vm.finishWith(result: "a b")
+        vm.toggleHunk(0)
+        #expect(vm.displayedResult == "a b")
+    }
 }

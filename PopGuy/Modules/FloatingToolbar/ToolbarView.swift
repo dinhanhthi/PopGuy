@@ -785,10 +785,23 @@ struct ToolbarView: View {
                     // finalized characters — the diff only adds change highlighting.
                     VStack(alignment: .leading, spacing: z(8)) {
                         improveDiffTabs
+                            // Full-row anchor so the trailing-aligned tooltip stays inside the card.
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .toolbarTooltip(
+                                "Click a highlighted change to revert or restore it",
+                                controlRadius: metrics.controlRadius
+                            )
                         scrollableResultBody {
                             Group {
                                 if viewModel.showImproveDiff {
-                                    DiffView(segments: viewModel.diffSegments, font: viewModel.resultFontSize.font(scale: effectiveFontScale))
+                                    DiffView(
+                                        segments: viewModel.diffSegments,
+                                        rejected: viewModel.rejectedHunks,
+                                        font: viewModel.resultFontSize.nsFont(scale: effectiveFontScale),
+                                        onToggleHunk: { viewModel.toggleHunk($0) }
+                                    )
+                                    // NSViewRepresentable needs an explicit width in the toolbar.
+                                    .frame(width: editorContentWidth, alignment: .topLeading)
                                 } else {
                                     resultText(viewModel.displayedResult)
                                 }
@@ -1079,7 +1092,7 @@ struct ToolbarView: View {
                 .focused($promptFieldFocused)
                 .onSubmit { viewModel.runPrompt() }
 
-            Text("Use {{text}} for the selected text — added automatically if omitted.")
+            Text("Use {{text}} for the selected text — added automatically if omitted. Also: {{app}}, {{date}}, {{language}}, {{domain}}.")
                 .font(chromeFont(.caption1))
                 .foregroundStyle(.secondary)
 

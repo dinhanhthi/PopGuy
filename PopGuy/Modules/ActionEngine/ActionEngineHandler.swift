@@ -68,8 +68,7 @@ final class ActionEngineHandler: ToolbarActionHandling {
 
         let appName: String?
         if let sourceBundleID {
-            appName = NSWorkspace.shared.runningApplications
-                .first { $0.bundleIdentifier == sourceBundleID }?.localizedName ?? sourceBundleID
+            appName = appDisplayName(for: sourceBundleID) ?? sourceBundleID
         } else {
             appName = nil
         }
@@ -89,6 +88,27 @@ final class ActionEngineHandler: ToolbarActionHandling {
             input: input,
             output: output,
             storeFullText: settings.historyStoreFullText
+        )
+    }
+
+    /// Localized name of the running app with `bundleID`, or nil when unknown or quit.
+    private func appDisplayName(for bundleID: String?) -> String? {
+        guard let bundleID else { return nil }
+        return NSWorkspace.shared.runningApplications
+            .first { $0.bundleIdentifier == bundleID }?.localizedName
+    }
+
+    // MARK: - Prompt context
+
+    /// Snapshot the prompt-token values at dispatch time. `domain` is only set
+    /// when Ignored Domains is on (the view model's source domain); the browser
+    /// URL is deliberately not read here.
+    private func makePromptContext(viewModel: ToolbarViewModel, language: String) -> PromptContext {
+        PromptContext(
+            appName: appDisplayName(for: viewModel.sourceBundleID) ?? "",
+            domain: viewModel.sourceDomain ?? "",
+            date: PromptContext.dateString(for: Date()),
+            language: language
         )
     }
 
@@ -207,6 +227,7 @@ final class ActionEngineHandler: ToolbarActionHandling {
         let startedAt = Date()
         // Snapshot the source app now; viewModel.sourceBundleID may change mid-stream.
         let sourceBundleID = viewModel.sourceBundleID
+        let promptContext = makePromptContext(viewModel: viewModel, language: viewModel.targetLanguage.rawValue)
         streamTask = Task { @MainActor in
             do {
                 let stream = try await engine.dispatch(
@@ -217,7 +238,8 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     baseURLOverride: baseURLOverride,
                     executablePathOverride: executablePath,
                     preserveFormatting: preserveFormatting,
-                    globalPrompt: globalPrompt
+                    globalPrompt: globalPrompt,
+                    promptContext: promptContext
                 )
                 var accumulated = ""
                 for try await token in stream {
@@ -256,6 +278,7 @@ final class ActionEngineHandler: ToolbarActionHandling {
         let startedAt = Date()
         // Snapshot the source app now; viewModel.sourceBundleID may change mid-stream.
         let sourceBundleID = viewModel.sourceBundleID
+        let promptContext = makePromptContext(viewModel: viewModel, language: viewModel.targetLanguage.rawValue)
         streamTask = Task { @MainActor in
             do {
                 let stream = try await engine.dispatch(
@@ -266,7 +289,8 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     baseURLOverride: baseURLOverride,
                     executablePathOverride: executablePath,
                     preserveFormatting: preserveFormatting,
-                    globalPrompt: globalPrompt
+                    globalPrompt: globalPrompt,
+                    promptContext: promptContext
                 )
                 var accumulated = ""
                 for try await token in stream {
@@ -305,6 +329,7 @@ final class ActionEngineHandler: ToolbarActionHandling {
         let startedAt = Date()
         // Snapshot the source app now; viewModel.sourceBundleID may change mid-stream.
         let sourceBundleID = viewModel.sourceBundleID
+        let promptContext = makePromptContext(viewModel: viewModel, language: viewModel.targetLanguage.rawValue)
         streamTask = Task { @MainActor in
             do {
                 let stream = try await engine.dispatch(
@@ -315,7 +340,8 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     baseURLOverride: baseURLOverride,
                     executablePathOverride: executablePath,
                     preserveFormatting: preserveFormatting,
-                    globalPrompt: globalPrompt
+                    globalPrompt: globalPrompt,
+                    promptContext: promptContext
                 )
                 var accumulated = ""
                 for try await token in stream {
@@ -375,15 +401,20 @@ final class ActionEngineHandler: ToolbarActionHandling {
         // .ai          → .custom(prompt:) — free-form system prompt.
         // .translation → .translate(...)  — structured translation request.
         let engineAction: Action
+        let customLanguage: String
         switch action.type {
         case .ai:
             engineAction = .custom(prompt: action.systemPrompt)
+            customLanguage = viewModel.targetLanguage.rawValue
         case .translation:
             engineAction = .translate(
                 targetLanguage: action.targetLanguage,
                 customPrompt: action.systemPrompt.isEmpty ? nil : action.systemPrompt,
                 tone: action.tone
             )
+            // Display name of the action's BCP-47 target; raw code if not a picker language.
+            customLanguage = TargetLanguage.allCases
+                .first { $0.bcp47 == action.targetLanguage }?.rawValue ?? action.targetLanguage
         case .speech, .dictionary, .openURL, .runShortcut, .appleScript, .shellScript:
             // Already guarded above; these cases are unreachable.
             return
@@ -392,6 +423,7 @@ final class ActionEngineHandler: ToolbarActionHandling {
         let startedAt = Date()
         // Snapshot the source app now; viewModel.sourceBundleID may change mid-stream.
         let sourceBundleID = viewModel.sourceBundleID
+        let promptContext = makePromptContext(viewModel: viewModel, language: customLanguage)
         streamTask = Task { @MainActor in
             do {
                 let stream = try await engine.dispatch(
@@ -402,7 +434,8 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     baseURLOverride: baseURLOverride,
                     executablePathOverride: executablePath,
                     preserveFormatting: preserveFormatting,
-                    globalPrompt: globalPrompt
+                    globalPrompt: globalPrompt,
+                    promptContext: promptContext
                 )
                 var accumulated = ""
                 for try await token in stream {
@@ -440,6 +473,7 @@ final class ActionEngineHandler: ToolbarActionHandling {
         let startedAt = Date()
         // Snapshot the source app now; viewModel.sourceBundleID may change mid-stream.
         let sourceBundleID = viewModel.sourceBundleID
+        let promptContext = makePromptContext(viewModel: viewModel, language: viewModel.targetLanguage.rawValue)
         streamTask = Task { @MainActor in
             do {
                 let stream = try await engine.dispatch(
@@ -450,7 +484,8 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     baseURLOverride: baseURLOverride,
                     executablePathOverride: executablePath,
                     preserveFormatting: preserveFormatting,
-                    globalPrompt: globalPrompt
+                    globalPrompt: globalPrompt,
+                    promptContext: promptContext
                 )
                 var accumulated = ""
                 for try await token in stream {
@@ -488,6 +523,7 @@ final class ActionEngineHandler: ToolbarActionHandling {
         let startedAt = Date()
         // Snapshot the source app now; viewModel.sourceBundleID may change mid-stream.
         let sourceBundleID = viewModel.sourceBundleID
+        let promptContext = makePromptContext(viewModel: viewModel, language: targetLanguage.rawValue)
         streamTask = Task { @MainActor in
             do {
                 let stream = try await engine.dispatch(
@@ -502,7 +538,8 @@ final class ActionEngineHandler: ToolbarActionHandling {
                     baseURLOverride: baseURLOverride,
                     executablePathOverride: executablePath,
                     preserveFormatting: preserveFormatting,
-                    globalPrompt: globalPrompt
+                    globalPrompt: globalPrompt,
+                    promptContext: promptContext
                 )
                 var accumulated = ""
                 for try await token in stream {

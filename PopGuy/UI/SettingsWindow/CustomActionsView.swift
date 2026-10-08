@@ -287,7 +287,7 @@ struct CustomActionEditSheet: View {
                 // Pull the editor closer to the card edges — less margin around the input box.
                 .padding(.horizontal, -6)
                 .padding(.top, -6)
-            Text("Use {{text}} for the selected text.")
+            Text("Use {{text}} for the selected text. Also available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

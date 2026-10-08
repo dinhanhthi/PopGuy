@@ -140,6 +140,9 @@ nonisolated struct ActionEngine: Sendable {
     ///                      leaving the action's authoritative directives last). When
     ///                      the action consumed the system role via `{{text}}`, the
     ///                      global prompt becomes the system prompt. Empty = no-op.
+    ///   - promptContext: Values for the `{{app}}`, `{{domain}}`, `{{date}}` and
+    ///                      `{{language}}` tokens in the action prompt and the global
+    ///                      prompt. Defaults to `.empty` (tokens expand to "").
     /// - Returns: An `AsyncThrowingStream<String, Error>` of token deltas.
     func dispatch(
         action: Action,
@@ -149,7 +152,8 @@ nonisolated struct ActionEngine: Sendable {
         baseURLOverride: String? = nil,
         executablePathOverride: String? = nil,
         preserveFormatting: Bool = false,
-        globalPrompt: String = ""
+        globalPrompt: String = "",
+        promptContext: PromptContext = .empty
     ) async throws -> AsyncThrowingStream<String, Error> {
 
         // Guard: OpenAI-wire providers that require an explicit endpoint must have
@@ -177,13 +181,14 @@ nonisolated struct ActionEngine: Sendable {
             executablePath: executablePathOverride
         )
 
-        // Apply {{text}} placeholder substitution. When the prompt contains the
-        // token, the substituted string becomes the user message (input) and
-        // systemPrompt is set to nil — the custom prompt is a complete user request.
-        // When the token is absent this is a no-op (identity transform).
-        let (systemPrompt, effectiveInput) = Self.applyTextPlaceholder(
-            prompt: rawSystemPrompt,
-            input: input
+        // Expand prompt tokens. When the prompt contains {{text}}, the expanded
+        // string becomes the user message (input) and systemPrompt is set to nil —
+        // the custom prompt is a complete user request. Otherwise only the context
+        // tokens are expanded and the input is unchanged.
+        let (systemPrompt, effectiveInput) = Self.expandPrompt(
+            rawSystemPrompt,
+            input: input,
+            context: promptContext
         )
 
         // Prepend the user's global prompt (if any) so it reads as overarching
@@ -191,7 +196,9 @@ nonisolated struct ActionEngine: Sendable {
         // action consumed the system role via {{text}} (systemPrompt is nil), the
         // global prompt becomes the system prompt instead of muddying the user input.
         var withGlobalPrompt = systemPrompt
-        let trimmedGlobal = globalPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Context tokens only: {{text}} stays literal in the global prompt.
+        let trimmedGlobal = PromptTemplate.expand(globalPrompt, text: nil, context: promptContext).output
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedGlobal.isEmpty {
             if let existing = withGlobalPrompt {
                 withGlobalPrompt = trimmedGlobal + "\n\n" + existing
@@ -338,9 +345,9 @@ nonisolated struct ActionEngine: Sendable {
         return prompt + "\n\n" + fragment
     }
 
-    // MARK: - {{text}} placeholder substitution
+    // MARK: - Prompt token expansion
 
-    /// Substitute `{{text}}` in a prompt with the selected input text.
+    /// Expand prompt tokens (`{{text}}` plus the context tokens) in one pass.
     ///
     /// When `prompt` contains the `{{text}}` token, the token is replaced with
     /// `input` and the result becomes the USER message (input); systemPrompt is
@@ -350,20 +357,19 @@ nonisolated struct ActionEngine: Sendable {
     /// empty user message (which Anthropic rejects with HTTP 400) and deliberately
     /// places untrusted selection text in the lower-authority user role.
     ///
-    /// When the token is absent this is an identity transform: prompt and input
-    /// are returned unchanged.
+    /// When the token is absent, the expanded prompt stays the system prompt and
+    /// input is returned unchanged.
     ///
     /// UNTRUSTED DATA: `input` is plain text from the user's selection. It is
-    /// only substituted as literal text — never interpreted or executed.
-    private static func applyTextPlaceholder(
-        prompt: String?,
-        input: String
+    /// only substituted as literal text — never interpreted, executed or re-scanned.
+    private static func expandPrompt(
+        _ prompt: String?,
+        input: String,
+        context: PromptContext
     ) -> (systemPrompt: String?, input: String) {
-        guard let prompt, prompt.contains("{{text}}") else {
-            return (prompt, input)
-        }
-        let substituted = prompt.replacingOccurrences(of: "{{text}}", with: input)
-        return (nil, substituted)
+        guard let prompt else { return (nil, input) }
+        let (output, consumedText) = PromptTemplate.expand(prompt, text: input, context: context)
+        return consumedText ? (nil, output) : (output, input)
     }
 
     // MARK: - Wrapping-quote cleanup

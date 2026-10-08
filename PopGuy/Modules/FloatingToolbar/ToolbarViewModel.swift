@@ -361,7 +361,9 @@ final class ToolbarViewModel: ObservableObject {
     /// finalized result. Empty when there is no result.
     var displayedResult: String {
         guard case .result(let text) = actionState else { return "" }
-        return isResultEditable ? editedResult : text
+        if isResultEditable { return editedResult }
+        if diffSegments.isEmpty { return text }
+        return DiffHunks.merged(segments: diffSegments, rejected: rejectedHunks)
     }
 
     /// Currently selected dictionary result for rendering and Listen playback.
@@ -385,6 +387,20 @@ final class ToolbarViewModel: ObservableObject {
     /// Precomputed diff segments — set once when the Improve action finalizes.
     /// Empty for non-Improve actions.
     @Published private(set) var diffSegments: [DiffSegment] = []
+
+    /// Indices of diff hunks the user rejected (reverted to the original text).
+    /// Empty = every hunk accepted. Cleared wherever `diffSegments` changes.
+    @Published private(set) var rejectedHunks: Set<Int> = []
+
+    /// Toggle accept/reject for one diff hunk. Out-of-range indices are ignored.
+    func toggleHunk(_ index: Int) {
+        guard DiffHunks.hunkRanges(diffSegments).indices.contains(index) else { return }
+        if rejectedHunks.contains(index) {
+            rejectedHunks.remove(index)
+        } else {
+            rejectedHunks.insert(index)
+        }
+    }
 
     // MARK: Phase 3 seam
 
@@ -475,6 +491,7 @@ final class ToolbarViewModel: ObservableObject {
         // Reset action state when a new selection arrives.
         actionState = .idle
         editedResult = ""
+        rejectedHunks = []
         isEditing = false
         isPromptInputActive = false
         promptDraft = ""
@@ -905,6 +922,7 @@ final class ToolbarViewModel: ObservableObject {
             selectedDictionaryProvider = first.providerKind
         }
         diffSegments = []
+        rejectedHunks = []
         let preview = dictionaryPreview(for: selectedDictionaryResult?.entry ?? first.entry)
         actionState = .result(preview)
         editedResult = preview
@@ -918,6 +936,7 @@ final class ToolbarViewModel: ObservableObject {
         dictionaryEntries = []
         selectedDictionaryProvider = nil
         diffSegments = []
+        rejectedHunks = []
         actionState = .result("")
         editedResult = ""
         isEditing = false
@@ -934,6 +953,7 @@ final class ToolbarViewModel: ObservableObject {
         } else {
             diffSegments = []
         }
+        rejectedHunks = []
         actionState = .result(result)
         editedResult = result
         isEditing = false
@@ -995,6 +1015,7 @@ final class ToolbarViewModel: ObservableObject {
         activeCustomActionID = nil
         clearDictionaryState()
         diffSegments = []
+        rejectedHunks = []
         editedResult = ""
         isEditing = false
         isShowingCloseConfirmation = false
