@@ -3,13 +3,25 @@
     <channel>
         <title>PopGuy</title>
         <item>
+            <title>1.1.0</title>
+            <pubDate>Thu, 08 Oct 2026 09:33:39 +0200</pubDate>
+            <sparkle:fullReleaseNotesLink>https://github.com/dinhanhthi/PopGuy/releases</sparkle:fullReleaseNotesLink>
+            <sparkle:version>23</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v1.1.0/PopGuy-1.1.0.zip" length="20657226" type="application/octet-stream" sparkle:edSignature="bQyQdVSYZOd2BnojOq1l4mgu9d2Hjurksi40RdOH/J4RjAZ1tb/PewncWpQ1FOHpqaMp6gCeGCbCeBvq6M2QBA=="/>
+            <sparkle:deltas>
+                <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v1.1.0/PopGuy23-22.delta" sparkle:deltaFrom="22" length="742982" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="ATPUswPnCDLQh+jDZlC8tr67MrdRE6xiw1kRbzA+jFnc0nfr/VUCfnwrHR/aFoUekPBVsovgVti/pQKOrpLsAw=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>1.0.5</title>
             <pubDate>Sat, 03 Oct 2026 00:54:51 +0200</pubDate>
             <sparkle:fullReleaseNotesLink>https://github.com/dinhanhthi/PopGuy/releases</sparkle:fullReleaseNotesLink>
             <sparkle:version>22</sparkle:version>
             <sparkle:shortVersionString>1.0.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v1.0.5/PopGuy-1.0.5.zip" length="20606245" type="application/octet-stream" sparkle:edSignature="6viVhJn2yjojihjURnzSO94BH3yDk4wntDTq6GJLBgeZ0yW7q8U5Ltm7lk0PaYhr3CA7KfPsjh/l2pVMTEjyCw=="/>
+            <enclosure url="https://github.com/dinhanhthi/PopGuy/releases/download/v1.1.0/PopGuy-1.0.5.zip" length="20606245" type="application/octet-stream" sparkle:edSignature="6viVhJn2yjojihjURnzSO94BH3yDk4wntDTq6GJLBgeZ0yW7q8U5Ltm7lk0PaYhr3CA7KfPsjh/l2pVMTEjyCw=="/>
         </item>
     </channel>
 </rss>
