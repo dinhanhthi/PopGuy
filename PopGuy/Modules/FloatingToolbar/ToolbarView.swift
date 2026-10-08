@@ -1303,7 +1303,7 @@ struct ToolbarView: View {
                 .controlSize(.small)
                 .frame(minHeight: footerButtonHeight)
                 .disabled(isPastingBack || viewModel.isRefineInputActive)
-                .toolbarTooltip("Refine with an instruction", controlRadius: metrics.controlRadius)
+                .toolbarTooltip("Refine", controlRadius: metrics.controlRadius)
             }
 
             // For Dictionary, push Cancel to the trailing edge, away from Listen.
