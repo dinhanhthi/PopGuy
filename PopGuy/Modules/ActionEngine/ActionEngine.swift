@@ -29,6 +29,15 @@
 
 import Foundation
 
+// MARK: - FollowUp
+
+/// A refine request: revise `previousResult` according to `instruction`.
+/// Both values are plain text and are never token-expanded.
+nonisolated struct FollowUp: Sendable, Equatable {
+    let previousResult: String
+    let instruction: String
+}
+
 // MARK: - ProviderFactory
 
 /// A closure that produces a Provider given a kind and an API key.
@@ -101,6 +110,10 @@ nonisolated struct ActionEngine: Sendable {
         Return only the corrected text — no commentary, no preamble
         """
 
+    /// System-role directive for a follow-up (refine) run. The user's instruction
+    /// is appended after it on its own "Instruction:" line.
+    static let refineDirective = "You previously produced a result for the text below. Revise that previous result according to the user's instruction. Return only the revised result, with no preamble or explanation."
+
     /// Appended to the system prompt (or input) when the user enables
     /// "Preserve & render formatting" — asks the model to keep the input's
     /// Markdown formatting in its output.
@@ -143,6 +156,11 @@ nonisolated struct ActionEngine: Sendable {
     ///   - promptContext: Values for the `{{app}}`, `{{domain}}`, `{{date}}` and
     ///                      `{{language}}` tokens in the action prompt and the global
     ///                      prompt. Defaults to `.empty` (tokens expand to "").
+    ///   - followUp: When non-nil, turns the run into a refine of a previous
+    ///                      result (see `applyFollowUp`). Applied after token
+    ///                      expansion, before the global prompt. Non-LLM providers
+    ///                      (DeepL, Google Translate) ignore the system prompt, so
+    ///                      the instruction has no effect there.
     /// - Returns: An `AsyncThrowingStream<String, Error>` of token deltas.
     func dispatch(
         action: Action,
@@ -153,7 +171,8 @@ nonisolated struct ActionEngine: Sendable {
         executablePathOverride: String? = nil,
         preserveFormatting: Bool = false,
         globalPrompt: String = "",
-        promptContext: PromptContext = .empty
+        promptContext: PromptContext = .empty,
+        followUp: FollowUp? = nil
     ) async throws -> AsyncThrowingStream<String, Error> {
 
         // Guard: OpenAI-wire providers that require an explicit endpoint must have
@@ -185,11 +204,20 @@ nonisolated struct ActionEngine: Sendable {
         // string becomes the user message (input) and systemPrompt is set to nil —
         // the custom prompt is a complete user request. Otherwise only the context
         // tokens are expanded and the input is unchanged.
-        let (systemPrompt, effectiveInput) = Self.expandPrompt(
+        var (systemPrompt, effectiveInput) = Self.expandPrompt(
             rawSystemPrompt,
             input: input,
             context: promptContext
         )
+
+        // Follow-up (refine): runs after token expansion so the instruction and
+        // previous result are never expanded. The instruction goes in the system
+        // role because the CLI providers treat the whole input as data.
+        if let followUp {
+            let refined = Self.applyFollowUp(systemPrompt: systemPrompt, input: effectiveInput, followUp: followUp)
+            systemPrompt = refined.systemPrompt
+            effectiveInput = refined.input
+        }
 
         // Prepend the user's global prompt (if any) so it reads as overarching
         // context, with the action's authoritative directives kept last. When the
@@ -370,6 +398,28 @@ nonisolated struct ActionEngine: Sendable {
         guard let prompt else { return (nil, input) }
         let (output, consumedText) = PromptTemplate.expand(prompt, text: input, context: context)
         return consumedText ? (nil, output) : (output, input)
+    }
+
+    // MARK: - Follow-up (refine)
+
+    /// Compose a refine request. The system prompt gets the refine directive and
+    /// the user's instruction appended (after any existing system prompt); the
+    /// input becomes labelled "Original text" and "Previous result" sections.
+    /// Pure: no token expansion of any argument.
+    static func applyFollowUp(
+        systemPrompt: String?,
+        input: String,
+        followUp: FollowUp
+    ) -> (systemPrompt: String, input: String) {
+        let directive = refineDirective + "\n\nInstruction: " + followUp.instruction
+        let system: String
+        if let systemPrompt, !systemPrompt.isEmpty {
+            system = systemPrompt + "\n\n" + directive
+        } else {
+            system = directive
+        }
+        let composedInput = "Original text:\n" + input + "\n\nPrevious result:\n" + followUp.previousResult
+        return (system, composedInput)
     }
 
     // MARK: - Wrapping-quote cleanup

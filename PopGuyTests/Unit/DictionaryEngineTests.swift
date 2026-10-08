@@ -1102,6 +1102,7 @@ private final class DictionarySpy: ToolbarActionHandling {
     func recordSpeak(text: String, engineLabel: String, accent: String, sourceBundleID: String?) {}
     func recordScriptAction(actionName: String, typeLabel: String, input: String, output: String, success: Bool, errorMessage: String?, startedAt: Date, sourceBundleID: String?) {}
     func prompt(promptText: String, text: String, viewModel: ToolbarViewModel) {}
+    func refine(target: RefineTarget, text: String, previousResult: String, instruction: String, viewModel: ToolbarViewModel) {}
     func dictionary(text: String, targetLanguage: TargetLanguage, viewModel: ToolbarViewModel) {
         dictionaryCalled = true
         dictionaryCalls.append(text)

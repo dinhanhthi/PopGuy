@@ -904,6 +904,111 @@ struct ActionEngineTests {
         )
         #expect(mock.capturedSystemPrompt == "App=[] Date=[]")
     }
+
+    // MARK: - Follow-up (refine)
+
+    private let followUp = FollowUp(previousResult: "Hi there.", instruction: "Make it more formal")
+
+    @Test("Follow-up: system prompt keeps the action prompt, then the refine directive and instruction")
+    func followUpShapeWithSystemPrompt() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .improve(customPrompt: nil, tone: .neutral),
+            input:  "hi there",
+            config: improveConfig,
+            apiKey: "sk-test",
+            followUp: followUp
+        )
+        let prompt = try #require(mock.capturedSystemPrompt)
+        #expect(prompt.hasPrefix(improveSystemPromptBase + "\n\n"))
+        #expect(prompt.contains(ActionEngine.refineDirective))
+        #expect(prompt.hasSuffix("Instruction: Make it more formal"))
+        let directive = try #require(prompt.range(of: ActionEngine.refineDirective))
+        let instruction = try #require(prompt.range(of: "Instruction: "))
+        #expect(directive.lowerBound < instruction.lowerBound)
+        #expect(mock.capturedInput == "Original text:\nhi there\n\nPrevious result:\nHi there.")
+    }
+
+    @Test("Follow-up: a {{text}} template gets a non-nil system prompt and keeps its expanded request")
+    func followUpShapeWithTextTemplate() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .custom(prompt: "Summarize: {{text}}"),
+            input:  "Hello world",
+            config: improveConfig,
+            apiKey: "sk-test",
+            followUp: followUp
+        )
+        #expect(mock.capturedSystemPrompt == ActionEngine.refineDirective + "\n\nInstruction: Make it more formal")
+        #expect(mock.capturedInput == "Original text:\nSummarize: Hello world\n\nPrevious result:\nHi there.")
+    }
+
+    @Test("Follow-up: tokens inside the previous result stay literal")
+    func followUpPreviousResultNotExpanded() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .custom(prompt: "Rewrite for {{app}}."),
+            input:  "Hello",
+            config: improveConfig,
+            apiKey: "sk-test",
+            promptContext: sampleContext,
+            followUp: FollowUp(previousResult: "Sent from {{app}}", instruction: "Shorter")
+        )
+        #expect(mock.capturedSystemPrompt?.hasPrefix("Rewrite for Mail.") == true)
+        #expect(mock.capturedInput.hasSuffix("Previous result:\nSent from {{app}}"))
+    }
+
+    @Test("Follow-up: {{text}} in the instruction is not replaced with the selection")
+    func followUpInstructionNotExpanded() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .improve(customPrompt: nil, tone: .neutral),
+            input:  "secret selection",
+            config: improveConfig,
+            apiKey: "sk-test",
+            promptContext: sampleContext,
+            followUp: FollowUp(previousResult: "Done.", instruction: "Quote {{text}} and {{app}}")
+        )
+        let prompt = try #require(mock.capturedSystemPrompt)
+        #expect(prompt.hasSuffix("Instruction: Quote {{text}} and {{app}}"))
+        #expect(!prompt.contains("secret selection"))
+    }
+
+    @Test("Follow-up: globalPrompt stays first and the preserve directive stays last")
+    func followUpOrderingWithGlobalPromptAndPreserveFormatting() async throws {
+        let mock = MockProvider()
+        let engine = makeEngine(mock: mock)
+
+        _ = try await engine.dispatch(
+            action: .improve(customPrompt: nil, tone: .neutral),
+            input:  "hi there",
+            config: improveConfig,
+            apiKey: "sk-test",
+            preserveFormatting: true,
+            globalPrompt: globalPromptText,
+            followUp: followUp
+        )
+        let prompt = try #require(mock.capturedSystemPrompt)
+        #expect(prompt == globalPromptText + "\n\n" + improveSystemPromptBase
+            + "\n\n" + ActionEngine.refineDirective + "\n\nInstruction: Make it more formal"
+            + "\n\n" + preserveFormattingInstruction)
+        #expect(mock.capturedInput == "Original text:\nhi there\n\nPrevious result:\nHi there.")
+    }
+
+    @Test("applyFollowUp: empty system prompt yields only the directive")
+    func applyFollowUpEmptySystemPrompt() {
+        let result = ActionEngine.applyFollowUp(systemPrompt: "", input: "a", followUp: followUp)
+        #expect(result.systemPrompt == ActionEngine.refineDirective + "\n\nInstruction: Make it more formal")
+        #expect(result.input == "Original text:\na\n\nPrevious result:\nHi there.")
+    }
 }
 
 // MARK: - Wrapping-quote cleanup

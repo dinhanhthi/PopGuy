@@ -174,6 +174,7 @@ struct ToolbarView: View {
     /// Overflow (burger) menu — native inline Menu (same pattern as Settings filters).
 
     @FocusState private var promptFieldFocused: Bool
+    @FocusState private var refineFieldFocused: Bool
 
     /// Measured width of the action bar. The card's width is driven by this row
     /// (the widest one), so the result body below uses it to fill the full card
@@ -836,6 +837,19 @@ struct ToolbarView: View {
                             .padding(.trailing, resultContentTrailing)
                     }
                 }
+                if viewModel.isRefineInputActive {
+                    inlineInputArea(
+                        placeholder: "How should it change? (e.g. shorter, more formal)",
+                        text: $viewModel.refineDraft,
+                        hint: nil,
+                        focus: $refineFieldFocused,
+                        onRun: { viewModel.runRefine() },
+                        // Closes only the field — the result stays on screen.
+                        onCancel: { viewModel.cancelRefineInput() }
+                    )
+                    // The result container has no trailing inset (scrollbar flush).
+                    .padding(.trailing, resultContentTrailing)
+                }
                 resultButtons(
                     effective: currentResultEffectiveText,
                     isEditable: viewModel.isResultEditable,
@@ -1082,32 +1096,57 @@ struct ToolbarView: View {
 
     /// Inline editor for the on-the-fly Prompt action. The selected text is applied
     /// via the {{text}} placeholder — implicitly when omitted, verbatim when present.
-    @ViewBuilder
     private var promptInputArea: some View {
+        inlineInputArea(
+            placeholder: "Type a prompt for the selected text…",
+            text: $viewModel.promptDraft,
+            hint: "Use {{text}} for the selected text — added automatically if omitted. Also: {{app}}, {{date}}, {{language}}, {{domain}}.",
+            focus: $promptFieldFocused,
+            onRun: { viewModel.runPrompt() },
+            // Explicit dismiss — closes the toolbar immediately, bypassing the
+            // prevent-close guard (that guard only stops accidental outside-click /
+            // Escape, not a deliberate Cancel tap).
+            onCancel: { onDismiss() }
+        )
+        // Full padding (incl. trailing) — unlike the result area there is no
+        // overlay scrollbar here, so the field/Run button need a right inset.
+        .padding(resultPadding)
+        .frame(width: resultWidth, alignment: .leading)
+    }
+
+    /// Shared inline text input (Prompt and Refine): a multi-line field, an
+    /// optional hint, and a left-aligned Run / Cancel row. Callers add padding.
+    private func inlineInputArea(
+        placeholder: String,
+        text: Binding<String>,
+        hint: String?,
+        focus: FocusState<Bool>.Binding,
+        onRun: @escaping () -> Void,
+        onCancel: @escaping () -> Void
+    ) -> some View {
         VStack(alignment: .leading, spacing: z(6)) {
-            TextField("Type a prompt for the selected text…", text: $viewModel.promptDraft, axis: .vertical)
+            TextField(placeholder, text: text, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: NSFont.systemFontSize * zoom))
                 .lineLimit(1...4)
-                .focused($promptFieldFocused)
-                .onSubmit { viewModel.runPrompt() }
+                .focused(focus)
+                .onSubmit(onRun)
 
-            Text("Use {{text}} for the selected text — added automatically if omitted. Also: {{app}}, {{date}}, {{language}}, {{domain}}.")
-                .font(chromeFont(.caption1))
-                .foregroundStyle(.secondary)
+            if let hint {
+                Text(hint)
+                    .font(chromeFont(.caption1))
+                    .foregroundStyle(.secondary)
+            }
 
             // Footer button row, below the hint — left-aligned, Run then Cancel.
             HStack(spacing: z(8)) {
-                Button { viewModel.runPrompt() } label: {
+                Button(action: onRun) {
                     Text("Run").font(footerButtonFont)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .disabled(viewModel.promptDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                // Explicit dismiss — closes the toolbar immediately, bypassing the
-                // prevent-close guard (that guard only stops accidental outside-click /
-                // Escape, not a deliberate Cancel tap).
-                Button { onDismiss() } label: {
+                .disabled(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button(action: onCancel) {
                     Text("Cancel").font(footerButtonFont)
                 }
                 .buttonStyle(.bordered)
@@ -1115,16 +1154,12 @@ struct ToolbarView: View {
                 Spacer()
             }
         }
-        // Full padding (incl. trailing) — unlike the result area there is no
-        // overlay scrollbar here, so the field/Run button need a right inset.
-        .padding(resultPadding)
-        .frame(width: resultWidth, alignment: .leading)
         // Defer one runloop tick: the panel is made key (makeKeyAndOrderFront) in
         // the same event as this area appearing, so setting @FocusState inline in
         // onAppear lands before the panel is key and is dropped. The async hop runs
         // after the window is key, so the field reliably becomes first responder.
         .onAppear {
-            DispatchQueue.main.async { promptFieldFocused = true }
+            DispatchQueue.main.async { focus.wrappedValue = true }
         }
     }
 
@@ -1239,6 +1274,36 @@ struct ToolbarView: View {
                     .frame(minHeight: footerButtonHeight)
                     .disabled(isPastingBack)
                 }
+            }
+
+            // Regenerate / Refine — icon-only to keep the footer compact; hidden
+            // while editing the result text.
+            if viewModel.canRegenerate && !viewModel.isEditing {
+                Button { viewModel.regenerate() } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(footerButtonFont)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .frame(minHeight: footerButtonHeight)
+                .disabled(isPastingBack)
+                .toolbarTooltip("Regenerate", controlRadius: metrics.controlRadius)
+            }
+
+            if viewModel.canRefine && !viewModel.isEditing {
+                Button {
+                    viewModel.openRefineInput()
+                    // Non-activating panel: make it key so the field takes keystrokes.
+                    onActivatePromptInput()
+                } label: {
+                    Image(systemName: "text.bubble")
+                        .font(footerButtonFont)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .frame(minHeight: footerButtonHeight)
+                .disabled(isPastingBack || viewModel.isRefineInputActive)
+                .toolbarTooltip("Refine with an instruction", controlRadius: metrics.controlRadius)
             }
 
             // For Dictionary, push Cancel to the trailing edge, away from Listen.

@@ -514,6 +514,7 @@ final class ToolbarController {
 
         // I-C: set default target language from settings (falls back to .english for unknown codes).
         viewModel.targetLanguage = TargetLanguage(bcp47: settings.defaultTargetLanguage)
+        viewModel.translateUsesModel = settings.translateConfig.providerKind.usesModel
         viewModel.dictionaryTargetLanguage = TargetLanguage(bcp47: settings.dictionaryConfig.definitionLanguage)
 
         // I-D: push enabled flags into the view model so ToolbarView can conditionally render.
@@ -764,6 +765,11 @@ final class ToolbarController {
         // draft falls through to normal dismiss handling.
         if viewModel.isPromptInputActive,
            !viewModel.promptDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return
+        }
+        // Same rule for a non-empty Refine instruction draft.
+        if viewModel.isRefineInputActive,
+           !viewModel.refineDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return
         }
         if isActionRunning {

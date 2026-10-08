@@ -75,6 +75,20 @@ enum TargetLanguage: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Refine target
+
+/// The action whose result a refine run revises. Carries whatever the original
+/// run needed beyond the selection: the Translate language, the Prompt text, or
+/// the custom action itself (resolved by the handler like `custom(action:)`).
+enum RefineTarget: Equatable {
+    case improve
+    case shorten
+    case proofread
+    case translate(TargetLanguage)
+    case prompt(String)
+    case custom(CustomAction)
+}
+
 // MARK: - Action handling protocol
 
 /// Protocol seam so Phase 3 can inject ActionEngine without modifying this file.
@@ -117,6 +131,10 @@ protocol ToolbarActionHandling: AnyObject {
 
     /// Begin a one-off Prompt action: run the user-typed prompt against the selected text.
     func prompt(promptText: String, text: String, viewModel: ToolbarViewModel)
+
+    /// Revise `previousResult` of `target` per the user's `instruction`. `text` is
+    /// the original selection (used for the prompt, quote stripping and history).
+    func refine(target: RefineTarget, text: String, previousResult: String, instruction: String, viewModel: ToolbarViewModel)
 
     /// Cancel any in-flight stream. Called when the toolbar is dismissed.
     func cancel()
@@ -243,6 +261,21 @@ final class ToolbarViewModel: ObservableObject {
     /// The user's in-progress prompt text. Non-empty while typing keeps the
     /// toolbar open (prevent-close).
     @Published var promptDraft: String = ""
+
+    /// The prompt text of the last Prompt run, kept so Regenerate / Refine can
+    /// reuse it after `promptDraft` is cleared.
+    private(set) var lastPromptText: String?
+
+    /// Whether the built-in Translate provider takes a model (false for DeepL /
+    /// Google Translate, which cannot follow a refine instruction). Set by
+    /// ToolbarController on each presentation.
+    @Published var translateUsesModel: Bool = true
+
+    /// True while the inline refine input area is open.
+    @Published var isRefineInputActive: Bool = false
+
+    /// The user's in-progress refine instruction.
+    @Published var refineDraft: String = ""
 
     /// Speak settings (accent, voice, rate, pitch, dictionary toggle).
     /// Set by ToolbarController on each presentation from SettingsStore.
@@ -495,6 +528,8 @@ final class ToolbarViewModel: ObservableObject {
         isEditing = false
         isPromptInputActive = false
         promptDraft = ""
+        lastPromptText = nil
+        clearRefineState()
         clearDictionaryState()
         // Stop any audio from the previous selection and drop its replay cache.
         speakCoordinator?.clearReplay()
@@ -821,6 +856,14 @@ final class ToolbarViewModel: ObservableObject {
     func runPrompt() {
         let trimmed = promptDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !capturedText.isEmpty else { return }
+        startPrompt(trimmed)
+        promptDraft = ""
+    }
+
+    /// Dispatch a Prompt run with `promptText`. Shared by `runPrompt()` and
+    /// `regenerate()`; remembers the text in `lastPromptText`.
+    private func startPrompt(_ promptText: String) {
+        lastPromptText = promptText
         onActPerformed?()
         cancelScriptAction()
         activeActionKind = .prompt
@@ -831,12 +874,112 @@ final class ToolbarViewModel: ObservableObject {
             let placeholder = "[Phase] Prompt: \(capturedText)"
             actionState = .result(placeholder)
             editedResult = placeholder
-            promptDraft = ""
             return
         }
         actionState = .running(progress: "")
-        handler.prompt(promptText: trimmed, text: capturedText, viewModel: self)
-        promptDraft = ""
+        handler.prompt(promptText: promptText, text: capturedText, viewModel: self)
+    }
+
+    // MARK: - Regenerate / Refine
+
+    /// The custom action that produced the current state, if any.
+    private var activeCustomAction: CustomAction? {
+        guard let id = activeCustomActionID else { return nil }
+        return customActions.first(where: { $0.id == id })
+    }
+
+    /// True when the current result came from a provider-backed text action
+    /// that can be re-run: built-in Improve/Shorten/Proofread/Translate, a
+    /// Prompt run, or a custom AI/Translation action. Scriptable, speech and
+    /// dictionary results cannot be regenerated.
+    var canRegenerate: Bool {
+        guard case .result = actionState, !isDictionaryAction else { return false }
+        switch activeActionKind {
+        case .improve, .shorten, .proofread, .translate:
+            return true
+        case .prompt:
+            return lastPromptText != nil
+        case nil:
+            guard let action = activeCustomAction else { return false }
+            return action.type == .ai || action.type == .translation
+        }
+    }
+
+    /// True when the current result can be revised with an instruction: it must
+    /// be regenerable and come from a provider that takes a model (DeepL and
+    /// Google Translate cannot follow instructions).
+    var canRefine: Bool {
+        guard canRegenerate else { return false }
+        if activeActionKind == .translate { return translateUsesModel }
+        if let action = activeCustomAction { return action.providerKind.usesModel }
+        return true
+    }
+
+    /// Re-run the action that produced the current result on the original selection.
+    func regenerate() {
+        guard canRegenerate else { return }
+        clearRefineState()
+        switch activeActionKind {
+        case .improve:   triggerImprove()
+        case .shorten:   triggerShorten()
+        case .proofread: triggerProofread()
+        case .translate: triggerTranslate()
+        case .prompt:
+            if let lastPromptText { startPrompt(lastPromptText) }
+        case nil:
+            if let action = activeCustomAction { triggerCustomAction(action) }
+        }
+    }
+
+    /// Open the inline refine input. No-op when the result cannot be refined.
+    func openRefineInput() {
+        guard canRefine else { return }
+        isRefineInputActive = true
+    }
+
+    /// Close the refine input and discard the draft.
+    func cancelRefineInput() {
+        clearRefineState()
+    }
+
+    /// Revise the current result per the typed instruction. The handler gets the
+    /// original selection and the result as currently shown (edited buffer or
+    /// merged hunks). The active action ids are kept so the next `finishWith`
+    /// renders (and diffs against the original selection) like the first run.
+    func runRefine() {
+        let instruction = refineDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !instruction.isEmpty, canRefine,
+              let target = refineTarget, let handler = actionHandler else { return }
+        let previousResult = displayedResult
+        onActPerformed?()
+        cancelScriptAction()
+        isEditing = false
+        clearRefineState()
+        actionState = .running(progress: "")
+        handler.refine(
+            target: target,
+            text: capturedText,
+            previousResult: previousResult,
+            instruction: instruction,
+            viewModel: self
+        )
+    }
+
+    /// The refine target matching the action that produced the current result.
+    private var refineTarget: RefineTarget? {
+        switch activeActionKind {
+        case .improve:   return .improve
+        case .shorten:   return .shorten
+        case .proofread: return .proofread
+        case .translate: return .translate(targetLanguage)
+        case .prompt:    return lastPromptText.map { .prompt($0) }
+        case nil:        return activeCustomAction.map { .custom($0) }
+        }
+    }
+
+    private func clearRefineState() {
+        isRefineInputActive = false
+        refineDraft = ""
     }
 
     /// Speak the captured text using the given accent, or the currently selected
@@ -1021,6 +1164,8 @@ final class ToolbarViewModel: ObservableObject {
         isShowingCloseConfirmation = false
         isPromptInputActive = false
         promptDraft = ""
+        lastPromptText = nil
+        clearRefineState()
         sourceDomain = nil
         ocrPreviewImage = nil
         speakCoordinator?.clearReplay()

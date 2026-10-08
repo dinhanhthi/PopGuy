@@ -64,6 +64,9 @@ private final class SpyHandler: ToolbarActionHandling {
     func recordScriptAction(actionName: String, typeLabel: String, input: String, output: String, success: Bool, errorMessage: String?, startedAt: Date, sourceBundleID: String?) {}
 
     func prompt(promptText: String, text: String, viewModel: ToolbarViewModel) { promptCalled = true }
+
+    func refine(target: RefineTarget, text: String, previousResult: String, instruction: String, viewModel: ToolbarViewModel) {}
+
     func dictionary(text: String, targetLanguage: TargetLanguage, viewModel: ToolbarViewModel) {
         dictionaryCalled = true
     }

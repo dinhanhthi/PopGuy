@@ -563,6 +563,110 @@ final class ActionEngineHandler: ToolbarActionHandling {
         }
     }
 
+    // MARK: - Refine
+
+    /// Engine action, config, history name and `{{language}}` value for a refine
+    /// target — the same values the matching per-action method uses. Returns nil
+    /// for custom types that never stream through ActionEngine.
+    private func resolve(target: RefineTarget, viewModel: ToolbarViewModel)
+        -> (action: Action, config: ActionConfig, actionName: String, language: String)? {
+        let pickerLanguage = viewModel.targetLanguage.rawValue
+        switch target {
+        case .improve:
+            let config = settings.config(for: .improve)
+            return (.improve(customPrompt: config.customPrompt, tone: config.tone ?? .neutral),
+                    config, "Improve", pickerLanguage)
+        case .shorten:
+            let config = settings.config(for: .shorten)
+            return (.shorten(customPrompt: config.customPrompt, tone: config.tone ?? .neutral),
+                    config, "Shorten", pickerLanguage)
+        case .proofread:
+            let config = settings.config(for: .proofread)
+            return (.proofread(customPrompt: config.customPrompt), config, "Proofread", pickerLanguage)
+        case .translate(let language):
+            let config = settings.config(for: .translate)
+            return (.translate(targetLanguage: language.bcp47, customPrompt: config.customPrompt,
+                               tone: config.tone ?? .neutral),
+                    config, "Translate", language.rawValue)
+        case .prompt(let promptText):
+            return (.custom(prompt: promptText), settings.config(for: .prompt), "Prompt", pickerLanguage)
+        case .custom(let action):
+            // Same placeholder config as custom(action:): ActionEngine reads only
+            // providerKind and model for custom/translation actions.
+            let config = ActionConfig(id: .improve, providerKind: action.providerKind, model: action.model)
+            switch action.type {
+            case .ai:
+                return (.custom(prompt: action.systemPrompt), config, action.title, pickerLanguage)
+            case .translation:
+                let language = TargetLanguage.allCases
+                    .first { $0.bcp47 == action.targetLanguage }?.rawValue ?? action.targetLanguage
+                return (.translate(targetLanguage: action.targetLanguage,
+                                   customPrompt: action.systemPrompt.isEmpty ? nil : action.systemPrompt,
+                                   tone: action.tone),
+                        config, action.title, language)
+            case .speech, .dictionary, .openURL, .runShortcut, .appleScript, .shellScript:
+                return nil
+            }
+        }
+    }
+
+    func refine(target: RefineTarget, text: String, previousResult: String, instruction: String, viewModel: ToolbarViewModel) {
+        // Resolve before touching state so a non-streaming custom type cannot
+        // cancel an in-flight run.
+        guard let resolved = resolve(target: target, viewModel: viewModel) else { return }
+
+        cancelCurrentTask()
+        generation += 1
+        let myGen = generation
+        let config = resolved.config
+        let actionName = resolved.actionName
+        let apiKey = keychain.key(for: config.providerKind) ?? ""
+        let baseURLOverride = resolveBaseURL(for: config.providerKind)
+        let executablePath = resolveExecutablePath(for: config.providerKind)
+        let preserveFormatting = settings.preserveFormatting
+        let globalPrompt = settings.globalPrompt
+        let followUp = FollowUp(previousResult: previousResult, instruction: instruction)
+
+        let startedAt = Date()
+        // Snapshot the source app now; viewModel.sourceBundleID may change mid-stream.
+        let sourceBundleID = viewModel.sourceBundleID
+        let promptContext = makePromptContext(viewModel: viewModel, language: resolved.language)
+        streamTask = Task { @MainActor in
+            do {
+                let stream = try await engine.dispatch(
+                    action: resolved.action,
+                    input: text,
+                    config: config,
+                    apiKey: apiKey,
+                    baseURLOverride: baseURLOverride,
+                    executablePathOverride: executablePath,
+                    preserveFormatting: preserveFormatting,
+                    globalPrompt: globalPrompt,
+                    promptContext: promptContext,
+                    followUp: followUp
+                )
+                var accumulated = ""
+                for try await token in stream {
+                    guard myGen == self.generation else { return }
+                    accumulated += token
+                    viewModel.appendProgress(token)
+                }
+                guard myGen == self.generation else { return }
+                let output = ActionEngine.stripWrappingQuotes(from: accumulated, input: text)
+                viewModel.finishWith(result: output)
+                recordHistory(actionName: actionName, providerKind: config.providerKind, model: config.model,
+                              input: text, output: output, success: true, errorMessage: nil,
+                              startedAt: startedAt, sourceBundleID: sourceBundleID)
+            } catch {
+                guard myGen == self.generation else { return }
+                viewModel.failWith(message: error.localizedDescription)
+                recordHistory(actionName: actionName, providerKind: config.providerKind, model: config.model,
+                              input: text, output: "", success: false, errorMessage: error.localizedDescription,
+                              startedAt: startedAt, sourceBundleID: sourceBundleID)
+            }
+        }
+    }
+
     // MARK: - Dictionary
 
     func dictionary(text: String, targetLanguage: TargetLanguage, viewModel: ToolbarViewModel) {
