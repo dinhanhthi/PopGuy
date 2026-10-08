@@ -694,6 +694,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         ))
+
+        // macOS 27+ hides menu item images by default; opt our icons back in.
+        if #available(macOS 27, *) {
+            for item in menu.items where item.image != nil {
+                item.preferredImageVisibility = .visible
+            }
+        }
     }
 
     @objc private func togglePopGuyEnabled() {
