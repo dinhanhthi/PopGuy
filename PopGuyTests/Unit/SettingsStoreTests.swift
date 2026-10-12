@@ -196,13 +196,13 @@ struct SettingsStoreTests {
 
     // MARK: - Text-select editable-only
 
-    @Test("triggerOnSelectEditableOnly defaults to true on a fresh suite")
-    func triggerOnSelectEditableOnlyDefaultTrue() {
+    @Test("triggerOnSelectEditableOnly defaults to false on a fresh suite")
+    func triggerOnSelectEditableOnlyDefaultFalse() {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
         let store = SettingsStore(defaults: suite)
-        #expect(store.triggerOnSelectEditableOnly == true)
+        #expect(store.triggerOnSelectEditableOnly == false)
     }
 
     @Test("triggerOnSelectEditableOnly round-trips through UserDefaults")
@@ -211,10 +211,10 @@ struct SettingsStoreTests {
         defer { removeSuite(name) }
 
         let store1 = SettingsStore(defaults: suite)
-        store1.triggerOnSelectEditableOnly = false
+        store1.triggerOnSelectEditableOnly = true
 
         let store2 = SettingsStore(defaults: suite)
-        #expect(store2.triggerOnSelectEditableOnly == false)
+        #expect(store2.triggerOnSelectEditableOnly == true)
     }
 
     // MARK: - preserveFormatting

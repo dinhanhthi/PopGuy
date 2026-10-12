@@ -15,7 +15,7 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 
 ### Added
 
-- "Only in editable text" option for Show toolbar when text is selected (on by default). Selecting read-only text, such as web page content or chat messages, no longer pops up the toolbar; Cmd+C+C and hotkeys still work on any text. Turn it off in Settings → Triggers.
+- "Only in editable text" option for Show toolbar when text is selected (off by default). When on, selecting read-only text, such as web page content or chat messages, no longer pops up the toolbar; Cmd+C+C and hotkeys still work on any text. Turn it on in Settings → Triggers.
 
 ## [1.1.0] - 2026-10-08
 

@@ -416,10 +416,10 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(triggerOnSelectEnabled, forKey: Keys.triggerOnSelect) }
     }
 
-    /// When true (default), the text-select trigger shows the popup only for
+    /// When true, the text-select trigger shows the popup only for
     /// selections inside an editable text area; read-only text (web pages, chat
     /// messages) is ignored. Does not affect the chord, hotkeys, or the
-    /// double-click trigger.
+    /// double-click trigger (default: false).
     @Published var triggerOnSelectEditableOnly: Bool {
         didSet { defaults.set(triggerOnSelectEditableOnly, forKey: Keys.triggerOnSelectEditableOnly) }
     }
@@ -620,7 +620,7 @@ final class SettingsStore: ObservableObject {
         ignoredDomainsEnabled    = defaults.object(forKey: Keys.ignoredDomainsEnabled) as? Bool ?? false
         popGuyEnabled            = defaults.object(forKey: Keys.popGuyEnabled) as? Bool ?? true
         triggerOnSelectEnabled   = defaults.object(forKey: Keys.triggerOnSelect) as? Bool ?? false
-        triggerOnSelectEditableOnly = defaults.object(forKey: Keys.triggerOnSelectEditableOnly) as? Bool ?? true
+        triggerOnSelectEditableOnly = defaults.object(forKey: Keys.triggerOnSelectEditableOnly) as? Bool ?? false
         triggerDoubleClickEnabled = defaults.object(forKey: Keys.triggerDoubleClick) as? Bool ?? false
         let hideLogo = defaults.object(forKey: Keys.hideToolbarLogo) as? Bool ?? false
         hideToolbarLogo = hideLogo

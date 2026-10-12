@@ -474,7 +474,7 @@ private struct OnboardingTriggersPage: View {
             Toggle("Show toolbar when text is selected", isOn: $settings.triggerOnSelectEnabled)
                 .font(.subheadline)
 
-            Text("Shows the toolbar the moment you select text in an editable field. That can feel busy, so it's off by default.")
+            Text("Shows the toolbar the moment you select text. That can feel busy, so it's off by default.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
