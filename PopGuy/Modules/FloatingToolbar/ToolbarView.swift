@@ -359,6 +359,7 @@ struct ToolbarView: View {
                     toolbarDivider
                 }
                 actionControl(for: id)
+                    .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: index == 0))
             }
 
             if viewModel.hasOverflow {
@@ -366,6 +367,7 @@ struct ToolbarView: View {
                     toolbarDivider
                 }
                 burgerButton
+                    .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: viewModel.orderedActions.isEmpty))
             }
 
             // Push the utility group (Ignore this App, Settings) to the trailing
@@ -384,6 +386,7 @@ struct ToolbarView: View {
                     zoom: zoom,
                     action: onIgnoreDomain
                 )
+                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls))
             }
 
             ToolbarUtilityButton(
@@ -396,6 +399,7 @@ struct ToolbarView: View {
             )
             .opacity(viewModel.sourceBundleID == nil ? 0.4 : 1.0)
             .disabled(viewModel.sourceBundleID == nil)
+            .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && viewModel.sourceDomain == nil))
 
             ToolbarUtilityButton(
                 systemName: "gear",
@@ -425,6 +429,19 @@ struct ToolbarView: View {
                     .onChange(of: proxy.size.width) { actionBarWidth = $0 }
             }
         )
+    }
+
+    /// Whether any action button or the overflow menu precedes the utility group.
+    private var hasActionControls: Bool {
+        !viewModel.orderedActions.isEmpty || viewModel.hasOverflow
+    }
+
+    /// Tooltip alignment for an action-bar control. The control at the bar's
+    /// leading edge (nothing before it) left-aligns its tooltip: the default
+    /// trailing alignment would push a wider tooltip past the panel's left edge,
+    /// where the hosting panel clips it.
+    private func tooltipAlignment(isFirst: Bool) -> Alignment {
+        isFirst && !viewModel.showsLogo ? .bottomLeading : .bottomTrailing
     }
 
     /// Renders the appropriate control for a given action identifier.
@@ -1626,7 +1643,9 @@ private struct AccentPicker: View {
 /// utility buttons. Appears ~120 ms after the cursor enters — fast enough to
 /// feel instant but slow enough to avoid flickering on a passing cursor.
 ///
-/// Placement is `.bottomTrailing` to avoid obscuring the button icon above.
+/// Placement is below the button so it doesn't obscure the icon, trailing-aligned
+/// by default; the bar's leading-edge control switches to leading alignment via
+/// `toolbarTooltipAlignment` so the tooltip isn't clipped by the panel edge.
 /// Uses the same `regularMaterial` pill as the rest of the toolbar chrome.
 ///
 /// When `text` is empty the modifier is a no-op — no hover tracking, no overlay.
@@ -1634,6 +1653,7 @@ private struct ToolbarTooltipModifier: ViewModifier {
     let text: String
     let controlRadius: CGFloat
 
+    @Environment(\.toolbarTooltipAlignment) private var alignment
     @State private var isHovered = false
     @State private var showTooltip = false
     @State private var hoverTask: Task<Void, Never>?
@@ -1661,7 +1681,7 @@ private struct ToolbarTooltipModifier: ViewModifier {
                     }
                 }
                 .onDisappear { teardown() }
-                .overlay(alignment: .bottomTrailing) {
+                .overlay(alignment: alignment) {
                     if showTooltip {
                         Text(text)
                             .font(.body)
@@ -1705,6 +1725,18 @@ private struct ToolbarTooltipModifier: ViewModifier {
             NSEvent.removeMonitor(clickMonitor)
             self.clickMonitor = nil
         }
+    }
+}
+
+private struct ToolbarTooltipAlignmentKey: EnvironmentKey {
+    static let defaultValue: Alignment = .bottomTrailing
+}
+
+private extension EnvironmentValues {
+    /// Overlay alignment for `toolbarTooltip` (`.bottomTrailing` by default).
+    var toolbarTooltipAlignment: Alignment {
+        get { self[ToolbarTooltipAlignmentKey.self] }
+        set { self[ToolbarTooltipAlignmentKey.self] = newValue }
     }
 }
 
