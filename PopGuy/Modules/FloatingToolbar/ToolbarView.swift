@@ -370,8 +370,9 @@ struct ToolbarView: View {
 
             // Push the utility group (Ignore this App, Settings) to the trailing
             // edge, leaving a clear gap between it and the action buttons. Under
-            // the root `.fixedSize()` this Spacer only has slack to expand because
-            // the action bar is floored to `minResultWidth` below.
+            // the root `.fixedSize()` this Spacer only has slack to expand when
+            // the action bar is floored to `minResultWidth` below; otherwise it
+            // stays at its minimum so the bar hugs its buttons.
             Spacer(minLength: z(16))
 
             if viewModel.sourceDomain != nil {
@@ -406,11 +407,11 @@ struct ToolbarView: View {
             )
         }
         .padding(metrics.cardPadding)
-        // Floor the bar to the same minimum the result body uses, so the trailing
-        // Spacer has slack to push the utility group to the right edge even when
-        // few actions are active. When many actions make the row naturally wider,
-        // this is a no-op and the row keeps its intrinsic width.
-        .frame(minWidth: minResultWidth, alignment: .leading)
+        // While a body is expanded below, floor the bar to the same minimum the
+        // result body uses, so the trailing Spacer pushes the utility group to the
+        // card's right edge even when few actions are active. When idle there is
+        // no body to match, so the bar keeps its intrinsic width (no empty gap).
+        .frame(minWidth: hasExpandedBody ? minResultWidth : nil, alignment: .leading)
         // Measure this row's width: it's the widest one and sets the card width,
         // so the result body can match it (see `resultWidth`). We set the @State
         // directly from the GeometryReader (onAppear + onChange) rather than via a
@@ -995,6 +996,14 @@ struct ToolbarView: View {
     /// Minimum content width for the result/prompt/speak body, so a short action
     /// bar doesn't force text to wrap in a cramped column.
     private var minResultWidth: CGFloat { z(340) }
+
+    /// Whether anything (prompt, result, stop row, speak) is shown below the
+    /// action bar — mirrors the conditions in `toolbarCard`.
+    private var hasExpandedBody: Bool {
+        if viewModel.isPromptInputActive { return true }
+        if case .idle = viewModel.actionState {} else { return true }
+        return (viewModel.speakPhase != .idle || viewModel.canReplaySpeak) && !viewModel.isDictionaryAction
+    }
 
     /// Explicit width for the edit-mode editor (an NSViewRepresentable, which does
     /// not expand to `maxWidth: .infinity` the way a native Text does). Matches the
