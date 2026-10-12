@@ -13,6 +13,13 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.1.2] - 2026-10-13
+
+### Fixed
+
+- The toolbar now fits the number of actions it shows. With only one action left, it no longer stretches wide with an empty gap before the Ignore and Settings buttons.
+- The tooltip of the leftmost toolbar button is no longer cut off when the logo is hidden; it now aligns to the left edge.
+
 ## [1.1.1] - 2026-10-12
 
 ### Added
