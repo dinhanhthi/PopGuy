@@ -30,6 +30,13 @@ func shouldIgnoreReentrantSelection(isShowing: Bool, actionInProgress: Bool, new
     isShowing && actionInProgress && newText == currentText
 }
 
+/// Returns true when the text-select trigger may show the toolbar for a selection.
+/// With `editableOnly` on, only selections inside an editable text area pass —
+/// read-only text (web pages, chat messages) is ignored. Pure/testable.
+func shouldShowOnTextSelect(isEditable: Bool, editableOnly: Bool) -> Bool {
+    !editableOnly || isEditable
+}
+
 @MainActor
 final class ToolbarController {
 
@@ -423,7 +430,13 @@ final class ToolbarController {
                 // (drag/keyboard, many words) is never a double-click, so it fires
                 // here even when the double-click trigger is also enabled; a
                 // double-click also lands here when the double-click trigger is off.
-                guard self.settings.triggerOnSelectEnabled else { continue }
+                // The editable-only option applies to this path alone, so the
+                // chord, hotkeys, and the double-click trigger above are unaffected.
+                guard self.settings.triggerOnSelectEnabled,
+                      shouldShowOnTextSelect(
+                          isEditable: event.sourceElement.isEditable,
+                          editableOnly: self.settings.triggerOnSelectEditableOnly
+                      ) else { continue }
                 self.handleEvent(event)
             }
         }

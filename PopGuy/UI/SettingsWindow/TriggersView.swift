@@ -4,7 +4,8 @@
 // Settings tab for popup trigger configuration.
 //
 // Sections:
-//   • On text selection: toggle that shows the toolbar on text selection.
+//   • On text selection: toggle that shows the toolbar on text selection, plus
+//     an "only in editable text" sub-option.
 //   • Keyboard shortcut: Cmd+C+C chord toggle + optional replacement shortcut.
 //
 // The chord replacement shortcut is stored directly on SettingsStore as
@@ -44,7 +45,7 @@ struct TriggersView: View {
                 // between cells (i.e. between settings).
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Show toolbar when text is selected", isOn: $settings.triggerOnSelectEnabled)
-                    Text("When on, selecting text in any app shows the toolbar.")
+                    Text("When on, selecting text shows the toolbar — in editable fields only, or in any app when the option below is off.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -58,8 +59,16 @@ struct TriggersView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Only in editable text", isOn: $settings.triggerOnSelectEditableOnly)
+                    Text("When on, the toolbar appears only for text selected inside a field you can type in (text boxes, editors, compose areas). Selecting read-only text — web page content, chat messages — does nothing, so other apps' own selection features are not interrupted. Cmd+C+C and hotkeys still work on any text.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .disabled(!settings.triggerOnSelectEnabled)
+
+                VStack(alignment: .leading, spacing: 8) {
                     Toggle("Show toolbar on double-click (single word)", isOn: $settings.triggerDoubleClickEnabled)
-                    Text("When on, double-clicking a word shows the toolbar — handy for quickly checking a word's meaning or hearing it. Use it on its own, or alongside the option above: a double-click shows the toolbar once, while selecting a range of text still uses the option above.")
+                    Text("When on, double-clicking a word shows the toolbar — handy for quickly checking a word's meaning or hearing it. Use it on its own, or alongside \"Show toolbar when text is selected\": a double-click shows the toolbar once (even on read-only text), while selecting a range of text still follows the options above.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 

@@ -143,6 +143,7 @@ final class SettingsStore: ObservableObject {
         static let ignoredDomainsEnabled      = "settings.ignoredDomainsEnabled"
         static let popGuyEnabled              = "settings.popGuyEnabled"
         static let triggerOnSelect            = "settings.triggerOnSelect"
+        static let triggerOnSelectEditableOnly = "settings.triggerOnSelectEditableOnly"
         static let triggerDoubleClick         = "settings.triggerDoubleClick"
         static let hideToolbarLogo            = "settings.hideToolbarLogo"
         static let doubleClickAssignedAction  = "settings.doubleClickAssignedAction"
@@ -415,6 +416,14 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(triggerOnSelectEnabled, forKey: Keys.triggerOnSelect) }
     }
 
+    /// When true (default), the text-select trigger shows the popup only for
+    /// selections inside an editable text area; read-only text (web pages, chat
+    /// messages) is ignored. Does not affect the chord, hotkeys, or the
+    /// double-click trigger.
+    @Published var triggerOnSelectEditableOnly: Bool {
+        didSet { defaults.set(triggerOnSelectEditableOnly, forKey: Keys.triggerOnSelectEditableOnly) }
+    }
+
     /// Hides the PopGuy logo on the toolbar to save space (default: false).
     /// Raises the principal-row cap by one; use `setHideToolbarLogo(_:)` to change it
     /// so re-showing the logo can be rejected when the extra action has nowhere to go.
@@ -611,6 +620,7 @@ final class SettingsStore: ObservableObject {
         ignoredDomainsEnabled    = defaults.object(forKey: Keys.ignoredDomainsEnabled) as? Bool ?? false
         popGuyEnabled            = defaults.object(forKey: Keys.popGuyEnabled) as? Bool ?? true
         triggerOnSelectEnabled   = defaults.object(forKey: Keys.triggerOnSelect) as? Bool ?? false
+        triggerOnSelectEditableOnly = defaults.object(forKey: Keys.triggerOnSelectEditableOnly) as? Bool ?? true
         triggerDoubleClickEnabled = defaults.object(forKey: Keys.triggerDoubleClick) as? Bool ?? false
         let hideLogo = defaults.object(forKey: Keys.hideToolbarLogo) as? Bool ?? false
         hideToolbarLogo = hideLogo

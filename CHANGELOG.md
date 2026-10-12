@@ -13,6 +13,10 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+### Added
+
+- "Only in editable text" option for Show toolbar when text is selected (on by default). Selecting read-only text, such as web page content or chat messages, no longer pops up the toolbar; Cmd+C+C and hotkeys still work on any text. Turn it off in Settings → Triggers.
+
 ## [1.1.0] - 2026-10-08
 
 ### Added
