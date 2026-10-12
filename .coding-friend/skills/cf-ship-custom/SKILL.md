@@ -47,20 +47,23 @@ If there are **no user-facing app commits** after filtering, stop and tell the u
 
 Classify the filtered commits using conventional commit prefixes:
 
-| Prefix | Level |
+| Commits | Level |
 |---|---|
-| `feat:` | MINOR (x.Y.0) |
-| `fix:`, `perf:`, `refactor:`, `docs:`, `chore:`, `style:`, `test:` | PATCH (x.x.Z) |
+| Several (2+) `feat:` commits, or any breaking change | MINOR (x.Y.0) |
+| A single `feat:`, and/or `fix:`, `perf:`, `refactor:`, `docs:`, `chore:`, `style:`, `test:` | PATCH (x.x.Z) |
 
 Rules:
+- **PATCH is the default.** Propose MINOR only when there are **several** app-facing
+  `feat:` commits, or a **breaking change** (`feat!:`/`fix!:`, a `BREAKING CHANGE:` footer,
+  or a change that removes/alters existing behavior users rely on).
+- A **single** `feat:` commit with no breaking change → **PATCH** (e.g. v1.1.1 shipped one
+  new option as a patch).
 - `*(website):` commits do **not** count as `feat:` (or any other prefix) for the bump.
   A website-only `feat(website):` must never trigger a MINOR.
-- If **any** remaining `feat:` commit exists → proposed level is **MINOR**.
-- If only non-feat commits remain → proposed level is **PATCH**.
-- If the changes look large enough to warrant a **MAJOR** bump (breaking change, complete
-  redesign, removal of core feature) → **STOP. Do NOT auto-bump. Ask the user:**
-  `"Some changes look like they could justify a MAJOR version bump. Can you clarify
-  whether this is breaking or backward-compatible?"`
+- If the changes look large enough to warrant a **MAJOR** bump (complete redesign,
+  removal of a core feature) → **STOP. Do NOT auto-bump. Ask the user:**
+  `"Some changes look like they could justify a MAJOR version bump. Should this be a
+  MAJOR release, or MINOR?"`
 - When in doubt between PATCH and MINOR → choose **PATCH**.
 
 Get current version from project:
