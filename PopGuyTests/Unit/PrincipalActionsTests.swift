@@ -34,91 +34,71 @@ struct PrincipalActionsTests {
         #expect(Set(principal).isDisjoint(with: Set(overflow)))
     }
 
-    @Test("migration assigns first maxPrincipalActions enabled actions to principal")
-    func migrationDefaults() {
+    @Test("fresh-install migration assigns every enabled action to principal")
+    func migrationAssignsAllEnabled() {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
+        // Enable 7 built-ins (more than the old cap of 6), then drop the saved
+        // partition so the next load runs the first-launch migration.
+        let store1 = SettingsStore(defaults: suite)
+        store1.promptEnabled = true
+        store1.dictionaryConfig.isEnabled = true
+        suite.removeObject(forKey: "settings.principalActionIDs")
+
         let store = SettingsStore(defaults: suite)
-        let expectedPrincipal = Set(store.enabledOrderedIdentifiers.prefix(ToolbarLimits.maxPrincipalActions))
-        #expect(store.principalActionIDs == expectedPrincipal)
-        #expect(store.principalActionCount <= ToolbarLimits.maxPrincipalActions)
+        #expect(store.enabledOrderedIdentifiers.count == 7)
+        #expect(store.principalActionIDs == Set(store.enabledOrderedIdentifiers))
+        #expect(store.overflowOrderedIdentifiers.isEmpty)
     }
 
-    @Test("setPrincipal rejects when enabled principal zone is full")
-    func setPrincipalRejectsPrincipalCap() {
+    @Test("every enabled action can become principal")
+    func everyEnabledActionCanBePrincipal() {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
         let store = SettingsStore(defaults: suite)
         store.promptEnabled = true
-        _ = store.setPrincipal(.builtin(.prompt), true)
         store.dictionaryConfig.isEnabled = true
-        #expect(store.principalActionCount == ToolbarLimits.maxPrincipalActions)
+        for i in 0..<5 {
+            store.addCustomAction(CustomAction(title: "Custom \(i)", systemPrompt: "p", isEnabled: true))
+        }
 
-        #expect(!store.setPrincipal(.dictionary, true))
-        #expect(!store.isPrincipal(.dictionary))
+        for id in store.enabledOrderedIdentifiers {
+            store.setPrincipal(id, true)
+        }
+        #expect(store.principalOrderedIdentifiers.count == 12)
+        #expect(store.overflowOrderedIdentifiers.isEmpty)
     }
 
-    @Test("setPrincipal rejects when enabled burger zone is full")
-    func setPrincipalRejectsBurgerCap() {
+    @Test("eight or more enabled actions can sit in More actions")
+    func manyActionsCanSitInMore() {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
         let store = SettingsStore(defaults: suite)
-        store.promptEnabled = true
-        _ = store.setPrincipal(.builtin(.prompt), true)
-        store.dictionaryConfig.isEnabled = true
-
         for i in 0..<4 {
-            store.addCustomAction(CustomAction(title: "Burger \(i)", systemPrompt: "p", isEnabled: true))
+            store.addCustomAction(CustomAction(title: "More \(i)", systemPrompt: "p", isEnabled: true))
         }
-        #expect(store.overflowActionCount == ToolbarLimits.maxBurgerActions)
 
-        guard let principalID = store.principalOrderedIdentifiers.first else {
-            Issue.record("Expected a principal action")
-            return
+        for id in store.enabledOrderedIdentifiers {
+            store.setPrincipal(id, false)
         }
-        #expect(!store.setPrincipal(principalID, false))
-        #expect(store.isPrincipal(principalID))
+        #expect(store.overflowOrderedIdentifiers.count == 9)
+        #expect(store.principalOrderedIdentifiers.isEmpty)
     }
 
-    @Test("disabled actions switch zones without cap check")
+    @Test("disabled actions switch zones freely")
     func disabledActionsSwitchZonesFreely() {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
         let store = SettingsStore(defaults: suite)
         store.improveEnabled = false
-        #expect(store.setPrincipal(.builtin(.improve), false))
+        store.setPrincipal(.builtin(.improve), false)
         #expect(!store.isPrincipal(.builtin(.improve)))
-        #expect(store.setPrincipal(.builtin(.improve), true))
+        store.setPrincipal(.builtin(.improve), true)
         #expect(store.isPrincipal(.builtin(.improve)))
-    }
-
-    @Test("disabled overflow assignments do not block moving enabled actions to More")
-    func disabledOverflowDoesNotBlockEnabledDemotion() {
-        let (suite, name) = makeSuite()
-        defer { removeSuite(name) }
-
-        let store = SettingsStore(defaults: suite)
-        // Fill burger zone with disabled assignments (not visible in overflowActionCount).
-        store.shortenEnabled = false
-        store.proofreadEnabled = false
-        _ = store.setPrincipal(.builtin(.shorten), false)
-        _ = store.setPrincipal(.builtin(.proofread), false)
-
-        let disabledOverflow = store.actionOrder.filter { !store.isPrincipal($0) }.count
-        #expect(disabledOverflow >= 2)
-        #expect(store.overflowActionCount < ToolbarLimits.maxBurgerActions)
-
-        guard let principalID = store.principalOrderedIdentifiers.first else {
-            Issue.record("Expected a principal action")
-            return
-        }
-        #expect(store.setPrincipal(principalID, false))
-        #expect(!store.isPrincipal(principalID))
-        #expect(store.overflowActionCount <= ToolbarLimits.maxBurgerActions)
     }
 
     @Test("migration persists principalActionIDs across reload")
@@ -133,13 +113,13 @@ struct PrincipalActionsTests {
         #expect(store2.principalActionIDs == expected)
     }
 
-    @Test("reconcilePrincipal drops stale IDs and trims over-cap principal set")
-    func reconcilePrincipalTrimsAndDropsStale() {
+    @Test("loading a saved layout drops stale IDs without trimming")
+    func loadDropsStaleWithoutTrimming() {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
         let stale = UUID()
-        var principal: Set<ActionIdentifier> = [
+        let principal: Set<ActionIdentifier> = [
             .builtin(.improve),
             .builtin(.shorten),
             .builtin(.proofread),
@@ -155,9 +135,7 @@ struct PrincipalActionsTests {
 
         let store = SettingsStore(defaults: suite)
         #expect(!store.principalActionIDs.contains(.custom(stale)))
-        #expect(store.principalActionIDs.count <= ToolbarLimits.maxPrincipalActions)
-        let ordered = store.actionOrder.filter { store.isPrincipal($0) }
-        #expect(ordered.count == store.principalActionIDs.count)
+        #expect(store.principalActionIDs == Set(SettingsStore.defaultBuiltinOrder))
     }
 
     @Test("deleteCustomAction removes id from principalActionIDs")
@@ -168,74 +146,37 @@ struct PrincipalActionsTests {
         let store = SettingsStore(defaults: suite)
         let action = CustomAction(title: "P", systemPrompt: "p", isEnabled: true)
         store.addCustomAction(action)
-        _ = store.setPrincipal(.custom(action.id), true)
+        store.setPrincipal(.custom(action.id), true)
 
         store.deleteCustomAction(id: action.id)
         #expect(!store.principalActionIDs.contains(.custom(action.id)))
     }
 
-    @Test("logo is shown by default with the base principal cap")
-    func logoShownByDefault() {
+    @Test("toggling hideToolbarLogo never changes principalActionIDs")
+    func toggleLogoKeepsPrincipal() {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
         let store = SettingsStore(defaults: suite)
         #expect(!store.hideToolbarLogo)
-        #expect(store.maxPrincipalActions == ToolbarLimits.maxPrincipalActions)
-    }
 
-    @Test("hiding the logo raises the principal cap and persists")
-    func hideLogoRaisesCap() {
-        let (suite, name) = makeSuite()
-        defer { removeSuite(name) }
+        store.hideToolbarLogo = true
+        store.promptEnabled = true
+        store.dictionaryConfig.isEnabled = true
+        for id in store.enabledOrderedIdentifiers {
+            store.setPrincipal(id, true)
+        }
+        let before = store.principalActionIDs
+        #expect(store.principalOrderedIdentifiers.count == 7)
 
-        let store = SettingsStore(defaults: suite)
-        #expect(store.setHideToolbarLogo(true))
-        #expect(store.maxPrincipalActions == ToolbarLimits.maxPrincipalActionsLogoHidden)
+        store.hideToolbarLogo = false
+        #expect(store.principalActionIDs == before)
+        #expect(store.principalOrderedIdentifiers.count == 7)
+        #expect(!SettingsStore(defaults: suite).hideToolbarLogo)
+
+        store.hideToolbarLogo = true
+        #expect(store.principalActionIDs == before)
         #expect(SettingsStore(defaults: suite).hideToolbarLogo)
-    }
-
-    @Test("showing the logo moves surplus principal actions to the burger menu")
-    func showLogoDemotesSurplus() {
-        let (suite, name) = makeSuite()
-        defer { removeSuite(name) }
-
-        let store = SettingsStore(defaults: suite)
-        store.setHideToolbarLogo(true)
-        store.promptEnabled = true
-        _ = store.setPrincipal(.builtin(.prompt), true)
-        store.dictionaryConfig.isEnabled = true
-        _ = store.setPrincipal(.dictionary, true)
-        #expect(store.principalActionCount == ToolbarLimits.maxPrincipalActionsLogoHidden)
-
-        #expect(store.setHideToolbarLogo(false))
-        #expect(store.principalActionCount == ToolbarLimits.maxPrincipalActions)
-    }
-
-    @Test("showing the logo is rejected when the burger menu cannot take the surplus")
-    func showLogoRejectedWhenBurgerFull() {
-        let (suite, name) = makeSuite()
-        defer { removeSuite(name) }
-
-        let store = SettingsStore(defaults: suite)
-        store.setHideToolbarLogo(true)
-        store.promptEnabled = true
-        _ = store.setPrincipal(.builtin(.prompt), true)
-        store.dictionaryConfig.isEnabled = true
-        for i in 0..<5 {
-            store.addCustomAction(CustomAction(title: "Burger \(i)", systemPrompt: "p", isEnabled: true))
-        }
-        guard let burgerID = store.overflowOrderedIdentifiers.first else {
-            Issue.record("Expected a burger action")
-            return
-        }
-        _ = store.setPrincipal(burgerID, true)
-        #expect(store.principalActionCount == ToolbarLimits.maxPrincipalActionsLogoHidden)
-        #expect(store.overflowActionCount == ToolbarLimits.maxBurgerActions)
-
-        #expect(!store.setHideToolbarLogo(false))
-        #expect(store.hideToolbarLogo)
-        #expect(store.principalActionCount == ToolbarLimits.maxPrincipalActionsLogoHidden)
     }
 }
 

@@ -33,7 +33,7 @@ struct ToolbarLayoutEditTests {
         }
 
         let moving = before[1]
-        #expect(store.moveAction(moving, toZone: true, atIndex: 0))
+        store.moveAction(moving, toZone: true, atIndex: 0)
         #expect(store.principalOrderedIdentifiers.first == moving)
         #expect(Set(store.principalOrderedIdentifiers) == Set(before))
     }
@@ -50,24 +50,9 @@ struct ToolbarLayoutEditTests {
         }
 
         let overflowBefore = store.overflowOrderedIdentifiers
-        #expect(store.moveAction(principalID, toZone: false, atIndex: overflowBefore.count))
+        store.moveAction(principalID, toZone: false, atIndex: overflowBefore.count)
         #expect(!store.isPrincipal(principalID))
         #expect(store.overflowOrderedIdentifiers.last == principalID)
-    }
-
-    @Test("cap-full target zone rejects move")
-    func rejectsWhenZoneFull() {
-        let (suite, name) = makeSuite()
-        defer { removeSuite(name) }
-
-        let store = SettingsStore(defaults: suite)
-        store.promptEnabled = true
-        _ = store.setPrincipal(.builtin(.prompt), true)
-        store.dictionaryConfig.isEnabled = true
-        #expect(store.principalActionCount == ToolbarLimits.maxPrincipalActions)
-
-        #expect(!store.moveAction(.dictionary, toZone: true, atIndex: 0))
-        #expect(!store.isPrincipal(.dictionary))
     }
 
     @Test("index translation lands at expected position among zone members")
@@ -83,7 +68,72 @@ struct ToolbarLayoutEditTests {
         }
 
         let moving = principal[2]
-        #expect(store.moveAction(moving, toZone: true, atIndex: 1))
+        store.moveAction(moving, toZone: true, atIndex: 1)
         #expect(store.principalOrderedIdentifiers[1] == moving)
+    }
+
+    /// Fills More actions with three custom actions and returns them in order.
+    private func storeWithThreeInMore(_ suite: UserDefaults) -> (SettingsStore, [ActionIdentifier]) {
+        let store = SettingsStore(defaults: suite)
+        for i in 0..<3 {
+            let action = CustomAction(title: "More \(i)", systemPrompt: "p", isEnabled: true)
+            store.addCustomAction(action)
+            store.setPrincipal(.custom(action.id), false)
+        }
+        return (store, store.overflowOrderedIdentifiers)
+    }
+
+    @Test("toolbar to More at index 0 lands first")
+    func toolbarToMoreAtStart() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let (store, more) = storeWithThreeInMore(suite)
+        #expect(more.count == 3)
+        let moving = store.principalOrderedIdentifiers[0]
+
+        store.moveAction(moving, toZone: false, atIndex: 0)
+        #expect(store.overflowOrderedIdentifiers == [moving] + more)
+    }
+
+    @Test("toolbar to More at a middle index lands at that index")
+    func toolbarToMoreAtMiddle() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let (store, more) = storeWithThreeInMore(suite)
+        #expect(more.count == 3)
+        let moving = store.principalOrderedIdentifiers[0]
+
+        store.moveAction(moving, toZone: false, atIndex: 2)
+        #expect(store.overflowOrderedIdentifiers == [more[0], more[1], moving, more[2]])
+    }
+
+    @Test("reorder within More moves the action to the target index")
+    func reorderWithinMore() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let (store, more) = storeWithThreeInMore(suite)
+        #expect(more.count == 3)
+
+        store.moveAction(more[2], toZone: false, atIndex: 0)
+        #expect(store.overflowOrderedIdentifiers == [more[2], more[0], more[1]])
+    }
+
+    @Test("More to toolbar at index i lands at i")
+    func moreToToolbarAtIndex() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let (store, more) = storeWithThreeInMore(suite)
+        #expect(more.count == 3)
+        let principalBefore = store.principalOrderedIdentifiers
+
+        store.moveAction(more[1], toZone: true, atIndex: 2)
+        #expect(store.isPrincipal(more[1]))
+        #expect(store.principalOrderedIdentifiers.count == principalBefore.count + 1)
+        #expect(store.principalOrderedIdentifiers[2] == more[1])
+        #expect(store.overflowOrderedIdentifiers == [more[0], more[2]])
     }
 }

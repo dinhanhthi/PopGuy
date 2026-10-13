@@ -39,7 +39,6 @@ struct ToolbarLayoutEditorView: View {
     @ObservedObject var settings: SettingsStore
 
     @State private var dragSession: ToolbarDragSession?
-    @State private var rejectionMessage: String?
 
     @State private var principalRowFrame: CGRect = .zero
     @State private var overflowRowFrame: CGRect = .zero
@@ -72,13 +71,6 @@ struct ToolbarLayoutEditorView: View {
                 }
 
                 Spacer(minLength: 8)
-            }
-
-            if let rejectionMessage {
-                Text(rejectionMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .transition(.opacity)
             }
         }
         .padding(12)
@@ -353,19 +345,7 @@ struct ToolbarLayoutEditorView: View {
 
         guard !unchanged else { return }
 
-        if settings.moveAction(session.id, toZone: session.targetPrincipal, atIndex: session.targetIndex) {
-            rejectionMessage = nil
-            return
-        }
-
-        rejectionMessage = session.targetPrincipal
-            ? "Toolbar row is full (\(settings.maxPrincipalActions)/\(settings.maxPrincipalActions)). Free a slot first."
-            : "More menu is full (\(ToolbarLimits.maxBurgerActions)/\(ToolbarLimits.maxBurgerActions)). Free a slot first."
-
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
-            if rejectionMessage != nil { rejectionMessage = nil }
-        }
+        settings.moveAction(session.id, toZone: session.targetPrincipal, atIndex: session.targetIndex)
     }
 
     // MARK: Action metadata

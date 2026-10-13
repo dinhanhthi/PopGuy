@@ -77,12 +77,6 @@ struct ActionsView: View {
     /// panel slides over the whole window, matching the Add/Edit Action panel.
     @Binding var showingLibrary: Bool
 
-    /// Drives the "toolbar action limit reached" alert.
-    @State private var showLimitAlert = false
-
-    /// Drives the "toolbar layout zone full" alert when principal/burger caps block a move.
-    @State private var showPrincipalLimitAlert = false
-
     /// Filters the action list by type. `.all` shows every action.
     @State private var typeFilter: ActionTypeFilter = .all
 
@@ -154,10 +148,6 @@ struct ActionsView: View {
                         Text("Add Action")
                     }
                     .buttonStyle(.borderedProminent)
-
-                    Text("\(settings.principalActionCount)/\(settings.maxPrincipalActions) toolbar · \(settings.overflowActionCount)/\(ToolbarLimits.maxBurgerActions) More")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
 
                     Spacer()
 
@@ -259,16 +249,6 @@ struct ActionsView: View {
                 .padding(.horizontal, SettingsMetrics.pagePadding)
                 .padding(.bottom, SettingsMetrics.pagePadding)
             }
-        }
-        .alert("Toolbar Limit Reached", isPresented: $showLimitAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("PopGuy supports at most \(settings.maxToolbarActionsCurrent) enabled actions (\(settings.maxPrincipalActions) on the toolbar and \(ToolbarLimits.maxBurgerActions) in the More menu). Turn off another action first.")
-        }
-        .alert("Toolbar Layout Full", isPresented: $showPrincipalLimitAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("The toolbar row holds up to \(settings.maxPrincipalActions) actions and the More menu holds up to \(ToolbarLimits.maxBurgerActions). Free a slot in that zone before moving this action.")
         }
         .alert("Import Failed", isPresented: $showImportError) {
             Button("OK", role: .cancel) {}
@@ -546,7 +526,7 @@ struct ActionsView: View {
             }
             // Mark as plugin-imported so the action shows a "From plugin" badge.
             fresh.isFromPlugin = true
-            _ = settings.addCustomAction(fresh)
+            settings.addCustomAction(fresh)
         }
 
         if skippedCount > 0 {
@@ -617,11 +597,7 @@ struct ActionsView: View {
     private func principalBinding(for id: ActionIdentifier) -> Binding<Bool> {
         Binding(
             get: { settings.isPrincipal(id) },
-            set: { newValue in
-                if !settings.setPrincipal(id, newValue) {
-                    showPrincipalLimitAlert = true
-                }
-            }
+            set: { settings.setPrincipal(id, $0) }
         )
     }
 
@@ -636,7 +612,7 @@ struct ActionsView: View {
                 icon: "wand.and.stars",
                 title: "Improve",
                 subtitle: "Fix grammar and improve clarity while preserving the original meaning and tone.",
-                enabled: guardedEnableBinding(for: $settings.improveEnabled),
+                enabled: $settings.improveEnabled,
                 isPrincipal: principalBinding(for: id),
                 config: $settings.improveConfig,
                 showsTone: true
@@ -648,7 +624,7 @@ struct ActionsView: View {
                 icon: "text.badge.minus",
                 title: "Shorten",
                 subtitle: "Make the selected text more concise and simpler without losing the main ideas.",
-                enabled: guardedEnableBinding(for: $settings.shortenEnabled),
+                enabled: $settings.shortenEnabled,
                 isPrincipal: principalBinding(for: id),
                 config: $settings.shortenConfig,
                 showsTone: true
@@ -660,7 +636,7 @@ struct ActionsView: View {
                 icon: "checkmark.bubble",
                 title: "Proofread",
                 subtitle: "Fix spelling, grammar, and punctuation without changing the meaning or tone.",
-                enabled: guardedEnableBinding(for: $settings.proofreadEnabled),
+                enabled: $settings.proofreadEnabled,
                 isPrincipal: principalBinding(for: id),
                 config: $settings.proofreadConfig
             )
@@ -671,7 +647,7 @@ struct ActionsView: View {
                 icon: "bubble.and.pencil",
                 title: "Prompt",
                 subtitle: "Type a one-off prompt for the selected text. Use {{text}} to place the selection; it's added automatically if omitted. Also available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on).",
-                enabled: guardedEnableBinding(for: $settings.promptEnabled),
+                enabled: $settings.promptEnabled,
                 isPrincipal: principalBinding(for: id),
                 config: $settings.promptConfig,
                 showsTone: false,
@@ -685,7 +661,7 @@ struct ActionsView: View {
             SpeakCardView(
                 settings: settings,
                 keychain: keychain,
-                enabled: guardedEnableBinding(for: $settings.speakEnabled),
+                enabled: $settings.speakEnabled,
                 isPrincipal: principalBinding(for: id),
                 recordingID: $recordingID
             )
@@ -693,7 +669,7 @@ struct ActionsView: View {
         case .dictionary:
             DictionaryCardView(
                 settings: settings,
-                enabled: guardedEnableBinding(for: $settings.dictionaryConfig.isEnabled),
+                enabled: $settings.dictionaryConfig.isEnabled,
                 isPrincipal: principalBinding(for: id)
             )
 
@@ -705,26 +681,6 @@ struct ActionsView: View {
                 )
             }
         }
-    }
-
-    // MARK: - Cap-guarded enable binding
-
-    /// Returns a Binding<Bool> that intercepts enable (off→on) attempts.
-    ///
-    /// When turning ON and `enabledToolbarActionCount` is already at the cap,
-    /// the write is rejected and `showLimitAlert` is set to true so the user
-    /// sees a warning. Turning OFF is always allowed.
-    private func guardedEnableBinding(for binding: Binding<Bool>) -> Binding<Bool> {
-        Binding(
-            get: { binding.wrappedValue },
-            set: { newValue in
-                if newValue && settings.enabledToolbarActionCount >= settings.maxToolbarActionsCurrent {
-                    showLimitAlert = true
-                } else {
-                    binding.wrappedValue = newValue
-                }
-            }
-        )
     }
 
     // MARK: - Tone picker
@@ -755,7 +711,7 @@ struct ActionsView: View {
             icon: .sfSymbol("character.bubble"),
             title: "Translate",
             subtitle: "Translate the selected text into your chosen language.",
-            enabled: guardedEnableBinding(for: $settings.translateEnabled),
+            enabled: $settings.translateEnabled,
             isPrincipal: isPrincipal,
             isBuiltin: true
         ) {
@@ -992,7 +948,7 @@ struct ActionsView: View {
             icon: action.icon,
             title: action.title.isEmpty ? "(untitled)" : action.title,
             subtitle: action.actionDescription,
-            enabled: guardedEnableBinding(for: rawEnabledBinding),
+            enabled: rawEnabledBinding,
             isPrincipal: isPrincipal,
             isBuiltin: false,
             isFromPlugin: action.isFromPlugin,

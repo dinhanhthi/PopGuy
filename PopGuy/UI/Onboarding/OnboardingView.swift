@@ -587,10 +587,7 @@ private struct OnboardingActionsPage: View {
         )
     }
 
-    /// Persist the toggle. Turning off is always allowed.
-    ///
-    /// `setPrincipal` is best-effort after a successful enable — a false return
-    /// means the principal row is full.
+    /// Persist the toggle. Enabling also places the action on the toolbar.
     private func setEnabled(_ id: ActionIdentifier, _ enabled: Bool) {
         if enabled {
             writeEnabled(id, true)
