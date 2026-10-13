@@ -1,0 +1,63 @@
+name: Deploy Pages
+
+# One GitHub Pages site (custom domain https://pg.dinh.work) serves both:
+#   - the website (website/, React + Vite), and
+#   - the Sparkle feed appcast.xml. Installed apps fetch
+#     https://dinhanhthi.github.io/PopGuy/appcast.xml (SUFeedURL), which GitHub 301s to
+#     https://pg.dinh.work/appcast.xml. Every deploy replaces the whole site, so both
+#     must always ship in the same artifact.
+# Only website/dist and appcast.xml are published; docs/ and the app source never are.
+# Requires Settings → Pages → Source = "GitHub Actions" and custom domain pg.dinh.work.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'appcast.xml'
+      - 'website/**'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Build website
+        working-directory: website
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: Add appcast and route pages
+        run: |
+          cp appcast.xml website/dist/appcast.xml
+          # Pages has no rewrites: give each route its own copy of index.html so it
+          # answers 200 at /actions, /docs, /privacy (Pages maps /docs to docs.html),
+          # and send unknown paths to the app, which redirects them home.
+          for route in actions docs privacy; do
+            cp website/dist/index.html "website/dist/$route.html"
+          done
+          cp website/dist/index.html website/dist/404.html
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: website/dist
+      - id: deployment
+        uses: actions/deploy-pages@v5

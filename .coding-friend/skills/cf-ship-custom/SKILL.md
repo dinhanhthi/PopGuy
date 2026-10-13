@@ -3,7 +3,7 @@
 This is a **version bump + changelog + ship** workflow for PopGuy. The release runs
 **entirely on this machine** (the local flow, `docs/RELEASING.md`): build → sign → notarize
 → DMG → GitHub Release → appcast → Pages. There is no CI release workflow; the only
-workflow is `deploy-appcast.yml`, which publishes `appcast.xml` to Pages. The local archive
+workflow is `deploy-pages.yml`, which publishes the website and `appcast.xml` to Pages. The local archive
 uses a warm SPM/Metal cache, so it is far faster than an always-clean CI runner.
 
 This **Before** section handles prep (commits → version → changelogs → file updates). The
