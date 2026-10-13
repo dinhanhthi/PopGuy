@@ -6,6 +6,7 @@ import {
   Routes,
   useLocation
 } from "react-router-dom";
+import { SITE_URL } from "./constants";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { ActionsPage } from "./pages/ActionsPage";
@@ -25,6 +26,15 @@ export function AppRoutes() {
 
   useEffect(() => {
     document.title = titles[location.pathname] ?? titles["/"];
+    // Not in index.html: every route serves that file, so a static tag would
+    // mark each page as a copy of the home page.
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.rel = "canonical";
+      document.head.append(canonical);
+    }
+    canonical.href = SITE_URL + (titles[location.pathname] ? location.pathname : "/");
   }, [location.pathname]);
 
   return (

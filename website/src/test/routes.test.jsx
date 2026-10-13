@@ -98,6 +98,15 @@ describe("website routes", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("adds a canonical link for the current page", () => {
+    renderAt("/docs");
+
+    const canonical = document.querySelectorAll('link[rel="canonical"]');
+    expect(canonical).toHaveLength(1);
+    expect(canonical[0]).toHaveAttribute("href", "https://pg.dinh.work/docs");
+    canonical[0].remove();
+  });
+
   it("toggles the color theme from the header", () => {
     renderAt("/");
 

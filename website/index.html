@@ -3,13 +3,63 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PopGuy — AI where you write</title>
     <meta
       name="description"
-      content="AI actions for selected text on macOS."
+      content="Select text in any Mac app, pick an action, and get the result right there. Free and open source for macOS 13+."
     />
     <meta name="theme-color" content="#f7f7f8" />
     <link rel="icon" type="image/png" href="/popguy-logo.png" />
-    <title>PopGuy — AI where you write</title>
+    <!-- Link previews (Facebook, LinkedIn, Reddit, Slack, Discord, iMessage…).
+         Crawlers don't run JS, so these stay static and absolute. No og:url or
+         canonical here: every route serves this file, so crawlers fall back to
+         the shared URL; App.jsx adds the canonical link per route. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PopGuy" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content="PopGuy — AI where you write" />
+    <meta
+      property="og:description"
+      content="Select text in any Mac app, pick an action, and get the result right there. Free and open source for macOS 13+."
+    />
+    <meta property="og:image" content="https://pg.dinh.work/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1260" />
+    <meta
+      property="og:image:alt"
+      content="PopGuy: a floating toolbar over selected text in a Mac app, showing an Improve result as an inline diff."
+    />
+
+    <!-- X / Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="PopGuy — AI where you write" />
+    <meta
+      name="twitter:description"
+      content="Select text in any Mac app, pick an action, and get the result right there. Free and open source for macOS 13+."
+    />
+    <meta name="twitter:image" content="https://pg.dinh.work/og-image.png" />
+    <meta
+      name="twitter:image:alt"
+      content="PopGuy: a floating toolbar over selected text in a Mac app, showing an Improve result as an inline diff."
+    />
+
+    <!-- Search engines: app details -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "PopGuy",
+        "url": "https://pg.dinh.work/",
+        "description": "Select text in any Mac app, pick an action, and get the result right there.",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "macOS 13 or later",
+        "image": "https://pg.dinh.work/og-image.png",
+        "downloadUrl": "https://github.com/dinhanhthi/PopGuy/releases/latest",
+        "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
     <script>
       try {
         const saved = localStorage.getItem("theme");
