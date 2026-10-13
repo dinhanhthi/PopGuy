@@ -138,6 +138,20 @@ struct ActionsView: View {
 
                 ToolbarLayoutEditorView(settings: settings)
 
+                // MARK: Settings-button switch (same look as ActionCard header switches)
+                HStack {
+                    Toggle(isOn: $settings.showToolbarSettingsButton) {
+                        Text("Show Settings button on toolbar")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .hoverTooltip("Settings stay available from the PopGuy menu bar icon")
+
+                    Spacer()
+                }
+
                 // MARK: Add Custom Action button
                 HStack {
                     Button {

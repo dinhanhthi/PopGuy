@@ -370,12 +370,16 @@ struct ToolbarView: View {
                     .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: viewModel.orderedActions.isEmpty))
             }
 
-            // Push the utility group (Ignore this App, Settings) to the trailing
-            // edge, leaving a clear gap between it and the action buttons. Under
+            // Push the utility group (Ignore this site/app, Settings) to the
+            // trailing edge, leaving a clear gap between it and the action
+            // buttons. The gap exists only when at least one system button
+            // follows; with none the bar ends right after the last action. Under
             // the root `.fixedSize()` this Spacer only has slack to expand when
             // the action bar is floored to `minResultWidth` below; otherwise it
             // stays at its minimum so the bar hugs its buttons.
-            Spacer(minLength: z(16))
+            if viewModel.hasSystemButtons {
+                Spacer(minLength: z(16))
+            }
 
             if viewModel.sourceDomain != nil {
                 ToolbarUtilityButton(
@@ -389,32 +393,39 @@ struct ToolbarView: View {
                 .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls))
             }
 
-            ToolbarUtilityButton(
-                systemName: "eye.slash",
-                tooltip: "Ignore this app",
-                controlHeight: metrics.controlHeight,
-                controlRadius: metrics.controlRadius,
-                zoom: zoom,
-                action: { isShowingIgnoreConfirmation = true }
-            )
-            .opacity(viewModel.sourceBundleID == nil ? 0.4 : 1.0)
-            .disabled(viewModel.sourceBundleID == nil)
-            .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && viewModel.sourceDomain == nil))
+            if viewModel.showsIgnoreAppButton {
+                ToolbarUtilityButton(
+                    systemName: "eye.slash",
+                    tooltip: "Ignore this app",
+                    controlHeight: metrics.controlHeight,
+                    controlRadius: metrics.controlRadius,
+                    zoom: zoom,
+                    action: { isShowingIgnoreConfirmation = true }
+                )
+                .opacity(viewModel.sourceBundleID == nil ? 0.4 : 1.0)
+                .disabled(viewModel.sourceBundleID == nil)
+                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && viewModel.sourceDomain == nil))
+            }
 
-            ToolbarUtilityButton(
-                systemName: "gear",
-                tooltip: "Settings",
-                controlHeight: metrics.controlHeight,
-                controlRadius: metrics.controlRadius,
-                zoom: zoom,
-                action: onOpenSettings
-            )
+            if viewModel.showsSettingsButton {
+                ToolbarUtilityButton(
+                    systemName: "gear",
+                    tooltip: "Settings",
+                    controlHeight: metrics.controlHeight,
+                    controlRadius: metrics.controlRadius,
+                    zoom: zoom,
+                    action: onOpenSettings
+                )
+                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && viewModel.sourceDomain == nil && !viewModel.showsIgnoreAppButton))
+            }
         }
         .padding(metrics.cardPadding)
         // While a body is expanded below, floor the bar to the same minimum the
         // result body uses, so the trailing Spacer pushes the utility group to the
-        // card's right edge even when few actions are active. When idle there is
-        // no body to match, so the bar keeps its intrinsic width (no empty gap).
+        // card's right edge even when few actions are active (with no system
+        // buttons there is no Spacer, so the leading alignment keeps the actions
+        // left). When idle there is no body to match, so the bar keeps its
+        // intrinsic width (no empty gap).
         .frame(minWidth: hasExpandedBody ? minResultWidth : nil, alignment: .leading)
         // Measure this row's width: it's the widest one and sets the card width,
         // so the result body can match it (see `resultWidth`). We set the @State

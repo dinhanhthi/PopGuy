@@ -485,7 +485,7 @@ final class ToolbarController {
         // Never treat PopGuy itself as the source app (e.g. when the Settings window is
         // frontmost and the chord fires) — that would let "Ignore this app" disable PopGuy.
         let sourceBundleID = (frontmostBundleID == Bundle.main.bundleIdentifier) ? nil : frontmostBundleID
-        if let bundleID = sourceBundleID, settings.ignoredAppBundleIDs.contains(bundleID) {
+        if let bundleID = sourceBundleID, settings.isIgnored(bundleID: bundleID) {
             return
         }
 
@@ -584,6 +584,8 @@ final class ToolbarController {
             }
         }
         viewModel.showsLogo = !settings.hideToolbarLogo
+        viewModel.showsIgnoreAppButton = settings.ignoredAppsEnabled
+        viewModel.showsSettingsButton = settings.showToolbarSettingsButton
         viewModel.orderedActions = filterVisible(settings.principalOrderedIdentifiers)
         viewModel.overflowActions = filterVisible(settings.overflowOrderedIdentifiers)
         viewModel.labeledActions = settings.labeledActionIDs

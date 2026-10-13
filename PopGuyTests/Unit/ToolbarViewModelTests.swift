@@ -2,7 +2,7 @@
 // PopGuyTests
 //
 // Unit tests for ToolbarViewModel per-action labels (labeledActions) and
-// the hasOverflow burger flag.
+// the hasOverflow burger flag, plus the system-button flags (hasSystemButtons).
 //
 // Also covers edit-buffer invariants introduced in the editable-toolbar-result phase:
 // finishWith seeds editedResult, reset/update clear it, beginEditing/endEditing toggle isEditing.
@@ -36,6 +36,51 @@ struct ToolbarViewModelTests {
         let vm = ToolbarViewModel()
         vm.overflowActions = [.builtin(.translate)]
         #expect(vm.hasOverflow == true)
+    }
+
+    // MARK: - System buttons (Ignore this site / app, Settings)
+
+    @Test("system button flags default to true")
+    func systemButtonFlagsDefaultTrue() {
+        let vm = ToolbarViewModel()
+        #expect(vm.showsIgnoreAppButton == true)
+        #expect(vm.showsSettingsButton == true)
+        #expect(vm.hasSystemButtons == true)
+    }
+
+    @Test("hasSystemButtons is false when no system button is visible")
+    func hasSystemButtonsFalseWhenNoneVisible() {
+        let vm = ToolbarViewModel()
+        vm.showsIgnoreAppButton = false
+        vm.showsSettingsButton = false
+        #expect(vm.sourceDomain == nil)
+        #expect(vm.hasSystemButtons == false)
+    }
+
+    @Test("hasSystemButtons is true when only the Ignore this app button is visible")
+    func hasSystemButtonsTrueForIgnoreApp() {
+        let vm = ToolbarViewModel()
+        vm.showsIgnoreAppButton = true
+        vm.showsSettingsButton = false
+        #expect(vm.hasSystemButtons == true)
+    }
+
+    @Test("hasSystemButtons is true when only the Settings button is visible")
+    func hasSystemButtonsTrueForSettings() {
+        let vm = ToolbarViewModel()
+        vm.showsIgnoreAppButton = false
+        vm.showsSettingsButton = true
+        #expect(vm.hasSystemButtons == true)
+    }
+
+    @Test("hasSystemButtons is true when only Ignore this site is visible (source domain set)")
+    func hasSystemButtonsTrueForSourceDomain() {
+        let vm = ToolbarViewModel()
+        vm.showsIgnoreAppButton = false
+        vm.showsSettingsButton = false
+        let ref = SourceElementRef(element: AXUIElementCreateSystemWide())
+        vm.update(text: "x", sourceElement: ref, screenRect: nil, sourceBundleID: nil, sourceDomain: "example.com")
+        #expect(vm.hasSystemButtons == true)
     }
 }
 

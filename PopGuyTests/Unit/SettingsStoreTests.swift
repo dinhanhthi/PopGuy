@@ -995,6 +995,69 @@ struct SettingsStoreTests {
         #expect(result == expected)
     }
 
+    // MARK: - Toolbar system buttons (ignored apps switch, settings button)
+
+    @Test("ignoredAppsEnabled defaults to true on a fresh suite")
+    func ignoredAppsEnabledDefaultTrue() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        #expect(store.ignoredAppsEnabled == true)
+    }
+
+    @Test("ignoredAppsEnabled round-trips through UserDefaults")
+    func ignoredAppsEnabledRoundTrip() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store1 = SettingsStore(defaults: suite)
+        store1.ignoredAppsEnabled = false
+
+        let store2 = SettingsStore(defaults: suite)
+        #expect(store2.ignoredAppsEnabled == false)
+        #expect(suite.object(forKey: "settings.ignoredAppsEnabled") as? Bool == false)
+    }
+
+    @Test("showToolbarSettingsButton defaults to true on a fresh suite")
+    func showToolbarSettingsButtonDefaultTrue() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        #expect(store.showToolbarSettingsButton == true)
+    }
+
+    @Test("showToolbarSettingsButton round-trips through UserDefaults")
+    func showToolbarSettingsButtonRoundTrip() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store1 = SettingsStore(defaults: suite)
+        store1.showToolbarSettingsButton = false
+
+        let store2 = SettingsStore(defaults: suite)
+        #expect(store2.showToolbarSettingsButton == false)
+        #expect(suite.object(forKey: "settings.showToolbarSettingsButton") as? Bool == false)
+    }
+
+    @Test("isIgnored(bundleID:) applies the list only while ignoredAppsEnabled is on; the list is kept")
+    func isIgnoredRespectsIgnoredAppsEnabled() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        store.addIgnoredApp(bundleID: "com.example.listed")
+        #expect(store.isIgnored(bundleID: "com.example.listed") == true)
+
+        store.ignoredAppsEnabled = false
+        #expect(store.isIgnored(bundleID: "com.example.listed") == false)
+        #expect(store.ignoredAppBundleIDs == ["com.example.listed"])
+
+        store.ignoredAppsEnabled = true
+        #expect(store.isIgnored(bundleID: "com.example.listed") == true)
+    }
+
     @Test("isLastEnabledAction is true only for the single remaining enabled action")
     func isLastEnabledActionOnlyForSoleEnabled() {
         let (suite, name) = makeSuite()

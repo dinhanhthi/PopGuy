@@ -141,6 +141,8 @@ final class SettingsStore: ObservableObject {
         static let ignoredAppBundleIDs        = "settings.ignoredAppBundleIDs"
         static let ignoredDomains             = "settings.ignoredDomains"
         static let ignoredDomainsEnabled      = "settings.ignoredDomainsEnabled"
+        static let ignoredAppsEnabled         = "settings.ignoredAppsEnabled"
+        static let showToolbarSettingsButton  = "settings.showToolbarSettingsButton"
         static let popGuyEnabled              = "settings.popGuyEnabled"
         static let triggerOnSelect            = "settings.triggerOnSelect"
         static let triggerOnSelectEditableOnly = "settings.triggerOnSelectEditableOnly"
@@ -404,6 +406,19 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(ignoredDomainsEnabled, forKey: Keys.ignoredDomainsEnabled) }
     }
 
+    /// Master switch for the ignored-apps feature (default: true). While off, the
+    /// ignored-apps list is not applied and the "Ignore this app" toolbar button is
+    /// hidden; the saved list is kept.
+    @Published var ignoredAppsEnabled: Bool {
+        didSet { defaults.set(ignoredAppsEnabled, forKey: Keys.ignoredAppsEnabled) }
+    }
+
+    /// Whether the floating toolbar shows its Settings (gear) button (default: true).
+    /// Settings stay reachable from the menu bar icon when it is hidden.
+    @Published var showToolbarSettingsButton: Bool {
+        didSet { defaults.set(showToolbarSettingsButton, forKey: Keys.showToolbarSettingsButton) }
+    }
+
     /// Master kill switch (default: true). When false, every trigger — text
     /// selection, double-click, the Cmd+C+C chord (and its replacement shortcut),
     /// and custom-action hotkeys — is suppressed and PopGuy stays idle until
@@ -624,6 +639,8 @@ final class SettingsStore: ObservableObject {
         ignoredAppBundleIDs      = Self.load([String].self, key: Keys.ignoredAppBundleIDs, from: defaults) ?? []
         ignoredDomains           = Self.load([String].self, key: Keys.ignoredDomains, from: defaults) ?? []
         ignoredDomainsEnabled    = defaults.object(forKey: Keys.ignoredDomainsEnabled) as? Bool ?? false
+        ignoredAppsEnabled       = defaults.object(forKey: Keys.ignoredAppsEnabled) as? Bool ?? true
+        showToolbarSettingsButton = defaults.object(forKey: Keys.showToolbarSettingsButton) as? Bool ?? true
         popGuyEnabled            = defaults.object(forKey: Keys.popGuyEnabled) as? Bool ?? true
         triggerOnSelectEnabled   = defaults.object(forKey: Keys.triggerOnSelect) as? Bool ?? false
         triggerOnSelectEditableOnly = defaults.object(forKey: Keys.triggerOnSelectEditableOnly) as? Bool ?? false
@@ -824,9 +841,10 @@ final class SettingsStore: ObservableObject {
         ignoredAppBundleIDs.removeAll { $0 == bundleID }
     }
 
-    /// Returns `true` if `bundleID` is in the ignore list.
+    /// Returns `true` if `bundleID` is in the ignore list and the ignored-apps
+    /// feature is enabled.
     func isIgnored(bundleID: String) -> Bool {
-        ignoredAppBundleIDs.contains(bundleID)
+        ignoredAppsEnabled && ignoredAppBundleIDs.contains(bundleID)
     }
 
     // MARK: - Ignored-domain CRUD

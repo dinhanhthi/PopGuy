@@ -327,6 +327,18 @@ final class ToolbarViewModel: ObservableObject {
     /// Whether the PopGuy logo is shown at the start of the action bar.
     @Published var showsLogo: Bool = true
 
+    /// Whether the "Ignore this app" button is shown. Set by ToolbarController
+    /// (and ToolbarPreviewView) on each presentation from SettingsStore.ignoredAppsEnabled.
+    @Published var showsIgnoreAppButton: Bool = true
+
+    /// Whether the Settings (gear) button is shown. Set by ToolbarController
+    /// (and ToolbarPreviewView) on each presentation from SettingsStore.showToolbarSettingsButton.
+    @Published var showsSettingsButton: Bool = true
+
+    /// True when at least one system button ("Ignore this site", "Ignore this app",
+    /// Settings) is visible; the gap before them exists only in that case.
+    var hasSystemButtons: Bool { sourceDomain != nil || showsIgnoreAppButton || showsSettingsButton }
+
     /// Enabled overflow actions shown in the burger menu.
     @Published var overflowActions: [ActionIdentifier] = []
 
