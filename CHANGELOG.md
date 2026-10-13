@@ -13,6 +13,29 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.2.0] - 2026-10-13
+
+### Added
+
+- The toolbar preview in Settings → Actions now shows your real toolbar at its true size and look (zoom, logo, labels, system buttons and the gap included). Drag actions to reorder them, or between the toolbar and a separate "More actions" row. The preview scrolls sideways when the toolbar is wide, and a warning appears when it gets very wide.
+- Show label: each action now has its own "Show label" switch to display its name next to its icon on the toolbar (off by default).
+- Action cards have a second row of switches: Activate, In More actions and Show label.
+- "Enable Ignored Apps" switch in Settings → Apps. When off, the ignored-apps list is not applied and the "Ignore this app" button leaves the toolbar; your list is kept.
+- "Show Settings button on toolbar" switch in Settings → Actions.
+
+### Changed
+
+- There is no longer a limit on how many actions the toolbar or the More actions menu can hold (it used to be 6 and 5). If the toolbar gets too wide, that is up to you.
+- Toolbar buttons are icon-only by default. Names no longer appear automatically when few actions are shown; turn on Show label per action to get them back.
+- The gap between the action buttons and the Ignore / Settings buttons only appears when at least one of those buttons is visible.
+- The "Toolbar" checkbox on action cards is now an "In More actions" switch (the opposite meaning).
+- "Add Action" is now a "+" button in the row with Export, Import and Library.
+- At least one action always stays active: the last active action's switch and delete button are locked, with a tooltip explaining why.
+
+### Fixed
+
+- Moving every action into More actions no longer resets the toolbar layout the next time PopGuy starts.
+
 ## [1.1.2] - 2026-10-13
 
 ### Fixed
