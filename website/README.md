@@ -21,8 +21,8 @@ Download buttons point to the latest GitHub release.
 
 ## Deploy
 
-GitHub Pages, custom domain `pg.dinh.work` (Cloudflare DNS: CNAME `pg` → `dinhanhthi.github.io`,
-DNS only). `.github/workflows/deploy-pages.yml` builds this site on every push to `main` that
+GitHub Pages, custom domain `pg.dinhanhthi.com` (Cloudflare DNS, zone `dinhanhthi.com`: CNAME `pg`
+→ `dinhanhthi.github.io`, DNS only). `.github/workflows/deploy-pages.yml` builds this site on every push to `main` that
 touches `website/` or `appcast.xml`, and publishes it together with the Sparkle feed
 `appcast.xml`: one Pages site serves both, so they always deploy in the same artifact.
 

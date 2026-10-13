@@ -1,13 +1,13 @@
 name: Deploy Pages
 
-# One GitHub Pages site (custom domain https://pg.dinh.work) serves both:
+# One GitHub Pages site (custom domain https://pg.dinhanhthi.com) serves both:
 #   - the website (website/, React + Vite), and
 #   - the Sparkle feed appcast.xml. Installed apps fetch
 #     https://dinhanhthi.github.io/PopGuy/appcast.xml (SUFeedURL), which GitHub 301s to
-#     https://pg.dinh.work/appcast.xml. Every deploy replaces the whole site, so both
+#     https://pg.dinhanhthi.com/appcast.xml. Every deploy replaces the whole site, so both
 #     must always ship in the same artifact.
 # Only website/dist and appcast.xml are published; docs/ and the app source never are.
-# Requires Settings → Pages → Source = "GitHub Actions" and custom domain pg.dinh.work.
+# Requires Settings → Pages → Source = "GitHub Actions" and custom domain pg.dinhanhthi.com.
 
 on:
   push:

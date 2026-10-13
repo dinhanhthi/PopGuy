@@ -103,7 +103,7 @@ describe("website routes", () => {
 
     const canonical = document.querySelectorAll('link[rel="canonical"]');
     expect(canonical).toHaveLength(1);
-    expect(canonical[0]).toHaveAttribute("href", "https://pg.dinh.work/docs");
+    expect(canonical[0]).toHaveAttribute("href", "https://pg.dinhanhthi.com/docs");
     canonical[0].remove();
   });
 

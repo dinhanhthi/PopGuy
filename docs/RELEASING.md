@@ -354,7 +354,7 @@ The feed lives at the repo root as `**appcast.xml*`* (tracked on `main`). It is 
 to the `SUFeedURL` `https://dinhanhthi.github.io/PopGuy/appcast.xml` by
 `.github/workflows/deploy-pages.yml`, which builds the website (`website/`) and adds
 `appcast.xml` to the same Pages artifact — `docs/` and source are never published. Pages has
-the custom domain `pg.dinh.work`, so the feed URL 301s to `https://pg.dinh.work/appcast.xml`;
+the custom domain `pg.dinhanhthi.com`, so the feed URL 301s to `https://pg.dinhanhthi.com/appcast.xml`;
 Sparkle follows the redirect.
 
 > **One-time:** GitHub repo → **Settings → Pages → Source = "GitHub Actions"**. Without
