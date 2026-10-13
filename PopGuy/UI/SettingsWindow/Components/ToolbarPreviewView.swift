@@ -114,6 +114,7 @@ struct ToolbarPreviewView: View {
         viewModel.showsLogo = !settings.hideToolbarLogo
         viewModel.showsIgnoreAppButton = settings.ignoredAppsEnabled
         viewModel.showsSettingsButton = settings.showToolbarSettingsButton
+        viewModel.inlineSystemButtons = settings.inlineToolbarSystemButtons
         viewModel.orderedActions = principal
         viewModel.overflowActions = overflow
         viewModel.labeledActions = settings.labeledActionIDs

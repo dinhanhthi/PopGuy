@@ -393,12 +393,17 @@ struct ToolbarView: View {
             // follows; with none the bar ends right after the last action. Under
             // the root `.fixedSize()` this Spacer only has slack to expand when
             // the action bar is floored to `minResultWidth` below; otherwise it
-            // stays at its minimum so the bar hugs its buttons.
-            if viewModel.hasSystemButtons {
+            // stays at its minimum so the bar hugs its buttons. With
+            // `inlineSystemButtons` there is no gap: each system button follows
+            // the actions like another action, after a divider.
+            if viewModel.hasSystemButtons && !viewModel.inlineSystemButtons {
                 Spacer(minLength: z(16))
             }
 
             if viewModel.sourceDomain != nil {
+                if viewModel.inlineSystemButtons && hasActionControls {
+                    toolbarDivider
+                }
                 ToolbarUtilityButton(
                     systemName: "nosign",
                     tooltip: "Ignore this site",
@@ -411,6 +416,9 @@ struct ToolbarView: View {
             }
 
             if viewModel.showsIgnoreAppButton {
+                if viewModel.inlineSystemButtons && (hasActionControls || viewModel.sourceDomain != nil) {
+                    toolbarDivider
+                }
                 ToolbarUtilityButton(
                     systemName: "eye.slash",
                     tooltip: "Ignore this app",
@@ -425,6 +433,9 @@ struct ToolbarView: View {
             }
 
             if viewModel.showsSettingsButton {
+                if viewModel.inlineSystemButtons && (hasActionControls || viewModel.sourceDomain != nil || viewModel.showsIgnoreAppButton) {
+                    toolbarDivider
+                }
                 ToolbarUtilityButton(
                     systemName: "gear",
                     tooltip: "Settings",
@@ -440,8 +451,8 @@ struct ToolbarView: View {
         // While a body is expanded below, floor the bar to the same minimum the
         // result body uses, so the trailing Spacer pushes the utility group to the
         // card's right edge even when few actions are active (with no system
-        // buttons there is no Spacer, so the leading alignment keeps the actions
-        // left). When idle there is no body to match, so the bar keeps its
+        // buttons, or inline ones, there is no Spacer, so the leading alignment
+        // keeps the buttons left). When idle there is no body to match, so the bar keeps its
         // intrinsic width (no empty gap).
         .frame(minWidth: hasExpandedBody ? minResultWidth : nil, alignment: .leading)
         // Measure this row's width: it's the widest one and sets the card width,

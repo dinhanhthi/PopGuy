@@ -339,6 +339,11 @@ final class ToolbarViewModel: ObservableObject {
     /// Settings) is visible; the gap before them exists only in that case.
     var hasSystemButtons: Bool { sourceDomain != nil || showsIgnoreAppButton || showsSettingsButton }
 
+    /// Whether the system buttons sit inline with the actions (dividers, no gap).
+    /// Set by ToolbarController (and ToolbarPreviewView) on each presentation from
+    /// SettingsStore.inlineToolbarSystemButtons.
+    @Published var inlineSystemButtons: Bool = false
+
     /// Enabled overflow actions shown in the burger menu.
     @Published var overflowActions: [ActionIdentifier] = []
 

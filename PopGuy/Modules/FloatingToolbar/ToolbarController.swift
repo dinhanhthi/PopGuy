@@ -586,6 +586,7 @@ final class ToolbarController {
         viewModel.showsLogo = !settings.hideToolbarLogo
         viewModel.showsIgnoreAppButton = settings.ignoredAppsEnabled
         viewModel.showsSettingsButton = settings.showToolbarSettingsButton
+        viewModel.inlineSystemButtons = settings.inlineToolbarSystemButtons
         viewModel.orderedActions = filterVisible(settings.principalOrderedIdentifiers)
         viewModel.overflowActions = filterVisible(settings.overflowOrderedIdentifiers)
         viewModel.labeledActions = settings.labeledActionIDs

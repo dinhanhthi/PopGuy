@@ -1305,6 +1305,7 @@ private struct AppearanceView: View {
     @State private var toolbarZoom: ToolbarZoom = .x1
     @State private var zoomIncludesFontSize: Bool = true
     @State private var hideLogo: Bool = false
+    @State private var inlineSystemButtons: Bool = false
 
     var body: some View {
         Form {
@@ -1346,6 +1347,17 @@ private struct AppearanceView: View {
                         }
 
                     Text("Hide the PopGuy logo to save space on the toolbar.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Remove gap before system buttons", isOn: $inlineSystemButtons)
+                        .onChange(of: inlineSystemButtons) { newValue in
+                            settings.inlineToolbarSystemButtons = newValue
+                        }
+
+                    Text("Show the Ignore and Settings buttons right after the actions, separated by dividers like any other action, instead of after a gap.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1403,6 +1415,7 @@ private struct AppearanceView: View {
             toolbarZoom = settings.toolbarZoom
             zoomIncludesFontSize = settings.zoomIncludesFontSize
             hideLogo = settings.hideToolbarLogo
+            inlineSystemButtons = settings.inlineToolbarSystemButtons
         }
     }
 }

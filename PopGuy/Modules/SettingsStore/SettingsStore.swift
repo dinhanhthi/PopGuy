@@ -148,6 +148,7 @@ final class SettingsStore: ObservableObject {
         static let triggerOnSelectEditableOnly = "settings.triggerOnSelectEditableOnly"
         static let triggerDoubleClick         = "settings.triggerDoubleClick"
         static let hideToolbarLogo            = "settings.hideToolbarLogo"
+        static let inlineToolbarSystemButtons = "settings.inlineToolbarSystemButtons"
         static let doubleClickAssignedAction  = "settings.doubleClickAssignedAction"
         static let triggerChord               = "settings.triggerChord"
         static let chordReplacementShortcut   = "settings.chordReplacementShortcut"
@@ -445,6 +446,13 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(hideToolbarLogo, forKey: Keys.hideToolbarLogo) }
     }
 
+    /// Places the system buttons (Ignore this site/app, Settings) right after the
+    /// action buttons, separated by dividers like any other action, instead of
+    /// after a gap (default: false — keep the gap).
+    @Published var inlineToolbarSystemButtons: Bool {
+        didSet { defaults.set(inlineToolbarSystemButtons, forKey: Keys.inlineToolbarSystemButtons) }
+    }
+
     /// Whether to trigger the popup on double-clicking a single word (default: false).
     /// Works alongside `triggerOnSelectEnabled`: a double-click fires when either
     /// trigger is on, while range selections use `triggerOnSelectEnabled`.
@@ -646,6 +654,7 @@ final class SettingsStore: ObservableObject {
         triggerOnSelectEditableOnly = defaults.object(forKey: Keys.triggerOnSelectEditableOnly) as? Bool ?? false
         triggerDoubleClickEnabled = defaults.object(forKey: Keys.triggerDoubleClick) as? Bool ?? false
         hideToolbarLogo = defaults.object(forKey: Keys.hideToolbarLogo) as? Bool ?? false
+        inlineToolbarSystemButtons = defaults.object(forKey: Keys.inlineToolbarSystemButtons) as? Bool ?? false
         doubleClickAssignedAction = Self.load(ActionIdentifier.self, key: Keys.doubleClickAssignedAction, from: defaults)
         triggerChordEnabled      = defaults.object(forKey: Keys.triggerChord)    as? Bool ?? true
         historyEnabled           = defaults.object(forKey: Keys.historyEnabled)        as? Bool ?? true
