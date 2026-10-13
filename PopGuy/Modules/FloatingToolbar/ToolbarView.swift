@@ -340,6 +340,22 @@ struct ToolbarView: View {
 
     // MARK: - Action bar
 
+    /// Named coordinate space in which each action control reports its frame
+    /// through `ToolbarActionFramesKey`. Declared by the Settings → Actions
+    /// editor around the embedded preview; unused by the floating panel.
+    static let previewCoordinateSpace = "toolbarPreview"
+
+    /// Reports one action control's frame (incl. its pickers) without
+    /// affecting layout. Only the Settings → Actions editor reads it.
+    private func actionFrameReporter(for id: ActionIdentifier) -> some View {
+        GeometryReader { geo in
+            Color.clear.preference(
+                key: ToolbarActionFramesKey.self,
+                value: [id: geo.frame(in: .named(Self.previewCoordinateSpace))]
+            )
+        }
+    }
+
     private var actionBar: some View {
         HStack(spacing: metrics.groupSpacing) {
             // Brand mark — decorative, spans the full control height so
@@ -359,6 +375,7 @@ struct ToolbarView: View {
                     toolbarDivider
                 }
                 actionControl(for: id)
+                    .background(actionFrameReporter(for: id))
                     .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: index == 0))
             }
 
@@ -1527,6 +1544,20 @@ private struct ToolbarSizeKey: PreferenceKey {
     static let defaultValue: CGSize = .zero
     static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
         value = nextValue()
+    }
+}
+
+// MARK: - Action frames preference
+
+/// Frame of each toolbar action control in `ToolbarView.previewCoordinateSpace`.
+/// Only consumed by the Settings → Actions layout editor (drag hit-testing and
+/// drop-zone resolution). Nothing reads it in the floating panel, where
+/// preference changes do not propagate under the intrinsic hosting view, so
+/// the live toolbar is unaffected.
+struct ToolbarActionFramesKey: PreferenceKey {
+    static let defaultValue: [ActionIdentifier: CGRect] = [:]
+    static func reduce(value: inout [ActionIdentifier: CGRect], nextValue: () -> [ActionIdentifier: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
     }
 }
 

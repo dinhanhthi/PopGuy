@@ -133,13 +133,14 @@ struct ActionsView: View {
     var body: some View {
         VStack(spacing: 0) {
 
-            // MARK: Fixed header (toolbar preview + Add Custom Action row)
+            // MARK: Fixed header (toolbar preview + switch/action-buttons row)
             VStack(spacing: SettingsMetrics.cardSpacing) {
 
                 ToolbarLayoutEditorView(settings: settings)
 
-                // MARK: Settings-button switch (same look as ActionCard header switches)
+                // MARK: Settings-button switch (left) + action buttons (right)
                 HStack {
+                    // Same look as ActionCard header switches.
                     Toggle(isOn: $settings.showToolbarSettingsButton) {
                         Text("Show Settings button on toolbar")
                             .font(.caption)
@@ -150,20 +151,17 @@ struct ActionsView: View {
                     .hoverTooltip("Settings stay available from the PopGuy menu bar icon")
 
                     Spacer()
-                }
 
-                // MARK: Add Custom Action button
-                HStack {
                     Button {
                         withAnimation(.easeInOut(duration: 0.28)) {
                             editingAction = CustomAction(title: "", systemPrompt: "")
                         }
                     } label: {
-                        Text("Add Action")
+                        Image(systemName: "plus")
+                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
                     }
-                    .buttonStyle(.borderedProminent)
-
-                    Spacer()
+                    .buttonStyle(ToolbarIconButtonStyle(prominent: true))
+                    .hoverTooltip("Add action")
 
                     Button {
                         exportActions()

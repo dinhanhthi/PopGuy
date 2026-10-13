@@ -24,8 +24,10 @@ extension View {
     /// Applies the shared toolbar-icon pill background (resting state).
     /// Padding defaults match the bordered Button siblings; callers (e.g. the
     /// plugin Menu trigger) may override to fine-tune their own footprint.
+    /// `prominent` fills the pill with the accent color (primary action, e.g. Add).
     func toolbarIconChrome(
         pressed: Bool = false,
+        prominent: Bool = false,
         hPadding: CGFloat = toolbarIconHPadding,
         vPadding: CGFloat = toolbarIconVPadding
     ) -> some View {
@@ -34,7 +36,9 @@ extension View {
             .padding(.vertical, vPadding)
             .background(
                 RoundedRectangle(cornerRadius: toolbarIconCornerRadius, style: .continuous)
-                    .fill(Color.primary.opacity(pressed ? 0.14 : 0.08))
+                    .fill(prominent
+                        ? Color.accentColor.opacity(pressed ? 0.8 : 1)
+                        : Color.primary.opacity(pressed ? 0.14 : 0.08))
             )
             .contentShape(RoundedRectangle(cornerRadius: toolbarIconCornerRadius, style: .continuous))
     }
@@ -42,9 +46,21 @@ extension View {
 
 /// Button style matching `toolbarIconChrome` for the Actions toolbar row.
 struct ToolbarIconButtonStyle: ButtonStyle {
+    /// Accent-filled variant for the primary action (Add action).
+    var prominent = false
+
+    @ViewBuilder
+    private func tinted(_ label: Configuration.Label) -> some View {
+        if prominent {
+            label.foregroundStyle(.white)
+        } else {
+            label
+        }
+    }
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .toolbarIconChrome(pressed: configuration.isPressed)
+        tinted(configuration.label)
+            .toolbarIconChrome(pressed: configuration.isPressed, prominent: prominent)
             .opacity(configuration.isPressed ? 0.85 : 1)
     }
 }
