@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { AppRoutes } from "../App";
 
 const pages = [
-  ["/", "AI where you write."],
+  ["/", "A guy pops up from your selected text with magic."],
   ["/actions", "Actions"],
   ["/docs", "Docs"],
   ["/privacy", "Privacy"]

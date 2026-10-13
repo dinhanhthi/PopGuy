@@ -29,7 +29,7 @@ export function HomePage() {
   return (
     <main>
       <section className="hero">
-        <h1>AI where you write.</h1>
+        <h1>A guy pops up from your selected text with magic.</h1>
         <p>Select text in any Mac app, pick an action, and get the result right there.</p>
         <div className="actions">
           <ButtonLink href={DOWNLOAD_URL} icon="download">Download</ButtonLink>

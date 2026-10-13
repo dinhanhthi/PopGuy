@@ -15,7 +15,7 @@ import { HomePage } from "./pages/HomePage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 
 const titles = {
-  "/": "PopGuy — AI where you write",
+  "/": "PopGuy — A guy pops up from your selected text with magic",
   "/actions": "Actions — PopGuy",
   "/docs": "Docs — PopGuy",
   "/privacy": "Privacy — PopGuy"
