@@ -340,6 +340,22 @@ struct ToolbarView: View {
 
     // MARK: - Action bar
 
+    /// Named coordinate space in which each action control reports its frame
+    /// through `ToolbarActionFramesKey`. Declared by the Settings → Actions
+    /// editor around the embedded preview; unused by the floating panel.
+    static let previewCoordinateSpace = "toolbarPreview"
+
+    /// Reports one action control's frame (incl. its pickers) without
+    /// affecting layout. Only the Settings → Actions editor reads it.
+    private func actionFrameReporter(for id: ActionIdentifier) -> some View {
+        GeometryReader { geo in
+            Color.clear.preference(
+                key: ToolbarActionFramesKey.self,
+                value: [id: geo.frame(in: .named(Self.previewCoordinateSpace))]
+            )
+        }
+    }
+
     private var actionBar: some View {
         HStack(spacing: metrics.groupSpacing) {
             // Brand mark — decorative, spans the full control height so
@@ -359,6 +375,7 @@ struct ToolbarView: View {
                     toolbarDivider
                 }
                 actionControl(for: id)
+                    .background(actionFrameReporter(for: id))
                     .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: index == 0))
             }
 
@@ -370,12 +387,16 @@ struct ToolbarView: View {
                     .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: viewModel.orderedActions.isEmpty))
             }
 
-            // Push the utility group (Ignore this App, Settings) to the trailing
-            // edge, leaving a clear gap between it and the action buttons. Under
+            // Push the utility group (Ignore this site/app, Settings) to the
+            // trailing edge, leaving a clear gap between it and the action
+            // buttons. The gap exists only when at least one system button
+            // follows; with none the bar ends right after the last action. Under
             // the root `.fixedSize()` this Spacer only has slack to expand when
             // the action bar is floored to `minResultWidth` below; otherwise it
             // stays at its minimum so the bar hugs its buttons.
-            Spacer(minLength: z(16))
+            if viewModel.hasSystemButtons {
+                Spacer(minLength: z(16))
+            }
 
             if viewModel.sourceDomain != nil {
                 ToolbarUtilityButton(
@@ -389,32 +410,39 @@ struct ToolbarView: View {
                 .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls))
             }
 
-            ToolbarUtilityButton(
-                systemName: "eye.slash",
-                tooltip: "Ignore this app",
-                controlHeight: metrics.controlHeight,
-                controlRadius: metrics.controlRadius,
-                zoom: zoom,
-                action: { isShowingIgnoreConfirmation = true }
-            )
-            .opacity(viewModel.sourceBundleID == nil ? 0.4 : 1.0)
-            .disabled(viewModel.sourceBundleID == nil)
-            .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && viewModel.sourceDomain == nil))
+            if viewModel.showsIgnoreAppButton {
+                ToolbarUtilityButton(
+                    systemName: "eye.slash",
+                    tooltip: "Ignore this app",
+                    controlHeight: metrics.controlHeight,
+                    controlRadius: metrics.controlRadius,
+                    zoom: zoom,
+                    action: { isShowingIgnoreConfirmation = true }
+                )
+                .opacity(viewModel.sourceBundleID == nil ? 0.4 : 1.0)
+                .disabled(viewModel.sourceBundleID == nil)
+                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && viewModel.sourceDomain == nil))
+            }
 
-            ToolbarUtilityButton(
-                systemName: "gear",
-                tooltip: "Settings",
-                controlHeight: metrics.controlHeight,
-                controlRadius: metrics.controlRadius,
-                zoom: zoom,
-                action: onOpenSettings
-            )
+            if viewModel.showsSettingsButton {
+                ToolbarUtilityButton(
+                    systemName: "gear",
+                    tooltip: "Settings",
+                    controlHeight: metrics.controlHeight,
+                    controlRadius: metrics.controlRadius,
+                    zoom: zoom,
+                    action: onOpenSettings
+                )
+                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && viewModel.sourceDomain == nil && !viewModel.showsIgnoreAppButton))
+            }
         }
         .padding(metrics.cardPadding)
         // While a body is expanded below, floor the bar to the same minimum the
         // result body uses, so the trailing Spacer pushes the utility group to the
-        // card's right edge even when few actions are active. When idle there is
-        // no body to match, so the bar keeps its intrinsic width (no empty gap).
+        // card's right edge even when few actions are active (with no system
+        // buttons there is no Spacer, so the leading alignment keeps the actions
+        // left). When idle there is no body to match, so the bar keeps its
+        // intrinsic width (no empty gap).
         .frame(minWidth: hasExpandedBody ? minResultWidth : nil, alignment: .leading)
         // Measure this row's width: it's the widest one and sets the card width,
         // so the result body can match it (see `resultWidth`). We set the @State
@@ -447,7 +475,7 @@ struct ToolbarView: View {
     /// Renders the appropriate control for a given action identifier.
     @ViewBuilder
     private func actionControl(for id: ActionIdentifier, forceLabeled: Bool = false) -> some View {
-        let compact = forceLabeled ? false : viewModel.compactActions
+        let compact = !(forceLabeled || viewModel.labeledActions.contains(id))
         switch id {
         case .builtin(.improve):
             ToolbarActionButton(
@@ -1516,6 +1544,20 @@ private struct ToolbarSizeKey: PreferenceKey {
     static let defaultValue: CGSize = .zero
     static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
         value = nextValue()
+    }
+}
+
+// MARK: - Action frames preference
+
+/// Frame of each toolbar action control in `ToolbarView.previewCoordinateSpace`.
+/// Only consumed by the Settings → Actions layout editor (drag hit-testing and
+/// drop-zone resolution). Nothing reads it in the floating panel, where
+/// preference changes do not propagate under the intrinsic hosting view, so
+/// the live toolbar is unaffected.
+struct ToolbarActionFramesKey: PreferenceKey {
+    static let defaultValue: [ActionIdentifier: CGRect] = [:]
+    static func reduce(value: inout [ActionIdentifier: CGRect], nextValue: () -> [ActionIdentifier: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
     }
 }
 

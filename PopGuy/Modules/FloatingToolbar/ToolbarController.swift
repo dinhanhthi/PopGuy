@@ -485,7 +485,7 @@ final class ToolbarController {
         // Never treat PopGuy itself as the source app (e.g. when the Settings window is
         // frontmost and the chord fires) — that would let "Ignore this app" disable PopGuy.
         let sourceBundleID = (frontmostBundleID == Bundle.main.bundleIdentifier) ? nil : frontmostBundleID
-        if let bundleID = sourceBundleID, settings.ignoredAppBundleIDs.contains(bundleID) {
+        if let bundleID = sourceBundleID, settings.isIgnored(bundleID: bundleID) {
             return
         }
 
@@ -573,10 +573,9 @@ final class ToolbarController {
         }
 
         // Drive the action bar from the user's saved order (enabled identifiers only).
-        // Zone caps come from ToolbarLimits. Additionally, remove any .custom
-        // entries that were filtered out by the appliesWhenRegex visibility check
-        // so dividers and compactActions counts reflect only the actions that
-        // are actually rendered.
+        // Remove any .custom entries that were filtered out by the appliesWhenRegex visibility check
+        // so dividers and the burger reflect only the actions that are actually
+        // rendered.
         let visibleCustomIDs = Set(viewModel.customActions.map(\.id))
         func filterVisible(_ ids: [ActionIdentifier]) -> [ActionIdentifier] {
             ids.filter { id in
@@ -584,33 +583,15 @@ final class ToolbarController {
                 return true
             }
         }
-        let principalIDs = filterVisible(settings.principalOrderedIdentifiers)
-        let overflowIDs = filterVisible(settings.overflowOrderedIdentifiers)
-        let allocated = Self.allocate(
-            principal: principalIDs,
-            overflow: overflowIDs,
-            maxPrincipal: settings.maxPrincipalActions,
-            maxBurger: ToolbarLimits.maxBurgerActions
-        )
         viewModel.showsLogo = !settings.hideToolbarLogo
-        viewModel.orderedActions = allocated.principal
-        viewModel.overflowActions = allocated.overflow
+        viewModel.showsIgnoreAppButton = settings.ignoredAppsEnabled
+        viewModel.showsSettingsButton = settings.showToolbarSettingsButton
+        viewModel.orderedActions = filterVisible(settings.principalOrderedIdentifiers)
+        viewModel.overflowActions = filterVisible(settings.overflowOrderedIdentifiers)
+        viewModel.labeledActions = settings.labeledActionIDs
 
         // If already showing, reposition; otherwise show fresh.
         show(for: event)
-    }
-
-    /// Apply universal zone caps from ToolbarLimits (or the caller-supplied values).
-    nonisolated static func allocate(
-        principal: [ActionIdentifier],
-        overflow: [ActionIdentifier],
-        maxPrincipal: Int,
-        maxBurger: Int
-    ) -> (principal: [ActionIdentifier], overflow: [ActionIdentifier]) {
-        (
-            Array(principal.prefix(maxPrincipal)),
-            Array(overflow.prefix(maxBurger))
-        )
     }
 
     // MARK: - Show / Hide

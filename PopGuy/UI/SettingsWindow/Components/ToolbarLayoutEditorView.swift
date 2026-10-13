@@ -1,33 +1,87 @@
 // ToolbarLayoutEditorView.swift
 // PopGuy — UI/SettingsWindow/Components
 //
-// Interactive drag-and-drop editor for the principal toolbar row.
-// Overflow (More menu) chips are read-only; use the Toolbar checkbox on
-// action cards to move items in or out of More.
+// Interactive drag-and-drop editor for the toolbar layout (Settings → Actions).
+//
+// Row 1 renders the REAL floating toolbar (`ToolbarView`, non-interactive) from an
+// editor-owned view model, so metrics, zoom, labels, burger, and system buttons
+// match the live toolbar exactly. Row 2 is an editor-owned "More actions" card of
+// icon chips. Both rows are draggable: reorder on the toolbar, reorder within
+// More, and move actions between the two. There are no action-count caps; a soft
+// warning appears when the toolbar card grows wider than
+// `ToolbarLimits.toolbarWidthWarningThreshold`.
+//
+// One container-level drag gesture resolves the dragged action from the frames the
+// toolbar reports (`ToolbarActionFramesKey`) and the More chip frames, and previews
+// the drop by rewriting the preview view model's order (never from `body`).
 //
 // Isolation: @MainActor — implicitly via SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor.
+// `ToolbarLayoutEditMath` is nonisolated pure math.
 
 import AppKit
+import Combine
 import SwiftUI
+
+// MARK: - Drag math
+
+/// Pure index math for the layout editor's drag preview.
+nonisolated enum ToolbarLayoutEditMath {
+
+    /// Insertion index of `dragging` among the other items of a row, using
+    /// neighbour-swap with hysteresis: the index steps right only once the pointer
+    /// passes the midX of the next neighbour, and left only once it passes the midX
+    /// of the previous one. Robust to uneven widths (labeled vs icon-only controls).
+    ///
+    /// - Parameters:
+    ///   - current: the dragged item's current index among the others. Pass 0 when
+    ///     the item is entering a row it is not displayed in yet.
+    ///   - orderedIDs: the row's displayed order (may include `dragging`).
+    ///   - frames: the displayed frames; a missing neighbour frame stops stepping.
+    static func insertionIndex(
+        pointerX: CGFloat,
+        current: Int,
+        orderedIDs: [ActionIdentifier],
+        frames: [ActionIdentifier: CGRect],
+        dragging: ActionIdentifier
+    ) -> Int {
+        let others = orderedIDs.filter { $0 != dragging }
+        var index = min(max(0, current), others.count)
+        while index < others.count, let next = frames[others[index]], pointerX > next.midX {
+            index += 1
+        }
+        while index > 0, let previous = frames[others[index - 1]], pointerX < previous.midX {
+            index -= 1
+        }
+        return index
+    }
+
+    /// `ids` with `dragging` moved (or inserted) at `index`, clamped.
+    static func previewOrder(
+        _ ids: [ActionIdentifier],
+        dragging: ActionIdentifier,
+        at index: Int
+    ) -> [ActionIdentifier] {
+        var result = ids.filter { $0 != dragging }
+        result.insert(dragging, at: min(max(0, index), result.count))
+        return result
+    }
+}
 
 // MARK: - Drag session
 
 private struct ToolbarDragSession: Equatable {
     var id: ActionIdentifier
+    var sourcePrincipal: Bool
+    var sourceIndex: Int
     var targetPrincipal: Bool
     var targetIndex: Int
-    var translation: CGSize = .zero
+    var location: CGPoint
 }
 
 // MARK: - Frame preferences
 
-private struct LayoutRowFrameKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
-}
-
-private struct LayoutChipFramesKey: PreferenceKey {
-    static var defaultValue: [ActionIdentifier: CGRect] = [:]
+private struct MoreChipFramesKey: PreferenceKey {
+    static let defaultValue: [ActionIdentifier: CGRect] = [:]
     static func reduce(value: inout [ActionIdentifier: CGRect], nextValue: () -> [ActionIdentifier: CGRect]) {
         value.merge(nextValue(), uniquingKeysWith: { $1 })
     }
@@ -38,334 +92,355 @@ private struct LayoutChipFramesKey: PreferenceKey {
 struct ToolbarLayoutEditorView: View {
     @ObservedObject var settings: SettingsStore
 
+    /// Drives the embedded real toolbar. Seeded from settings, and rewritten by the
+    /// drag gesture to preview the drop; mutated only from event handlers.
+    @StateObject private var previewModel = ToolbarViewModel()
+
     @State private var dragSession: ToolbarDragSession?
-    @State private var rejectionMessage: String?
+    /// True while the drag gesture is active. Unlike `onEnded`, a `@GestureState`
+    /// also resets when SwiftUI cancels the gesture, so it catches stale sessions.
+    @GestureState private var isDragActive = false
+    @State private var toolbarFrames: [ActionIdentifier: CGRect] = [:]
+    @State private var moreFrames: [ActionIdentifier: CGRect] = [:]
+    @State private var moreRowFrame: CGRect = .zero
+    @State private var cardWidth: CGFloat = 0
+    @State private var canvasHeight: CGFloat = 0
 
-    @State private var principalRowFrame: CGRect = .zero
-    @State private var overflowRowFrame: CGRect = .zero
-    @State private var burgerFrame: CGRect = .zero
-    @State private var principalChipFrames: [ActionIdentifier: CGRect] = [:]
-
-    private let chipSize: CGFloat = 28
-    private let chipIconSize: CGFloat = 12
-    private let logoSize: CGFloat = 26
-    private let chipSpacing: CGFloat = 5
     private let dragAnimation = Animation.interactiveSpring(response: 0.28, dampingFraction: 0.86)
+
+    /// Pointer slack (pt) above the More card that still counts as the More zone.
+    private let moreZoneSlack: CGFloat = 8
+
+    // Same scaled metrics as the real toolbar (ToolbarView's ToolbarMetrics).
+    private var zoom: CGFloat { previewModel.toolbarZoom.scale }
+    private var controlHeight: CGFloat { 26 * zoom }
+    private var cardRadius: CGFloat { 10 * zoom }
+    private var cardPadding: CGFloat { 4 * zoom }
+    private var controlRadius: CGFloat { cardRadius - cardPadding }
+    private var chipIconSize: CGFloat { NSFont.preferredFont(forTextStyle: .callout).pointSize * zoom }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                if !settings.hideToolbarLogo {
-                    Image("ToolbarLogo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: logoSize, height: logoSize)
-                        .accessibilityHidden(true)
-                }
-
-                principalChipStrip
-
-                if showsOverflowSection {
-                    burgerDivider
-                    burgerMarker
-                    overflowChipStrip
-                }
-
-                Spacer(minLength: 8)
+            ScrollView(.horizontal, showsIndicators: false) {
+                canvas
             }
+            .frame(height: canvasHeight > 0 ? canvasHeight : nil)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(ToolbarPreviewBackdrop())
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            if let rejectionMessage {
-                Text(rejectionMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .transition(.opacity)
+            if cardWidth > ToolbarLimits.toolbarWidthWarningThreshold {
+                widthWarning
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear(perform: reseed)
+        // objectWillChange fires before the new value is stored, so reseed on the
+        // next main-actor turn. Skipped while dragging (the gesture owns the
+        // preview order then); the drag's end reseeds explicitly.
+        .onReceive(settings.objectWillChange) { _ in
+            DispatchQueue.main.async {
+                guard dragSession == nil else { return }
+                reseed()
+            }
+        }
+    }
+
+    // MARK: Canvas
+
+    /// Both rows plus hover targets and the drag ghost, in one named coordinate
+    /// space shared by every frame reader and the drag gesture.
+    private var canvas: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            toolbarRow
+            moreRow
+                // Align with the toolbar card (ToolbarView's root horizontal padding).
+                .padding(.leading, 12 * zoom)
+                // Room for the card shadow.
+                .padding(.bottom, 16)
+        }
+        .padding(.top, 8)
+        .overlay(alignment: .topLeading) { toolbarHoverTargets }
+        .overlay(alignment: .topLeading) { dragGhost }
+        .coordinateSpace(name: ToolbarView.previewCoordinateSpace)
+        .contentShape(Rectangle())
+        .gesture(dragGesture)
+        .onChange(of: isDragActive) { active in
+            guard !active else { return }
+            // A cancelled drag skips `onEnded` and leaves a stale session. Defer to
+            // the next main-actor turn so a normal `onEnded` in the same update
+            // always commits the move first; then the nil-check makes this a no-op.
+            DispatchQueue.main.async {
+                guard !isDragActive, dragSession != nil else { return }
+                dragSession = nil
+                reseed()
+            }
+        }
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(white: 0.12))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .coordinateSpace(name: "layoutEditor")
-    }
-
-    // MARK: Zones
-
-    private var showsOverflowSection: Bool {
-        !settings.overflowOrderedIdentifiers.isEmpty
-            || dragSession?.targetPrincipal == false
-    }
-
-    private var displayPrincipalIDs: [ActionIdentifier] {
-        guard let session = dragSession else {
-            return settings.principalOrderedIdentifiers
-        }
-        if session.targetPrincipal {
-            return Self.previewOrder(
-                settings.principalOrderedIdentifiers,
-                dragging: session.id,
-                at: session.targetIndex
-            )
-        }
-        return settings.principalOrderedIdentifiers.filter { $0 != session.id }
-    }
-
-    private var displayOverflowIDs: [ActionIdentifier] {
-        let actual = settings.overflowOrderedIdentifiers
-        guard let session = dragSession, !session.targetPrincipal else { return actual }
-        var preview = actual.filter { $0 != session.id }
-        if !preview.contains(session.id) {
-            preview.append(session.id)
-        }
-        return preview
-    }
-
-    private static func previewOrder(
-        _ ids: [ActionIdentifier],
-        dragging: ActionIdentifier,
-        at index: Int
-    ) -> [ActionIdentifier] {
-        var result = ids.filter { $0 != dragging }
-        let clamped = min(max(0, index), result.count)
-        result.insert(dragging, at: clamped)
-        return result
-    }
-
-    // MARK: Principal strip
-
-    private var principalChipStrip: some View {
-        HStack(spacing: chipSpacing) {
-            if displayPrincipalIDs.isEmpty, dragSession == nil {
-                emptyPrincipalSlot
-            } else {
-                ForEach(displayPrincipalIDs, id: \.self) { id in
-                    draggableChip(for: id, isDragged: dragSession?.id == id)
-                        .background(chipFrameReader(for: id))
-                }
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { canvasHeight = geo.size.height }
+                    .onChange(of: geo.size.height) { canvasHeight = $0 }
             }
-        }
-        .animation(dragAnimation, value: displayPrincipalIDs)
-        .background(rowFrameReader())
-        .onPreferenceChange(LayoutRowFrameKey.self) { principalRowFrame = $0 }
-        .onPreferenceChange(LayoutChipFramesKey.self) { principalChipFrames = $0 }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
         )
     }
 
-    // MARK: Overflow strip (read-only)
+    // MARK: Row 1 — the real toolbar
 
-    private var overflowChipStrip: some View {
-        HStack(spacing: chipSpacing) {
-            ForEach(displayOverflowIDs, id: \.self) { id in
-                staticChip(for: id)
+    private var toolbarRow: some View {
+        ToolbarView(
+            viewModel: previewModel,
+            outputHandler: OutputHandler(),
+            onContentResize: { _ in },
+            onOpenSettings: {},
+            onIgnoreApp: {},
+            onIgnoreDomain: {},
+            onDismiss: {},
+            onDisableCloseConfirmation: {},
+            onActivatePromptInput: {}
+        )
+        .allowsHitTesting(false)
+        .onPreferenceChange(ToolbarActionFramesKey.self) { toolbarFrames = $0 }
+        // Card width = the toolbar's size minus its root horizontal padding (12pt
+        // per side, zoomed). Measured here with GeometryReader + onAppear/onChange:
+        // ToolbarView's own onContentResize (its internal size preference) was
+        // found not to fire when embedded like this.
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { cardWidth = max(0, geo.size.width - 24 * zoom) }
+                    .onChange(of: geo.size.width) { cardWidth = max(0, $0 - 24 * zoom) }
+            }
+        )
+    }
+
+    /// Transparent hover targets over each toolbar action: the real toolbar has
+    /// hit-testing disabled, which also disables its own tooltips. They carry no
+    /// gesture, so drags starting on them reach the container gesture.
+    private var toolbarHoverTargets: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(previewModel.orderedActions, id: \.self) { id in
+                if let frame = toolbarFrames[id] {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .frame(width: frame.width, height: frame.height)
+                        .hoverTooltip(chipLabel(for: id))
+                        .padding(.leading, frame.minX)
+                        .padding(.top, frame.minY)
+                }
             }
         }
-        .animation(dragAnimation, value: displayOverflowIDs)
-        .background(rowFrameReader())
-        .onPreferenceChange(LayoutRowFrameKey.self) { overflowRowFrame = $0 }
     }
 
-    private var burgerDivider: some View {
-        Rectangle()
-            .fill(Color.white.opacity(0.15))
-            .frame(width: 1, height: chipSize - 4)
+    // MARK: Row 2 — More actions
+
+    private var moreRow: some View {
+        VStack(alignment: .leading, spacing: cardPadding) {
+            HStack(spacing: 3 * zoom) {
+                Text("More actions")
+                Image(systemName: "chevron.down")
+                    .imageScale(.small)
+            }
+            .font(.system(size: NSFont.preferredFont(forTextStyle: .caption1).pointSize * zoom))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5 * zoom)
+            .padding(.top, 2 * zoom)
+
+            HStack(spacing: cardPadding) {
+                if previewModel.overflowActions.isEmpty {
+                    emptyMoreSlot
+                } else {
+                    ForEach(previewModel.overflowActions, id: \.self) { id in
+                        moreChip(for: id)
+                    }
+                }
+            }
+        }
+        .padding(cardPadding)
+        .background(
+            RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor))
+                .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+        )
+        .onPreferenceChange(MoreChipFramesKey.self) { moreFrames = $0 }
+        .background(
+            GeometryReader { geo in
+                let frame = geo.frame(in: .named(ToolbarView.previewCoordinateSpace))
+                Color.clear
+                    .onAppear { moreRowFrame = frame }
+                    .onChange(of: frame) { moreRowFrame = $0 }
+            }
+        )
     }
 
-    private var burgerMarker: some View {
-        Image(systemName: "line.3.horizontal")
-            .font(.system(size: chipIconSize, weight: .medium))
-            .frame(width: chipSize, height: chipSize)
+    private func moreChip(for id: ActionIdentifier) -> some View {
+        chipIcon(for: id)
+            .font(.system(size: chipIconSize))
+            .frame(width: controlHeight, height: controlHeight)
             .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.white.opacity(dragSession?.targetPrincipal == false ? 0.18 : 0.10))
+                RoundedRectangle(cornerRadius: controlRadius, style: .continuous)
+                    .fill(Color.primary.opacity(0.05))
             )
-            .hoverTooltip("More menu")
             .background(
                 GeometryReader { geo in
                     Color.clear.preference(
-                        key: LayoutRowFrameKey.self,
-                        value: geo.frame(in: .named("layoutEditor"))
+                        key: MoreChipFramesKey.self,
+                        value: [id: geo.frame(in: .named(ToolbarView.previewCoordinateSpace))]
                     )
                 }
             )
-            .onPreferenceChange(LayoutRowFrameKey.self) { burgerFrame = $0 }
-    }
-
-    private var emptyPrincipalSlot: some View {
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .strokeBorder(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-            .frame(width: chipSize, height: chipSize)
-    }
-
-    private func rowFrameReader() -> some View {
-        GeometryReader { geo in
-            Color.clear.preference(
-                key: LayoutRowFrameKey.self,
-                value: geo.frame(in: .named("layoutEditor"))
-            )
-        }
-    }
-
-    private func chipFrameReader(for id: ActionIdentifier) -> some View {
-        GeometryReader { geo in
-            Color.clear.preference(
-                key: LayoutChipFramesKey.self,
-                value: [id: geo.frame(in: .named("layoutEditor"))]
-            )
-        }
-    }
-
-    // MARK: Chips
-
-    @ViewBuilder
-    private func draggableChip(for id: ActionIdentifier, isDragged: Bool) -> some View {
-        chipContent(for: id)
-            .scaleEffect(isDragged ? 1.06 : 1)
-            .shadow(color: .black.opacity(isDragged ? 0.35 : 0), radius: isDragged ? 6 : 0, y: 2)
-            .offset(isDragged ? (dragSession?.translation ?? .zero) : .zero)
-            .zIndex(isDragged ? 1 : 0)
-            .background(chipBackground(isDragged: isDragged))
-            .hoverTooltip(chipLabel(for: id))
-            .contentShape(Rectangle())
-            .gesture(principalDragGesture(for: id))
-    }
-
-    @ViewBuilder
-    private func staticChip(for id: ActionIdentifier) -> some View {
-        chipContent(for: id)
-            .background(chipBackground(isDragged: false))
             .hoverTooltip(chipLabel(for: id))
     }
 
+    private var emptyMoreSlot: some View {
+        RoundedRectangle(cornerRadius: controlRadius, style: .continuous)
+            .strokeBorder(
+                Color.secondary.opacity(0.5),
+                style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+            )
+            .frame(width: controlHeight * 2, height: controlHeight)
+    }
+
+    // MARK: Ghost and warning
+
     @ViewBuilder
-    private func chipContent(for id: ActionIdentifier) -> some View {
-        chipIcon(for: id)
-            .font(.system(size: chipIconSize, weight: .medium))
-            .frame(width: chipSize, height: chipSize)
+    private var dragGhost: some View {
+        if let session = dragSession {
+            chipIcon(for: session.id)
+                .font(.system(size: chipIconSize))
+                .frame(width: controlHeight, height: controlHeight)
+                .background(
+                    RoundedRectangle(cornerRadius: controlRadius, style: .continuous)
+                        .fill(Color(nsColor: .windowBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: controlRadius, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 2)
+                .position(session.location)
+                .allowsHitTesting(false)
+        }
     }
 
-    private func chipBackground(isDragged: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .fill(Color.white.opacity(isDragged ? 0.22 : 0.12))
+    private var widthWarning: some View {
+        Label {
+            Text("Your toolbar is getting wide and may cover more of your work. Consider moving some actions to More actions or turning off labels.")
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
 
-    private func principalDragGesture(for id: ActionIdentifier) -> some Gesture {
-        DragGesture(minimumDistance: 4, coordinateSpace: .named("layoutEditor"))
-            .onChanged { value in
-                if dragSession == nil {
-                    let startIndex = settings.principalOrderedIdentifiers.firstIndex(of: id) ?? 0
-                    dragSession = ToolbarDragSession(
-                        id: id,
-                        targetPrincipal: true,
-                        targetIndex: startIndex,
-                        translation: value.translation
-                    )
-                }
-                updateDragSession(value)
-            }
-            .onEnded { value in
-                updateDragSession(value)
-                commitDragSession()
-            }
+    // MARK: Seeding
+
+    private func reseed() {
+        ToolbarPreviewView.seed(
+            previewModel,
+            from: settings,
+            principal: settings.principalOrderedIdentifiers,
+            overflow: settings.overflowOrderedIdentifiers
+        )
     }
 
-    // MARK: Drag logic
+    // MARK: Drag
 
-    private func updateDragSession(_ value: DragGesture.Value) {
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .named(ToolbarView.previewCoordinateSpace))
+            .updating($isDragActive) { _, state, _ in state = true }
+            .onChanged(dragChanged)
+            .onEnded(dragEnded)
+    }
+
+    private func dragChanged(_ value: DragGesture.Value) {
+        if dragSession == nil {
+            // A drag that doesn't start on an action is ignored.
+            guard let session = beginSession(at: value.startLocation, location: value.location) else { return }
+            dragSession = session
+        }
         guard var session = dragSession else { return }
 
-        let location = value.location
-        let targetPrincipal = resolveTargetPrincipal(at: location, session: session)
-        let targetIndex: Int
-        if targetPrincipal {
-            targetIndex = insertionIndex(
-                at: location.x,
-                orderedIDs: displayPrincipalIDs,
-                frames: principalChipFrames,
-                dragging: session.id
-            )
-        } else {
-            targetIndex = settings.overflowOrderedIdentifiers.count
-        }
-
-        let changed = session.targetPrincipal != targetPrincipal
-            || session.targetIndex != targetIndex
-            || session.translation != value.translation
+        let targetPrincipal = !isInMoreZone(value.location)
+        let sameZone = targetPrincipal == session.targetPrincipal
+        let targetIndex = ToolbarLayoutEditMath.insertionIndex(
+            pointerX: value.location.x,
+            current: sameZone ? session.targetIndex : 0,
+            orderedIDs: targetPrincipal ? previewModel.orderedActions : previewModel.overflowActions,
+            frames: targetPrincipal ? toolbarFrames : moreFrames,
+            dragging: session.id
+        )
+        let slotChanged = !sameZone || targetIndex != session.targetIndex
 
         session.targetPrincipal = targetPrincipal
         session.targetIndex = targetIndex
-        session.translation = value.translation
+        session.location = value.location
+        dragSession = session
 
-        if changed, session.targetPrincipal != targetPrincipal || session.targetIndex != targetIndex {
+        if slotChanged {
             withAnimation(dragAnimation) {
-                dragSession = session
+                applyPreview(of: session)
             }
-        } else {
-            dragSession = session
         }
     }
 
-    private func resolveTargetPrincipal(at location: CGPoint, session: ToolbarDragSession) -> Bool {
-        // More zone (burger + overflow chips) takes priority over the principal row.
-        if showsOverflowSection, burgerFrame.width > 0, location.x >= burgerFrame.minX - 6 {
-            return false
-        }
-        if overflowRowFrame.contains(location) || burgerFrame.contains(location) {
-            return false
-        }
-        if principalRowFrame.contains(location) {
-            return true
-        }
-        return session.targetPrincipal
-    }
-
-    private func insertionIndex(
-        at pointerX: CGFloat,
-        orderedIDs: [ActionIdentifier],
-        frames: [ActionIdentifier: CGRect],
-        dragging: ActionIdentifier
-    ) -> Int {
-        let order = orderedIDs.filter { $0 != dragging }
-        guard !order.isEmpty else { return 0 }
-
-        for (offset, id) in order.enumerated() {
-            guard let frame = frames[id] else { continue }
-            if pointerX < frame.midX { return offset }
-        }
-        return order.count
-    }
-
-    private func commitDragSession() {
+    private func dragEnded(_ value: DragGesture.Value) {
+        guard dragSession != nil else { return }
+        dragChanged(value)
         guard let session = dragSession else { return }
 
-        let wasPrincipal = settings.isPrincipal(session.id)
-        let sourceIndex = settings.principalOrderedIdentifiers.firstIndex(of: session.id) ?? 0
-        let unchanged = session.targetPrincipal == wasPrincipal
-            && (session.targetPrincipal ? session.targetIndex == sourceIndex : true)
-
-        defer { dragSession = nil }
-
-        guard !unchanged else { return }
-
-        if settings.moveAction(session.id, toZone: session.targetPrincipal, atIndex: session.targetIndex) {
-            rejectionMessage = nil
-            return
+        let unchanged = session.targetPrincipal == session.sourcePrincipal
+            && session.targetIndex == session.sourceIndex
+        if !unchanged {
+            settings.moveAction(session.id, toZone: session.targetPrincipal, atIndex: session.targetIndex)
         }
+        dragSession = nil
+        reseed()
+    }
 
-        rejectionMessage = session.targetPrincipal
-            ? "Toolbar row is full (\(settings.maxPrincipalActions)/\(settings.maxPrincipalActions)). Free a slot first."
-            : "More menu is full (\(ToolbarLimits.maxBurgerActions)/\(ToolbarLimits.maxBurgerActions)). Free a slot first."
-
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
-            if rejectionMessage != nil { rejectionMessage = nil }
+    private func beginSession(at start: CGPoint, location: CGPoint) -> ToolbarDragSession? {
+        let rows: [(principal: Bool, ids: [ActionIdentifier], frames: [ActionIdentifier: CGRect])] = [
+            (true, previewModel.orderedActions, toolbarFrames),
+            (false, previewModel.overflowActions, moreFrames)
+        ]
+        for row in rows {
+            if let index = row.ids.firstIndex(where: { row.frames[$0]?.contains(start) == true }) {
+                return ToolbarDragSession(
+                    id: row.ids[index],
+                    sourcePrincipal: row.principal,
+                    sourceIndex: index,
+                    targetPrincipal: row.principal,
+                    targetIndex: index,
+                    location: location
+                )
+            }
         }
+        return nil
+    }
+
+    /// The More card spans only its chips' width, so the zone is the whole band at
+    /// or below its top edge (minus a little slack), not just the card's rect —
+    /// dragging straight down from any toolbar action reaches More.
+    private func isInMoreZone(_ location: CGPoint) -> Bool {
+        moreRowFrame != .zero && location.y >= moreRowFrame.minY - moreZoneSlack
+    }
+
+    /// Shows the dragged action at its target slot in the preview.
+    private func applyPreview(of session: ToolbarDragSession) {
+        var principal = previewModel.orderedActions.filter { $0 != session.id }
+        var overflow = previewModel.overflowActions.filter { $0 != session.id }
+        if session.targetPrincipal {
+            principal = ToolbarLayoutEditMath.previewOrder(principal, dragging: session.id, at: session.targetIndex)
+        } else {
+            overflow = ToolbarLayoutEditMath.previewOrder(overflow, dragging: session.id, at: session.targetIndex)
+        }
+        if previewModel.orderedActions != principal { previewModel.orderedActions = principal }
+        if previewModel.overflowActions != overflow { previewModel.overflowActions = overflow }
     }
 
     // MARK: Action metadata

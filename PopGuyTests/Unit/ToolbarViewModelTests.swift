@@ -1,9 +1,8 @@
 // ToolbarViewModelTests.swift
 // PopGuyTests
 //
-// Unit tests for ToolbarViewModel.compactActions threshold logic.
-// Verifies that the flag is false below 4 inline controls (principal actions
-// plus the burger button when present) and true at 4+.
+// Unit tests for ToolbarViewModel per-action labels (labeledActions) and
+// the hasOverflow burger flag, plus the system-button flags (hasSystemButtons).
 //
 // Also covers edit-buffer invariants introduced in the editable-toolbar-result phase:
 // finishWith seeds editedResult, reset/update clear it, beginEditing/endEditing toggle isEditing.
@@ -17,60 +16,12 @@ import Testing
 @MainActor
 struct ToolbarViewModelTests {
 
-    // MARK: - compactActions threshold
+    // MARK: - labeledActions
 
-    @Test("compactActions is false with no principal or overflow actions")
-    func zeroActions() {
+    @Test("labeledActions defaults to empty (all actions icon-only)")
+    func labeledActionsDefaultsEmpty() {
         let vm = ToolbarViewModel()
-        vm.orderedActions = []
-        vm.overflowActions = []
-        #expect(vm.compactActions == false)
-    }
-
-    @Test("compactActions is false with 1 principal action")
-    func oneAction() {
-        let vm = ToolbarViewModel()
-        vm.orderedActions = [.builtin(.improve)]
-        #expect(vm.compactActions == false)
-    }
-
-    @Test("compactActions is false with 2 principal actions")
-    func twoActions() {
-        let vm = ToolbarViewModel()
-        vm.orderedActions = [.builtin(.improve), .builtin(.shorten)]
-        #expect(vm.compactActions == false)
-    }
-
-    @Test("compactActions is false with exactly 3 principal actions")
-    func threePrincipal() {
-        let vm = ToolbarViewModel()
-        vm.orderedActions = [.builtin(.improve), .builtin(.shorten), .builtin(.proofread)]
-        #expect(vm.compactActions == false)
-    }
-
-    @Test("compactActions is true with 4 principal actions")
-    func fourPrincipal() {
-        let vm = ToolbarViewModel()
-        vm.orderedActions = [
-            .builtin(.improve), .builtin(.shorten), .builtin(.proofread), .builtin(.translate),
-        ]
-        #expect(vm.compactActions == true)
-    }
-
-    @Test("compactActions is true with 3 principal actions and a burger menu")
-    func threePrincipalPlusBurger() {
-        let vm = ToolbarViewModel()
-        vm.orderedActions = [.builtin(.improve), .builtin(.shorten), .builtin(.proofread)]
-        vm.overflowActions = [.builtin(.translate)]
-        #expect(vm.compactActions == true)
-    }
-
-    @Test("compactActions is false with 2 principal actions and a burger menu (3 inline)")
-    func twoPrincipalPlusBurger() {
-        let vm = ToolbarViewModel()
-        vm.orderedActions = [.builtin(.improve), .builtin(.shorten)]
-        vm.overflowActions = [.builtin(.proofread), .builtin(.translate)]
-        #expect(vm.compactActions == false)
+        #expect(vm.labeledActions.isEmpty)
     }
 
     @Test("hasOverflow is false when overflowActions is empty")
@@ -85,6 +36,51 @@ struct ToolbarViewModelTests {
         let vm = ToolbarViewModel()
         vm.overflowActions = [.builtin(.translate)]
         #expect(vm.hasOverflow == true)
+    }
+
+    // MARK: - System buttons (Ignore this site / app, Settings)
+
+    @Test("system button flags default to true")
+    func systemButtonFlagsDefaultTrue() {
+        let vm = ToolbarViewModel()
+        #expect(vm.showsIgnoreAppButton == true)
+        #expect(vm.showsSettingsButton == true)
+        #expect(vm.hasSystemButtons == true)
+    }
+
+    @Test("hasSystemButtons is false when no system button is visible")
+    func hasSystemButtonsFalseWhenNoneVisible() {
+        let vm = ToolbarViewModel()
+        vm.showsIgnoreAppButton = false
+        vm.showsSettingsButton = false
+        #expect(vm.sourceDomain == nil)
+        #expect(vm.hasSystemButtons == false)
+    }
+
+    @Test("hasSystemButtons is true when only the Ignore this app button is visible")
+    func hasSystemButtonsTrueForIgnoreApp() {
+        let vm = ToolbarViewModel()
+        vm.showsIgnoreAppButton = true
+        vm.showsSettingsButton = false
+        #expect(vm.hasSystemButtons == true)
+    }
+
+    @Test("hasSystemButtons is true when only the Settings button is visible")
+    func hasSystemButtonsTrueForSettings() {
+        let vm = ToolbarViewModel()
+        vm.showsIgnoreAppButton = false
+        vm.showsSettingsButton = true
+        #expect(vm.hasSystemButtons == true)
+    }
+
+    @Test("hasSystemButtons is true when only Ignore this site is visible (source domain set)")
+    func hasSystemButtonsTrueForSourceDomain() {
+        let vm = ToolbarViewModel()
+        vm.showsIgnoreAppButton = false
+        vm.showsSettingsButton = false
+        let ref = SourceElementRef(element: AXUIElementCreateSystemWide())
+        vm.update(text: "x", sourceElement: ref, screenRect: nil, sourceBundleID: nil, sourceDomain: "example.com")
+        #expect(vm.hasSystemButtons == true)
     }
 }
 

@@ -141,6 +141,8 @@ final class SettingsStore: ObservableObject {
         static let ignoredAppBundleIDs        = "settings.ignoredAppBundleIDs"
         static let ignoredDomains             = "settings.ignoredDomains"
         static let ignoredDomainsEnabled      = "settings.ignoredDomainsEnabled"
+        static let ignoredAppsEnabled         = "settings.ignoredAppsEnabled"
+        static let showToolbarSettingsButton  = "settings.showToolbarSettingsButton"
         static let popGuyEnabled              = "settings.popGuyEnabled"
         static let triggerOnSelect            = "settings.triggerOnSelect"
         static let triggerOnSelectEditableOnly = "settings.triggerOnSelectEditableOnly"
@@ -166,6 +168,7 @@ final class SettingsStore: ObservableObject {
         static let historyStoreFullText       = "settings.historyStoreFullText"
         static let actionOrder                = "settings.actionOrder"
         static let principalActionIDs         = "settings.principalActionIDs"
+        static let labeledActionIDs           = "settings.labeledActionIDs"
         static let completedLocalModelIDs     = "settings.completedLocalModelIDs"
         static let localModelIdleSeconds      = "settings.localModelIdleSeconds"
     }
@@ -403,6 +406,19 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(ignoredDomainsEnabled, forKey: Keys.ignoredDomainsEnabled) }
     }
 
+    /// Master switch for the ignored-apps feature (default: true). While off, the
+    /// ignored-apps list is not applied and the "Ignore this app" toolbar button is
+    /// hidden; the saved list is kept.
+    @Published var ignoredAppsEnabled: Bool {
+        didSet { defaults.set(ignoredAppsEnabled, forKey: Keys.ignoredAppsEnabled) }
+    }
+
+    /// Whether the floating toolbar shows its Settings (gear) button (default: true).
+    /// Settings stay reachable from the menu bar icon when it is hidden.
+    @Published var showToolbarSettingsButton: Bool {
+        didSet { defaults.set(showToolbarSettingsButton, forKey: Keys.showToolbarSettingsButton) }
+    }
+
     /// Master kill switch (default: true). When false, every trigger — text
     /// selection, double-click, the Cmd+C+C chord (and its replacement shortcut),
     /// and custom-action hotkeys — is suppressed and PopGuy stays idle until
@@ -425,9 +441,7 @@ final class SettingsStore: ObservableObject {
     }
 
     /// Hides the PopGuy logo on the toolbar to save space (default: false).
-    /// Raises the principal-row cap by one; use `setHideToolbarLogo(_:)` to change it
-    /// so re-showing the logo can be rejected when the extra action has nowhere to go.
-    @Published private(set) var hideToolbarLogo: Bool {
+    @Published var hideToolbarLogo: Bool {
         didSet { defaults.set(hideToolbarLogo, forKey: Keys.hideToolbarLogo) }
     }
 
@@ -526,6 +540,13 @@ final class SettingsStore: ObservableObject {
         didSet { save(principalActionIDs, key: Keys.principalActionIDs) }
     }
 
+    /// Action identifiers whose label is shown on their toolbar button (default: off).
+    /// The value is preserved while the action sits in More actions. Persisted via
+    /// `didSet` on mutation; `didSet` does NOT fire on init assignment.
+    @Published private(set) var labeledActionIDs: Set<ActionIdentifier> {
+        didSet { save(labeledActionIDs, key: Keys.labeledActionIDs) }
+    }
+
     // MARK: - Init
 
     /// Create a SettingsStore backed by the given UserDefaults instance.
@@ -618,12 +639,13 @@ final class SettingsStore: ObservableObject {
         ignoredAppBundleIDs      = Self.load([String].self, key: Keys.ignoredAppBundleIDs, from: defaults) ?? []
         ignoredDomains           = Self.load([String].self, key: Keys.ignoredDomains, from: defaults) ?? []
         ignoredDomainsEnabled    = defaults.object(forKey: Keys.ignoredDomainsEnabled) as? Bool ?? false
+        ignoredAppsEnabled       = defaults.object(forKey: Keys.ignoredAppsEnabled) as? Bool ?? true
+        showToolbarSettingsButton = defaults.object(forKey: Keys.showToolbarSettingsButton) as? Bool ?? true
         popGuyEnabled            = defaults.object(forKey: Keys.popGuyEnabled) as? Bool ?? true
         triggerOnSelectEnabled   = defaults.object(forKey: Keys.triggerOnSelect) as? Bool ?? false
         triggerOnSelectEditableOnly = defaults.object(forKey: Keys.triggerOnSelectEditableOnly) as? Bool ?? false
         triggerDoubleClickEnabled = defaults.object(forKey: Keys.triggerDoubleClick) as? Bool ?? false
-        let hideLogo = defaults.object(forKey: Keys.hideToolbarLogo) as? Bool ?? false
-        hideToolbarLogo = hideLogo
+        hideToolbarLogo = defaults.object(forKey: Keys.hideToolbarLogo) as? Bool ?? false
         doubleClickAssignedAction = Self.load(ActionIdentifier.self, key: Keys.doubleClickAssignedAction, from: defaults)
         triggerChordEnabled      = defaults.object(forKey: Keys.triggerChord)    as? Bool ?? true
         historyEnabled           = defaults.object(forKey: Keys.historyEnabled)        as? Bool ?? true
@@ -645,8 +667,9 @@ final class SettingsStore: ObservableObject {
 
         let rawPrincipal = Self.load(Set<ActionIdentifier>.self, key: Keys.principalActionIDs, from: defaults)
         let resolvedPrincipal: Set<ActionIdentifier>
-        if let rawPrincipal, !rawPrincipal.isEmpty {
-            resolvedPrincipal = Self.reconcilePrincipal(persisted: rawPrincipal, actionOrder: reconciledOrder, maxPrincipal: Self.maxPrincipal(hideLogo: hideLogo))
+        // An empty persisted set is a user choice (every action in More), not a first launch.
+        if let rawPrincipal {
+            resolvedPrincipal = Self.reconcilePrincipal(persisted: rawPrincipal, actionOrder: reconciledOrder)
         } else {
             let impEnabled = defaults.object(forKey: Keys.improveEnabled) as? Bool ?? true
             let shEnabled = defaults.object(forKey: Keys.shortenEnabled) as? Bool ?? true
@@ -666,14 +689,15 @@ final class SettingsStore: ObservableObject {
                 dictionaryEnabled: dictConfig.isEnabled,
                 customActions: loadedCustomActions
             )
-            let migrated = Set(enabled.prefix(Self.maxPrincipal(hideLogo: hideLogo)))
-            resolvedPrincipal = Self.reconcilePrincipal(persisted: migrated, actionOrder: reconciledOrder, maxPrincipal: Self.maxPrincipal(hideLogo: hideLogo))
+            // First launch / upgrade: every enabled action starts on the toolbar.
+            resolvedPrincipal = Set(enabled)
         }
 
         actionOrder = reconciledOrder
         principalActionIDs = resolvedPrincipal
+        labeledActionIDs = Self.load(Set<ActionIdentifier>.self, key: Keys.labeledActionIDs, from: defaults) ?? []
         // Persist first-launch / upgrade migration (`didSet` does not run on init).
-        if rawPrincipal == nil || rawPrincipal?.isEmpty == true {
+        if rawPrincipal == nil {
             save(principalActionIDs, key: Keys.principalActionIDs)
         }
 
@@ -686,39 +710,7 @@ final class SettingsStore: ObservableObject {
         }
     }
 
-    // MARK: - Toolbar action cap
-
-    /// Maximum number of enabled actions that may be active on the toolbar at once
-    /// (principal row + burger menu combined).
-    static let maxToolbarActions = ToolbarLimits.maxPrincipalActions + ToolbarLimits.maxBurgerActions
-
-    private static func maxPrincipal(hideLogo: Bool) -> Int {
-        hideLogo ? ToolbarLimits.maxPrincipalActionsLogoHidden : ToolbarLimits.maxPrincipalActions
-    }
-
-    /// Principal-row cap for the current logo visibility.
-    var maxPrincipalActions: Int { Self.maxPrincipal(hideLogo: hideToolbarLogo) }
-
-    /// Combined toolbar cap (principal row + burger) for the current logo visibility.
-    var maxToolbarActionsCurrent: Int { maxPrincipalActions + ToolbarLimits.maxBurgerActions }
-
-    /// Show or hide the toolbar logo. Hiding always succeeds. Showing lowers the
-    /// principal cap, so surplus principal actions move to the burger menu; returns
-    /// `false` (and changes nothing) when the burger menu has no room for them.
-    @discardableResult
-    func setHideToolbarLogo(_ hide: Bool) -> Bool {
-        guard hide != hideToolbarLogo else { return true }
-        if !hide {
-            let newCap = ToolbarLimits.maxPrincipalActions
-            let surplus = max(0, principalActionCount - newCap)
-            guard overflowActionCount + surplus <= ToolbarLimits.maxBurgerActions else { return false }
-            for id in principalOrderedIdentifiers.suffix(surplus) {
-                principalActionIDs.remove(id)
-            }
-        }
-        hideToolbarLogo = hide
-        return true
-    }
+    // MARK: - Action order defaults
 
     /// Canonical default order for the six built-in actions.
     /// Custom actions are appended after these in `customActions` array order.
@@ -731,19 +723,6 @@ final class SettingsStore: ObservableObject {
         .dictionary,
         .speak,
     ]
-
-    /// Total count of enabled toolbar actions: built-in flags + enabled custom actions.
-    var enabledToolbarActionCount: Int {
-        let builtins = [improveEnabled, shortenEnabled, proofreadEnabled, translateEnabled, speakEnabled, promptEnabled, dictionaryConfig.isEnabled]
-            .filter { $0 }.count
-        let customs = customActions.filter(\.isEnabled).count
-        return builtins + customs
-    }
-
-    /// Total count of all toolbar actions (enabled or not): built-ins + custom.
-    var totalToolbarActionCount: Int {
-        Self.defaultBuiltinOrder.count + customActions.count
-    }
 
     // MARK: - Config accessors
 
@@ -783,52 +762,16 @@ final class SettingsStore: ObservableObject {
     // MARK: - Custom action CRUD
 
     /// Append a new custom action at the end of the list.
-    ///
-    /// If the incoming action is enabled and committing it would push
-    /// `enabledToolbarActionCount` beyond `maxToolbarActions`, the action is
-    /// persisted with `isEnabled = false` instead.
-    ///
-    /// - Returns: `true` if the enable flag was clamped to `false`; `false` otherwise.
-    @discardableResult
-    func addCustomAction(_ action: CustomAction) -> Bool {
-        let wouldExceed = action.isEnabled && (enabledToolbarActionCount + 1 > maxToolbarActionsCurrent)
-        if wouldExceed {
-            var clamped = action
-            clamped.isEnabled = false
-            customActions.append(clamped)
-            actionOrder.append(.custom(action.id))
-            return true
-        }
+    func addCustomAction(_ action: CustomAction) {
         customActions.append(action)
         actionOrder.append(.custom(action.id))
-        return false
     }
 
     /// Replace an existing custom action identified by its `id`.
     /// No-op if the id is not found.
-    ///
-    /// If the incoming action is enabled and committing it would push the
-    /// enabled count beyond `maxToolbarActions` (excluding the old version
-    /// of this action from the count), the action is persisted with
-    /// `isEnabled = false` instead.
-    ///
-    /// - Returns: `true` if the enable flag was clamped to `false`; `false` otherwise.
-    @discardableResult
-    func updateCustomAction(_ action: CustomAction) -> Bool {
-        guard let index = customActions.firstIndex(where: { $0.id == action.id }) else { return false }
-        if action.isEnabled {
-            // Count excluding the old version of this action.
-            let oldWasEnabled = customActions[index].isEnabled
-            let countWithoutOld = enabledToolbarActionCount - (oldWasEnabled ? 1 : 0)
-            if countWithoutOld + 1 > maxToolbarActionsCurrent {
-                var clamped = action
-                clamped.isEnabled = false
-                customActions[index] = clamped
-                return true
-            }
-        }
+    func updateCustomAction(_ action: CustomAction) {
+        guard let index = customActions.firstIndex(where: { $0.id == action.id }) else { return }
         customActions[index] = action
-        return false
     }
 
     /// Remove the custom action with the given id.
@@ -839,6 +782,7 @@ final class SettingsStore: ObservableObject {
         // Remove from the unified action order and principal partition.
         actionOrder.removeAll { $0 == .custom(id) }
         principalActionIDs.remove(.custom(id))
+        labeledActionIDs.remove(.custom(id))
     }
 
     /// Move custom actions at the given source offsets to the destination offset.
@@ -897,9 +841,10 @@ final class SettingsStore: ObservableObject {
         ignoredAppBundleIDs.removeAll { $0 == bundleID }
     }
 
-    /// Returns `true` if `bundleID` is in the ignore list.
+    /// Returns `true` if `bundleID` is in the ignore list and the ignored-apps
+    /// feature is enabled.
     func isIgnored(bundleID: String) -> Bool {
-        ignoredAppBundleIDs.contains(bundleID)
+        ignoredAppsEnabled && ignoredAppBundleIDs.contains(bundleID)
     }
 
     // MARK: - Ignored-domain CRUD
@@ -986,6 +931,12 @@ final class SettingsStore: ObservableObject {
         actionOrder.filter { isEnabled($0) }
     }
 
+    /// True when `id` is the only enabled action. The toolbar must keep at
+    /// least one action, so the UI locks this action's enable switch.
+    func isLastEnabledAction(_ id: ActionIdentifier) -> Bool {
+        enabledOrderedIdentifiers == [id]
+    }
+
     /// Returns whether `id` is assigned to the principal (inline) toolbar row.
     func isPrincipal(_ id: ActionIdentifier) -> Bool {
         principalActionIDs.contains(id)
@@ -1001,60 +952,45 @@ final class SettingsStore: ObservableObject {
         enabledOrderedIdentifiers.filter { !isPrincipal($0) }
     }
 
-    /// Count of enabled principal-row actions.
-    var principalActionCount: Int {
-        principalOrderedIdentifiers.count
-    }
-
-    /// Count of enabled burger-menu actions.
-    var overflowActionCount: Int {
-        overflowOrderedIdentifiers.count
-    }
-
     /// Assign or remove `id` from the principal toolbar row.
-    ///
-    /// Caps apply only when the action is enabled: moving an enabled action into
-    /// a zone that is already at its cap is rejected. Disabled actions may
-    /// switch zones freely.
-    ///
-    /// - Returns: `true` when the membership changed or was already in the requested state;
-    ///   `false` when rejected by a zone cap.
-    @discardableResult
-    func setPrincipal(_ id: ActionIdentifier, _ value: Bool) -> Bool {
-        let currentlyPrincipal = principalActionIDs.contains(id)
-        guard value != currentlyPrincipal else { return true }
-
+    /// Any action, enabled or not, may switch zones freely.
+    func setPrincipal(_ id: ActionIdentifier, _ value: Bool) {
+        guard value != principalActionIDs.contains(id) else { return }
         if value {
-            // Enabled actions count toward the principal cap; disabled actions may
-            // be assigned freely and only block once enabled.
-            if isEnabled(id), principalActionCount >= maxPrincipalActions {
-                return false
-            }
             principalActionIDs.insert(id)
         } else {
-            if isEnabled(id), overflowActionCount >= ToolbarLimits.maxBurgerActions {
-                return false
-            }
             principalActionIDs.remove(id)
         }
-        return true
+    }
+
+    /// Returns whether `id` shows its label on the toolbar button (default: off).
+    func isLabeled(_ id: ActionIdentifier) -> Bool {
+        labeledActionIDs.contains(id)
+    }
+
+    /// Show or hide the label on `id`'s toolbar button. The value is preserved
+    /// while the action sits in More actions.
+    func setLabeled(_ id: ActionIdentifier, _ value: Bool) {
+        guard value != labeledActionIDs.contains(id) else { return }
+        if value {
+            labeledActionIDs.insert(id)
+        } else {
+            labeledActionIDs.remove(id)
+        }
     }
 
     /// Atomically move an action to a toolbar zone at a position among that zone's
     /// enabled members (principal row or burger menu).
     ///
-    /// Enforces the same zone caps as `setPrincipal`. Reorders `actionOrder` so
-    /// enabled members of the target zone appear at `atIndex` relative to each other.
-    ///
-    /// - Returns: `false` when the zone cap would be exceeded; `true` on success.
-    @discardableResult
-    func moveAction(_ id: ActionIdentifier, toZone principal: Bool, atIndex: Int) -> Bool {
+    /// Reorders `actionOrder` so enabled members of the target zone appear at
+    /// `atIndex` relative to each other.
+    func moveAction(_ id: ActionIdentifier, toZone principal: Bool, atIndex: Int) {
         if isPrincipal(id) != principal {
-            guard setPrincipal(id, principal) else { return false }
+            setPrincipal(id, principal)
         }
 
-        guard actionOrder.contains(id) else { return false }
-        guard isEnabled(id) else { return true }
+        guard actionOrder.contains(id) else { return }
+        guard isEnabled(id) else { return }
 
         let zoneMembers = actionOrder.filter {
             principalActionIDs.contains($0) == principal && isEnabled($0)
@@ -1076,30 +1012,16 @@ final class SettingsStore: ObservableObject {
             }
         }
         actionOrder = newOrder
-        return true
     }
 
     /// Reconcile a persisted principal set against the current `actionOrder`.
     ///
-    /// Drops stale identifiers, trims to `maxPrincipal` by
-    /// `actionOrder`, and leaves actions not in the set in the burger zone.
+    /// Drops stale identifiers; actions not in the set stay in the burger zone.
     private static func reconcilePrincipal(
         persisted: Set<ActionIdentifier>,
-        actionOrder: [ActionIdentifier],
-        maxPrincipal: Int
+        actionOrder: [ActionIdentifier]
     ) -> Set<ActionIdentifier> {
-        var ordered = actionOrder.filter { persisted.contains($0) }
-        if ordered.count > maxPrincipal {
-            ordered = Array(ordered.prefix(maxPrincipal))
-        }
-        var principalSet = Set(ordered)
-        var burger = actionOrder.filter { !principalSet.contains($0) }
-        while burger.count > ToolbarLimits.maxBurgerActions,
-              principalSet.count < maxPrincipal {
-            let promote = burger.removeFirst()
-            principalSet.insert(promote)
-        }
-        return principalSet
+        Set(actionOrder.filter(persisted.contains))
     }
 
     /// Enabled identifiers in `actionOrder` order — static for init migration.

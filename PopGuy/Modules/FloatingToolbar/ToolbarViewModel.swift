@@ -319,8 +319,25 @@ final class ToolbarViewModel: ObservableObject {
     /// customActions array below.
     @Published var orderedActions: [ActionIdentifier] = []
 
+    /// Actions whose toolbar button shows its title next to the icon. All other
+    /// actions render icon-only with a hover tooltip. Set by ToolbarController
+    /// (and ToolbarPreviewView) on each presentation from SettingsStore.labeledActionIDs.
+    @Published var labeledActions: Set<ActionIdentifier> = []
+
     /// Whether the PopGuy logo is shown at the start of the action bar.
     @Published var showsLogo: Bool = true
+
+    /// Whether the "Ignore this app" button is shown. Set by ToolbarController
+    /// (and ToolbarPreviewView) on each presentation from SettingsStore.ignoredAppsEnabled.
+    @Published var showsIgnoreAppButton: Bool = true
+
+    /// Whether the Settings (gear) button is shown. Set by ToolbarController
+    /// (and ToolbarPreviewView) on each presentation from SettingsStore.showToolbarSettingsButton.
+    @Published var showsSettingsButton: Bool = true
+
+    /// True when at least one system button ("Ignore this site", "Ignore this app",
+    /// Settings) is visible; the gap before them exists only in that case.
+    var hasSystemButtons: Bool { sourceDomain != nil || showsIgnoreAppButton || showsSettingsButton }
 
     /// Enabled overflow actions shown in the burger menu.
     @Published var overflowActions: [ActionIdentifier] = []
@@ -369,16 +386,6 @@ final class ToolbarViewModel: ObservableObject {
         guard let id = activeCustomActionID,
               let action = customActions.first(where: { $0.id == id }) else { return false }
         return action.isScriptable && action.afterRun != .showResult
-    }
-
-    // MARK: Compact mode
-
-    /// True when 4 or more inline controls are visible (principal actions plus the
-    /// burger button when present). Utility buttons are excluded.
-    /// When compact, action buttons render icon-only with a hover tooltip.
-    var compactActions: Bool {
-        let inlineCount = orderedActions.count + (hasOverflow ? 1 : 0)
-        return inlineCount >= 4
     }
 
     // MARK: Edit-buffer computed helpers

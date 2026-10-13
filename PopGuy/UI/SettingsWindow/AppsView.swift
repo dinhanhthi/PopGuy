@@ -4,8 +4,11 @@
 // Settings tab for ignored-apps and ignored-domains configuration.
 //
 // Sections:
-//   • Ignored Apps: list of bundle IDs with friendly name + icon; remove button.
-//     An "Add App…" button opens NSOpenPanel to pick a .app bundle.
+//   • Ignored Apps: an "Enable Ignored Apps" toggle (default on) gates the whole
+//     feature — while off, the list is not applied and the toolbar's "Ignore this
+//     app" button is hidden (the saved list is kept). When on, a list of bundle IDs
+//     with friendly name + icon; remove button. An "Add App…" button opens
+//     NSOpenPanel to pick a .app bundle.
 //   • Ignored Domains: an "Enable Ignored Domains" toggle (default off) gates the
 //     whole feature — while off, PopGuy never reads any browser URL and macOS
 //     never prompts for Automation permission. When on, a permission warning plus
@@ -36,30 +39,34 @@ struct AppsView: View {
     var body: some View {
         Form {
             Section {
-                if settings.ignoredAppBundleIDs.isEmpty {
-                    Text("No ignored apps.")
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 4)
-                } else {
-                    ForEach(settings.ignoredAppBundleIDs, id: \.self) { bundleID in
-                        IgnoredAppRow(bundleID: bundleID) {
-                            settings.removeIgnoredApp(bundleID: bundleID)
+                Toggle("Enable Ignored Apps", isOn: $settings.ignoredAppsEnabled)
+                    .padding(.vertical, 2)
+
+                if settings.ignoredAppsEnabled {
+                    if settings.ignoredAppBundleIDs.isEmpty {
+                        Text("No ignored apps.")
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 4)
+                    } else {
+                        ForEach(settings.ignoredAppBundleIDs, id: \.self) { bundleID in
+                            IgnoredAppRow(bundleID: bundleID) {
+                                settings.removeIgnoredApp(bundleID: bundleID)
+                            }
                         }
                     }
-                }
 
-                Button {
-                    addApp()
-                } label: {
-                    Label("Add App…", systemImage: "plus")
+                    Button {
+                        addApp()
+                    } label: {
+                        Label("Add App…", systemImage: "plus")
+                    }
+                    .buttonStyle(.bordered)
+                    .padding(.vertical, 4)
                 }
-                .buttonStyle(.bordered)
-                .padding(.vertical, 4)
-
             } header: {
                 Text("Ignored Apps")
             } footer: {
-                Text("The toolbar will not appear when you select text in these apps.")
+                Text("The toolbar will not appear when you select text in these apps. Turning this off also removes the \"Ignore this app\" button from the toolbar.")
                     .foregroundStyle(.secondary)
             }
 

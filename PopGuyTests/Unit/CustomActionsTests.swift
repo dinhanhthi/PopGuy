@@ -460,41 +460,22 @@ struct CustomActionsTests {
         #expect(decoded == ids)
     }
 
-    // MARK: - addCustomAction toolbar-clamp return value
+    // MARK: - addCustomAction keeps the enable flag
 
-    @Test("addCustomAction returns false when under the toolbar-active cap")
-    func addCustomActionUnderCapReturnsFalse() {
+    @Test("addCustomAction keeps isEnabled true past 11 enabled actions")
+    func addCustomActionPastElevenStaysEnabled() {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
         let store = SettingsStore(defaults: suite)
-        // Fresh store: improve+shorten+proofread+translate+speak = 5 enabled (prompt+dictionary off by default).
-        // Adding an enabled action (count goes 5→6, cap is 7) must return false.
-        let action = makeAction(title: "Cap Test")
-        let clamped = store.addCustomAction(action)
-        #expect(!clamped)
-        #expect(store.customActions.count == 1)
-    }
-
-    @Test("addCustomAction returns true (clamp) when adding past the toolbar-active cap")
-    func addCustomActionAtCapReturnsTrue() {
-        let (suite, name) = makeSuite()
-        defer { removeSuite(name) }
-        let store = SettingsStore(defaults: suite)
-        // Fill to exactly maxToolbarActions by adding enabled actions.
-        // Default count is 5 (improve+shorten+proofread+translate+speak), cap is 7.
-        // Add enabled actions until we are one below the cap, then verify the
-        // action that would exceed it gets clamped.
-        while store.enabledToolbarActionCount < SettingsStore.maxToolbarActions {
-            let filler = makeAction(title: "Filler \(store.enabledToolbarActionCount)")
-            _ = store.addCustomAction(filler)
+        // Default: 5 enabled built-ins (improve+shorten+proofread+translate+speak).
+        // Adding 7 enabled customs brings the total to 12, past the old cap of 11.
+        for i in 0..<6 {
+            store.addCustomAction(makeAction(title: "Filler \(i)"))
         }
-        // Now at cap — adding another enabled action must be clamped.
-        let overflow = makeAction(title: "Overflow")
-        let clamped = store.addCustomAction(overflow)
-        #expect(clamped)
-        // The action is still appended, but with isEnabled = false.
+        store.addCustomAction(makeAction(title: "Overflow"))
+        #expect(store.enabledOrderedIdentifiers.count == 12)
         #expect(store.customActions.last?.title == "Overflow")
-        #expect(store.customActions.last?.isEnabled == false)
+        #expect(store.customActions.allSatisfy { $0.isEnabled })
     }
 
     // MARK: - isSaveable

@@ -77,12 +77,6 @@ struct ActionsView: View {
     /// panel slides over the whole window, matching the Add/Edit Action panel.
     @Binding var showingLibrary: Bool
 
-    /// Drives the "toolbar action limit reached" alert.
-    @State private var showLimitAlert = false
-
-    /// Drives the "toolbar layout zone full" alert when principal/burger caps block a move.
-    @State private var showPrincipalLimitAlert = false
-
     /// Filters the action list by type. `.all` shows every action.
     @State private var typeFilter: ActionTypeFilter = .all
 
@@ -139,27 +133,35 @@ struct ActionsView: View {
     var body: some View {
         VStack(spacing: 0) {
 
-            // MARK: Fixed header (toolbar preview + Add Custom Action row)
+            // MARK: Fixed header (toolbar preview + switch/action-buttons row)
             VStack(spacing: SettingsMetrics.cardSpacing) {
 
                 ToolbarLayoutEditorView(settings: settings)
 
-                // MARK: Add Custom Action button
+                // MARK: Settings-button switch (left) + action buttons (right)
                 HStack {
+                    // Same look as ActionCard header switches.
+                    Toggle(isOn: $settings.showToolbarSettingsButton) {
+                        Text("Show Settings button on toolbar")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .hoverTooltip("Settings stay available from the PopGuy menu bar icon")
+
+                    Spacer()
+
                     Button {
                         withAnimation(.easeInOut(duration: 0.28)) {
                             editingAction = CustomAction(title: "", systemPrompt: "")
                         }
                     } label: {
-                        Text("Add Action")
+                        Image(systemName: "plus")
+                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
                     }
-                    .buttonStyle(.borderedProminent)
-
-                    Text("\(settings.principalActionCount)/\(settings.maxPrincipalActions) toolbar · \(settings.overflowActionCount)/\(ToolbarLimits.maxBurgerActions) More")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
+                    .buttonStyle(ToolbarIconButtonStyle(prominent: true))
+                    .hoverTooltip("Add action")
 
                     Button {
                         exportActions()
@@ -254,21 +256,12 @@ struct ActionsView: View {
                 VStack(spacing: SettingsMetrics.cardSpacing) {
                     ForEach(filteredActionOrder, id: \.self) { id in
                         card(for: id)
+                            .environment(\.isLastEnabledAction, settings.isLastEnabledAction(id))
                     }
                 }
                 .padding(.horizontal, SettingsMetrics.pagePadding)
                 .padding(.bottom, SettingsMetrics.pagePadding)
             }
-        }
-        .alert("Toolbar Limit Reached", isPresented: $showLimitAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("PopGuy supports at most \(settings.maxToolbarActionsCurrent) enabled actions (\(settings.maxPrincipalActions) on the toolbar and \(ToolbarLimits.maxBurgerActions) in the More menu). Turn off another action first.")
-        }
-        .alert("Toolbar Layout Full", isPresented: $showPrincipalLimitAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("The toolbar row holds up to \(settings.maxPrincipalActions) actions and the More menu holds up to \(ToolbarLimits.maxBurgerActions). Free a slot in that zone before moving this action.")
         }
         .alert("Import Failed", isPresented: $showImportError) {
             Button("OK", role: .cancel) {}
@@ -546,7 +539,7 @@ struct ActionsView: View {
             }
             // Mark as plugin-imported so the action shows a "From plugin" badge.
             fresh.isFromPlugin = true
-            _ = settings.addCustomAction(fresh)
+            settings.addCustomAction(fresh)
         }
 
         if skippedCount > 0 {
@@ -617,11 +610,14 @@ struct ActionsView: View {
     private func principalBinding(for id: ActionIdentifier) -> Binding<Bool> {
         Binding(
             get: { settings.isPrincipal(id) },
-            set: { newValue in
-                if !settings.setPrincipal(id, newValue) {
-                    showPrincipalLimitAlert = true
-                }
-            }
+            set: { settings.setPrincipal(id, $0) }
+        )
+    }
+
+    private func labelBinding(for id: ActionIdentifier) -> Binding<Bool> {
+        Binding(
+            get: { settings.isLabeled(id) },
+            set: { settings.setLabeled(id, $0) }
         )
     }
 
@@ -636,8 +632,9 @@ struct ActionsView: View {
                 icon: "wand.and.stars",
                 title: "Improve",
                 subtitle: "Fix grammar and improve clarity while preserving the original meaning and tone.",
-                enabled: guardedEnableBinding(for: $settings.improveEnabled),
+                enabled: $settings.improveEnabled,
                 isPrincipal: principalBinding(for: id),
+                showLabel: labelBinding(for: id),
                 config: $settings.improveConfig,
                 showsTone: true
             )
@@ -648,8 +645,9 @@ struct ActionsView: View {
                 icon: "text.badge.minus",
                 title: "Shorten",
                 subtitle: "Make the selected text more concise and simpler without losing the main ideas.",
-                enabled: guardedEnableBinding(for: $settings.shortenEnabled),
+                enabled: $settings.shortenEnabled,
                 isPrincipal: principalBinding(for: id),
+                showLabel: labelBinding(for: id),
                 config: $settings.shortenConfig,
                 showsTone: true
             )
@@ -660,8 +658,9 @@ struct ActionsView: View {
                 icon: "checkmark.bubble",
                 title: "Proofread",
                 subtitle: "Fix spelling, grammar, and punctuation without changing the meaning or tone.",
-                enabled: guardedEnableBinding(for: $settings.proofreadEnabled),
+                enabled: $settings.proofreadEnabled,
                 isPrincipal: principalBinding(for: id),
+                showLabel: labelBinding(for: id),
                 config: $settings.proofreadConfig
             )
 
@@ -671,60 +670,47 @@ struct ActionsView: View {
                 icon: "bubble.and.pencil",
                 title: "Prompt",
                 subtitle: "Type a one-off prompt for the selected text. Use {{text}} to place the selection; it's added automatically if omitted. Also available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on).",
-                enabled: guardedEnableBinding(for: $settings.promptEnabled),
+                enabled: $settings.promptEnabled,
                 isPrincipal: principalBinding(for: id),
+                showLabel: labelBinding(for: id),
                 config: $settings.promptConfig,
                 showsTone: false,
                 showsPrompt: false
             )
 
         case .builtin(.translate):
-            translateCard(isPrincipal: principalBinding(for: id))
+            translateCard(
+                isPrincipal: principalBinding(for: id),
+                showLabel: labelBinding(for: id)
+            )
 
         case .speak:
             SpeakCardView(
                 settings: settings,
                 keychain: keychain,
-                enabled: guardedEnableBinding(for: $settings.speakEnabled),
+                enabled: $settings.speakEnabled,
                 isPrincipal: principalBinding(for: id),
+                showLabel: labelBinding(for: id),
                 recordingID: $recordingID
             )
 
         case .dictionary:
             DictionaryCardView(
                 settings: settings,
-                enabled: guardedEnableBinding(for: $settings.dictionaryConfig.isEnabled),
-                isPrincipal: principalBinding(for: id)
+                enabled: $settings.dictionaryConfig.isEnabled,
+                isPrincipal: principalBinding(for: id),
+                showLabel: labelBinding(for: id)
             )
 
         case .custom(let uuid):
             if let action = settings.customActions.first(where: { $0.id == uuid }) {
                 customActionCard(
                     action: action,
-                    isPrincipal: principalBinding(for: id)
+                    isPrincipal: principalBinding(for: id),
+                    showLabel: labelBinding(for: id)
                 )
             }
         }
-    }
-
-    // MARK: - Cap-guarded enable binding
-
-    /// Returns a Binding<Bool> that intercepts enable (off→on) attempts.
-    ///
-    /// When turning ON and `enabledToolbarActionCount` is already at the cap,
-    /// the write is rejected and `showLimitAlert` is set to true so the user
-    /// sees a warning. Turning OFF is always allowed.
-    private func guardedEnableBinding(for binding: Binding<Bool>) -> Binding<Bool> {
-        Binding(
-            get: { binding.wrappedValue },
-            set: { newValue in
-                if newValue && settings.enabledToolbarActionCount >= settings.maxToolbarActionsCurrent {
-                    showLimitAlert = true
-                } else {
-                    binding.wrappedValue = newValue
-                }
-            }
-        )
     }
 
     // MARK: - Tone picker
@@ -749,14 +735,16 @@ struct ActionsView: View {
 
     @ViewBuilder
     private func translateCard(
-        isPrincipal: Binding<Bool>
+        isPrincipal: Binding<Bool>,
+        showLabel: Binding<Bool>
     ) -> some View {
         ActionCard(
             icon: .sfSymbol("character.bubble"),
             title: "Translate",
             subtitle: "Translate the selected text into your chosen language.",
-            enabled: guardedEnableBinding(for: $settings.translateEnabled),
+            enabled: $settings.translateEnabled,
             isPrincipal: isPrincipal,
+            showLabel: showLabel,
             isBuiltin: true
         ) {
             // Provider picker (all 5 providers).
@@ -881,6 +869,7 @@ struct ActionsView: View {
         subtitle: String,
         enabled: Binding<Bool>,
         isPrincipal: Binding<Bool>,
+        showLabel: Binding<Bool>,
         config: Binding<ActionConfig>,
         showsTone: Bool = false,
         showsPrompt: Bool = true
@@ -891,6 +880,7 @@ struct ActionsView: View {
             subtitle: subtitle,
             enabled: enabled,
             isPrincipal: isPrincipal,
+            showLabel: showLabel,
             isBuiltin: true
         ) {
             // Provider picker (AI-only)
@@ -977,7 +967,8 @@ struct ActionsView: View {
     @ViewBuilder
     private func customActionCard(
         action: CustomAction,
-        isPrincipal: Binding<Bool>
+        isPrincipal: Binding<Bool>,
+        showLabel: Binding<Bool>
     ) -> some View {
         let id = action.id
         let rawEnabledBinding = Binding(
@@ -992,8 +983,9 @@ struct ActionsView: View {
             icon: action.icon,
             title: action.title.isEmpty ? "(untitled)" : action.title,
             subtitle: action.actionDescription,
-            enabled: guardedEnableBinding(for: rawEnabledBinding),
+            enabled: rawEnabledBinding,
             isPrincipal: isPrincipal,
+            showLabel: showLabel,
             isBuiltin: false,
             isFromPlugin: action.isFromPlugin,
             onEdit: {
@@ -1337,9 +1329,12 @@ private struct FromPluginBadge: View {
 
 /// A card container for a single action's settings.
 ///
-/// In-card header: icon badge + title (with optional Built-in badge) on the
-/// left; principal checkbox + enabled toggle on the right. Body: the
-/// caller-supplied content rows below the header divider.
+/// In-card header: icon + title (with optional Built-in / From plugin badge)
+/// on the left; Edit / Delete buttons (custom actions only) on the right. A
+/// second header row holds three labeled switches — Activate, In More actions
+/// (inverse of `isPrincipal`), and Show label (greyed while the action is in
+/// More actions; its value is kept). Body: the caller-supplied content rows
+/// below the header divider.
 private struct ActionCard<Content: View>: View {
 
     let icon: ActionIcon
@@ -1348,6 +1343,8 @@ private struct ActionCard<Content: View>: View {
     var subtitle: String? = nil
     @Binding var enabled: Bool
     @Binding var isPrincipal: Bool
+    /// Whether the action shows its name next to its icon on the toolbar.
+    @Binding var showLabel: Bool
     /// When true, a "Built-in" badge appears next to the title.
     var isBuiltin: Bool = false
     /// When true (and not built-in), a "From plugin" badge appears next to the title.
@@ -1364,6 +1361,8 @@ private struct ActionCard<Content: View>: View {
 
     /// Drives the delete confirmation dialog.
     @State private var isShowingDeleteConfirmation = false
+
+    @Environment(\.isLastEnabledAction) private var isLastEnabled
 
     var body: some View {
         SettingsCard(
@@ -1384,12 +1383,21 @@ private struct ActionCard<Content: View>: View {
                         .hoverTooltip("Edit")
                     }
                     if let onDelete {
-                        Button { isShowingDeleteConfirmation = true } label: {
-                            Image(systemName: "trash")
-                                .foregroundStyle(.red)
+                        // Locked like Activate while this is the only active
+                        // action; the tooltip sits on an enabled wrapper.
+                        HStack {
+                            Button { isShowingDeleteConfirmation = true } label: {
+                                Image(systemName: "trash")
+                                    .foregroundStyle(.red)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isLastEnabled)
+                            .opacity(isLastEnabled ? 0.35 : 1)
                         }
-                        .buttonStyle(.plain)
-                        .hoverTooltip("Delete")
+                        .contentShape(Rectangle())
+                        .hoverTooltip(isLastEnabled
+                            ? "Can't delete the only active action. The toolbar needs at least one. Turn on another action first."
+                            : "Delete")
                         .confirmationDialog(
                             "Delete this action?",
                             isPresented: $isShowingDeleteConfirmation,
@@ -1401,20 +1409,6 @@ private struct ActionCard<Content: View>: View {
                             Text("This custom action will be permanently removed.")
                         }
                     }
-
-                    Toggle(isOn: $isPrincipal) {
-                        Text("Toolbar")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .toggleStyle(.checkbox)
-                    .hoverTooltip("Show in the main toolbar (off = in the More menu)")
-
-                    // Enable toggle
-                    Toggle("", isOn: $enabled)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .controlSize(.mini)
                 }
             },
             titleAccessory: {
@@ -1424,10 +1418,78 @@ private struct ActionCard<Content: View>: View {
                     FromPluginBadge()
                 }
             },
+            headerDetail: {
+                HStack(spacing: 14) {
+                    lockableSwitch(
+                        "Activate",
+                        isOn: $enabled,
+                        locked: isLastEnabled,
+                        tooltip: "Turn this action on or off",
+                        lockedTooltip: "Disabled because this is the only active action. The toolbar needs at least one. Turn on another action first."
+                    )
+                    headerSwitch("In More actions", isOn: Binding(
+                        get: { !isPrincipal },
+                        set: { isPrincipal = !$0 }
+                    ))
+                    .hoverTooltip("Show this action in the More actions menu instead of on the toolbar")
+                    lockableSwitch(
+                        "Show label",
+                        isOn: $showLabel,
+                        locked: !isPrincipal,
+                        tooltip: "Show the action's name next to its icon on the toolbar",
+                        lockedTooltip: "Disabled because this action is in More actions, which always shows action names. Turn off In More actions to use it."
+                    )
+                }
+            },
             content: {
                 content()
             }
         )
+    }
+
+    /// Caption + mini switch, macOS labeled-switch style (caption leading).
+    private func headerSwitch(_ title: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .toggleStyle(.switch)
+        .controlSize(.mini)
+    }
+
+    /// A header switch that can be locked: faded and non-interactive, with a
+    /// tooltip explaining why. Only the inner switch is disabled; the tooltip
+    /// sits on an enabled wrapper so hovering still works while locked.
+    private func lockableSwitch(
+        _ title: String,
+        isOn: Binding<Bool>,
+        locked: Bool,
+        tooltip: String,
+        lockedTooltip: String
+    ) -> some View {
+        HStack {
+            headerSwitch(title, isOn: isOn)
+                .disabled(locked)
+                .opacity(locked ? 0.35 : 1)
+        }
+        .contentShape(Rectangle())
+        .hoverTooltip(locked ? lockedTooltip : tooltip)
+    }
+}
+
+// MARK: - Last enabled action
+
+private struct IsLastEnabledActionKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private extension EnvironmentValues {
+    /// True when the card's action is the only enabled one, so its Activate
+    /// switch is locked (the toolbar needs at least one action).
+    var isLastEnabledAction: Bool {
+        get { self[IsLastEnabledActionKey.self] }
+        set { self[IsLastEnabledActionKey.self] = newValue }
     }
 }
 
@@ -1438,6 +1500,7 @@ private struct DictionaryCardView: View {
     @ObservedObject var settings: SettingsStore
     @Binding var enabled: Bool
     @Binding var isPrincipal: Bool
+    @Binding var showLabel: Bool
 
     var body: some View {
         ActionCard(
@@ -1446,6 +1509,7 @@ private struct DictionaryCardView: View {
             subtitle: "Look up definitions, phonetics, and examples across every dictionary provider.",
             enabled: $enabled,
             isPrincipal: $isPrincipal,
+            showLabel: $showLabel,
             isBuiltin: true
         ) {
             DictionaryConfigFields(
@@ -1597,6 +1661,7 @@ private struct SpeakCardView: View {
     @ObservedObject var settings: SettingsStore
     @Binding var enabled: Bool
     @Binding var isPrincipal: Bool
+    @Binding var showLabel: Bool
     @Binding var recordingID: ActionIdentifier?
 
     @StateObject private var coordinator: SpeakCoordinator
@@ -1613,11 +1678,13 @@ private struct SpeakCardView: View {
         keychain: KeychainManager,
         enabled: Binding<Bool>,
         isPrincipal: Binding<Bool>,
+        showLabel: Binding<Bool>,
         recordingID: Binding<ActionIdentifier?>
     ) {
         self.settings = settings
         self._enabled = enabled
         self._isPrincipal = isPrincipal
+        self._showLabel = showLabel
         self._recordingID = recordingID
         _coordinator = StateObject(wrappedValue: SpeakCoordinator(keychain: keychain))
         _selectedVoiceLanguage = State(initialValue: settings.speakSettings.defaultAccent)
@@ -1634,6 +1701,7 @@ private struct SpeakCardView: View {
             subtitle: "Read the selected text aloud using the system speech synthesiser.",
             enabled: $enabled,
             isPrincipal: $isPrincipal,
+            showLabel: $showLabel,
             isBuiltin: true
         ) {
             VStack(alignment: .leading, spacing: 16) {

@@ -560,10 +560,22 @@ private struct OnboardingActionsPage: View {
 
                         Spacer(minLength: 8)
 
-                        Toggle(item.title, isOn: enabledBinding(for: item.identifier))
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
+                        // Locked while this is the only active action: the
+                        // toolbar needs at least one. The tooltip sits on an
+                        // enabled wrapper so it still shows while locked.
+                        let isLastEnabled = settings.isLastEnabledAction(item.identifier)
+                        HStack {
+                            Toggle(item.title, isOn: enabledBinding(for: item.identifier))
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
+                                .disabled(isLastEnabled)
+                                .opacity(isLastEnabled ? 0.35 : 1)
+                        }
+                        .contentShape(Rectangle())
+                        .hoverTooltip(isLastEnabled
+                            ? "Keep at least one action on. Turn on another action first."
+                            : "Turn this action on or off")
                     }
                 }
             }
@@ -587,10 +599,7 @@ private struct OnboardingActionsPage: View {
         )
     }
 
-    /// Persist the toggle. Turning off is always allowed.
-    ///
-    /// `setPrincipal` is best-effort after a successful enable — a false return
-    /// means the principal row is full.
+    /// Persist the toggle. Enabling also places the action on the toolbar.
     private func setEnabled(_ id: ActionIdentifier, _ enabled: Bool) {
         if enabled {
             writeEnabled(id, true)
