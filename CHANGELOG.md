@@ -13,6 +13,12 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.2.1] - 2026-10-13
+
+### Added
+
+- "Remove gap before system buttons" switch in Settings → Appearance (off by default). When on, the Ignore and Settings buttons sit right after the actions like any other action, with a vertical divider before each, instead of after a gap. The preview in Settings updates as you toggle it.
+
 ## [1.2.0] - 2026-10-13
 
 ### Added
