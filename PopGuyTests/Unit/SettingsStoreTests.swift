@@ -994,4 +994,21 @@ struct SettingsStoreTests {
         ]
         #expect(result == expected)
     }
+
+    @Test("isLastEnabledAction is true only for the single remaining enabled action")
+    func isLastEnabledActionOnlyForSoleEnabled() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        #expect(store.isLastEnabledAction(.builtin(.improve)) == false)
+
+        store.shortenEnabled = false
+        store.proofreadEnabled = false
+        store.translateEnabled = false
+        store.speakEnabled = false
+        #expect(store.enabledOrderedIdentifiers == [.builtin(.improve)])
+        #expect(store.isLastEnabledAction(.builtin(.improve)) == true)
+        #expect(store.isLastEnabledAction(.builtin(.shorten)) == false)
+    }
 }

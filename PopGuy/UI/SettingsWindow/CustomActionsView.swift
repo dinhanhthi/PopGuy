@@ -186,10 +186,22 @@ struct CustomActionEditSheet: View {
 
                     // MARK: Identity (shared across all types)
                     SettingsCard(title: "Identity") {
-                        Toggle("", isOn: $draft.isEnabled)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .controlSize(.mini)
+                        // Locked while this is the only active action: the
+                        // toolbar needs at least one. The tooltip sits on an
+                        // enabled wrapper so it still shows while locked.
+                        let isLastEnabled = settings.isLastEnabledAction(.custom(draft.id))
+                        HStack {
+                            Toggle("", isOn: $draft.isEnabled)
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                                .controlSize(.mini)
+                                .disabled(isLastEnabled)
+                                .opacity(isLastEnabled ? 0.35 : 1)
+                        }
+                        .contentShape(Rectangle())
+                        .hoverTooltip(isLastEnabled
+                            ? "Disabled because this is the only active action. The toolbar needs at least one. Turn on another action first."
+                            : "Turn this action on or off")
                     } content: {
                         HStack(spacing: 8) {
                             Text("Name")

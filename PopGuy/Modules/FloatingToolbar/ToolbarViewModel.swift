@@ -319,6 +319,11 @@ final class ToolbarViewModel: ObservableObject {
     /// customActions array below.
     @Published var orderedActions: [ActionIdentifier] = []
 
+    /// Actions whose toolbar button shows its title next to the icon. All other
+    /// actions render icon-only with a hover tooltip. Set by ToolbarController
+    /// (and ToolbarPreviewView) on each presentation from SettingsStore.labeledActionIDs.
+    @Published var labeledActions: Set<ActionIdentifier> = []
+
     /// Whether the PopGuy logo is shown at the start of the action bar.
     @Published var showsLogo: Bool = true
 
@@ -369,16 +374,6 @@ final class ToolbarViewModel: ObservableObject {
         guard let id = activeCustomActionID,
               let action = customActions.first(where: { $0.id == id }) else { return false }
         return action.isScriptable && action.afterRun != .showResult
-    }
-
-    // MARK: Compact mode
-
-    /// True when 4 or more inline controls are visible (principal actions plus the
-    /// burger button when present). Utility buttons are excluded.
-    /// When compact, action buttons render icon-only with a hover tooltip.
-    var compactActions: Bool {
-        let inlineCount = orderedActions.count + (hasOverflow ? 1 : 0)
-        return inlineCount >= 4
     }
 
     // MARK: Edit-buffer computed helpers

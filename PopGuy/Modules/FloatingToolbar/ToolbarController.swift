@@ -574,8 +574,8 @@ final class ToolbarController {
 
         // Drive the action bar from the user's saved order (enabled identifiers only).
         // Remove any .custom entries that were filtered out by the appliesWhenRegex visibility check
-        // so dividers and compactActions counts reflect only the actions that
-        // are actually rendered.
+        // so dividers and the burger reflect only the actions that are actually
+        // rendered.
         let visibleCustomIDs = Set(viewModel.customActions.map(\.id))
         func filterVisible(_ ids: [ActionIdentifier]) -> [ActionIdentifier] {
             ids.filter { id in
@@ -586,6 +586,7 @@ final class ToolbarController {
         viewModel.showsLogo = !settings.hideToolbarLogo
         viewModel.orderedActions = filterVisible(settings.principalOrderedIdentifiers)
         viewModel.overflowActions = filterVisible(settings.overflowOrderedIdentifiers)
+        viewModel.labeledActions = settings.labeledActionIDs
 
         // If already showing, reposition; otherwise show fresh.
         show(for: event)

@@ -1288,35 +1288,3 @@ struct ToolbarViewModelDictionaryTests {
         #expect(vm.dictionaryEntry == nil)
     }
 }
-
-// MARK: - ToolbarViewModel.compactActions (dictionary-inclusive regression)
-
-@Suite("ToolbarViewModel compactActions + dictionary")
-@MainActor
-struct ToolbarViewModelCompactDictionaryTests {
-
-    @Test("3 built-ins + dictionary enabled (total 4) flips compact mode")
-    func dictionaryCountsTowardCompact() {
-        let vm = ToolbarViewModel()
-        vm.orderedActions = [
-            .builtin(.improve), .builtin(.shorten), .builtin(.translate), .dictionary,
-        ]
-        #expect(vm.compactActions == true)
-    }
-
-    @Test("2 built-ins + dictionary (total 3) does not flip compact mode")
-    func dictionaryKeepsNonCompactUnderFour() {
-        let vm = ToolbarViewModel()
-        vm.orderedActions = [
-            .builtin(.improve), .builtin(.shorten), .dictionary,
-        ]
-        #expect(vm.compactActions == false)
-    }
-
-    @Test("dictionary alone (1 enabled) does not flip compact mode")
-    func dictionaryOnly() {
-        let vm = ToolbarViewModel()
-        vm.orderedActions = [.dictionary]
-        #expect(vm.compactActions == false)
-    }
-}

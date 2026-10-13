@@ -86,6 +86,11 @@ struct PrincipalActionsTests {
         }
         #expect(store.overflowOrderedIdentifiers.count == 9)
         #expect(store.principalOrderedIdentifiers.isEmpty)
+
+        // A persisted empty principal set is a user choice, not a first launch.
+        let reloaded = SettingsStore(defaults: suite)
+        #expect(reloaded.principalActionIDs.isEmpty)
+        #expect(reloaded.overflowOrderedIdentifiers.count == 9)
     }
 
     @Test("disabled actions switch zones freely")
@@ -177,6 +182,63 @@ struct PrincipalActionsTests {
         store.hideToolbarLogo = true
         #expect(store.principalActionIDs == before)
         #expect(SettingsStore(defaults: suite).hideToolbarLogo)
+    }
+
+    // MARK: - Show label
+
+    @Test("no action is labeled by default")
+    func noActionLabeledByDefault() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        store.addCustomAction(CustomAction(title: "C", systemPrompt: "p", isEnabled: true))
+
+        #expect(store.labeledActionIDs.isEmpty)
+        for id in store.actionOrder {
+            #expect(!store.isLabeled(id))
+        }
+    }
+
+    @Test("setLabeled persists across reload")
+    func setLabeledPersistsAcrossReload() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        store.setLabeled(.builtin(.translate), true)
+        #expect(store.isLabeled(.builtin(.translate)))
+
+        let reloaded = SettingsStore(defaults: suite)
+        #expect(reloaded.isLabeled(.builtin(.translate)))
+        #expect(reloaded.labeledActionIDs.contains(.builtin(.translate)))
+    }
+
+    @Test("moving an action into More keeps its label")
+    func setPrincipalKeepsLabel() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        store.setLabeled(.builtin(.improve), true)
+        store.setPrincipal(.builtin(.improve), false)
+
+        #expect(!store.isPrincipal(.builtin(.improve)))
+        #expect(store.isLabeled(.builtin(.improve)))
+    }
+
+    @Test("deleteCustomAction removes id from labeledActionIDs")
+    func deleteCustomActionRemovesLabel() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        let action = CustomAction(title: "L", systemPrompt: "p", isEnabled: true)
+        store.addCustomAction(action)
+        store.setLabeled(.custom(action.id), true)
+
+        store.deleteCustomAction(id: action.id)
+        #expect(!store.labeledActionIDs.contains(.custom(action.id)))
     }
 }
 

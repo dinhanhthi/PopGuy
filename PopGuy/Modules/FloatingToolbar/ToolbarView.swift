@@ -447,7 +447,7 @@ struct ToolbarView: View {
     /// Renders the appropriate control for a given action identifier.
     @ViewBuilder
     private func actionControl(for id: ActionIdentifier, forceLabeled: Bool = false) -> some View {
-        let compact = forceLabeled ? false : viewModel.compactActions
+        let compact = !(forceLabeled || viewModel.labeledActions.contains(id))
         switch id {
         case .builtin(.improve):
             ToolbarActionButton(

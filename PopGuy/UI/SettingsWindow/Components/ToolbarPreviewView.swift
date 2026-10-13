@@ -2,14 +2,14 @@
 // PopGuy — UI/SettingsWindow/Components
 //
 // A static, pixel-faithful preview of the floating toolbar, driven by SettingsStore.
-// Reuses the real ToolbarView so compactActions (icon-only flip at >=4 buttons),
-// dividers, pickers, and utility buttons match the live toolbar exactly.
+// Reuses the real ToolbarView so per-action labels (Show label), dividers,
+// pickers, and utility buttons match the live toolbar exactly.
 //
 // The view model is seeded fresh on every body evaluation — acceptable here
 // because .allowsHitTesting(false) means no interactive state is preserved.
 //
-// Overflow: the bar can exceed the panel width (up to 6 principal actions,
-// optional burger menu, plus utility buttons). A horizontal ScrollView with a GeometryReader-bound minWidth centers when the
+// Overflow: the bar can exceed the panel width (any number of principal
+// actions, optional burger menu, plus utility buttons). A horizontal ScrollView with a GeometryReader-bound minWidth centers when the
 // bar fits and scrolls horizontally when it overflows.
 //
 // Isolation: @MainActor — implicitly via SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor.
@@ -58,6 +58,7 @@ struct ToolbarPreviewView: View {
         viewModel.showsLogo = !settings.hideToolbarLogo
         viewModel.orderedActions = settings.principalOrderedIdentifiers
         viewModel.overflowActions = settings.overflowOrderedIdentifiers
+        viewModel.labeledActions = settings.labeledActionIDs
 
         // The preview renders the toolbar at its real on-screen size, so the
         // backdrop and optical-centering nudge scale with the configured zoom

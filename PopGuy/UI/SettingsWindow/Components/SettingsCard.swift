@@ -5,7 +5,9 @@
 //
 // Unlike GroupBox (whose label floats *above* the box, so consecutive cards
 // blur together), the header lives INSIDE the card above a divider — each
-// group reads as one clearly bounded unit, System Settings style.
+// group reads as one clearly bounded unit, System Settings style. An optional
+// second header row ("header detail") sits under the title row and stays
+// visible while a collapsible card is collapsed.
 //
 // All spacing follows the shared SettingsMetrics 4pt scale so both tabs and
 // every card render identically.
@@ -41,9 +43,9 @@ enum SettingsMetrics {
 // MARK: - SettingsCard
 
 /// A card with an in-card header (optional icon badge, title, optional
-/// trailing accessory such as a Toggle), a divider, and caller-supplied
-/// content rows below.
-struct SettingsCard<Accessory: View, TitleAccessory: View, Content: View>: View {
+/// trailing accessory such as a Toggle, optional second "header detail" row),
+/// a divider, and caller-supplied content rows below.
+struct SettingsCard<Accessory: View, TitleAccessory: View, HeaderDetail: View, Content: View>: View {
 
     let icon: ActionIcon?
     let title: String
@@ -56,6 +58,11 @@ struct SettingsCard<Accessory: View, TitleAccessory: View, Content: View>: View 
     let isExpanded: Binding<Bool>?
     @ViewBuilder let accessory: () -> Accessory
     @ViewBuilder let titleAccessory: () -> TitleAccessory
+    /// Optional second header row (e.g. a row of switches), rendered below the
+    /// title row and left-aligned with the title/subtitle column. Part of the
+    /// header, so it stays visible while the card is collapsed. Taps on it never
+    /// toggle expansion. Pass `EmptyView` (the convenience inits do) to omit it.
+    @ViewBuilder let headerDetail: () -> HeaderDetail
     @ViewBuilder let content: () -> Content
 
     init(
@@ -65,6 +72,7 @@ struct SettingsCard<Accessory: View, TitleAccessory: View, Content: View>: View 
         isExpanded: Binding<Bool>? = nil,
         @ViewBuilder accessory: @escaping () -> Accessory,
         @ViewBuilder titleAccessory: @escaping () -> TitleAccessory,
+        @ViewBuilder headerDetail: @escaping () -> HeaderDetail,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.icon = icon
@@ -73,6 +81,7 @@ struct SettingsCard<Accessory: View, TitleAccessory: View, Content: View>: View 
         self.isExpanded = isExpanded
         self.accessory = accessory
         self.titleAccessory = titleAccessory
+        self.headerDetail = headerDetail
         self.content = content
     }
 
@@ -80,9 +89,17 @@ struct SettingsCard<Accessory: View, TitleAccessory: View, Content: View>: View 
     /// always shown.
     private var showsContent: Bool { isExpanded?.wrappedValue ?? true }
 
+    /// Whether a header-detail row was supplied. `EmptyView` means none, so no
+    /// row (and no extra padding) is rendered.
+    private var hasHeaderDetail: Bool { HeaderDetail.self != EmptyView.self }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+
+            if hasHeaderDetail {
+                headerDetailRow
+            }
 
             if showsContent {
                 Divider()
@@ -158,11 +175,50 @@ struct SettingsCard<Accessory: View, TitleAccessory: View, Content: View>: View 
             }
         }
     }
+
+    /// Second header row. The leading inset (icon width + header HStack
+    /// spacing) aligns it with the title/subtitle column. The empty tap
+    /// gesture swallows taps on the row — including on control captions — so
+    /// they never toggle card expansion.
+    private var headerDetailRow: some View {
+        headerDetail()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, icon == nil ? 0 : 20 + 5)
+            .padding(.horizontal, SettingsMetrics.cardPadding)
+            .padding(.bottom, 8)
+            .contentShape(Rectangle())
+            .onTapGesture {}
+    }
 }
 
 // MARK: - Convenience inits
 
-extension SettingsCard where TitleAccessory == EmptyView {
+extension SettingsCard where HeaderDetail == EmptyView {
+    /// Card with both header accessories but no header-detail row.
+    /// Covers the SettingsView Babylon BGL card.
+    init(
+        icon: ActionIcon? = nil,
+        title: String,
+        subtitle: String? = nil,
+        isExpanded: Binding<Bool>? = nil,
+        @ViewBuilder accessory: @escaping () -> Accessory,
+        @ViewBuilder titleAccessory: @escaping () -> TitleAccessory,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.init(
+            icon: icon,
+            title: title,
+            subtitle: subtitle,
+            isExpanded: isExpanded,
+            accessory: accessory,
+            titleAccessory: titleAccessory,
+            headerDetail: { EmptyView() },
+            content: content
+        )
+    }
+}
+
+extension SettingsCard where TitleAccessory == EmptyView, HeaderDetail == EmptyView {
     /// Card with a trailing header accessory but no title-adjacent accessory.
     /// Covers HistoryView and SettingsView provider cards (GetAPIKeyLink).
     init(
@@ -180,12 +236,13 @@ extension SettingsCard where TitleAccessory == EmptyView {
             isExpanded: isExpanded,
             accessory: accessory,
             titleAccessory: { EmptyView() },
+            headerDetail: { EmptyView() },
             content: content
         )
     }
 }
 
-extension SettingsCard where Accessory == EmptyView, TitleAccessory == EmptyView {
+extension SettingsCard where Accessory == EmptyView, TitleAccessory == EmptyView, HeaderDetail == EmptyView {
     /// Card without any header accessories.
     init(
         icon: ActionIcon? = nil,
@@ -201,6 +258,7 @@ extension SettingsCard where Accessory == EmptyView, TitleAccessory == EmptyView
             isExpanded: isExpanded,
             accessory: { EmptyView() },
             titleAccessory: { EmptyView() },
+            headerDetail: { EmptyView() },
             content: content
         )
     }

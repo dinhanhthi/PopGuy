@@ -166,6 +166,7 @@ final class SettingsStore: ObservableObject {
         static let historyStoreFullText       = "settings.historyStoreFullText"
         static let actionOrder                = "settings.actionOrder"
         static let principalActionIDs         = "settings.principalActionIDs"
+        static let labeledActionIDs           = "settings.labeledActionIDs"
         static let completedLocalModelIDs     = "settings.completedLocalModelIDs"
         static let localModelIdleSeconds      = "settings.localModelIdleSeconds"
     }
@@ -524,6 +525,13 @@ final class SettingsStore: ObservableObject {
         didSet { save(principalActionIDs, key: Keys.principalActionIDs) }
     }
 
+    /// Action identifiers whose label is shown on their toolbar button (default: off).
+    /// The value is preserved while the action sits in More actions. Persisted via
+    /// `didSet` on mutation; `didSet` does NOT fire on init assignment.
+    @Published private(set) var labeledActionIDs: Set<ActionIdentifier> {
+        didSet { save(labeledActionIDs, key: Keys.labeledActionIDs) }
+    }
+
     // MARK: - Init
 
     /// Create a SettingsStore backed by the given UserDefaults instance.
@@ -642,7 +650,8 @@ final class SettingsStore: ObservableObject {
 
         let rawPrincipal = Self.load(Set<ActionIdentifier>.self, key: Keys.principalActionIDs, from: defaults)
         let resolvedPrincipal: Set<ActionIdentifier>
-        if let rawPrincipal, !rawPrincipal.isEmpty {
+        // An empty persisted set is a user choice (every action in More), not a first launch.
+        if let rawPrincipal {
             resolvedPrincipal = Self.reconcilePrincipal(persisted: rawPrincipal, actionOrder: reconciledOrder)
         } else {
             let impEnabled = defaults.object(forKey: Keys.improveEnabled) as? Bool ?? true
@@ -669,8 +678,9 @@ final class SettingsStore: ObservableObject {
 
         actionOrder = reconciledOrder
         principalActionIDs = resolvedPrincipal
+        labeledActionIDs = Self.load(Set<ActionIdentifier>.self, key: Keys.labeledActionIDs, from: defaults) ?? []
         // Persist first-launch / upgrade migration (`didSet` does not run on init).
-        if rawPrincipal == nil || rawPrincipal?.isEmpty == true {
+        if rawPrincipal == nil {
             save(principalActionIDs, key: Keys.principalActionIDs)
         }
 
@@ -755,6 +765,7 @@ final class SettingsStore: ObservableObject {
         // Remove from the unified action order and principal partition.
         actionOrder.removeAll { $0 == .custom(id) }
         principalActionIDs.remove(.custom(id))
+        labeledActionIDs.remove(.custom(id))
     }
 
     /// Move custom actions at the given source offsets to the destination offset.
@@ -902,6 +913,12 @@ final class SettingsStore: ObservableObject {
         actionOrder.filter { isEnabled($0) }
     }
 
+    /// True when `id` is the only enabled action. The toolbar must keep at
+    /// least one action, so the UI locks this action's enable switch.
+    func isLastEnabledAction(_ id: ActionIdentifier) -> Bool {
+        enabledOrderedIdentifiers == [id]
+    }
+
     /// Returns whether `id` is assigned to the principal (inline) toolbar row.
     func isPrincipal(_ id: ActionIdentifier) -> Bool {
         principalActionIDs.contains(id)
@@ -925,6 +942,22 @@ final class SettingsStore: ObservableObject {
             principalActionIDs.insert(id)
         } else {
             principalActionIDs.remove(id)
+        }
+    }
+
+    /// Returns whether `id` shows its label on the toolbar button (default: off).
+    func isLabeled(_ id: ActionIdentifier) -> Bool {
+        labeledActionIDs.contains(id)
+    }
+
+    /// Show or hide the label on `id`'s toolbar button. The value is preserved
+    /// while the action sits in More actions.
+    func setLabeled(_ id: ActionIdentifier, _ value: Bool) {
+        guard value != labeledActionIDs.contains(id) else { return }
+        if value {
+            labeledActionIDs.insert(id)
+        } else {
+            labeledActionIDs.remove(id)
         }
     }
 
