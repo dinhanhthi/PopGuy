@@ -1581,8 +1581,10 @@ struct ModelField: View {
     private var curated: [String] { providerKind.curatedModels }
     private var hasCurated: Bool { !curated.isEmpty }
 
-    /// True when the free-text field is visible (custom mode or no curated list).
-    private var freeTextVisible: Bool { isCustomMode || !hasCurated }
+    /// True when the free-text field is visible (custom mode, no curated list, or
+    /// a model outside the curated list) — the same condition that makes the
+    /// Picker show "Custom…", so the two never disagree after a provider switch.
+    private var freeTextVisible: Bool { isCustomMode || !curated.contains(model) }
 
     /// The tag value for the Picker: either the current model (if curated) or the
     /// sentinel (if in custom mode or curated list is empty).
@@ -1631,11 +1633,13 @@ struct ModelField: View {
             }
         }
         .onAppear { syncCustomMode() }
-        .onChange(of: providerKind) { _ in
+        .onChange(of: providerKind) { newKind in
             checkTask?.cancel()
             checkTask = nil
             isChecking = false
-            syncCustomMode()
+            // Use the passed value: `providerKind` read inside this closure can
+            // still be the previous provider.
+            syncCustomMode(for: newKind)
             checkOutcome = nil
         }
         .onChange(of: model) { _ in
@@ -1732,7 +1736,7 @@ struct ModelField: View {
             .pickerStyle(.menu)
             .fixedSize()
 
-            if isCustomMode {
+            if freeTextVisible {
                 TextField(placeholder, text: $model)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 200)
@@ -1887,8 +1891,8 @@ struct ModelField: View {
 
     /// Derives `isCustomMode` from the current `model` and `providerKind`.
     /// Called on appear and on change of either value so state stays in sync.
-    private func syncCustomMode() {
-        let curated = providerKind.curatedModels
+    private func syncCustomMode(for kind: ProviderKind? = nil) {
+        let curated = (kind ?? providerKind).curatedModels
         let nowCustom = !curated.isEmpty && !curated.contains(model)
         isCustomMode = nowCustom
     }
