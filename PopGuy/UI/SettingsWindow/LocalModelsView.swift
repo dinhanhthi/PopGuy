@@ -241,15 +241,19 @@ struct LocalModelsView: View {
                         "needs \(formatRAM(model.minRAMBytes))",
                         systemImage: "memorychip"
                     )
-                    // Dedicated models (e.g. the humanizer) only appear in the
-                    // picker of the action installed from their Library preset.
-                    if model.dedicatedPresetID != nil {
-                        Label("Used only by the Humanize action", systemImage: "lock")
-                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .labelStyle(.titleAndIcon)
+
+                // Dedicated models (e.g. the humanizer) only appear in the
+                // picker of the action installed from their Library preset.
+                if model.dedicatedPresetID != nil {
+                    Text("Rewrites AI-sounding text so it reads like a person wrote it (English and Chinese). Works only with the Humanize action: in Settings → Actions, open the Action Library, install Humanize from AI Writing, then pick this model as its Local (MLX) model.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Spacer(minLength: 8)
