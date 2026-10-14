@@ -13,10 +13,12 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.3.1] - 2026-10-14
+
 ### Added
 
 - Humanize action in the Action Library (new AI Writing category): rewrites AI-sounding text so it reads like a person wrote it. Works with every AI provider.
-- Local AI: Humanizer 12B, an on-device model built for the Humanize action.
+- Local AI: Humanizer 12B, an on-device model built for the Humanize action. It is selectable only for Humanize, and its Local Models entry explains how to set the action up.
 
 ## [1.3.0] - 2026-10-14
 
