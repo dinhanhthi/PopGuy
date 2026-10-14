@@ -38,9 +38,9 @@ struct LocalModelCatalogTests {
 
     // MARK: - Catalog size
 
-    @Test("catalog contains the expected 5 models")
+    @Test("catalog contains the expected 10 models")
     func catalogSize() {
-        #expect(LocalModelCatalog.all.count == 5)
+        #expect(LocalModelCatalog.all.count == 10)
     }
 
     // MARK: - Family assignments
@@ -61,6 +61,12 @@ struct LocalModelCatalogTests {
         for model in qwenModels {
             #expect(model.family == .qwen, "Expected .qwen family for '\(model.id)'")
         }
+    }
+
+    @Test("non-Gemma, non-Qwen models have .other family")
+    func otherModelsHaveOtherFamily() {
+        #expect(LocalModelCatalog.model(for: "lfm2.5-1.2b")?.family == .other)
+        #expect(LocalModelCatalog.model(for: "llama-3.2-3b")?.family == .other)
     }
 
     // MARK: - Size fields

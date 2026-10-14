@@ -97,12 +97,52 @@ public nonisolated enum LocalModelCatalog {
             minRAMBytes: 4_294_967_296
         ),
         LocalModel(
+            id: "qwen3.5-0.8b",
+            repoID: "mlx-community/Qwen3.5-0.8B-MLX-4bit",
+            displayName: "Qwen3.5 0.8B (4-bit)",
+            family: .qwen,
+            approxSizeBytes: 650_000_000,
+            minRAMBytes: 4_294_967_296
+        ),
+        LocalModel(
+            id: "qwen3.5-2b",
+            repoID: "mlx-community/Qwen3.5-2B-MLX-4bit",
+            displayName: "Qwen3.5 2B (4-bit)",
+            family: .qwen,
+            approxSizeBytes: 1_750_000_000,
+            minRAMBytes: 4_294_967_296
+        ),
+        LocalModel(
             id: "qwen3.5-4b",
             repoID: "mlx-community/Qwen3.5-4B-MLX-4bit",
             displayName: "Qwen3.5 4B (4-bit)",
             family: .qwen,
             approxSizeBytes: 3_100_000_000,
             minRAMBytes: 6_442_450_944
+        ),
+        LocalModel(
+            id: "qwen3.5-9b",
+            repoID: "mlx-community/Qwen3.5-9B-MLX-4bit",
+            displayName: "Qwen3.5 9B (4-bit)",
+            family: .qwen,
+            approxSizeBytes: 6_000_000_000,
+            minRAMBytes: 12_884_901_888
+        ),
+        LocalModel(
+            id: "lfm2.5-1.2b",
+            repoID: "mlx-community/LFM2.5-1.2B-Instruct-4bit",
+            displayName: "LFM2.5 1.2B (4-bit)",
+            family: .other,
+            approxSizeBytes: 660_000_000,
+            minRAMBytes: 4_294_967_296
+        ),
+        LocalModel(
+            id: "llama-3.2-3b",
+            repoID: "mlx-community/Llama-3.2-3B-Instruct-4bit",
+            displayName: "Llama 3.2 3B (4-bit)",
+            family: .other,
+            approxSizeBytes: 1_820_000_000,
+            minRAMBytes: 4_294_967_296
         ),
     ]
 
