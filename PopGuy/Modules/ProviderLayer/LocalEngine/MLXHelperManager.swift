@@ -495,7 +495,9 @@ actor MLXHelperManager {
         systemPrompt: String?,
         input: String,
         maxTokens: Int,
-        temperature: Double
+        temperature: Double,
+        rawPrompt: Bool = false,
+        topP: Double? = nil
     ) async throws -> AsyncThrowingStream<String, Error> {
         try checkSupported()
 
@@ -537,7 +539,9 @@ actor MLXHelperManager {
                 systemPrompt: systemPrompt,
                 input: input,
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                rawPrompt: rawPrompt,
+                topP: topP
             ))
         } catch {
             failActiveRequest(error)

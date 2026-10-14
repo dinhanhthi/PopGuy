@@ -114,6 +114,38 @@ struct HelperRequestTests {
         #expect(try roundTrip(req) == req)
     }
 
+    @Test("generate round-trip identity with rawPrompt and topP")
+    func generateRoundTripWithRawPromptAndTopP() throws {
+        let req = HelperRequest.generate(
+            modelID: "m", systemPrompt: nil, input: "q", maxTokens: 100, temperature: 1.0,
+            rawPrompt: true, topP: 0.95
+        )
+        let obj = try json(req)
+        #expect(obj["rawPrompt"] as? Bool == true)
+        #expect(obj["topP"] as? Double == 0.95)
+        #expect(try roundTrip(req) == req)
+    }
+
+    @Test("legacy generate JSON without rawPrompt/topP decodes to false/nil")
+    func legacyGenerateDecodesDefaults() throws {
+        let data = Data(#"{"type":"generate","modelID":"m","input":"q","maxTokens":1,"temperature":0.5}"#.utf8)
+        let req = try decoder.decode(HelperRequest.self, from: data)
+        #expect(req == .generate(
+            modelID: "m", systemPrompt: nil, input: "q", maxTokens: 1, temperature: 0.5,
+            rawPrompt: false, topP: nil
+        ))
+    }
+
+    @Test("chat generate omits rawPrompt and topP keys")
+    func chatGenerateOmitsRawPromptAndTopP() throws {
+        let req = HelperRequest.generate(
+            modelID: "m", systemPrompt: "s", input: "q", maxTokens: 1, temperature: 0.5
+        )
+        let obj = try json(req)
+        #expect(obj["rawPrompt"] == nil)
+        #expect(obj["topP"] == nil)
+    }
+
     @Test("unload encodes type=unload")
     func unloadTypeDiscriminator() throws {
         let obj = try json(HelperRequest.unload)

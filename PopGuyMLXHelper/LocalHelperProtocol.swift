@@ -22,12 +22,17 @@ public nonisolated enum HelperRequest: Codable, Equatable, Sendable {
     case download(modelID: String)
 
     /// Run inference on a loaded model. The helper streams `.token` lines then `.done`.
+    /// `rawPrompt` sends `input` as a plain completion prompt (no chat template);
+    /// `topP` overrides the sampler's nucleus value. Both are omitted on the wire
+    /// at their defaults so chat requests stay unchanged.
     case generate(
         modelID: String,
         systemPrompt: String?,
         input: String,
         maxTokens: Int,
-        temperature: Double
+        temperature: Double,
+        rawPrompt: Bool = false,
+        topP: Double? = nil
     )
 
     /// Unload the current model and release GPU memory.
@@ -45,6 +50,8 @@ public nonisolated enum HelperRequest: Codable, Equatable, Sendable {
         case input
         case maxTokens
         case temperature
+        case rawPrompt
+        case topP
     }
 
     public init(from decoder: any Decoder) throws {
@@ -62,12 +69,16 @@ public nonisolated enum HelperRequest: Codable, Equatable, Sendable {
             let input = try container.decode(String.self, forKey: .input)
             let maxTokens = try container.decode(Int.self, forKey: .maxTokens)
             let temperature = try container.decode(Double.self, forKey: .temperature)
+            let rawPrompt = try container.decodeIfPresent(Bool.self, forKey: .rawPrompt) ?? false
+            let topP = try container.decodeIfPresent(Double.self, forKey: .topP)
             self = .generate(
                 modelID: modelID,
                 systemPrompt: systemPrompt,
                 input: input,
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                rawPrompt: rawPrompt,
+                topP: topP
             )
         case "unload":
             self = .unload
@@ -90,13 +101,20 @@ public nonisolated enum HelperRequest: Codable, Equatable, Sendable {
         case .download(let modelID):
             try container.encode("download", forKey: .type)
             try container.encode(modelID, forKey: .modelID)
-        case .generate(let modelID, let systemPrompt, let input, let maxTokens, let temperature):
+        case .generate(
+            let modelID, let systemPrompt, let input, let maxTokens, let temperature,
+            let rawPrompt, let topP
+        ):
             try container.encode("generate", forKey: .type)
             try container.encode(modelID, forKey: .modelID)
             try container.encodeIfPresent(systemPrompt, forKey: .systemPrompt)
             try container.encode(input, forKey: .input)
             try container.encode(maxTokens, forKey: .maxTokens)
             try container.encode(temperature, forKey: .temperature)
+            if rawPrompt {
+                try container.encode(true, forKey: .rawPrompt)
+            }
+            try container.encodeIfPresent(topP, forKey: .topP)
         case .unload:
             try container.encode("unload", forKey: .type)
         case .status:

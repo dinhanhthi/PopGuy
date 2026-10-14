@@ -8,9 +8,14 @@
 // No-think policy: for the Qwen model family, enable_thinking: false is injected into
 // UserInput.additionalContext so the chat-template suppresses the reasoning trace.
 // Gemma models need no special context.
+//
+// Raw mode: the input is tokenized as-is and fed straight to the model, bypassing the chat
+// template (and its stdout warning when a model ships none). System prompt and the Qwen
+// no-think context are ignored in this mode.
 
 import Foundation
 import HuggingFace
+import MLX
 import MLXLLM
 import MLXHuggingFace
 import MLXLMCommon
@@ -74,6 +79,12 @@ func sanitizeTemperature(_ value: Double) -> Double {
     return min(value, 2.0)
 }
 
+/// Helper-only (not mirrored). Sanitizes `topP`: nil, non-finite or outside (0, 1] → 1.0 (disabled).
+func sanitizeTopP(_ value: Double?) -> Double {
+    guard let value, value.isFinite, value > 0, value <= 1 else { return 1.0 }
+    return value
+}
+
 // MARK: - ModelRunner
 
 /// Actor that manages a single resident ModelContainer.
@@ -110,38 +121,55 @@ actor ModelRunner {
     ///
     /// For Qwen/QwQ models, `enable_thinking: false` is injected into `UserInput.additionalContext`
     /// to suppress the reasoning trace via the chat template.
+    ///
+    /// When `rawPrompt` is true, `input` is tokenized directly (no chat template) and
+    /// `systemPrompt` is ignored. `topP` nil or out of (0, 1] disables nucleus sampling.
     func generate(
         modelID: String,
         systemPrompt: String?,
         input: String,
         maxTokens: Int,
-        temperature: Double
+        temperature: Double,
+        rawPrompt: Bool,
+        topP: Double?
     ) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
                     let loaded = try await self.ensureLoaded(modelID: modelID)
 
-                    var messages: [Chat.Message] = []
-                    if let system = systemPrompt, !system.isEmpty {
-                        messages.append(.system(system))
-                    }
-                    messages.append(.user(input))
-
-                    let additionalContext: [String: any Sendable]? =
-                        isQwenFamily(modelID) ? ["enable_thinking": false] : nil
-
-                    let userInput = UserInput(
-                        chat: messages,
-                        additionalContext: additionalContext
-                    )
-
                     let params = GenerateParameters(
                         maxTokens: clampMaxTokens(maxTokens),
-                        temperature: Float(sanitizeTemperature(temperature))
+                        temperature: Float(sanitizeTemperature(temperature)),
+                        topP: Float(sanitizeTopP(topP))
                     )
 
-                    let lmInput = try await loaded.prepare(input: userInput)
+                    let lmInput: LMInput
+                    if rawPrompt {
+                        let tokens = await loaded.encode(input)
+                        #if DEBUG
+                        // stderr only: stdout is the JSON line protocol.
+                        let head = tokens.prefix(5).map(String.init).joined(separator: ",")
+                        FileHandle.standardError.write(Data("raw prompt tokens: [\(head)]\n".utf8))
+                        #endif
+                        lmInput = LMInput(tokens: MLXArray(tokens))
+                    } else {
+                        var messages: [Chat.Message] = []
+                        if let system = systemPrompt, !system.isEmpty {
+                            messages.append(.system(system))
+                        }
+                        messages.append(.user(input))
+
+                        let additionalContext: [String: any Sendable]? =
+                            isQwenFamily(modelID) ? ["enable_thinking": false] : nil
+
+                        let userInput = UserInput(
+                            chat: messages,
+                            additionalContext: additionalContext
+                        )
+
+                        lmInput = try await loaded.prepare(input: userInput)
+                    }
                     let stream = try await loaded.generate(input: lmInput, parameters: params)
 
                     for await generation in stream {

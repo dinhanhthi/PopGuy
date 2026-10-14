@@ -1554,6 +1554,9 @@ struct ModelField: View {
     var settings: SettingsStore? = nil
     /// Keychain — needed to read the API key when the user taps Check.
     var keychain: KeychainManager? = nil
+    /// Action Library preset of the action being edited — unlocks the local
+    /// models dedicated to that preset. Nil hides every dedicated model.
+    var libraryPresetID: String? = nil
 
     /// Sentinel tag used for the "Custom…" Picker row. Must not collide with
     /// any real model identifier string.
@@ -1663,11 +1666,13 @@ struct ModelField: View {
     /// updated when the user explicitly selects a different entry.
     ///
     /// If no models are installed at all, shows a hint pointing to Local Models.
+    /// Models dedicated to a library preset are hidden unless `libraryPresetID` matches.
     @ViewBuilder
     private var mlxLocalModelPicker: some View {
-        let installedModels: [LocalModel] = LocalModelCatalog.all.filter {
-            settings?.installedLocalModels.contains($0.id) ?? false
-        }
+        let installedModels: [LocalModel] = LocalModelCatalog.selectableModels(
+            installed: settings?.installedLocalModels ?? [],
+            presetID: libraryPresetID
+        )
         let currentIsInstalled = installedModels.map(\.id).contains(model)
 
         if installedModels.isEmpty && model.isEmpty {

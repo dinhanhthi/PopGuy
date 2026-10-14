@@ -386,13 +386,18 @@ func runMain() async {
                     writeResponse(.error(message: error.localizedDescription))
                 }
 
-            case .generate(let modelID, let systemPrompt, let input, let maxTokens, let temperature):
+            case .generate(
+                let modelID, let systemPrompt, let input, let maxTokens, let temperature,
+                let rawPrompt, let topP
+            ):
                 let stream = await runner.generate(
                     modelID: modelID,
                     systemPrompt: systemPrompt,
                     input: input,
                     maxTokens: maxTokens,
-                    temperature: temperature
+                    temperature: temperature,
+                    rawPrompt: rawPrompt,
+                    topP: topP
                 )
                 do {
                     for try await delta in stream {

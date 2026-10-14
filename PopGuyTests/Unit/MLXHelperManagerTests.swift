@@ -13,6 +13,9 @@
 //   "quit"    → exits immediately (no done)
 //   any other → token:hello, token:" world", done
 //
+// Raw-prompt requests (line contains "rawPrompt":true) bypass the modes above:
+//   with "topP":0.95 → token:raw-ok, done; otherwise token:raw-missing-topP, done
+//
 // Stub download modes (selected by the `modelID` field value, matched by substring):
 //   contains "error" → error response (no done)
 //   contains "quit"  → exits immediately (no done)
@@ -69,6 +72,17 @@ private func writeStubHelper(emitReady: Bool = true) throws -> URL {
     while IFS= read -r line; do
         case "$line" in
             *'"type":"generate"'*|*'"type": "generate"'*)
+                # Raw-prompt requests: echo whether topP was forwarded too.
+                case "$line" in
+                    *'"rawPrompt":true'*)
+                        case "$line" in
+                            *'"topP":0.95'*) printf '{"type":"token","delta":"raw-ok"}\n' ;;
+                            *) printf '{"type":"token","delta":"raw-missing-topP"}\n' ;;
+                        esac
+                        printf '{"type":"done"}\n'
+                        continue
+                        ;;
+                esac
                 mode=$(echo "$line" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('input',''))" 2>/dev/null || echo "")
                 loaded_model_id=$(echo "$line" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('modelID',''))" 2>/dev/null || echo "")
                 case "$mode" in
@@ -195,6 +209,32 @@ struct MLXHelperManagerTests {
 
         await manager.shutdown()
         #expect(result == "hello world")
+    }
+
+    @Test("generate forwards rawPrompt and topP to the helper")
+    func generateForwardsRawPromptAndTopP() async throws {
+        let stubURL = try writeStubHelper()
+        defer { try? FileManager.default.removeItem(at: stubURL) }
+
+        let manager = MLXHelperManager(helperURL: stubURL, supported: true)
+        let stream = try await manager.generate(
+            modelID: "gemma-4-e2b",
+            systemPrompt: nil,
+            input: "Rewrite this.",
+            maxTokens: 64,
+            temperature: 1.0,
+            rawPrompt: true,
+            topP: 0.95
+        )
+
+        let tokens: [String] = try await collectWithTimeout(seconds: 10) {
+            var collected: [String] = []
+            for try await token in stream { collected.append(token) }
+            return collected
+        }
+
+        await manager.shutdown()
+        #expect(tokens == ["raw-ok"])
     }
 
     // MARK: - 7a: helper error → stream throws

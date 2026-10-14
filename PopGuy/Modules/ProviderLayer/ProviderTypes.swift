@@ -202,7 +202,9 @@ extension ProviderKind {
              .deepL, .googleTranslate:
             return []
         case .mlxLocal:
-            return LocalModelCatalog.all.map(\.id)
+            // Dedicated models (e.g. the humanizer) are reachable only through the
+            // local model picker of their matching Action Library preset.
+            return LocalModelCatalog.all.filter { $0.dedicatedPresetID == nil }.map(\.id)
         case .claudeCLI:
             return ["opus", "sonnet", "haiku", "fable"]
         case .codexCLI:
