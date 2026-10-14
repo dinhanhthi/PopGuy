@@ -9,6 +9,20 @@ uses a warm SPM/Metal cache, so it is far faster than an always-clean CI runner.
 This **Before** section handles prep (commits → version → changelogs → file updates). The
 **After** section runs the actual local release.
 
+**Fully autonomous — never ask the user anything.** Running `/cf-ship` is the approval for
+the whole flow: version bump, changelog, commit, push to `main`, and `scripts/ship.sh`
+(public GitHub Release + appcast). Do not ask to confirm the version, do not ask to review
+the changelog, do not ask before pushing or before `ship.sh`. Decide with the rules below and
+keep going. These overrides beat the generic cf-ship rules:
+
+- Pushing the `release: vX.Y.Z` commit straight to `main` is expected (this repo releases
+  from `main`); skip cf-ship's "never push to main" warning and its PR step.
+- A version in the hint (e.g. `/cf-ship 1.4.0`) is used as-is, skipping Step B2's classification.
+- The only stops are hard failures you cannot fix: a test that still fails after one re-run,
+  a build/notarize/publish script exiting non-zero, or no user-facing commits (Step B1).
+  A test that fails once and passes on re-run is flaky: record it with `capture-later.sh`
+  and continue.
+
 ### Step B1: Collect unreleased commits
 
 ```bash
@@ -49,21 +63,23 @@ Classify the filtered commits using conventional commit prefixes:
 
 | Commits | Level |
 |---|---|
-| Several (2+) `feat:` commits, or any breaking change | MINOR (x.Y.0) |
-| A single `feat:`, and/or `fix:`, `perf:`, `refactor:`, `docs:`, `chore:`, `style:`, `test:` | PATCH (x.x.Z) |
+| Many new features (3+ distinct app-facing features), or any breaking change | MINOR (x.Y.0) |
+| Anything else: 1–2 features, `fix:`, `perf:`, `refactor:`, `docs:`, `chore:`, `style:`, `test:` | PATCH (x.x.Z) |
 
 Rules:
-- **PATCH is the default.** Propose MINOR only when there are **several** app-facing
-  `feat:` commits, or a **breaking change** (`feat!:`/`fix!:`, a `BREAKING CHANGE:` footer,
-  or a change that removes/alters existing behavior users rely on).
-- A **single** `feat:` commit with no breaking change → **PATCH** (e.g. v1.1.1 shipped one
-  new option as a patch).
+- **PATCH is the default and strongly preferred.** Choose MINOR only for **many** new
+  features (3 or more distinct app-facing features) or a **breaking change**
+  (`feat!:`/`fix!:`, a `BREAKING CHANGE:` footer, or a change that removes/alters existing
+  behavior users rely on).
+- Count **features**, not commits: several `feat:` commits for the same feature (plan phases,
+  follow-up `fix:` on it) count as one. Model-list refreshes and new catalog entries are
+  one feature each, not many.
+- 1 or 2 new features with no breaking change → **PATCH** (e.g. v1.1.1 shipped one new option
+  as a patch).
 - `*(website):` commits do **not** count as `feat:` (or any other prefix) for the bump.
   A website-only `feat(website):` must never trigger a MINOR.
-- If the changes look large enough to warrant a **MAJOR** bump (complete redesign,
-  removal of a core feature) → **STOP. Do NOT auto-bump. Ask the user:**
-  `"Some changes look like they could justify a MAJOR version bump. Should this be a
-  MAJOR release, or MINOR?"`
+- **Never bump MAJOR on your own** — even for a redesign; use MINOR and mention in the final
+  summary that it might deserve a MAJOR. MAJOR only when the user passes it in the hint.
 - When in doubt between PATCH and MINOR → choose **PATCH**.
 
 Get current version from project:
@@ -71,17 +87,13 @@ Get current version from project:
 grep "MARKETING_VERSION" PopGuy.xcodeproj/project.pbxproj | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'
 ```
 
-Compute the new version from current + bump level. **Show the user:**
+Compute the new version from current + bump level and print it (no confirmation — continue
+straight to Step B3):
 ```
 Current version : X.Y.Z (build N)
-Proposed bump   : MINOR / PATCH
+Bump            : MINOR / PATCH
 New version     : X.Y+1.0 / X.Y.Z+1
 ```
-
-**Ask for explicit confirmation before continuing:**
-`"Proceed with vX.Y.Z? (yes / no / different version)"`
-
-If the user specifies a different version, use that.
 
 ### Step B3: Synthesize the changelog
 
@@ -111,12 +123,12 @@ the user sees after they download or Sparkle-update. A landing-page redesign, do
 restyle, or provider-logo tweak on the site is not a release-note item — even when
 the same git range includes those commits.
 
-Write the changelog out in the chat for review **before modifying any files**.
-Ask: `"Does this look right? (yes to proceed, or paste corrections)"`
+If `## [Unreleased]` already has entries, they belong to this release: move them into the new
+section and add any missing commits. Print the final changelog section in the chat for the
+record, then continue — do not wait for review.
 
 ### Step B4: Update files
 
-Only after Step B3 confirmation:
 
 **1. Update CHANGELOG.md** — prepend the new `## [X.Y.Z]` section after `## [Unreleased]`.
 Keep existing entries intact.
@@ -175,7 +187,9 @@ Shipped (local flow):
 
 ## Rules
 
-- **Never auto-bump MAJOR** — always ask the user to confirm before a MAJOR bump.
+- **No questions** — the whole flow runs without asking the user (see the top of Before).
+- **Never auto-bump MAJOR** — MAJOR only when the user passes it in the hint.
+- **Prefer PATCH** — MINOR only for 3+ distinct new features or a breaking change.
 - **Release locally, not via CI** — run `build-and-notarize.sh` + `publish-release.sh` on this
   machine. Do **not** push tags expecting CI to release; there is no release workflow.
 - **Never push tags before committing** — the tag must point to the version-bumped commit.
@@ -185,10 +199,11 @@ Shipped (local flow):
 - **Website changes never go in release notes** — ignore `website/` and
   `*(website):` commits for bump classification and the changelog. The website
   has had no release-notes UI since `5d522f3` removed its changelog modal.
-- **Always show the changelog for review before writing files** — Step B3 is mandatory.
+- **Always print the changelog section** in the chat (Step B3) — for the record, not for review.
 - **Verify the archive after pbxproj changes** — a normal build can pass while `archive` fails
   (e.g. the MLX bundle symlink → `cp -RL` fix). Only `xcodebuild archive` catches it.
-- **If a step is unclear, stop and ask** — do not guess. Then update this SKILL.md to
-  encode the answer so the same question is never asked again.
+- **If a step is unclear, pick the most conservative option and continue** (e.g. PATCH over
+  MINOR). Mention the choice in the final summary, then update this SKILL.md to encode it so
+  the same doubt never comes up again.
 - **Only commit these files per release:** `CHANGELOG.md`, `PopGuy.xcodeproj/project.pbxproj`
   (and `appcast.xml` in Step A3). Never stage build artifacts, secrets, or `ExportOptions.plist`.
