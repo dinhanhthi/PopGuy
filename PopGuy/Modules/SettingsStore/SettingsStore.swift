@@ -581,37 +581,44 @@ final class SettingsStore: ObservableObject {
         let rawImproveConfig = Self.load(ActionConfig.self, key: Keys.improveConfig, from: defaults) ?? .defaultImprove
         // I-B coercion: if the persisted Improve provider is translation-only,
         // reset to the default AI provider so the app never dispatches Improve to DeepL/Google.
+        let coercedImproveConfig: ActionConfig
         if ActionKind.improve.allowedProviders.contains(rawImproveConfig.providerKind) {
-            improveConfig = rawImproveConfig
+            coercedImproveConfig = rawImproveConfig
         } else {
-            improveConfig = ActionConfig(
+            coercedImproveConfig = ActionConfig(
                 id: .improve,
                 providerKind: ActionConfig.defaultImprove.providerKind,
                 model: ActionConfig.defaultImprove.model
             )
         }
+        improveConfig = Self.migratedConfig(coercedImproveConfig)
         // Same I-B coercion for Shorten and Proofread (AI-only actions).
         let rawShortenConfig = Self.load(ActionConfig.self, key: Keys.shortenConfig, from: defaults) ?? .defaultShorten
+        let coercedShortenConfig: ActionConfig
         if ActionKind.shorten.allowedProviders.contains(rawShortenConfig.providerKind) {
-            shortenConfig = rawShortenConfig
+            coercedShortenConfig = rawShortenConfig
         } else {
-            shortenConfig = ActionConfig(
+            coercedShortenConfig = ActionConfig(
                 id: .shorten,
                 providerKind: ActionConfig.defaultShorten.providerKind,
                 model: ActionConfig.defaultShorten.model
             )
         }
+        shortenConfig = Self.migratedConfig(coercedShortenConfig)
         let rawProofreadConfig = Self.load(ActionConfig.self, key: Keys.proofreadConfig, from: defaults) ?? .defaultProofread
+        let coercedProofreadConfig: ActionConfig
         if ActionKind.proofread.allowedProviders.contains(rawProofreadConfig.providerKind) {
-            proofreadConfig = rawProofreadConfig
+            coercedProofreadConfig = rawProofreadConfig
         } else {
-            proofreadConfig = ActionConfig(
+            coercedProofreadConfig = ActionConfig(
                 id: .proofread,
                 providerKind: ActionConfig.defaultProofread.providerKind,
                 model: ActionConfig.defaultProofread.model
             )
         }
-        translateConfig  = Self.load(ActionConfig.self, key: Keys.translateConfig, from: defaults) ?? .defaultTranslate
+        proofreadConfig = Self.migratedConfig(coercedProofreadConfig)
+        let rawTranslateConfig = Self.load(ActionConfig.self, key: Keys.translateConfig, from: defaults) ?? .defaultTranslate
+        translateConfig  = Self.migratedConfig(rawTranslateConfig)
         defaultTargetLanguage = defaults.string(forKey: Keys.targetLanguage) ?? "en"
         ollamaBaseURL         = defaults.string(forKey: Keys.ollamaBaseURL)  ?? "http://localhost:11434/v1"
         customBaseURL         = defaults.string(forKey: Keys.customBaseURL)  ?? ""
@@ -627,20 +634,24 @@ final class SettingsStore: ObservableObject {
         // I-B coercion: if the persisted Prompt provider is translation-only,
         // reset to the default AI provider so the app never dispatches Prompt to DeepL/Google.
         let rawPromptConfig = Self.load(ActionConfig.self, key: Keys.promptConfig, from: defaults) ?? .defaultPrompt
+        let coercedPromptConfig: ActionConfig
         if ActionKind.prompt.allowedProviders.contains(rawPromptConfig.providerKind) {
-            promptConfig = rawPromptConfig
+            coercedPromptConfig = rawPromptConfig
         } else {
-            promptConfig = ActionConfig(
+            coercedPromptConfig = ActionConfig(
                 id: .prompt,
                 providerKind: ActionConfig.defaultPrompt.providerKind,
                 model: ActionConfig.defaultPrompt.model
             )
         }
+        promptConfig = Self.migratedConfig(coercedPromptConfig)
         speakSettings       = Self.load(SpeakSettings.self, key: Keys.speakSettings, from: defaults) ?? .default
         dictionaryConfig    = Self.load(DictionaryConfig.self, key: Keys.dictionaryConfig, from: defaults) ?? .default
         babylonDictionaries = Self.load([BabylonDictionary].self, key: Keys.babylonDictionaries, from: defaults) ?? []
-        ttsProviderConfigs  = Self.load([String: TTSProviderConfig].self, key: Keys.ttsProviderConfigs, from: defaults) ?? [:]
-        let loadedCustomActions = Self.load([CustomAction].self, key: Keys.customActions, from: defaults) ?? []
+        let rawTTSProviderConfigs = Self.load([String: TTSProviderConfig].self, key: Keys.ttsProviderConfigs, from: defaults) ?? [:]
+        ttsProviderConfigs  = Self.migratedTTSConfigs(rawTTSProviderConfigs)
+        let rawCustomActions = Self.load([CustomAction].self, key: Keys.customActions, from: defaults) ?? []
+        let loadedCustomActions = rawCustomActions.map(Self.migratedAction)
         customActions       = loadedCustomActions
         shortcutBindings = Self.load([ShortcutBinding].self, key: Keys.shortcutBindings, from: defaults) ?? ShortcutBinding.defaultBuiltins
         hasOnboarded     = defaults.object(forKey: Keys.hasOnboarded) as? Bool ?? false
@@ -709,6 +720,15 @@ final class SettingsStore: ObservableObject {
         if rawPrincipal == nil {
             save(principalActionIDs, key: Keys.principalActionIDs)
         }
+        // Persist deprecated-model migration (`didSet` does not run on init).
+        // Only values the migration changed are written; pure defaults never change.
+        if improveConfig != coercedImproveConfig { save(improveConfig, key: Keys.improveConfig) }
+        if shortenConfig != coercedShortenConfig { save(shortenConfig, key: Keys.shortenConfig) }
+        if proofreadConfig != coercedProofreadConfig { save(proofreadConfig, key: Keys.proofreadConfig) }
+        if translateConfig != rawTranslateConfig { save(translateConfig, key: Keys.translateConfig) }
+        if promptConfig != coercedPromptConfig { save(promptConfig, key: Keys.promptConfig) }
+        if ttsProviderConfigs != rawTTSProviderConfigs { save(ttsProviderConfigs, key: Keys.ttsProviderConfigs) }
+        if customActions != rawCustomActions { save(customActions, key: Keys.customActions) }
 
         // Push the persisted idle value to the manager (didSet does not fire on init assignment).
         // The manager defaults to 300; push only when the persisted value differs.
@@ -771,7 +791,9 @@ final class SettingsStore: ObservableObject {
     // MARK: - Custom action CRUD
 
     /// Append a new custom action at the end of the list.
+    /// A deprecated model is migrated first (covers plugin import).
     func addCustomAction(_ action: CustomAction) {
+        let action = Self.migratedAction(action)
         customActions.append(action)
         actionOrder.append(.custom(action.id))
     }
@@ -904,6 +926,41 @@ final class SettingsStore: ObservableObject {
         // Append any canonical entry not already present.
         for entry in canonical where !seen.contains(entry) {
             result.append(entry)
+        }
+        return result
+    }
+
+    // MARK: - Deprecated model migration
+
+    /// Returns `config` with a deprecated model replaced by its recommended
+    /// successor (see `ModelDeprecations`). Unchanged when the model is current.
+    private static func migratedConfig(_ config: ActionConfig) -> ActionConfig {
+        ActionConfig(
+            id: config.id,
+            providerKind: config.providerKind,
+            model: config.providerKind.migratedModel(config.model),
+            customPrompt: config.customPrompt,
+            tone: config.tone
+        )
+    }
+
+    /// Returns `action` with deprecated AI and TTS models replaced.
+    /// The TTS model goes through the OpenAI TTS map: only OpenAI TTS has
+    /// deprecated ids, and they never match another engine's model.
+    private static func migratedAction(_ action: CustomAction) -> CustomAction {
+        var action = action
+        action.model = action.providerKind.migratedModel(action.model)
+        action.ttsConfig.model = TTSProviderKind.openAITTS.migratedModel(action.ttsConfig.model)
+        return action
+    }
+
+    /// Returns `configs` with each deprecated TTS model replaced, keyed by
+    /// `TTSProviderKind` raw value. Unknown keys are left untouched.
+    private static func migratedTTSConfigs(_ configs: [String: TTSProviderConfig]) -> [String: TTSProviderConfig] {
+        var result = configs
+        for (key, config) in configs {
+            guard let kind = TTSProviderKind(rawValue: key) else { continue }
+            result[key]?.model = kind.migratedModel(config.model)
         }
         return result
     }

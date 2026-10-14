@@ -179,7 +179,7 @@ nonisolated struct CustomAction: Codable, Sendable, Identifiable, Equatable {
         type: CustomActionType = .ai,
         systemPrompt: String,
         providerKind: ProviderKind = .anthropic,
-        model: String = "claude-sonnet-4-6",
+        model: String = "claude-sonnet-5-5",
         isEnabled: Bool = true,
         targetLanguage: String = "en",
         tone: TranslateTone = .neutral,

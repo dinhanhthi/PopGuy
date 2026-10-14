@@ -89,7 +89,7 @@ struct SettingsStoreTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        let custom = ActionConfig(id: .improve, providerKind: .openAI, model: "gpt-4o")
+        let custom = ActionConfig(id: .improve, providerKind: .openAI, model: "gpt-6-luna")
         let store1 = SettingsStore(defaults: suite)
         store1.improveConfig = custom
 
@@ -472,7 +472,7 @@ struct SettingsStoreTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        let custom = ActionConfig(id: .shorten, providerKind: .openAI, model: "gpt-4o")
+        let custom = ActionConfig(id: .shorten, providerKind: .openAI, model: "gpt-6-luna")
         let store1 = SettingsStore(defaults: suite)
         store1.shortenConfig = custom
 
@@ -520,7 +520,7 @@ struct SettingsStoreTests {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        let config = TTSProviderConfig(voiceOverrides: ["en-US": "alloy"], model: "tts-1")
+        let config = TTSProviderConfig(voiceOverrides: ["en-US": "alloy"], model: "gpt-4o-mini-tts")
         let store1 = SettingsStore(defaults: suite)
         store1.setTTSConfig(config, for: .openAITTS)
 
@@ -1073,5 +1073,95 @@ struct SettingsStoreTests {
         #expect(store.enabledOrderedIdentifiers == [.builtin(.improve)])
         #expect(store.isLastEnabledAction(.builtin(.improve)) == true)
         #expect(store.isLastEnabledAction(.builtin(.shorten)) == false)
+    }
+
+    // MARK: - Deprecated model migration
+
+    @Test("persisted built-in config with a deprecated model is migrated and re-saved, keeping prompt and tone")
+    func builtinConfigDeprecatedModelMigrated() throws {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let old = ActionConfig(id: .improve, providerKind: .gemini, model: "gemini-3.1-pro",
+                               customPrompt: "x", tone: .formal)
+        suite.set(try JSONEncoder().encode(old), forKey: "settings.improveConfig")
+
+        let store = SettingsStore(defaults: suite)
+        #expect(store.improveConfig.model == "gemini-4-argon")
+        #expect(store.improveConfig.providerKind == .gemini)
+        #expect(store.improveConfig.customPrompt == "x")
+        #expect(store.improveConfig.tone == .formal)
+
+        let data = try #require(suite.data(forKey: "settings.improveConfig"))
+        #expect(try JSONDecoder().decode(ActionConfig.self, from: data).model == "gemini-4-argon")
+        #expect(SettingsStore(defaults: suite).improveConfig.model == "gemini-4-argon")
+    }
+
+    @Test("legacy-but-active model is left unchanged")
+    func legacyActiveModelUnchanged() throws {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let config = ActionConfig(id: .shorten, providerKind: .anthropic, model: "claude-opus-4-8")
+        suite.set(try JSONEncoder().encode(config), forKey: "settings.shortenConfig")
+
+        let store = SettingsStore(defaults: suite)
+        #expect(store.shortenConfig.model == "claude-opus-4-8")
+    }
+
+    @Test("pure default configs are not persisted on load")
+    func defaultConfigsNotPersistedOnLoad() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        _ = SettingsStore(defaults: suite)
+        #expect(suite.data(forKey: "settings.improveConfig") == nil)
+        #expect(suite.data(forKey: "settings.customActions") == nil)
+        #expect(suite.data(forKey: "settings.ttsProviderConfigs") == nil)
+    }
+
+    @Test("persisted custom action with a deprecated model is migrated and re-saved")
+    func customActionDeprecatedModelMigrated() throws {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let action = CustomAction(title: "A", systemPrompt: "p",
+                                  providerKind: .anthropic, model: "claude-3-5-sonnet-20241022")
+        suite.set(try JSONEncoder().encode([action]), forKey: "settings.customActions")
+
+        let store = SettingsStore(defaults: suite)
+        #expect(store.customActions.first?.model == "claude-sonnet-5-5")
+
+        let data = try #require(suite.data(forKey: "settings.customActions"))
+        #expect(try JSONDecoder().decode([CustomAction].self, from: data).first?.model == "claude-sonnet-5-5")
+    }
+
+    @Test("persisted OpenAI TTS config with a deprecated model is migrated and re-saved")
+    func ttsProviderConfigDeprecatedModelMigrated() throws {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let configs = ["openai_tts": TTSProviderConfig(model: "tts-1")]
+        suite.set(try JSONEncoder().encode(configs), forKey: "settings.ttsProviderConfigs")
+
+        let store = SettingsStore(defaults: suite)
+        #expect(store.ttsConfig(for: .openAITTS).model == "gpt-4o-mini-tts")
+
+        let data = try #require(suite.data(forKey: "settings.ttsProviderConfigs"))
+        let saved = try JSONDecoder().decode([String: TTSProviderConfig].self, from: data)
+        #expect(saved["openai_tts"]?.model == "gpt-4o-mini-tts")
+    }
+
+    @Test("addCustomAction migrates a deprecated model before storing")
+    func addCustomActionMigratesModel() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        store.addCustomAction(CustomAction(title: "C", systemPrompt: "p",
+                                           providerKind: .codexCLI, model: "gpt-5.5",
+                                           ttsConfig: TTSProviderConfig(model: "tts-1-hd")))
+        #expect(store.customActions.last?.model == "gpt-6.1-sol")
+        #expect(store.customActions.last?.ttsConfig.model == "gpt-4o-mini-tts")
     }
 }

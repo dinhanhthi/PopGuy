@@ -13,6 +13,15 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+### Changed
+
+- Model pickers now list the latest models: GPT-6.1 Sol, GPT-6 Astra and GPT-6 Luna (OpenAI and Codex CLI), Claude Opus 5.5, Sonnet 5.5, Haiku 5.5 and Fable 5.1, Gemini 4 Argon and Gemini 3.8 Flash, GLM-5.3, plus updated OpenRouter and Gemini CLI suggestions. The default OpenAI model is now GPT-6.1 Sol.
+
+### Fixed
+
+- Actions saved with a deprecated or retired model are switched automatically to the provider's recommended replacement, at launch and when you import an action. This also fixes a few model ids PopGuy used to suggest that providers never accepted, such as "gemini-3.1-pro" and "anthropic/claude-opus-4-8".
+- OpenAI speech: "tts-1" and "tts-1-hd" (deprecated) now switch to "gpt-4o-mini-tts".
+
 ## [1.2.1] - 2026-10-13
 
 ### Added

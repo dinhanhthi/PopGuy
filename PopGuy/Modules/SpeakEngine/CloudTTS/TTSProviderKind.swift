@@ -71,10 +71,41 @@ extension TTSProviderKind {
     /// An empty array means the picker falls back to a plain TextField.
     nonisolated var curatedModels: [String] {
         switch self {
-        case .openAITTS:      return ["gpt-4o-mini-tts", "tts-1-hd", "tts-1"]
+        case .openAITTS:      return ["gpt-4o-mini-tts"]
         case .googleCloudTTS: return []
         case .azureTTS:       return []
         }
+    }
+
+    /// Deprecated model id → replacement for this provider (OpenAI "Deprecations"
+    /// page, checked 2026-10-14).
+    ///
+    /// OpenAI names `gpt-realtime-2.1-mini` as the official replacement for
+    /// `tts-1` / `tts-1-hd`, but that is a Realtime API model and cannot be used
+    /// on the speech endpoint `OpenAITTSProvider` calls. `gpt-4o-mini-tts` is the
+    /// speech model that endpoint documents, and its voices are a superset of the
+    /// `tts-1` voices, so no voice reset is needed.
+    nonisolated var deprecatedModelReplacements: [String: String] {
+        switch self {
+        case .openAITTS:
+            return [
+                "tts-1": "gpt-4o-mini-tts",
+                "tts-1-hd": "gpt-4o-mini-tts",
+                "gpt-4o-mini-tts-2025-03-20": "gpt-4o-mini-tts",
+                "gpt-4o-mini-tts-2025-12-15": "gpt-4o-mini-tts",
+            ]
+        case .googleCloudTTS: return [:]
+        case .azureTTS:       return [:]
+        }
+    }
+
+    /// Returns the replacement for `model` when it is a deprecated id for this
+    /// provider (matched after trimming whitespace and newlines); otherwise
+    /// returns `model` unchanged. `nil` stays `nil`.
+    nonisolated func migratedModel(_ model: String?) -> String? {
+        guard let model else { return nil }
+        let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return deprecatedModelReplacements[trimmed] ?? model
     }
 
     /// The Keychain account string for this provider's API key slot.

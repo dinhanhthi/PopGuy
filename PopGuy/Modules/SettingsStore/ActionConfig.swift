@@ -168,7 +168,7 @@ extension ActionConfig {
     /// default provider's curated model list. Derived (not hard-coded) so editing
     /// `ProviderKind.curatedModels` updates every default at once. The `??`
     /// fallback only fires if the curated list is ever emptied.
-    static let defaultModel: String = defaultProviderKind.curatedModels.first ?? "gpt-5.5"
+    static let defaultModel: String = defaultProviderKind.curatedModels.first ?? "gpt-6.1-sol"
 
     /// Default configuration for Improve: OpenAI / first curated model.
     static let defaultImprove = ActionConfig(

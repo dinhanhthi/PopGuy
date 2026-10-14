@@ -117,9 +117,9 @@ extension ProviderKind {
     public nonisolated var modelHint: String {
         switch self {
         case .openAI:
-            return "Enter an OpenAI model id, e.g. \"gpt-5.5\" or \"gpt-5.4-mini\". Find available models in your OpenAI account."
+            return "Enter an OpenAI model id, e.g. \"gpt-6.1-sol\" or \"gpt-6-luna\". Find available models in your OpenAI account."
         case .anthropic:
-            return "Enter an Anthropic model id, e.g. \"claude-sonnet-4-6\" or \"claude-opus-4-8\". See Anthropic's model list for valid identifiers."
+            return "Enter an Anthropic model id, e.g. \"claude-sonnet-5-5\" or \"claude-opus-5-5\". See Anthropic's model list for valid identifiers."
         case .ollama:
             return "Enter the name of a model installed in Ollama / LM Studio, e.g. \"llama3.1\" or \"qwen2.5\". Run `ollama list` to see installed models."
         case .deepL:
@@ -127,19 +127,19 @@ extension ProviderKind {
         case .googleTranslate:
             return "Google Translate handles translation automatically and does not use a model identifier — this field can be left empty."
         case .gemini:
-            return "Enter a Gemini model id, e.g. \"gemini-3.1-pro\" or \"gemini-3.5-flash\". See Google AI for Developers for the current model list."
+            return "Enter a Gemini model id, e.g. \"gemini-4-argon\" or \"gemini-3.8-flash\". See Google AI for Developers for the current model list."
         case .glm:
-            return "Enter a GLM model id, e.g. \"glm-4.7\" or \"glm-4.7-flash\". See the z.ai / BigModel documentation for available models."
+            return "Enter a GLM model id, e.g. \"glm-5.3\" or \"glm-5.3-flash\". See the z.ai / BigModel documentation for available models."
         case .openRouter:
-            return "Enter an OpenRouter model id in provider/model format, e.g. \"openai/gpt-5.5\" or \"google/gemini-3.1-pro\". Browse models at openrouter.ai."
+            return "Enter an OpenRouter model id in provider/model format, e.g. \"openai/gpt-6.1-sol\" or \"google/gemini-4-argon\". Browse models at openrouter.ai."
         case .custom:
             return "Enter the model identifier expected by your custom OpenAI-compatible endpoint (e.g. the model name your local server advertises)."
         case .claudeCLI:
-            return "Optional. A model alias (opus/sonnet/haiku) or full id; empty uses the CLI default."
+            return "Optional. A model alias (opus/sonnet/haiku/fable) or full id; empty uses the CLI default."
         case .codexCLI:
-            return "Optional. A model id (e.g. gpt-5.5); empty uses the CLI default."
+            return "Optional. A model id (e.g. gpt-6.1-sol); empty uses the CLI default."
         case .geminiCLI:
-            return "Optional. A model id (e.g. gemini-3-pro); empty uses the CLI default."
+            return "Optional. A model id (e.g. gemini-3.8-flash); empty uses the CLI default."
         case .mlxLocal:
             return "Select an on-device model. Download models in Settings → Local (MLX)."
         }
@@ -189,26 +189,26 @@ extension ProviderKind {
     public nonisolated var curatedModels: [String] {
         switch self {
         case .openAI:
-            return ["gpt-5.5", "gpt-5.4-mini", "gpt-5.4-nano"]
+            return ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"]
         case .anthropic:
-            return ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"]
+            return ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"]
         case .gemini:
-            return ["gemini-3.1-pro", "gemini-3.5-flash", "gemini-3-flash", "gemini-3.1-flash-lite"]
+            return ["gemini-4-argon", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
         case .glm:
-            return ["glm-5.1", "glm-5", "glm-5-turbo", "glm-4.7", "glm-4.7-flash", "glm-4.5-air"]
+            return ["glm-5.3", "glm-5.3-flashx", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-4.7"]
         case .openRouter:
-            return ["openai/gpt-5.5", "anthropic/claude-opus-4-8", "google/gemini-3.1-pro", "z-ai/glm-5.1"]
+            return ["openai/gpt-6.1-sol", "anthropic/claude-opus-5.5", "google/gemini-4-argon", "z-ai/glm-5.3"]
         case .ollama, .custom,
              .deepL, .googleTranslate:
             return []
         case .mlxLocal:
             return LocalModelCatalog.all.map(\.id)
         case .claudeCLI:
-            return ["opus", "sonnet", "haiku"]
+            return ["opus", "sonnet", "haiku", "fable"]
         case .codexCLI:
-            return ["gpt-5.5"]
+            return ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"]
         case .geminiCLI:
-            return ["gemini-3-pro", "gemini-3-flash"]
+            return ["gemini-3.1-pro-preview", "gemini-3.8-flash", "gemini-3.5-flash-lite"]
         }
     }
 }
