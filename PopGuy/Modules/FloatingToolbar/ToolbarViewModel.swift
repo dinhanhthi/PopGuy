@@ -919,11 +919,18 @@ final class ToolbarViewModel: ObservableObject {
 
     /// True when the current result can be revised with an instruction: it must
     /// be regenerable and come from a provider that takes a model (DeepL and
-    /// Google Translate cannot follow instructions).
+    /// Google Translate cannot follow instructions). A completion-only local model
+    /// ignores instructions too: it rewrites the whole refine input verbatim.
     var canRefine: Bool {
         guard canRegenerate else { return false }
         if activeActionKind == .translate { return translateUsesModel }
-        if let action = activeCustomAction { return action.providerKind.usesModel }
+        if let action = activeCustomAction {
+            if action.providerKind == .mlxLocal,
+               LocalModelCatalog.model(for: action.model)?.completionPrompt != nil {
+                return false
+            }
+            return action.providerKind.usesModel
+        }
         return true
     }
 

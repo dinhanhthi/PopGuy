@@ -1032,7 +1032,8 @@ struct ActionsView: View {
                     providerKind: settings.customActions.first(where: { $0.id == id })?.providerKind ?? .anthropic,
                     placeholder: "Model",
                     settings: settings,
-                    keychain: keychain
+                    keychain: keychain,
+                    libraryPresetID: settings.customActions.first(where: { $0.id == id })?.libraryPresetID
                 )
 
                 // System prompt field (required for AI)

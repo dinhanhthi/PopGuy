@@ -73,6 +73,8 @@ struct CustomActionEditSheet: View {
         draft.scriptSource = preset.scriptSource
         draft.afterRun = preset.afterRun
         draft.appliesWhenRegex = preset.appliesWhenRegex
+        // The draft no longer is the Library preset it was installed from.
+        draft.libraryPresetID = nil
         // Intentionally not copying: id (preserves identity), isEnabled (user preference),
         // systemPrompt (unused by scriptable presets), and provider/model/speech/etc.
     }
@@ -316,7 +318,8 @@ struct CustomActionEditSheet: View {
                 model: $draft.model,
                 providerKind: draft.providerKind,
                 settings: settings,
-                keychain: keychain
+                keychain: keychain,
+                libraryPresetID: draft.libraryPresetID
             )
         }
     }

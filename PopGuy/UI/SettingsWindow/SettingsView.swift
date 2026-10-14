@@ -219,7 +219,7 @@ struct SettingsView: View {
 
             // Action Library gallery — slides in from the right edge as a 2/3-width
             // slide-over, matching the Add/Edit Action panel. Install routes
-            // through sanitizeImported → addCustomAction.
+            // through ActionLibrary.installableAction → addCustomAction.
             SlideOverPanel(
                 isPresented: showingLibrary,
                 containerWidth: containerWidth,
@@ -233,15 +233,15 @@ struct SettingsView: View {
                         ActionLibrary.isInstalled(preset, in: settings.customActions)
                     },
                     onInstall: { preset in
-                        guard let sanitized = CustomAction.sanitizeImported(
-                            preset.make(),
-                            cloudAllowed: true
+                        guard let installable = ActionLibrary.installableAction(
+                            for: preset,
+                            improveConfig: settings.config(for: .improve)
                         ) else {
-                            assertionFailure("sanitizeImported returned nil for library preset '\(preset.id)' — the preset violates the import contract")
-                            Self.galleryLog.warning("sanitizeImported returned nil for library preset '\(preset.id, privacy: .public)' — preset skipped")
+                            assertionFailure("installableAction returned nil for library preset '\(preset.id)' — the preset violates the import contract")
+                            Self.galleryLog.warning("installableAction returned nil for library preset '\(preset.id, privacy: .public)' — preset skipped")
                             return
                         }
-                        settings.addCustomAction(sanitized)
+                        settings.addCustomAction(installable)
                     },
                     onClose: {
                         withAnimation(panelAnimation) { showingLibrary = false }
@@ -1674,6 +1674,11 @@ struct ModelField: View {
             presetID: libraryPresetID
         )
         let currentIsInstalled = installedModels.map(\.id).contains(model)
+        // Installed but dedicated to another Library preset (e.g. a Humanize action
+        // re-imported without its identity) — not "not installed".
+        let reservedModel: LocalModel? = !currentIsInstalled
+            && settings?.installedLocalModels.contains(model) == true
+            ? LocalModelCatalog.model(for: model) : nil
 
         if installedModels.isEmpty && model.isEmpty {
             // Nothing installed and nothing previously selected.
@@ -1694,7 +1699,11 @@ struct ModelField: View {
                     // When the stored id is not installed, show it as a disabled
                     // placeholder so the user SEES the situation without any silent
                     // mutation of their persisted ActionConfig.
-                    if !currentIsInstalled && !model.isEmpty {
+                    if let reservedModel {
+                        Divider()
+                        // "Humanize" tracks the only dedicatedPresetID in the catalog.
+                        Text("\(reservedModel.displayName) (Humanize only)").tag(model)
+                    } else if !currentIsInstalled && !model.isEmpty {
                         Divider()
                         Text("\(model) (not installed)").tag(model)
                     }
@@ -1703,8 +1712,17 @@ struct ModelField: View {
                 .pickerStyle(.menu)
                 .fixedSize()
 
-                // Hint shown only when the current selection is not installed.
-                if !currentIsInstalled && !model.isEmpty {
+                // Hint below the picker: reserved model, not installed, nothing downloaded,
+                // or the completion-only caption.
+                if reservedModel != nil {
+                    HStack(spacing: 4) {
+                        Image(systemName: "lock")
+                            .font(.caption2)
+                        Text("This model is reserved for the Humanize action from the Action Library. Choose another model.")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                } else if !currentIsInstalled && !model.isEmpty {
                     HStack(spacing: 4) {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.caption2)
@@ -1717,6 +1735,14 @@ struct ModelField: View {
                         Image(systemName: "tray")
                             .font(.caption2)
                         Text("No models downloaded. Go to Providers → AI → Local Models.")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                } else if LocalModelCatalog.model(for: model)?.completionPrompt != nil {
+                    HStack(spacing: 4) {
+                        Image(systemName: "info.circle")
+                            .font(.caption2)
+                        Text("This model uses its own fixed instruction. The action prompt, global prompt and Preserve formatting are not applied.")
                             .font(.caption)
                     }
                     .foregroundStyle(.secondary)

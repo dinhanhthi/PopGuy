@@ -171,6 +171,12 @@ nonisolated struct CustomAction: Codable, Sendable, Identifiable, Equatable {
     /// Backward-compat: absent in older blobs → decoded as `false`.
     var isFromPlugin: Bool
 
+    /// The Action Library preset this action was installed from (e.g. "ai.humanize"),
+    /// or nil for user-created and imported actions. Set only by the Library install
+    /// path and kept when the user edits title/prompt.
+    /// Backward-compat: absent in older blobs → decoded as `nil`.
+    var libraryPresetID: String?
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -189,7 +195,8 @@ nonisolated struct CustomAction: Codable, Sendable, Identifiable, Equatable {
         scriptSource: String = "",
         afterRun: AfterRunBehavior = .closeToolbar,
         appliesWhenRegex: String = "",
-        isFromPlugin: Bool = false
+        isFromPlugin: Bool = false,
+        libraryPresetID: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -209,6 +216,7 @@ nonisolated struct CustomAction: Codable, Sendable, Identifiable, Equatable {
         self.afterRun = afterRun
         self.appliesWhenRegex = appliesWhenRegex
         self.isFromPlugin = isFromPlugin
+        self.libraryPresetID = libraryPresetID
     }
 
     // MARK: - Codable (with backward-compat migration)
@@ -227,6 +235,8 @@ nonisolated struct CustomAction: Codable, Sendable, Identifiable, Equatable {
         case scriptSource, afterRun, appliesWhenRegex
         // Plugin-import marker — absent in blobs written by older builds (decode as false).
         case isFromPlugin
+        // Library preset identity — absent in blobs written by older builds (decode as nil).
+        case libraryPresetID
         // Legacy key written by older builds.
         case iconSystemName
     }
@@ -270,6 +280,7 @@ nonisolated struct CustomAction: Codable, Sendable, Identifiable, Equatable {
         afterRun           = try container.decodeIfPresent(AfterRunBehavior.self,  forKey: .afterRun)           ?? .none
         appliesWhenRegex   = try container.decodeIfPresent(String.self,           forKey: .appliesWhenRegex)   ?? ""
         isFromPlugin       = try container.decodeIfPresent(Bool.self,             forKey: .isFromPlugin)       ?? false
+        libraryPresetID    = try container.decodeIfPresent(String.self,           forKey: .libraryPresetID)
     }
 
     nonisolated func encode(to encoder: Encoder) throws {
@@ -292,6 +303,7 @@ nonisolated struct CustomAction: Codable, Sendable, Identifiable, Equatable {
         try container.encode(afterRun,          forKey: .afterRun)
         try container.encode(appliesWhenRegex,  forKey: .appliesWhenRegex)
         try container.encode(isFromPlugin,      forKey: .isFromPlugin)
+        try container.encodeIfPresent(libraryPresetID, forKey: .libraryPresetID)
     }
 }
 
@@ -553,6 +565,8 @@ extension CustomAction {
         )
 
         // --- Construct the sanitised action with a fresh UUID ---
+        // libraryPresetID is deliberately not carried over: an imported file must not
+        // claim a Library identity (the Library install path sets it after sanitizing).
 
         return CustomAction(
             id: UUID(),

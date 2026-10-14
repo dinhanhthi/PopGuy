@@ -186,4 +186,63 @@ struct ActionLibraryTests {
         // Despite type matching and both having "", the !isEmpty guard must block the match.
         #expect(!ActionLibrary.isInstalled(emptyPreset, in: [existingAction]))
     }
+
+    // MARK: - 12. AI Writing / Humanize
+
+    private func humanizePreset() -> LibraryPreset? {
+        ActionLibrary.presets(in: .aiWriting).first { $0.id == ActionLibraryAI.humanizePresetID }
+    }
+
+    @Test("Humanize preset is an AI action in AI Writing whose prompt has no {{text}} token")
+    func humanizePresetShape() {
+        guard let preset = humanizePreset() else {
+            Issue.record("Humanize preset not found in .aiWriting"); return
+        }
+        let action = preset.make()
+        #expect(action.type == .ai)
+        #expect(!action.systemPrompt.isEmpty)
+        #expect(!action.systemPrompt.contains("{{text}}"))
+    }
+
+    @Test("installableAction sets the preset identity and inherits Improve's provider and model")
+    func installableActionInheritsImprove() {
+        guard let preset = humanizePreset() else {
+            Issue.record("Humanize preset not found in .aiWriting"); return
+        }
+        let improve = ActionConfig(id: .improve, providerKind: .mlxLocal, model: "gemma-4-e4b")
+        let action = ActionLibrary.installableAction(for: preset, improveConfig: improve)
+        #expect(action?.libraryPresetID == ActionLibraryAI.humanizePresetID)
+        #expect(action?.providerKind == .mlxLocal)
+        #expect(action?.model == "gemma-4-e4b")
+    }
+
+    @Test("installableAction sets identity on a script preset and leaves its provider untouched")
+    func installableActionScriptPreset() {
+        guard let preset = ActionLibrary.allPresets().first(where: { $0.id == "search.google" }) else {
+            Issue.record("preset 'search.google' not found"); return
+        }
+        let improve = ActionConfig(id: .improve, providerKind: .openAI, model: "gpt-x")
+        let action = ActionLibrary.installableAction(for: preset, improveConfig: improve)
+        #expect(action?.libraryPresetID == "search.google")
+        #expect(action?.providerKind == preset.make().providerKind)
+        #expect(action?.model == preset.make().model)
+    }
+
+    @Test("isInstalled matches an AI preset by library identity")
+    func isInstalledByIdentity() {
+        guard let preset = humanizePreset() else {
+            Issue.record("Humanize preset not found in .aiWriting"); return
+        }
+        let improve = ActionConfig(id: .improve, providerKind: .openAI, model: "gpt-x")
+        guard let installed = ActionLibrary.installableAction(for: preset, improveConfig: improve) else {
+            Issue.record("installableAction returned nil"); return
+        }
+        #expect(!ActionLibrary.isInstalled(preset, in: []))
+        #expect(ActionLibrary.isInstalled(preset, in: [installed]))
+    }
+
+    @Test("the humanizer local model is dedicated to the Humanize preset")
+    func humanizerModelDedicatedToPreset() {
+        #expect(LocalModelCatalog.model(for: "humanizer-12b")?.dedicatedPresetID == ActionLibraryAI.humanizePresetID)
+    }
 }

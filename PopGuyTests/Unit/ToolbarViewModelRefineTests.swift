@@ -216,6 +216,34 @@ struct ToolbarViewModelCanRefineTests {
         vm.openRefineInput()
         #expect(vm.isRefineInputActive)
     }
+
+    private func finishedHumanize(provider: ProviderKind, model: String) -> ToolbarViewModel {
+        let (vm, handler) = makeVM()
+        defer { withExtendedLifetime(handler) {} }
+        let action = CustomAction(
+            title: "Humanize", type: .ai, systemPrompt: "Rewrite naturally.",
+            providerKind: provider, model: model
+        )
+        vm.customActions = [action]
+        vm.triggerCustomAction(action)
+        vm.finishWith(result: "rewritten")
+        return vm
+    }
+
+    @Test("custom AI action on a completion-only local model can regenerate but not refine")
+    func completionModelCannotRefine() {
+        let vm = finishedHumanize(provider: .mlxLocal, model: "humanizer-12b")
+        #expect(vm.canRegenerate)
+        #expect(!vm.canRefine)
+        vm.openRefineInput()
+        #expect(!vm.isRefineInputActive)
+    }
+
+    @Test("custom AI action on a cloud provider or a chat local model can refine")
+    func chatModelsCanRefine() {
+        #expect(finishedHumanize(provider: .anthropic, model: "claude-sonnet-5-5").canRefine)
+        #expect(finishedHumanize(provider: .mlxLocal, model: "gemma-4-e2b").canRefine)
+    }
 }
 
 // MARK: - runRefine

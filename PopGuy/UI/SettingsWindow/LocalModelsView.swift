@@ -241,6 +241,11 @@ struct LocalModelsView: View {
                         "needs \(formatRAM(model.minRAMBytes))",
                         systemImage: "memorychip"
                     )
+                    // Dedicated models (e.g. the humanizer) only appear in the
+                    // picker of the action installed from their Library preset.
+                    if model.dedicatedPresetID != nil {
+                        Label("Used only by the Humanize action", systemImage: "lock")
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)

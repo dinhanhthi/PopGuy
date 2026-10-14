@@ -14,6 +14,7 @@ import Foundation
 
 // nonisolated: opts out of SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor (app target).
 nonisolated enum LibraryCategory: String, CaseIterable, Sendable, Identifiable {
+    case aiWriting
     case search
     case web
     case maps
@@ -28,6 +29,7 @@ nonisolated enum LibraryCategory: String, CaseIterable, Sendable, Identifiable {
     /// Human-readable label shown in the category picker.
     nonisolated var displayName: String {
         switch self {
+        case .aiWriting:         return "AI Writing"
         case .search:            return "Search Engines"
         case .web:               return "Websites"
         case .maps:              return "Maps"
@@ -42,6 +44,7 @@ nonisolated enum LibraryCategory: String, CaseIterable, Sendable, Identifiable {
     /// SF Symbol name representing the category.
     nonisolated var iconName: String {
         switch self {
+        case .aiWriting:         return "wand.and.stars"
         case .search:            return "magnifyingglass"
         case .web:               return "globe"
         case .maps:              return "map"
@@ -92,7 +95,7 @@ nonisolated struct LibraryPreset: Sendable, Identifiable {
 
 /// Aggregator for the full Action Library preset catalog.
 ///
-/// Per-category presets live in separate files (ActionLibraryWeb/Text/Dev/Apps.swift)
+/// Per-category presets live in separate files (ActionLibraryAI/Web/Text/Dev/Apps.swift)
 /// and are wired into `presets(in:)`.
 // nonisolated: opts out of SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor (app target).
 nonisolated enum ActionLibrary: Sendable {
@@ -100,6 +103,8 @@ nonisolated enum ActionLibrary: Sendable {
     /// Returns all presets for the given category.
     nonisolated static func presets(in category: LibraryCategory) -> [LibraryPreset] {
         switch category {
+        case .aiWriting:
+            return ActionLibraryAI.all()
         case .search, .web, .maps, .aiLaunchers, .translateLaunchers:
             return ActionLibraryWeb.all().filter { $0.category == category }
         case .textTransform:
@@ -119,16 +124,38 @@ nonisolated enum ActionLibrary: Sendable {
     /// All categories in declaration order.
     nonisolated static var categories: [LibraryCategory] { LibraryCategory.allCases }
 
-    /// Returns `true` when `actions` already contains an action matching the
-    /// preset's `type` + `scriptSource`.
+    /// Returns `true` when `actions` already contains an action installed from this
+    /// preset (`libraryPresetID`), or one matching the preset's `type` + `scriptSource`.
     ///
     /// The `!isEmpty` guard prevents a false positive when two non-scriptable
     /// presets share an empty `scriptSource`: an empty `scriptSource` means
     /// "no script body", so it is never a meaningful identity key. Those
-    /// presets always report uninstalled, which is the safe default.
+    /// presets report installed only through `libraryPresetID`.
     nonisolated static func isInstalled(_ preset: LibraryPreset, in actions: [CustomAction]) -> Bool {
+        if actions.contains(where: { $0.libraryPresetID == preset.id }) { return true }
         let a = preset.make()
         guard !a.scriptSource.isEmpty else { return false }
         return actions.contains { $0.type == a.type && $0.scriptSource == a.scriptSource }
+    }
+
+    /// Builds the action the Library installs for `preset`: sanitized like an import,
+    /// tagged with the preset identity, and — for `.ai` presets — running on the
+    /// Improve action's provider and model. Returns `nil` when sanitizing rejects it.
+    ///
+    /// No re-sanitize after the provider copy: `.ai` actions allow exactly
+    /// `ActionKind.improve.allowedProviders`, so Improve's provider is always valid.
+    nonisolated static func installableAction(
+        for preset: LibraryPreset,
+        improveConfig: ActionConfig
+    ) -> CustomAction? {
+        guard var action = CustomAction.sanitizeImported(preset.make(), cloudAllowed: true) else {
+            return nil
+        }
+        action.libraryPresetID = preset.id
+        if action.type == .ai {
+            action.providerKind = improveConfig.providerKind
+            action.model = improveConfig.model
+        }
+        return action
     }
 }

@@ -274,6 +274,15 @@ struct CustomActionsTests {
         #expect(decoded == original)
     }
 
+    @Test("CustomAction Codable round-trip preserves libraryPresetID")
+    func codableRoundTripLibraryPresetID() throws {
+        let original = CustomAction(title: "Humanize", systemPrompt: "Rewrite", libraryPresetID: "ai.humanize")
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(CustomAction.self, from: data)
+        #expect(decoded.libraryPresetID == "ai.humanize")
+        #expect(decoded == original)
+    }
+
     // MARK: - CustomActionType + migration
 
     @Test("legacy AI blob (no type key) decodes as .ai with fields intact")
@@ -945,6 +954,15 @@ struct SanitizeImportedTests {
         let result = CustomAction.sanitizeImported(action, cloudAllowed: false)
         #expect(result?.appliesWhenRegex == "^https?://")
     }
+
+    @Test("libraryPresetID is never carried over from an imported action")
+    func libraryPresetIDDropped() {
+        var action = makeAI()
+        action.libraryPresetID = "ai.humanize"
+        let result = CustomAction.sanitizeImported(action, cloudAllowed: false)
+        #expect(result != nil)
+        #expect(result?.libraryPresetID == nil)
+    }
 }
 
 // MARK: - Backward-compat decode for new scriptable fields
@@ -1001,6 +1019,13 @@ struct CustomActionBackwardCompatTests {
         #expect(decoded.scriptSource == "")
         #expect(decoded.afterRun == .none)
         #expect(decoded.appliesWhenRegex == "")
+    }
+
+    @Test("blob without libraryPresetID decodes to nil")
+    func noLibraryPresetIDDecodesNil() throws {
+        let data = try legacyBlob()
+        let decoded = try JSONDecoder().decode(CustomAction.self, from: data)
+        #expect(decoded.libraryPresetID == nil)
     }
 }
 
