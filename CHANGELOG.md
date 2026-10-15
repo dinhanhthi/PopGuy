@@ -13,6 +13,16 @@ header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.3.2] - 2026-10-15
+
+### Added
+
+- Settings → Providers → Dictionary: a switch next to "Load" turns all Babylon dictionaries on or off at once.
+
+### Changed
+
+- Imported Babylon dictionaries are now stored as a small on-disk database per dictionary and read only when you look up a word. With eight large dictionaries loaded, PopGuy's memory use drops from about 560 MB to about 20 MB, and the first lookup is no longer slow. Existing dictionaries are converted once in the background right after the first launch of this version; your original `.bgl` files are never modified.
+
 ## [1.3.1] - 2026-10-14
 
 ### Added
