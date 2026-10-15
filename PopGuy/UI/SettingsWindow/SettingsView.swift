@@ -739,24 +739,40 @@ private struct APIKeysTab: View {
         SettingsCard(
             title: DictionaryProviderKind.babylonBGL.displayName,
             accessory: {
-                Button {
-                    loadBGLDictionaries()
-                } label: {
-                    HStack(spacing: 5) {
-                        if isIndexingBGL {
-                            ProgressView()
-                                .controlSize(.mini)
-                                .scaleEffect(0.85)
-                                .frame(width: 11, height: 11)
-                        } else {
-                            Image(systemName: "plus")
+                HStack(spacing: 8) {
+                    Toggle("", isOn: Binding(
+                        get: { settings.babylonDictionaries.contains(where: \.isEnabled) },
+                        set: { isOn in
+                            var updated = settings.babylonDictionaries
+                            for index in updated.indices { updated[index].isEnabled = isOn }
+                            settings.babylonDictionaries = updated
                         }
-                        Text(isIndexingBGL ? "Indexing" : "Load")
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .disabled(settings.babylonDictionaries.isEmpty)
+                    .hoverTooltip("Enable or disable all Babylon dictionaries")
+
+                    Button {
+                        loadBGLDictionaries()
+                    } label: {
+                        HStack(spacing: 5) {
+                            if isIndexingBGL {
+                                ProgressView()
+                                    .controlSize(.mini)
+                                    .scaleEffect(0.85)
+                                    .frame(width: 11, height: 11)
+                            } else {
+                                Image(systemName: "plus")
+                            }
+                            Text(isIndexingBGL ? "Indexing" : "Load")
+                        }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(isIndexingBGL)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .disabled(isIndexingBGL)
             },
             titleAccessory: { EmptyView() }
         ) {
