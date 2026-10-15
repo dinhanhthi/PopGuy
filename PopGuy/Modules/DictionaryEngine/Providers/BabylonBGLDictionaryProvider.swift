@@ -8,19 +8,19 @@ import Foundation
 // MARK: - BabylonBGLDictionaryProvider
 
 nonisolated struct BabylonBGLDictionaryProvider: DictionaryProvider {
-    typealias IndexLoader = @Sendable (BabylonDictionary) async throws -> BabylonBGLIndex
+    typealias EntryLookup = @Sendable (BabylonDictionary, String) async throws -> [BabylonBGLEntry]
 
     private let dictionaries: [BabylonDictionary]
-    private let indexLoader: IndexLoader
+    private let entryLookup: EntryLookup
 
     init(
         dictionaries: [BabylonDictionary],
-        indexLoader: @escaping IndexLoader = { dictionary in
-            try await BabylonBGLIndexCache.shared.index(for: dictionary)
+        entryLookup: @escaping EntryLookup = { dictionary, term in
+            try await BabylonBGLIndexCache.shared.lookup(term: term, in: dictionary)
         }
     ) {
         self.dictionaries = dictionaries
-        self.indexLoader = indexLoader
+        self.entryLookup = entryLookup
     }
 
     func lookup(
@@ -39,9 +39,8 @@ nonisolated struct BabylonBGLDictionaryProvider: DictionaryProvider {
             // A missing or corrupt .bgl file must not hide results from the other
             // enabled dictionaries — skip the failing one and keep going. If every
             // dictionary fails to load, the empty-result guard below reports notFound.
-            guard let index = try? await indexLoader(dictionary) else { continue }
-            let matches = index.lookup(term: trimmed)
-            guard !matches.isEmpty else { continue }
+            guard let matches = try? await entryLookup(dictionary, trimmed),
+                  !matches.isEmpty else { continue }
 
             lexicalEntries.append(contentsOf: matches.flatMap {
                 Self.lexicalEntries(for: $0, dictionary: dictionary)
@@ -401,155 +400,4 @@ nonisolated struct BabylonBGLDictionaryProvider: DictionaryProvider {
         "eg",
         "e.g.",
     ]
-}
-
-// MARK: - BabylonBGLIndexCache
-
-/// Actor-owned BGL index cache. Parsed indexes are kept in memory for the
-/// current launch and persisted under Application Support for later launches.
-actor BabylonBGLIndexCache {
-    typealias IndexParser = @Sendable (URL, BabylonDictionary) throws -> BabylonBGLIndex
-
-    static let shared = BabylonBGLIndexCache()
-
-    private static let cacheVersion = 2
-
-    private struct SourceFileSignature: Sendable, Codable, Equatable {
-        let filePath: String
-        let modificationTime: TimeInterval?
-        let fileSize: Int?
-    }
-
-    private struct CachedIndex {
-        let signature: SourceFileSignature
-        let index: BabylonBGLIndex
-    }
-
-    private struct PersistedIndex: Sendable, Codable {
-        let version: Int
-        let dictionaryID: UUID
-        let signature: SourceFileSignature
-        let entries: [BabylonBGLEntry]
-        let termIndex: [String: [Int]]
-    }
-
-    private var cache: [UUID: CachedIndex] = [:]
-    private let cacheDirectory: URL
-    private let parser: IndexParser
-
-    init(
-        cacheDirectory: URL? = nil,
-        parser: @escaping IndexParser = { url, dictionary in
-            try BabylonBGLParser().parseFile(url: url, dictionary: dictionary)
-        }
-    ) {
-        self.cacheDirectory = cacheDirectory ?? Self.defaultCacheDirectory()
-        self.parser = parser
-    }
-
-    func index(for dictionary: BabylonDictionary) async throws -> BabylonBGLIndex {
-        let fileURL = URL(fileURLWithPath: dictionary.filePath)
-        let signature = try Self.sourceFileSignature(for: fileURL)
-
-        if let cached = cache[dictionary.id],
-           cached.signature == signature {
-            return cached.index
-        }
-
-        if let persisted = loadPersistedIndex(for: dictionary, signature: signature) {
-            cache[dictionary.id] = CachedIndex(signature: signature, index: persisted)
-            return persisted
-        }
-
-        let parsed = try parser(fileURL, dictionary)
-        cache[dictionary.id] = CachedIndex(signature: signature, index: parsed)
-        try? savePersistedIndex(parsed, signature: signature)
-        return parsed
-    }
-
-    func warm(dictionaries: [BabylonDictionary]) async {
-        for dictionary in dictionaries where dictionary.isEnabled {
-            _ = try? await index(for: dictionary)
-        }
-    }
-
-    func remove(id: UUID) {
-        cache.removeValue(forKey: id)
-        try? FileManager.default.removeItem(at: cacheFileURL(for: id))
-    }
-
-    func removeAll() {
-        cache.removeAll()
-        try? FileManager.default.removeItem(at: cacheDirectory)
-    }
-
-    private func loadPersistedIndex(
-        for dictionary: BabylonDictionary,
-        signature: SourceFileSignature
-    ) -> BabylonBGLIndex? {
-        let fileURL = cacheFileURL(for: dictionary.id)
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
-
-        do {
-            let data = try Data(contentsOf: fileURL)
-            let payload = try PropertyListDecoder().decode(PersistedIndex.self, from: data)
-            guard payload.version == Self.cacheVersion,
-                  payload.dictionaryID == dictionary.id,
-                  payload.signature == signature else {
-                return nil
-            }
-
-            return BabylonBGLIndex(
-                dictionary: dictionary,
-                entries: payload.entries,
-                termIndex: payload.termIndex
-            )
-        } catch {
-            try? FileManager.default.removeItem(at: fileURL)
-            return nil
-        }
-    }
-
-    private func savePersistedIndex(
-        _ index: BabylonBGLIndex,
-        signature: SourceFileSignature
-    ) throws {
-        try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-
-        let encoder = PropertyListEncoder()
-        encoder.outputFormat = .binary
-        let payload = PersistedIndex(
-            version: Self.cacheVersion,
-            dictionaryID: index.dictionary.id,
-            signature: signature,
-            entries: index.entries,
-            termIndex: index.termIndex
-        )
-        let data = try encoder.encode(payload)
-        try data.write(to: cacheFileURL(for: index.dictionary.id), options: [.atomic])
-    }
-
-    private func cacheFileURL(for id: UUID) -> URL {
-        cacheDirectory.appendingPathComponent("\(id.uuidString).bglindex", isDirectory: false)
-    }
-
-    private static func sourceFileSignature(for fileURL: URL) throws -> SourceFileSignature {
-        let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
-        let modificationDate = attributes[.modificationDate] as? Date
-        let fileSize = (attributes[.size] as? NSNumber)?.intValue
-        return SourceFileSignature(
-            filePath: fileURL.path,
-            modificationTime: modificationDate?.timeIntervalSinceReferenceDate,
-            fileSize: fileSize
-        )
-    }
-
-    private static func defaultCacheDirectory() -> URL {
-        let base = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first ?? FileManager.default.temporaryDirectory
-        return base
-            .appendingPathComponent("PopGuy", isDirectory: true)
-            .appendingPathComponent("BabylonBGLIndexes", isDirectory: true)
-    }
 }

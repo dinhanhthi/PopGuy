@@ -128,9 +128,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     /// Combine subscription — re-applies hotkey wiring when the OCR opt-in toggle changes.
     private var ocrEnabledCancellable: AnyCancellable?
 
-    /// Combine subscription — warms persisted Babylon BGL indexes when loaded dictionaries change.
-    private var babylonIndexWarmupCancellable: AnyCancellable?
-
     // MARK: - Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -140,12 +137,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" { return }
 
         buildStatusMenu()
-        Self.warmBabylonIndexes(settingsStore.babylonDictionaries)
-        babylonIndexWarmupCancellable = settingsStore.$babylonDictionaries
-            .dropFirst()
-            .sink { dictionaries in
-                Self.warmBabylonIndexes(dictionaries)
+        // One-time background conversion of legacy Babylon indexes to SQLite; a no-op
+        // (stat + meta read per dictionary) once every dictionary is converted.
+        // Skipped when the app is the unit-test host so tests never rewrite the
+        // user's real index files.
+        let isTestHost = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        let babylonDictionaries = isTestHost ? [] : settingsStore.babylonDictionaries
+        Task(priority: .utility) {
+            for dictionary in babylonDictionaries {
+                _ = try? await BabylonBGLIndexCache.shared.prepareIndex(for: dictionary)
             }
+        }
 
         // Start the Sparkle updater and subscribe to availability changes.
         updater.start()
@@ -429,14 +431,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 guard self?.settingsStore.ocrEnabled == true else { return }
                 self?.ocrCaptureController?.beginCapture()
             }
-        }
-    }
-
-    private static func warmBabylonIndexes(_ dictionaries: [BabylonDictionary]) {
-        let enabled = dictionaries.filter(\.isEnabled)
-        guard !enabled.isEmpty else { return }
-        Task {
-            await BabylonBGLIndexCache.shared.warm(dictionaries: enabled)
         }
     }
 

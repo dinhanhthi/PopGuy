@@ -858,10 +858,12 @@ private struct APIKeysTab: View {
                 )
 
                 do {
-                    let index = try await BabylonBGLIndexCache.shared.index(for: dictionary)
-                    dictionary.entryCount = index.entryCount
+                    dictionary.entryCount = try await BabylonBGLIndexCache.shared.prepareIndex(for: dictionary)
                     loaded.append(dictionary)
                 } catch {
+                    // Nothing will look this attempt's ID up again: drop any index the
+                    // cache kept in memory after a failed write.
+                    await BabylonBGLIndexCache.shared.remove(id: dictionary.id)
                     failed.append("\(url.lastPathComponent): \(Self.bglImportMessage(for: error))")
                 }
             }

@@ -11,6 +11,7 @@
 
 import ApplicationServices
 import Foundation
+import os
 import Testing
 @testable import PopGuy
 
@@ -284,9 +285,9 @@ struct BabylonBGLDictionaryProviderTests {
         ]
         let provider = BabylonBGLDictionaryProvider(
             dictionaries: [viDictionary, frDictionary, disabledDictionary],
-            indexLoader: { dictionary in
+            entryLookup: { dictionary, term in
                 guard let index = indexes[dictionary.id] else { throw DictionaryLookupError.notFound }
-                return index
+                return index.lookup(term: term)
             }
         )
 
@@ -304,14 +305,14 @@ struct BabylonBGLDictionaryProviderTests {
         let viDictionary = Self.dictionary(id: 11, name: "Lac Viet E-V", enabled: true)
         let provider = BabylonBGLDictionaryProvider(
             dictionaries: [viDictionary],
-            indexLoader: { dictionary in
+            entryLookup: { dictionary, term in
                 BabylonBGLIndex(dictionary: dictionary, entries: [
                     BabylonBGLEntry(
                         headword: "format",
                         definition: "['fɔ:mæt]\ndanh từ khổ (sách, giấy, bìa...)",
                         alternates: ["formats"]
                     )
-                ])
+                ]).lookup(term: term)
             }
         )
 
@@ -328,14 +329,14 @@ struct BabylonBGLDictionaryProviderTests {
         let viDictionary = Self.dictionary(id: 12, name: "Lac Viet E-V", enabled: true)
         let provider = BabylonBGLDictionaryProvider(
             dictionaries: [viDictionary],
-            indexLoader: { dictionary in
+            entryLookup: { dictionary, term in
                 BabylonBGLIndex(dictionary: dictionary, entries: [
                     BabylonBGLEntry(
                         headword: "provider",
                         definition: "[prə'vaidə]\ndanh từ người cung cấp (nhất là người trụ cột của gia đình)",
                         alternates: []
                     )
-                ])
+                ]).lookup(term: term)
             }
         )
 
@@ -354,7 +355,7 @@ struct BabylonBGLDictionaryProviderTests {
         let viDictionary = Self.dictionary(id: 13, name: "Lac Viet E-V", enabled: true)
         let provider = BabylonBGLDictionaryProvider(
             dictionaries: [viDictionary],
-            indexLoader: { dictionary in
+            entryLookup: { dictionary, term in
                 BabylonBGLIndex(dictionary: dictionary, entries: [
                     BabylonBGLEntry(
                         headword: "provide",
@@ -369,7 +370,7 @@ struct BabylonBGLDictionaryProviderTests {
                         """,
                         alternates: []
                     )
-                ])
+                ]).lookup(term: term)
             }
         )
 
@@ -388,7 +389,7 @@ struct BabylonBGLDictionaryProviderTests {
         let viDictionary = Self.dictionary(id: 14, name: "Lac Viet E-V", enabled: true)
         let provider = BabylonBGLDictionaryProvider(
             dictionaries: [viDictionary],
-            indexLoader: { dictionary in
+            entryLookup: { dictionary, term in
                 BabylonBGLIndex(dictionary: dictionary, entries: [
                     BabylonBGLEntry(
                         headword: "result",
@@ -404,7 +405,7 @@ struct BabylonBGLDictionaryProviderTests {
                         """,
                         alternates: []
                     )
-                ])
+                ]).lookup(term: term)
             }
         )
 
@@ -440,129 +441,315 @@ struct BabylonBGLDictionaryProviderTests {
 @Suite("BabylonBGLIndexCache")
 struct BabylonBGLIndexCacheTests {
 
-    @Test("index persists to disk and reloads without reparsing")
-    func indexPersistsToDiskAndReloadsWithoutReparsing() async throws {
-        let tempRoot = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let sourceURL = tempRoot.appendingPathComponent("dictionary.bgl", isDirectory: false)
-        let cacheDirectory = tempRoot.appendingPathComponent("cache", isDirectory: true)
-        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
-        try Data("source-v1".utf8).write(to: sourceURL)
-        defer { try? FileManager.default.removeItem(at: tempRoot) }
+    @Test("prepareIndex builds a SQLite index that a new cache reads without reparsing")
+    func prepareIndexBuildsSQLiteIndexReadableWithoutReparsing() async throws {
+        let fixture = try Self.makeFixture(id: 101)
+        defer { try? FileManager.default.removeItem(at: fixture.tempRoot) }
 
-        let dictionary = BabylonDictionary(
-            id: UUID(uuidString: "00000000-0000-0000-0000-000000000101")!,
-            displayName: "Vietnamese English",
-            filePath: sourceURL.path,
-            isEnabled: true,
-            entryCount: 1
-        )
-        let expectedIndex = BabylonBGLIndex(dictionary: dictionary, entries: [
-            BabylonBGLEntry(headword: "hello", definition: "xin chào", alternates: ["hi"])
-        ])
         let writer = BabylonBGLIndexCache(
-            cacheDirectory: cacheDirectory,
-            parser: { _, _ in expectedIndex }
-        )
-
-        _ = try await writer.index(for: dictionary)
-
-        let reader = BabylonBGLIndexCache(
-            cacheDirectory: cacheDirectory,
-            parser: { _, _ in
-                throw DictionaryLookupError.decoding("Expected persisted BGL index to load without reparsing.")
+            cacheDirectory: fixture.cacheDirectory,
+            parser: { _, dictionary in
+                BabylonBGLIndex(dictionary: dictionary, entries: [
+                    BabylonBGLEntry(headword: "hello", definition: "xin chào", alternates: ["hi"])
+                ])
             }
         )
 
-        let loaded = try await reader.index(for: dictionary)
+        let entryCount = try await writer.prepareIndex(for: fixture.dictionary)
 
-        #expect(loaded.entryCount == 1)
-        #expect(loaded.lookup(term: "hi").first?.definition == "xin chào")
-    }
-
-    @Test("index ignores persisted cache when source file changes")
-    func indexIgnoresPersistedCacheWhenSourceFileChanges() async throws {
-        let tempRoot = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let sourceURL = tempRoot.appendingPathComponent("dictionary.bgl", isDirectory: false)
-        let cacheDirectory = tempRoot.appendingPathComponent("cache", isDirectory: true)
-        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
-        try Data("source-v1".utf8).write(to: sourceURL)
-        defer { try? FileManager.default.removeItem(at: tempRoot) }
-
-        let dictionary = BabylonDictionary(
-            id: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!,
-            displayName: "Vietnamese English",
-            filePath: sourceURL.path,
-            isEnabled: true,
-            entryCount: 1
-        )
-        let staleIndex = BabylonBGLIndex(dictionary: dictionary, entries: [
-            BabylonBGLEntry(headword: "old", definition: "stale", alternates: [])
-        ])
-        let writer = BabylonBGLIndexCache(
-            cacheDirectory: cacheDirectory,
-            parser: { _, _ in staleIndex }
-        )
-
-        _ = try await writer.index(for: dictionary)
-        try Data("source-v2-with-different-size".utf8).write(to: sourceURL)
-
-        let refreshedIndex = BabylonBGLIndex(dictionary: dictionary, entries: [
-            BabylonBGLEntry(headword: "new", definition: "fresh", alternates: [])
-        ])
-        let reader = BabylonBGLIndexCache(
-            cacheDirectory: cacheDirectory,
-            parser: { _, _ in refreshedIndex }
-        )
-
-        let loaded = try await reader.index(for: dictionary)
-
-        #expect(loaded.lookup(term: "old").isEmpty)
-        #expect(loaded.lookup(term: "new").first?.definition == "fresh")
-    }
-
-    @Test("warm loads persisted indexes into memory before lookup")
-    func warmLoadsPersistedIndexesIntoMemoryBeforeLookup() async throws {
-        let tempRoot = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let sourceURL = tempRoot.appendingPathComponent("dictionary.bgl", isDirectory: false)
-        let cacheDirectory = tempRoot.appendingPathComponent("cache", isDirectory: true)
-        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
-        try Data("source-v1".utf8).write(to: sourceURL)
-        defer { try? FileManager.default.removeItem(at: tempRoot) }
-
-        let dictionary = BabylonDictionary(
-            id: UUID(uuidString: "00000000-0000-0000-0000-000000000103")!,
-            displayName: "Vietnamese English",
-            filePath: sourceURL.path,
-            isEnabled: true,
-            entryCount: 1
-        )
-        let expectedIndex = BabylonBGLIndex(dictionary: dictionary, entries: [
-            BabylonBGLEntry(headword: "hello", definition: "xin chào", alternates: [])
-        ])
-        let writer = BabylonBGLIndexCache(
-            cacheDirectory: cacheDirectory,
-            parser: { _, _ in expectedIndex }
-        )
-
-        _ = try await writer.index(for: dictionary)
+        #expect(entryCount == 1)
+        #expect(FileManager.default.fileExists(atPath: fixture.fileURL(extension: "sqlite").path))
 
         let reader = BabylonBGLIndexCache(
-            cacheDirectory: cacheDirectory,
+            cacheDirectory: fixture.cacheDirectory,
             parser: { _, _ in
-                throw DictionaryLookupError.decoding("Expected warm cache to satisfy lookup without reparsing.")
+                throw DictionaryLookupError.decoding("Expected SQLite index to answer without reparsing.")
             }
         )
-        await reader.warm(dictionaries: [dictionary])
-        try FileManager.default.removeItem(
-            at: cacheDirectory.appendingPathComponent("\(dictionary.id.uuidString).bglindex", isDirectory: false)
+
+        let results = try await reader.lookup(term: "HI", in: fixture.dictionary)
+
+        #expect(results.count == 1)
+        #expect(results.first?.headword == "hello")
+        #expect(results.first?.definition == "xin chào")
+        #expect(results.first?.alternates.isEmpty == true)
+    }
+
+    @Test("lookup rebuilds the SQLite index when the source file changes")
+    func lookupRebuildsIndexWhenSourceFileChanges() async throws {
+        let fixture = try Self.makeFixture(id: 102)
+        defer { try? FileManager.default.removeItem(at: fixture.tempRoot) }
+
+        let writer = BabylonBGLIndexCache(
+            cacheDirectory: fixture.cacheDirectory,
+            parser: { _, dictionary in
+                BabylonBGLIndex(dictionary: dictionary, entries: [
+                    BabylonBGLEntry(headword: "old", definition: "stale", alternates: [])
+                ])
+            }
+        )
+        try await writer.prepareIndex(for: fixture.dictionary)
+        try Data("source-v2-with-different-size".utf8).write(to: fixture.sourceURL)
+
+        let reader = BabylonBGLIndexCache(
+            cacheDirectory: fixture.cacheDirectory,
+            parser: { _, dictionary in
+                BabylonBGLIndex(dictionary: dictionary, entries: [
+                    BabylonBGLEntry(headword: "new", definition: "fresh", alternates: [])
+                ])
+            }
         )
 
-        let loaded = try await reader.index(for: dictionary)
+        #expect(try await reader.lookup(term: "old", in: fixture.dictionary).isEmpty)
+        #expect(try await reader.lookup(term: "new", in: fixture.dictionary).first?.definition == "fresh")
+    }
 
-        #expect(loaded.lookup(term: "hello").first?.definition == "xin chào")
+    @Test("lookup converts a valid legacy .bglindex plist to SQLite and deletes the plist")
+    func lookupConvertsLegacyPlistToSQLite() async throws {
+        let fixture = try Self.makeFixture(id: 103)
+        defer { try? FileManager.default.removeItem(at: fixture.tempRoot) }
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: fixture.sourceURL.path)
+        let signature = BabylonBGLSourceFileSignature(
+            filePath: fixture.sourceURL.path,
+            modificationTime: (attributes[.modificationDate] as? Date)?.timeIntervalSinceReferenceDate,
+            fileSize: (attributes[.size] as? NSNumber)?.intValue
+        )
+        let legacy = BabylonBGLIndexCache.LegacyPersistedIndex(
+            version: 2,
+            dictionaryID: fixture.dictionary.id,
+            signature: signature,
+            entries: [
+                BabylonBGLEntry(headword: "Café", definition: "cà phê", alternates: ["cafe au lait"])
+            ]
+        )
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        let legacyURL = fixture.fileURL(extension: "bglindex")
+        try FileManager.default.createDirectory(at: fixture.cacheDirectory, withIntermediateDirectories: true)
+        try encoder.encode(legacy).write(to: legacyURL)
+
+        let cache = BabylonBGLIndexCache(
+            cacheDirectory: fixture.cacheDirectory,
+            parser: { _, _ in
+                throw DictionaryLookupError.decoding("Expected legacy plist to convert without reparsing.")
+            }
+        )
+
+        let results = try await cache.lookup(term: "cafe", in: fixture.dictionary)
+
+        #expect(results.first?.headword == "Café")
+        #expect(results.first?.definition == "cà phê")
+        #expect(try await cache.lookup(term: "CAFE AU LAIT", in: fixture.dictionary).first?.headword == "Café")
+        #expect(FileManager.default.fileExists(atPath: fixture.fileURL(extension: "sqlite").path))
+        #expect(!FileManager.default.fileExists(atPath: legacyURL.path))
+    }
+
+    @Test("remove deletes the SQLite index and its WAL/SHM side files")
+    func removeDeletesSQLiteIndexAndSideFiles() async throws {
+        let fixture = try Self.makeFixture(id: 104)
+        defer { try? FileManager.default.removeItem(at: fixture.tempRoot) }
+
+        let cache = BabylonBGLIndexCache(
+            cacheDirectory: fixture.cacheDirectory,
+            parser: { _, dictionary in
+                BabylonBGLIndex(dictionary: dictionary, entries: [
+                    BabylonBGLEntry(headword: "hello", definition: "xin chào", alternates: [])
+                ])
+            }
+        )
+        try await cache.prepareIndex(for: fixture.dictionary)
+        let files = ["sqlite", "sqlite-wal", "sqlite-shm"].map { fixture.fileURL(extension: $0) }
+        for sideFile in files.dropFirst() {
+            try Data("side".utf8).write(to: sideFile)
+        }
+
+        await cache.remove(id: fixture.dictionary.id)
+
+        for file in files {
+            #expect(!FileManager.default.fileExists(atPath: file.path))
+        }
+    }
+
+    @Test("lookup returns no entries for an unknown term")
+    func lookupReturnsEmptyForUnknownTerm() async throws {
+        let fixture = try Self.makeFixture(id: 105)
+        defer { try? FileManager.default.removeItem(at: fixture.tempRoot) }
+
+        let cache = BabylonBGLIndexCache(
+            cacheDirectory: fixture.cacheDirectory,
+            parser: { _, dictionary in
+                BabylonBGLIndex(dictionary: dictionary, entries: [
+                    BabylonBGLEntry(headword: "hello", definition: "xin chào", alternates: [])
+                ])
+            }
+        )
+
+        #expect(try await cache.lookup(term: "unknown", in: fixture.dictionary).isEmpty)
+    }
+
+    @Test("lookup answers from the parse when the index cannot be written, and does not reparse an unchanged source")
+    func lookupAnswersFromParseWhenIndexWriteFailsWithoutReparsing() async throws {
+        let fixture = try Self.makeFixture(id: 106)
+        defer { try? FileManager.default.removeItem(at: fixture.tempRoot) }
+
+        // A regular file where a parent directory is expected makes creating the
+        // cache directory fail deterministically.
+        let blocker = fixture.tempRoot.appendingPathComponent("blocker", isDirectory: false)
+        try Data("not a directory".utf8).write(to: blocker)
+        let parseCount = OSAllocatedUnfairLock(initialState: 0)
+        let cache = BabylonBGLIndexCache(
+            cacheDirectory: blocker.appendingPathComponent("cache", isDirectory: true),
+            parser: { _, dictionary in
+                parseCount.withLock { $0 += 1 }
+                return BabylonBGLIndex(dictionary: dictionary, entries: [
+                    BabylonBGLEntry(headword: "hello", definition: "xin chào", alternates: ["hi"])
+                ])
+            }
+        )
+
+        let first = try await cache.lookup(term: "HI", in: fixture.dictionary)
+        #expect(first.first?.headword == "hello")
+        #expect(first.first?.definition == "xin chào")
+
+        let second = try await cache.lookup(term: "hello", in: fixture.dictionary)
+        #expect(second.first?.headword == "hello")
+        #expect(second.first?.alternates.isEmpty == true)
+        #expect(parseCount.withLock { $0 } == 1)
+    }
+
+    @Test("lookup answers after prepareIndex failed to write the index, without reparsing")
+    func lookupAnswersAfterPrepareIndexWriteFailureWithoutReparsing() async throws {
+        let fixture = try Self.makeFixture(id: 108)
+        defer { try? FileManager.default.removeItem(at: fixture.tempRoot) }
+
+        let blocker = fixture.tempRoot.appendingPathComponent("blocker", isDirectory: false)
+        try Data("not a directory".utf8).write(to: blocker)
+        let parseCount = OSAllocatedUnfairLock(initialState: 0)
+        let cache = BabylonBGLIndexCache(
+            cacheDirectory: blocker.appendingPathComponent("cache", isDirectory: true),
+            parser: { _, dictionary in
+                parseCount.withLock { $0 += 1 }
+                return BabylonBGLIndex(dictionary: dictionary, entries: [
+                    BabylonBGLEntry(headword: "hello", definition: "xin chào", alternates: ["hi"])
+                ])
+            }
+        )
+
+        await #expect(throws: (any Error).self) {
+            try await cache.prepareIndex(for: fixture.dictionary)
+        }
+        await #expect(throws: (any Error).self) {
+            try await cache.prepareIndex(for: fixture.dictionary)
+        }
+
+        let results = try await cache.lookup(term: "HI", in: fixture.dictionary)
+        #expect(results.first?.headword == "hello")
+        #expect(results.first?.definition == "xin chào")
+        #expect(results.first?.alternates.isEmpty == true)
+        #expect(parseCount.withLock { $0 } == 1)
+    }
+
+    @Test("remove drops the in-memory index kept after a failed write")
+    func removeDropsUnwrittenIndex() async throws {
+        let fixture = try Self.makeFixture(id: 109)
+        defer { try? FileManager.default.removeItem(at: fixture.tempRoot) }
+
+        let blocker = fixture.tempRoot.appendingPathComponent("blocker", isDirectory: false)
+        try Data("not a directory".utf8).write(to: blocker)
+        let parseCount = OSAllocatedUnfairLock(initialState: 0)
+        let cache = BabylonBGLIndexCache(
+            cacheDirectory: blocker.appendingPathComponent("cache", isDirectory: true),
+            parser: { _, dictionary in
+                parseCount.withLock { $0 += 1 }
+                return BabylonBGLIndex(dictionary: dictionary, entries: [
+                    BabylonBGLEntry(headword: "hello", definition: "xin chào", alternates: [])
+                ])
+            }
+        )
+
+        _ = try await cache.lookup(term: "hello", in: fixture.dictionary)
+        #expect(parseCount.withLock { $0 } == 1)
+
+        await cache.remove(id: fixture.dictionary.id)
+
+        _ = try await cache.lookup(term: "hello", in: fixture.dictionary)
+        #expect(parseCount.withLock { $0 } == 2)
+    }
+
+    @Test("lookup deletes a stale legacy .bglindex plist and parses the source instead")
+    func lookupDeletesStaleLegacyPlistAndParses() async throws {
+        let fixture = try Self.makeFixture(id: 107)
+        defer { try? FileManager.default.removeItem(at: fixture.tempRoot) }
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: fixture.sourceURL.path)
+        let staleSignature = BabylonBGLSourceFileSignature(
+            filePath: fixture.sourceURL.path,
+            modificationTime: (attributes[.modificationDate] as? Date)?.timeIntervalSinceReferenceDate,
+            fileSize: ((attributes[.size] as? NSNumber)?.intValue ?? 0) + 1
+        )
+        let legacy = BabylonBGLIndexCache.LegacyPersistedIndex(
+            version: 2,
+            dictionaryID: fixture.dictionary.id,
+            signature: staleSignature,
+            entries: [BabylonBGLEntry(headword: "legacy", definition: "stale", alternates: [])]
+        )
+        let legacyURL = fixture.fileURL(extension: "bglindex")
+        try FileManager.default.createDirectory(at: fixture.cacheDirectory, withIntermediateDirectories: true)
+        try PropertyListEncoder().encode(legacy).write(to: legacyURL)
+
+        let cache = BabylonBGLIndexCache(
+            cacheDirectory: fixture.cacheDirectory,
+            parser: { _, dictionary in
+                BabylonBGLIndex(dictionary: dictionary, entries: [
+                    BabylonBGLEntry(headword: "parsed", definition: "fresh", alternates: [])
+                ])
+            }
+        )
+
+        #expect(try await cache.lookup(term: "parsed", in: fixture.dictionary).first?.definition == "fresh")
+        #expect(try await cache.lookup(term: "legacy", in: fixture.dictionary).isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: legacyURL.path))
+    }
+
+    @Test("normalizedTerm trims, lowercases and folds diacritics")
+    func normalizedTermTrimsLowercasesAndFoldsDiacritics() {
+        #expect(BabylonBGLIndex.normalizedTerm("  Héllo ") == "hello")
+    }
+
+    private struct Fixture {
+        let tempRoot: URL
+        let sourceURL: URL
+        let cacheDirectory: URL
+        let dictionary: BabylonDictionary
+
+        func fileURL(extension pathExtension: String) -> URL {
+            cacheDirectory.appendingPathComponent(
+                "\(dictionary.id.uuidString).\(pathExtension)",
+                isDirectory: false
+            )
+        }
+    }
+
+    private static func makeFixture(id: Int) throws -> Fixture {
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let sourceURL = tempRoot.appendingPathComponent("dictionary.bgl", isDirectory: false)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        try Data("source-v1".utf8).write(to: sourceURL)
+        let dictionary = BabylonDictionary(
+            id: UUID(uuidString: "00000000-0000-0000-0000-\(String(format: "%012d", id))")!,
+            displayName: "Vietnamese English",
+            filePath: sourceURL.path,
+            isEnabled: true,
+            entryCount: 1
+        )
+        return Fixture(
+            tempRoot: tempRoot,
+            sourceURL: sourceURL,
+            cacheDirectory: tempRoot.appendingPathComponent("cache", isDirectory: true),
+            dictionary: dictionary
+        )
     }
 }
 

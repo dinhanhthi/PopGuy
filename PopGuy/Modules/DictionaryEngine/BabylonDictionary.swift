@@ -41,7 +41,7 @@ nonisolated struct BabylonDictionary: Sendable, Codable, Equatable, Identifiable
     }
 
     /// Backward-compatible decoding: blobs persisted before the language fields
-    /// existed (SettingsStore and the .bglindex cache) lack these keys, so they
+    /// existed (SettingsStore) lack these keys, so they
     /// default to empty instead of failing to decode.
     init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -81,21 +81,9 @@ nonisolated struct BabylonBGLIndex: Sendable, Equatable {
     let termIndex: [String: [Int]]
 
     init(dictionary: BabylonDictionary, entries: [BabylonBGLEntry]) {
-        self.init(
-            dictionary: dictionary,
-            entries: entries,
-            termIndex: Self.makeTermIndex(entries: entries)
-        )
-    }
-
-    init(
-        dictionary: BabylonDictionary,
-        entries: [BabylonBGLEntry],
-        termIndex: [String: [Int]]
-    ) {
         self.dictionary = dictionary
         self.entries = entries
-        self.termIndex = termIndex
+        self.termIndex = Self.makeTermIndex(entries: entries)
     }
 
     nonisolated var entryCount: Int { entries.count }
@@ -110,27 +98,34 @@ nonisolated struct BabylonBGLIndex: Sendable, Equatable {
     private static func makeTermIndex(entries: [BabylonBGLEntry]) -> [String: [Int]] {
         var mapped: [String: [Int]] = [:]
         for (index, entry) in entries.enumerated() {
-            Self.index(entry.headword, entryIndex: index, into: &mapped)
-            for alternate in entry.alternates {
-                Self.index(alternate, entryIndex: index, into: &mapped)
+            for term in lookupTerms(for: entry) {
+                mapped[term, default: []].append(index)
             }
         }
         return mapped
     }
 
-    private static func index(
-        _ term: String,
-        entryIndex: Int,
-        into mapped: inout [String: [Int]]
-    ) {
-        let normalized = normalizedTerm(term)
-        guard !normalized.isEmpty else { return }
-        mapped[normalized, default: []].append(entryIndex)
+    /// Normalized headword + alternates for one entry: empty terms skipped,
+    /// duplicates removed, first-occurrence order kept.
+    nonisolated static func lookupTerms(for entry: BabylonBGLEntry) -> [String] {
+        var seen: Set<String> = []
+        var terms: [String] = []
+        for term in [entry.headword] + entry.alternates {
+            let normalized = normalizedTerm(term)
+            guard !normalized.isEmpty, seen.insert(normalized).inserted else { continue }
+            terms.append(normalized)
+        }
+        return terms
     }
 
+    /// The folding locale is pinned (not the user's current locale) because
+    /// normalized terms are persisted on disk and must stay stable across locales.
     nonisolated static func normalizedTerm(_ term: String) -> String {
         term.trimmingCharacters(in: .whitespacesAndNewlines)
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .folding(
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: Locale(identifier: "en_US_POSIX")
+            )
             .lowercased()
     }
 }
