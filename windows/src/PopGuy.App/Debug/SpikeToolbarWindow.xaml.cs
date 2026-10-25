@@ -1,3 +1,4 @@
+#if DEBUG
 using System.Globalization;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
@@ -706,3 +707,4 @@ public sealed partial class SpikeToolbarWindow : Window
         };
     }
 }
+#endif

@@ -8,13 +8,20 @@ using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace PopGuy.Platform.Input;
 
-/// <summary>A key press or release seen by the low-level keyboard hook.</summary>
-/// <param name="VirtualKey">The virtual-key code; the hook reports the left and right modifiers separately (VK_LCONTROL…).</param>
-/// <param name="ScanCode">The hardware scan code.</param>
+/// <summary>
+/// A key press or release seen by the low-level keyboard hook. Only the keys PopGuy watches (every modifier, C, and the
+/// keys of the registered hotkeys) carry their codes; any other key arrives as <see cref="OtherKey"/> with no virtual
+/// key or scan code, so the stream never holds what the user types (passwords), yet still breaks a double tap.
+/// </summary>
+/// <param name="VirtualKey">
+/// The virtual-key code (the hook reports the left and right modifiers separately: VK_LCONTROL…), or
+/// <see cref="OtherKey"/> for a key PopGuy does not watch.
+/// </param>
+/// <param name="ScanCode">The hardware scan code; 0 for <see cref="OtherKey"/>.</param>
 /// <param name="IsKeyDown">A press (or an auto-repeat), else a release.</param>
 /// <param name="Timestamp">The event's time in milliseconds of the system tick count (wraps after 49.7 days).</param>
 /// <param name="Injected">The event came from SendInput (PopGuy's or another app's, e.g. a remote-control tool), not a keyboard.</param>
-/// <param name="IsPopGuyMarker">The event carries <see cref="InputSynth.Marker"/>: PopGuy synthesized it.</param>
+/// <param name="IsPopGuyMarker">The event is injected and carries <see cref="InputSynth.Marker"/>: PopGuy synthesized it.</param>
 /// <param name="ClipboardSequence">
 /// On a C press while Ctrl is down only: the clipboard sequence number before the app copies, for
 /// <see cref="Capture.ClipboardHistoryCache.MarkArming"/>. Null on every other event.
@@ -22,7 +29,13 @@ namespace PopGuy.Platform.Input;
 public readonly record struct KeyEvent(
     uint VirtualKey, uint ScanCode, bool IsKeyDown, uint Timestamp, bool Injected, bool IsPopGuyMarker, uint? ClipboardSequence)
 {
+    /// <summary>The <see cref="VirtualKey"/> of a key PopGuy does not watch (no real key has code 0).</summary>
+    public const uint OtherKey = 0;
+
     public bool IsKeyUp => !IsKeyDown;
+
+    /// <summary>A key PopGuy does not watch: its code was not published.</summary>
+    public bool IsOtherKey => VirtualKey == OtherKey;
 }
 
 /// <summary>What a <see cref="MouseEvent"/> is. Low-level hooks deliver no double-clicks, only each press and release.</summary>
@@ -49,7 +62,7 @@ public enum MouseEventKind
 /// <param name="XButton">For <see cref="MouseEventKind.XDown"/> and <see cref="MouseEventKind.XUp"/>: 1 or 2, else 0.</param>
 /// <param name="Timestamp">The event's time in milliseconds of the system tick count (wraps after 49.7 days).</param>
 /// <param name="Injected">The event came from SendInput, not a mouse.</param>
-/// <param name="IsPopGuyMarker">The event carries <see cref="InputSynth.Marker"/>: PopGuy synthesized it.</param>
+/// <param name="IsPopGuyMarker">The event is injected and carries <see cref="InputSynth.Marker"/>: PopGuy synthesized it.</param>
 public readonly record struct MouseEvent(
     MouseEventKind Kind, int X, int Y, int WheelDelta, int XButton, uint Timestamp, bool Injected, bool IsPopGuyMarker);
 
@@ -67,6 +80,10 @@ public readonly record struct MouseEvent(
 /// Threading: every member may be called from any thread. Read the channels from other threads; their continuations
 /// never run on the input thread. Dispose completes the channels.
 /// </para>
+/// <para>
+/// The key and mouse channels are bounded (256 events each): when nobody drains them, the oldest events are dropped,
+/// so nothing accumulates. Key events carry codes only for the watched keys (see <see cref="KeyEvent"/>).
+/// </para>
 /// </summary>
 public sealed class GlobalInput : IDisposable
 {
@@ -83,19 +100,21 @@ public sealed class GlobalInput : IDisposable
     private static readonly TimeSpan CallTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// One writer (the input thread), one reader. No synchronous continuations: a consumer's await must never resume
-    /// inside a hook callback, on the hook thread.
+    /// One writer (the input thread), one reader, at most 256 events: an undrained channel drops its oldest event, so a
+    /// write never blocks the hook. No synchronous continuations: a consumer's await must never resume inside a hook
+    /// callback, on the hook thread.
     /// </summary>
-    private static readonly UnboundedChannelOptions ChannelOptions = new()
+    private static readonly BoundedChannelOptions ChannelOptions = new(256)
     {
+        FullMode = BoundedChannelFullMode.DropOldest,
         SingleReader = true,
         SingleWriter = true,
         AllowSynchronousContinuations = false,
     };
 
-    private readonly Channel<KeyEvent> _keys = Channel.CreateUnbounded<KeyEvent>(ChannelOptions);
-    private readonly Channel<MouseEvent> _mouse = Channel.CreateUnbounded<MouseEvent>(ChannelOptions);
-    private readonly Channel<int> _hotKeys = Channel.CreateUnbounded<int>(ChannelOptions);
+    private readonly Channel<KeyEvent> _keys = Channel.CreateBounded<KeyEvent>(ChannelOptions);
+    private readonly Channel<MouseEvent> _mouse = Channel.CreateBounded<MouseEvent>(ChannelOptions);
+    private readonly Channel<int> _hotKeys = Channel.CreateBounded<int>(ChannelOptions);
     private readonly Action<string>? _log;
     private readonly bool _includeMouseMoves;
 
@@ -120,12 +139,21 @@ public sealed class GlobalInput : IDisposable
     private bool _rightControlDown;
 
     /// <summary>
+    /// The sided modifiers the user holds (bits per <see cref="ModifierBit"/>), from every event but PopGuy's own:
+    /// another app's injected input counts as the user's. Written by the keyboard hook only, read from any thread.
+    /// </summary>
+    private int _userModifiers;
+
+    /// <summary>The left keys' bits in <see cref="_userModifiers"/> (see <see cref="ModifierBit"/>).</summary>
+    private const int LeftBits = 0b0101_0101;
+
+    /// <summary>
     /// Starts the input thread and installs both hooks. Throws <see cref="Win32Exception"/> if Windows refuses.
     /// </summary>
     /// <param name="log">Gets failures (unhook, a throwing callback). Never called on the hooks' normal path.</param>
     /// <param name="includeMouseMoves">
     /// Also deliver <see cref="MouseEventKind.Move"/> (hundreds per second): only when a consumer drains
-    /// <see cref="Mouse"/> continuously, since the channel is unbounded.
+    /// <see cref="Mouse"/> continuously, or the moves push the presses out of the bounded channel.
     /// </param>
     public GlobalInput(Action<string>? log = null, bool includeMouseMoves = false)
     {
@@ -136,7 +164,7 @@ public sealed class GlobalInput : IDisposable
         _window = MessageWindow.StartOnNewThread("PopGuy input", log, OnCreated);
     }
 
-    /// <summary>Every key press and release, in order.</summary>
+    /// <summary>Every key press and release, in order; unwatched keys as <see cref="KeyEvent.OtherKey"/>.</summary>
     public ChannelReader<KeyEvent> Keys => _keys.Reader;
 
     /// <summary>Every mouse press, release and wheel turn (and move, if asked for), in order.</summary>
@@ -144,6 +172,18 @@ public sealed class GlobalInput : IDisposable
 
     /// <summary>The id of each registered hotkey press. A held hotkey does not repeat.</summary>
     public ChannelReader<int> HotKeys => _hotKeys.Reader;
+
+    /// <summary>
+    /// Whether the user holds the modifier <paramref name="virtualKey"/> (sided, e.g. VK_LCONTROL, or generic, e.g.
+    /// VK_CONTROL for either side), as the keyboard hook saw it: PopGuy's own synthetic events do not count, so it stays
+    /// true while the user holds a key PopGuy released with a synthetic key-up (unlike the async key state). False for
+    /// any other key. For <see cref="InputSynth.SendCopy"/>'s <c>isUserKeyDown</c>. Any thread.
+    /// </summary>
+    public bool IsUserKeyDown(uint virtualKey)
+    {
+        var mask = ModifierMask(virtualKey);
+        return mask != 0 && (Volatile.Read(ref _userModifiers) & mask) != 0;
+    }
 
     /// <summary>
     /// Registers a global hotkey and returns its id (1 or more), which <see cref="HotKeys"/> reports on each press.
@@ -271,6 +311,9 @@ public sealed class GlobalInput : IDisposable
                 var data = (KBDLLHOOKSTRUCT*)lParam.Value;
                 var isDown = (data->flags & KBDLLHOOKSTRUCT_FLAGS.LLKHF_UP) == 0;
                 var vk = data->vkCode;
+                var injected = (data->flags & KBDLLHOOKSTRUCT_FLAGS.LLKHF_INJECTED) != 0;
+                var isPopGuy = injected && data->dwExtraInfo == InputSynth.Marker;
+                if (!isPopGuy) TrackUserModifier(vk, isDown);
                 switch ((VIRTUAL_KEY)vk)
                 {
                     case VIRTUAL_KEY.VK_LCONTROL:
@@ -287,13 +330,14 @@ public sealed class GlobalInput : IDisposable
                 uint? sequence = isDown && vk == (uint)VIRTUAL_KEY.VK_C && (_leftControlDown || _rightControlDown)
                     ? PInvoke.GetClipboardSequenceNumber()
                     : null;
+                var watched = IsWatched(vk);
                 _keys.Writer.TryWrite(new KeyEvent(
-                    vk,
-                    data->scanCode,
+                    watched ? vk : KeyEvent.OtherKey,
+                    watched ? data->scanCode : 0,
                     isDown,
                     data->time,
-                    (data->flags & KBDLLHOOKSTRUCT_FLAGS.LLKHF_INJECTED) != 0,
-                    data->dwExtraInfo == InputSynth.Marker,
+                    injected,
+                    isPopGuy,
                     sequence));
             }
             catch (Exception e)
@@ -330,6 +374,7 @@ public sealed class GlobalInput : IDisposable
                 };
                 if (kind is { } k)
                 {
+                    var injected = (data->flags & PInvoke.LLMHF_INJECTED) != 0;
                     _mouse.Writer.TryWrite(new MouseEvent(
                         k,
                         data->pt.X,
@@ -337,8 +382,8 @@ public sealed class GlobalInput : IDisposable
                         k is MouseEventKind.Wheel or MouseEventKind.HorizontalWheel ? high : 0,
                         k is MouseEventKind.XDown or MouseEventKind.XUp ? high : 0,
                         data->time,
-                        (data->flags & PInvoke.LLMHF_INJECTED) != 0,
-                        data->dwExtraInfo == InputSynth.Marker));
+                        injected,
+                        injected && data->dwExtraInfo == InputSynth.Marker));
                 }
             }
             catch (Exception e)
@@ -348,4 +393,57 @@ public sealed class GlobalInput : IDisposable
         }
         return PInvoke.CallNextHookEx(_mouseHook, code, wParam, lParam);
     }
+
+    /// <summary>
+    /// The keys whose codes are published: every modifier, C (the Ctrl+C+C chord) and the keys of the registered
+    /// hotkeys. Keyboard hook only (it runs on the input thread, which alone touches <see cref="_registered"/>).
+    /// </summary>
+    private bool IsWatched(uint vk)
+    {
+        if (vk == (uint)VIRTUAL_KEY.VK_C || IsModifier(vk)) return true;
+        foreach (var key in _registered.Values)
+        {
+            if (key.VirtualKey == vk) return true;
+        }
+        return false;
+    }
+
+    private static bool IsModifier(uint vk) => ModifierMask(vk) != 0;
+
+    /// <summary>Keyboard hook only (the single writer of <see cref="_userModifiers"/>).</summary>
+    private void TrackUserModifier(uint vk, bool isDown)
+    {
+        var mask = ModifierMask(vk);
+        if (mask == 0) return;
+        // A generic press (SendInput with VK_CONTROL…) counts as the left key; its release clears both sides.
+        var bits = isDown && IsGeneric(vk) ? mask & LeftBits : mask;
+        var state = Volatile.Read(ref _userModifiers);
+        Volatile.Write(ref _userModifiers, isDown ? state | bits : state & ~bits);
+    }
+
+    /// <summary>The bit of each sided modifier in <see cref="_userModifiers"/>: left at even, right at odd bits.</summary>
+    private static int ModifierBit(VIRTUAL_KEY vk) => vk switch
+    {
+        VIRTUAL_KEY.VK_LCONTROL => 1 << 0,
+        VIRTUAL_KEY.VK_RCONTROL => 1 << 1,
+        VIRTUAL_KEY.VK_LSHIFT => 1 << 2,
+        VIRTUAL_KEY.VK_RSHIFT => 1 << 3,
+        VIRTUAL_KEY.VK_LMENU => 1 << 4,
+        VIRTUAL_KEY.VK_RMENU => 1 << 5,
+        VIRTUAL_KEY.VK_LWIN => 1 << 6,
+        VIRTUAL_KEY.VK_RWIN => 1 << 7,
+        _ => 0,
+    };
+
+    /// <summary>The bits of a sided modifier, or both sides' for a generic one (VK_CONTROL, VK_SHIFT, VK_MENU); 0 otherwise.</summary>
+    private static int ModifierMask(uint vk) => (VIRTUAL_KEY)vk switch
+    {
+        VIRTUAL_KEY.VK_CONTROL => ModifierBit(VIRTUAL_KEY.VK_LCONTROL) | ModifierBit(VIRTUAL_KEY.VK_RCONTROL),
+        VIRTUAL_KEY.VK_SHIFT => ModifierBit(VIRTUAL_KEY.VK_LSHIFT) | ModifierBit(VIRTUAL_KEY.VK_RSHIFT),
+        VIRTUAL_KEY.VK_MENU => ModifierBit(VIRTUAL_KEY.VK_LMENU) | ModifierBit(VIRTUAL_KEY.VK_RMENU),
+        var sided => ModifierBit(sided),
+    };
+
+    private static bool IsGeneric(uint vk) =>
+        (VIRTUAL_KEY)vk is VIRTUAL_KEY.VK_CONTROL or VIRTUAL_KEY.VK_SHIFT or VIRTUAL_KEY.VK_MENU;
 }

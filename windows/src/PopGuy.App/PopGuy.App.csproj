@@ -32,4 +32,10 @@
   <ItemGroup>
     <ProjectReference Include="..\PopGuy.Platform\PopGuy.Platform.csproj" />
   </ItemGroup>
+
+  <!-- The Phase 3 spike toolbar is a DEBUG harness (like Debug/Probes.cs): left out of every other build. -->
+  <ItemGroup Condition="'$(Configuration)' != 'Debug'">
+    <Page Remove="Debug\SpikeToolbarWindow.xaml" />
+    <Compile Remove="Debug\SpikeToolbarWindow.xaml.cs" />
+  </ItemGroup>
 </Project>

@@ -18,6 +18,12 @@ public enum UiaCaptureStatus
 
     /// <summary>No focused element, no text pattern, a UI Automation error, or no answer within the timeout.</summary>
     Unavailable,
+
+    /// <summary>
+    /// The focused element is a password field (UI Automation IsPassword): nothing was read, and no fallback may copy
+    /// from it (<see cref="CaptureFallbackPolicy"/>).
+    /// </summary>
+    PasswordField,
 }
 
 /// <summary>The focused element's selection, read through UI Automation.</summary>
@@ -28,11 +34,13 @@ public enum UiaCaptureStatus
 public sealed record UiaSelection(UiaCaptureStatus Status, string Text, bool IsEditable, IReadOnlyList<Rectangle> SelectionRects)
 {
     internal static readonly UiaSelection Unavailable = new(UiaCaptureStatus.Unavailable, "", false, []);
+    internal static readonly UiaSelection PasswordField = new(UiaCaptureStatus.PasswordField, "", false, []);
 }
 
 /// <summary>
 /// Reads the focused element's text selection through UI Automation (CUIAutomation8 → focused element → text pattern).
-/// The primary capture path; the Ctrl+C fallback (<see cref="ClipboardGuard"/>) covers apps without a text pattern.
+/// The primary capture path; the Ctrl+C fallback (<see cref="ClipboardTransaction"/>) covers apps without a text
+/// pattern, when <see cref="CaptureFallbackPolicy"/> allows it. Password fields are never read.
 /// </summary>
 public static class UiaSelectionReader
 {
@@ -81,6 +89,8 @@ public static class UiaSelectionReader
             automation = (IUIAutomation)new CUIAutomation8();
             element = automation.GetFocusedElement();
             if (element is null) return UiaSelection.Unavailable;
+            // Before any text is read: a password field's text never leaves it.
+            if (element.CurrentIsPassword) return UiaSelection.PasswordField;
             textPattern = element.GetCurrentPattern(UIA_PATTERN_ID.UIA_TextPatternId) as IUIAutomationTextPattern;
             if (textPattern is null) return UiaSelection.Unavailable;
 

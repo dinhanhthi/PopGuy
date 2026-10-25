@@ -145,8 +145,10 @@ internal static class Probes
 
 /// <summary>
 /// The <c>--spike</c> resident run: global input, the clipboard history cache, the Ctrl+Alt+Shift+I hotkey and an
-/// inline Ctrl+C+C detector; each trigger captures the selection (UI Automation, else a Ctrl+C through the clipboard)
-/// and shows <see cref="SpikeToolbarWindow"/> at the pointer. Logs JSON lines to <c>spike-&lt;ts&gt;.jsonl</c>.
+/// inline Ctrl+C+C detector; each trigger captures the selection (UI Automation; for the chord, else the user's own
+/// copy; for the hotkey, else a synthetic Ctrl+C where <see cref="CaptureFallbackPolicy"/> allows it, through a
+/// <see cref="ClipboardTransaction"/>) and shows <see cref="SpikeToolbarWindow"/> at the pointer. Logs JSON lines to
+/// <c>spike-&lt;ts&gt;.jsonl</c>.
 /// </summary>
 internal sealed class SpikeSession
 {
@@ -158,6 +160,12 @@ internal sealed class SpikeSession
     private const uint ChordWindowMs = 300;
 
     private static readonly TimeSpan CaptureRestoreDelay = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>
+    /// Within <see cref="CaptureRestoreDelay"/>: when the copy counts as settled, and its sequence number is taken as the
+    /// one a restore may replace (OLE apps write twice: their data object, then the flushed formats).
+    /// </summary>
+    private static readonly TimeSpan CaptureSettleDelay = TimeSpan.FromMilliseconds(150);
     private static readonly TimeSpan PasteRestoreDelay = TimeSpan.FromMilliseconds(150);
 
     /// <summary>After giving the foreground back before a paste: the source's focus settles before Ctrl+V arrives.</summary>
@@ -295,7 +303,7 @@ internal sealed class SpikeSession
         if (_firstTap is { } first && unchecked(key.Timestamp - first.Time) <= ChordWindowMs)
         {
             _firstTap = null;
-            Trigger("chord", first.Sequence, key.Injected);
+            Trigger("chord", new ChordTaps(first.Sequence, sequence), key.Injected);
             return;
         }
         _firstTap = (key.Timestamp, sequence);
@@ -306,11 +314,17 @@ internal sealed class SpikeSession
     {
         await foreach (var id in _input!.HotKeys.ReadAllAsync(token))
         {
-            if (id == _hotKeyId) Trigger("hotkey", armingSequence: null, injected: null);
+            if (id == _hotKeyId) Trigger("hotkey", chord: null, injected: null);
         }
     }
 
-    private void Trigger(string kind, uint? armingSequence, bool? injected)
+    /// <summary>
+    /// The chord's two Ctrl+C presses: the clipboard sequence number before each (the first is the arming one, from
+    /// before the app's first copy).
+    /// </summary>
+    private readonly record struct ChordTaps(uint Arming, uint Second);
+
+    private void Trigger(string kind, ChordTaps? chord, bool? injected)
     {
         if (Interlocked.Exchange(ref _busy, 1) == 1)
         {
@@ -321,7 +335,7 @@ internal sealed class SpikeSession
         {
             try
             {
-                await CaptureAsync(kind, armingSequence, injected);
+                await CaptureAsync(kind, chord, injected);
             }
             finally
             {
@@ -331,12 +345,17 @@ internal sealed class SpikeSession
     }
 
     /// <summary>
-    /// Captures the foreground app's selection and shows the toolbar. UI Automation first; when it captures nothing
-    /// (unavailable or empty), a Ctrl+C through the clipboard (restored 300 ms later). For the chord, the clipboard from
-    /// before the user's first Ctrl+C comes back 300 ms after the capture (the cache's snapshot at the arming sequence
-    /// number).
+    /// Captures the foreground app's selection and shows the toolbar. UI Automation first. When it captures nothing:
+    /// <list type="bullet">
+    /// <item>The chord: the user's own Ctrl+C presses already copied the selection, so it is only read (never a
+    /// synthetic Ctrl+C on top). 300 ms after the capture, the clipboard from before the first press (the cache's
+    /// snapshot at the arming sequence number) comes back, unless someone copied again meanwhile.</item>
+    /// <item>The hotkey: a synthetic Ctrl+C, only where <see cref="CaptureFallbackPolicy"/> allows it and only when
+    /// <see cref="ClipboardTransaction.TryBegin"/> could save the clipboard first (else the capture is unavailable and
+    /// nothing touches the clipboard); restored 300 ms later unless someone copied again meanwhile.</item>
+    /// </list>
     /// </summary>
-    private async Task CaptureAsync(string kind, uint? armingSequence, bool? injected)
+    private async Task CaptureAsync(string kind, ChordTaps? chord, bool? injected)
     {
         var source = ToolbarWindowStyle.ForegroundWindow();
         if (ToolbarWindowStyle.IsToolbarOrOwned(source, _toolbar.Hwnd))
@@ -348,65 +367,109 @@ internal sealed class SpikeSession
         var selection = UiaSelectionReader.ReadFocused();
 
         string method;
-        string? text;
-        ClipboardSnapshot? own = null;
+        string? text = null;
+        string? fallback = null;
+        string? refusal = null;
         bool? copySent = null;
-        // Empty too: Monaco (VS Code) shows UI Automation only its hidden textarea, which reads as an empty selection.
-        if (selection.Status == UiaCaptureStatus.Captured)
+        var copied = false;
+        ClipboardTransaction? transaction = null;
+        try
         {
-            method = "uia";
-            text = selection.Text;
-        }
-        else
-        {
-            method = "ctrlc";
-            // The chord restores the cache's older snapshot instead: this one would hold the user's copy.
-            if (armingSequence is null) own = ClipboardGuard.Snapshot();
-            var before = ClipboardGuard.SequenceNumber;
-            copySent = InputSynth.SendCopy();
-            var changed = ClipboardGuard.WaitForChange(before);
-            // The chord's own Ctrl+C put the selection there already.
-            text = changed || armingSequence is not null ? ClipboardGuard.ReadText() : null;
-        }
-        _capturedText = text;
+            if (chord is { } taps)
+            {
+                // The second press's copy: wait for it, so the restore comes after it.
+                ClipboardGuard.WaitForChange(taps.Second);
+                if (selection.Status == UiaCaptureStatus.Captured)
+                {
+                    method = "uia";
+                    text = selection.Text;
+                }
+                else if (selection.Status == UiaCaptureStatus.PasswordField)
+                {
+                    method = "none";
+                    refusal = "passwordField";
+                }
+                else
+                {
+                    method = "userCopy";
+                    text = ClipboardGuard.SequenceNumber != taps.Arming ? ClipboardGuard.ReadText() : null;
+                }
+            }
+            else if (selection.Status == UiaCaptureStatus.Captured)
+            {
+                method = "uia";
+                text = selection.Text;
+            }
+            else
+            {
+                var decision = CaptureFallbackPolicy.Decide(selection.Status, source);
+                fallback = decision.Reason;
+                if (!decision.Allowed || !ClipboardTransaction.TryBegin(out transaction, out refusal))
+                {
+                    method = "none";
+                }
+                else
+                {
+                    method = "ctrlc";
+                    copySent = InputSynth.SendCopy(_input!.IsUserKeyDown);
+                    copied = ClipboardGuard.WaitForChange(transaction.SequenceBefore);
+                    if (copied) text = ClipboardGuard.ReadText();
+                }
+            }
+            _capturedText = text;
 
-        var pointer = ToolbarWindowStyle.CursorPosition();
-        _dispatcher.TryEnqueue(() => _toolbar.ShowAt(source, pointer));
+            var pointer = ToolbarWindowStyle.CursorPosition();
+            _dispatcher.TryEnqueue(() => _toolbar.ShowAt(source, pointer));
 
-        await Task.Delay(CaptureRestoreDelay);
-        bool? clipboardRestored = null;
-        if (own is not null)
-        {
-            clipboardRestored = ClipboardGuard.Restore(own);
-            own.Dispose();
-        }
-        else if (method == "ctrlc" && armingSequence is null)
-        {
-            clipboardRestored = false; // the snapshot could not be taken
-        }
-        string? chordRestore = null;
-        if (armingSequence is { } arming)
-        {
-            chordRestore = !_cache!.TryGetBefore(arming, out var cached) ? "missing"
-                : cached.IsTooLarge ? "tooLarge"
-                : ClipboardGuard.Restore(cached) ? "restored"
-                : "failed";
-        }
+            await Task.Delay(CaptureSettleDelay);
+            // What the copy left on the clipboard: a restore replaces only that, never a newer copy.
+            var settled = ClipboardGuard.SequenceNumber;
+            if (copied) transaction!.MarkCurrentAsOwn();
+            await Task.Delay(CaptureRestoreDelay - CaptureSettleDelay);
 
-        _log.Write(Record(kind,
-            ("fgBefore", SpikeToolbarWindow.Hex(source)),
-            ("fgAfter", SpikeToolbarWindow.Hex(ToolbarWindowStyle.ForegroundWindow())),
-            ("exe", exe),
-            ("uiaStatus", selection.Status.ToString()),
-            ("textLength", text?.Length),
-            ("isEditable", selection.IsEditable),
-            ("method", method),
-            ("copySent", copySent),
-            ("clipboardRestored", clipboardRestored),
-            ("chordRestore", chordRestore),
-            ("injected", injected),
-            ("marker", kind == "chord" ? (bool?)false : null)));
+            ClipboardRestoreResult? clipboardRestore = transaction?.Restore();
+            string? chordRestore = null;
+            if (chord is { } done)
+            {
+                chordRestore = !_cache!.TryGetBefore(done.Arming, out var cached) ? "missing"
+                    : cached.IsTooLarge ? "tooLarge"
+                    : Describe(ClipboardGuard.RestoreIfUnchanged(cached, settled));
+                _cache.CompleteArming(done.Arming);
+            }
+
+            _log.Write(Record(kind,
+                ("fgBefore", SpikeToolbarWindow.Hex(source)),
+                ("fgAfter", SpikeToolbarWindow.Hex(ToolbarWindowStyle.ForegroundWindow())),
+                ("exe", exe),
+                ("uiaStatus", selection.Status.ToString()),
+                ("capture", text is null ? "Unavailable" : "Captured"),
+                ("textLength", text?.Length),
+                ("isEditable", selection.IsEditable),
+                ("method", method),
+                ("fallback", fallback),
+                ("refusal", refusal),
+                ("copySent", copySent),
+                ("clipboardRestored", clipboardRestore is null ? null : clipboardRestore is ClipboardRestoreResult.Restored or ClipboardRestoreResult.Unchanged),
+                ("clipboardRestore", clipboardRestore is { } r ? Describe(r) : null),
+                ("chordRestore", chordRestore),
+                ("restoreSkipped", clipboardRestore == ClipboardRestoreResult.SkippedClipboardChanged || chordRestore == "skipped" ? "clipboardChanged" : null),
+                ("injected", injected),
+                ("marker", kind == "chord" ? (bool?)false : null)));
+        }
+        finally
+        {
+            transaction?.Dispose();
+        }
     }
+
+    private static string Describe(ClipboardRestoreResult result) => result switch
+    {
+        ClipboardRestoreResult.Restored => "restored",
+        ClipboardRestoreResult.Unchanged => "unchanged",
+        ClipboardRestoreResult.SkippedClipboardChanged => "skipped",
+        ClipboardRestoreResult.NotRestorable => "notRestorable",
+        _ => "failed",
+    };
 
     // Toolbar actions (UI thread).
 
@@ -422,7 +485,10 @@ internal sealed class SpikeSession
                     var text = _capturedText;
                     Watch(Task.Run(() =>
                     {
-                        var written = text is not null && ClipboardGuard.WriteText(text, excludeFromHistory: false);
+                        // The user asked for the clipboard to change; a failed write still gets the old contents back.
+                        using var snapshot = text is null ? null : ClipboardGuard.Snapshot();
+                        var written = text is not null
+                            && ClipboardGuard.WriteText(text, excludeFromHistory: false, snapshot is { IsComplete: true } ? snapshot : null);
                         _log.Write(Record("copy", ("textLength", text?.Length), ("written", written)));
                     }));
                     break;
@@ -435,7 +501,9 @@ internal sealed class SpikeSession
 
     /// <summary>
     /// The source gets the foreground back if needed, then PASTED-BY-POPGUY goes in through the clipboard (kept out
-    /// of clipboard history) and Ctrl+V; the clipboard comes back 150 ms later.
+    /// of clipboard history) and Ctrl+V; the clipboard comes back 150 ms later unless someone copied meanwhile. Refused,
+    /// with the reason logged and the clipboard left as it was (or put back), when the source is not the foreground
+    /// window, the clipboard could not be saved first, or the write failed.
     /// </summary>
     private void Paste()
     {
@@ -447,12 +515,40 @@ internal sealed class SpikeSession
         Watch(Task.Run(async () =>
         {
             if (switched) await Task.Delay(ForegroundSettleDelay);
-            var snapshot = ClipboardGuard.Snapshot();
-            var written = ClipboardGuard.WriteText(PastedText, excludeFromHistory: true);
-            var sent = InputSynth.SendPaste();
-            await Task.Delay(PasteRestoreDelay);
-            var restored = snapshot is not null && ClipboardGuard.Restore(snapshot);
-            snapshot?.Dispose();
+            string? refused = null;
+            bool? written = null;
+            bool? sent = null;
+            ClipboardRestoreResult? restore = null;
+            if (!sourceForeground || ToolbarWindowStyle.ForegroundWindow() != source)
+            {
+                refused = "sourceNotForeground";
+            }
+            else if (!ClipboardTransaction.TryBegin(out var transaction, out var refusal))
+            {
+                refused = refusal;
+            }
+            else
+            {
+                using (transaction)
+                {
+                    written = transaction.WriteText(PastedText, excludeFromHistory: true);
+                    if (written != true)
+                    {
+                        refused = "writeFailed"; // the transaction already put the clipboard back
+                    }
+                    else if (ToolbarWindowStyle.ForegroundWindow() != source)
+                    {
+                        refused = "sourceNotForeground";
+                        restore = transaction.Restore();
+                    }
+                    else
+                    {
+                        sent = InputSynth.SendPaste(_input!.IsUserKeyDown);
+                        await Task.Delay(PasteRestoreDelay);
+                        restore = transaction.Restore();
+                    }
+                }
+            }
             _log.Write(Record("paste",
                 ("fgBefore", SpikeToolbarWindow.Hex(fgBefore)),
                 ("fgAfter", SpikeToolbarWindow.Hex(ToolbarWindowStyle.ForegroundWindow())),
@@ -460,9 +556,13 @@ internal sealed class SpikeSession
                 ("exe", Probes.ExeOf(source)),
                 ("foregroundSwitched", switched),
                 ("sourceForeground", sourceForeground),
+                ("refused", refused),
+                ("message", refused is null ? null : "Paste not possible, the clipboard was left as it was"),
                 ("written", written),
                 ("injected", sent),
-                ("clipboardRestored", restored)));
+                ("clipboardRestored", restore is null ? null : restore is ClipboardRestoreResult.Restored or ClipboardRestoreResult.Unchanged),
+                ("clipboardRestore", restore is { } r ? Describe(r) : null),
+                ("restoreSkipped", restore == ClipboardRestoreResult.SkippedClipboardChanged ? "clipboardChanged" : null)));
         }));
     }
 
