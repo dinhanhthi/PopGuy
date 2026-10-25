@@ -78,8 +78,9 @@ public sealed class CredentialStoreTests
 
             var json = File.ReadAllBytes(paths.SettingsFile);
             Assert.True(json.AsSpan().IndexOf("https://example.invalid/v1"u8) >= 0);
+            // Secondary: settings never read the store, so this only guards a future code path that writes keys there.
             Assert.True(json.AsSpan().IndexOf(Encoding.UTF8.GetBytes(key)) < 0);
-            // No field that could hold a key, even an empty one.
+            // The guard: no field that could hold a key, even an empty one.
             using var document = JsonDocument.Parse(json);
             Assert.DoesNotContain(PropertyNames(document.RootElement), name => SecretName.IsMatch(name));
             Assert.Equal(key, _store.Get(id));
@@ -91,7 +92,7 @@ public sealed class CredentialStoreTests
         }
     }
 
-    private static readonly Regex SecretName = new("api_?key|secret|token", RegexOptions.IgnoreCase);
+    private static readonly Regex SecretName = new("api_?key|secret|accessToken|authToken|bearer", RegexOptions.IgnoreCase);
 
     private static IEnumerable<string> PropertyNames(JsonElement element) => element.ValueKind switch
     {

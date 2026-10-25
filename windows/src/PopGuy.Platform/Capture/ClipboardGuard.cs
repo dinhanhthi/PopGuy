@@ -166,7 +166,7 @@ public enum ClipboardRestoreResult
 /// <see cref="ClipboardTransaction"/>: it takes the <see cref="Snapshot"/> first and refuses to start when the
 /// clipboard could not be saved completely, writes, and restores only what PopGuy itself changed. Opening the
 /// clipboard tries 10 times, 10 ms apart, since other apps hold it briefly. Any thread; every call opens and closes
-/// the clipboard itself.
+/// the clipboard itself, under a process-wide lock, so two PopGuy threads never have it open at once.
 /// </summary>
 public static class ClipboardGuard
 {
@@ -192,6 +192,14 @@ public static class ClipboardGuard
 
     /// <summary>Longer than any name in <see cref="OleInternalFormatNames"/>, so a longer name never matches.</summary>
     private const int FormatNameCapacity = 64;
+
+    /// <summary>
+    /// Held from <see cref="Open"/> to <see cref="Close"/>: OpenClipboard excludes other processes only, since another
+    /// thread of PopGuy still opens it while one thread has it open (measured on windows-latest), and its close would
+    /// end the first thread's open section half way. Taken before <see cref="ClipboardSnapshot"/>'s own lock, and never
+    /// held across an await.
+    /// </summary>
+    private static readonly Lock OpenLock = new();
 
     private const int OpenAttempts = 10;
     private static readonly TimeSpan OpenRetryDelay = TimeSpan.FromMilliseconds(10);
@@ -296,7 +304,7 @@ public static class ClipboardGuard
         }
         finally
         {
-            PInvoke.CloseClipboard();
+            Close();
         }
 
         if (tooLarge)
@@ -324,15 +332,15 @@ public static class ClipboardGuard
         }
         finally
         {
-            PInvoke.CloseClipboard();
+            Close();
         }
     }
 
     /// <summary>
     /// Restores <paramref name="snapshot"/> only if the clipboard's sequence number is still
-    /// <paramref name="expectedSequence"/> (the contents PopGuy caused), checked with the clipboard open so nobody can
-    /// change it in between. Otherwise <see cref="ClipboardRestoreResult.SkippedClipboardChanged"/>, or
-    /// <see cref="ClipboardRestoreResult.Unchanged"/> when the clipboard holds the snapshot's own contents.
+    /// <paramref name="expectedSequence"/> (the contents PopGuy caused), checked with the clipboard open so no other
+    /// process can change it in between (within PopGuy, the process-wide lock serializes every open). Otherwise
+    /// <see cref="ClipboardRestoreResult.SkippedClipboardChanged"/>, or <see cref="ClipboardRestoreResult.Unchanged"/> when the clipboard holds the snapshot's own contents.
     /// <see cref="ClipboardRestoreResult.NotRestorable"/> (clipboard untouched) when the snapshot is not
     /// <see cref="ClipboardSnapshot.IsComplete"/>; <see cref="ClipboardRestoreResult.Failed"/> when a format was
     /// refused (the clipboard is then left empty, never half-restored).
@@ -350,7 +358,7 @@ public static class ClipboardGuard
         }
         finally
         {
-            PInvoke.CloseClipboard();
+            Close();
         }
     }
 
@@ -392,7 +400,7 @@ public static class ClipboardGuard
         }
         finally
         {
-            PInvoke.CloseClipboard();
+            Close();
         }
         // Read after closing: the write is complete then. Another app's change in between would be taken for ours.
         sequenceAfter = PInvoke.GetClipboardSequenceNumber();
@@ -412,15 +420,15 @@ public static class ClipboardGuard
         }
         finally
         {
-            PInvoke.CloseClipboard();
+            Close();
         }
     }
 
     /// <summary>
     /// The text of a synthetic copy, read only if the clipboard's contents are <paramref name="processId"/>'s (the
     /// window GetClipboardOwner reports belongs to it; contents with no owner window are refused) and changed since
-    /// <paramref name="sequenceAtSend"/>, all checked with the clipboard open so nobody can change it in between. The
-    /// number of changes is not a guard: one multi-format write moves the sequence number several times (7 for an
+    /// <paramref name="sequenceAtSend"/>, all checked with the clipboard open so no other process can change it in
+    /// between (within PopGuy, the process-wide lock serializes every open). The number of changes is not a guard: one multi-format write moves the sequence number several times (7 for an
     /// empty plus three formats on windows-latest). False, nothing read, with <paramref name="refusal"/> "foreignClipboardWrite" (or
     /// "clipboardBusy": it could not be opened). <paramref name="sequence"/> is the number checked: the contents that
     /// are PopGuy's to replace on restore.
@@ -450,7 +458,7 @@ public static class ClipboardGuard
         }
         finally
         {
-            PInvoke.CloseClipboard();
+            Close();
         }
     }
 
@@ -518,15 +526,31 @@ public static class ClipboardGuard
         return true;
     }
 
-    /// <summary>Opens the clipboard (no owner window), trying 10 times, 10 ms apart.</summary>
-    private static bool Open()
+    /// <summary>
+    /// Opens the clipboard (no owner window), trying 10 times, 10 ms apart, holding <see cref="OpenLock"/> from the
+    /// first attempt. True: the clipboard is open and the lock held, so call <see cref="Close"/> on this thread (in a
+    /// finally). False: the lock is released again.
+    /// </summary>
+    internal static bool Open()
     {
+        OpenLock.Enter();
         for (var attempt = 1; ; attempt++)
         {
             if (PInvoke.OpenClipboard(HWND.Null)) return true;
-            if (attempt == OpenAttempts) return false;
+            if (attempt == OpenAttempts)
+            {
+                OpenLock.Exit();
+                return false;
+            }
             Thread.Sleep(OpenRetryDelay);
         }
+    }
+
+    /// <summary>Closes the clipboard that <see cref="Open"/> opened on this thread, then releases <see cref="OpenLock"/>.</summary>
+    internal static void Close()
+    {
+        PInvoke.CloseClipboard();
+        OpenLock.Exit();
     }
 
     /// <summary>Zeroes copied bytes and deletes a metafile copy that will not be handed to a snapshot.</summary>

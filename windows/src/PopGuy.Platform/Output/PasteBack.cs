@@ -32,8 +32,8 @@ public enum PasteBackStatus
 /// "editabilityUnknown" (UI Automation could not tell whether the focused element is editable, and the app is not a
 /// known editable host); "sourceGone" (the source window was closed); "sourceNotForeground" (the source did not come
 /// to the front within 300 ms); a <see cref="ClipboardTransaction.TryBegin"/> refusal; "writeFailed"; "foregroundChanged" (the source lost
-/// the foreground before Ctrl+V, nothing sent); "passwordField" or "integratedTerminal" again when the focus moved there
-/// during the modifier wait (nothing sent); "notInserted" (SendInput did not insert every event).
+/// the foreground before Ctrl+V, nothing sent); any focus refusal above ("console" to "editabilityUnknown") again when
+/// the focus moved during the modifier wait (nothing sent); "notInserted" (SendInput did not insert every event).
 /// </param>
 /// <param name="ClipboardRestore">How the clipboard came back; null when it was never written.</param>
 public sealed record PasteBackResult(PasteBackStatus Status, string Reason, ClipboardRestoreResult? ClipboardRestore = null);
@@ -52,7 +52,7 @@ public sealed record PasteBackResult(PasteBackStatus Status, string Reason, Clip
 /// editable (no value pattern, no answer), unless the app is a known editable host (Notepad, WordPad, Office, the
 /// xterm.js-hosting editors, Chromium and Firefox browsers). IDEs that host terminals without an xterm.js hint
 /// (JetBrains, Visual Studio) are left off that list on purpose. Right before Ctrl+V (after the modifier wait), the
-/// focused element is probed again: a password field or an xterm.js terminal there aborts the paste.
+/// focused element is probed again with the same rules: any refusal there aborts the paste.
 /// </para>
 /// </summary>
 public static class PasteBack

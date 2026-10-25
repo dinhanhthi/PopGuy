@@ -160,6 +160,80 @@ public sealed class ClipboardGuardTests
         third.Dispose();
     }
 
+    // OpenClipboard does not exclude another thread of the same process: without the process-wide lock, a read here
+    // would open (and close) the clipboard in the middle of another PopGuy thread's restore or write.
+    [Fact]
+    public async Task AnOpenSectionBlocksEveryOtherPopGuyThreadUntilClosed()
+    {
+        RequireClipboard();
+        Assert.True(ClipboardGuard.WriteText("serialized", excludeFromHistory: false));
+        using var opened = new ManualResetEventSlim();
+        using var close = new ManualResetEventSlim();
+        var held = false;
+        var holder = new Thread(() =>
+        {
+            // No assert here: an exception on this thread would take the test host down.
+            held = ClipboardGuard.Open();
+            opened.Set();
+            if (!held) return;
+            close.Wait();
+            ClipboardGuard.Close();
+        });
+        holder.Start();
+        try
+        {
+            Assert.True(opened.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+            Assert.True(held);
+            var read = Task.Run(ClipboardGuard.ReadText, TestContext.Current.CancellationToken);
+            // Blocked while the holder has the clipboard open (unguarded, it returns within the 100 ms of retries).
+            var first = await Task.WhenAny(read, Task.Delay(TimeSpan.FromMilliseconds(300), TestContext.Current.CancellationToken));
+            Assert.NotSame(read, first);
+            close.Set();
+            Assert.Equal("serialized", await read.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            close.Set();
+            holder.Join();
+        }
+    }
+
+    // A synthetic copy's text is read only when the source process wrote it after the send.
+    [Fact]
+    public void TryReadCopyOfReadsOnlyTheProcessOwnWriteSinceTheSend()
+    {
+        RequireClipboard();
+        var processId = (uint)Environment.ProcessId;
+        var sequenceAtSend = ClipboardGuard.SequenceNumber;
+        // Owned by a window of this process; kept alive while it owns the clipboard (destroyed, the owner is NULL).
+        using var window = new MessageWindow();
+        Assert.True(PInvoke.OpenClipboard(window.Handle));
+        try
+        {
+            Assert.True(PInvoke.EmptyClipboard());
+            Assert.True(ClipboardGuard.SetBytes(UnicodeText, Encoding.Unicode.GetBytes("owned"), extraZeroBytes: sizeof(char)));
+        }
+        finally
+        {
+            PInvoke.CloseClipboard();
+        }
+
+        Assert.True(ClipboardGuard.TryReadCopyOf(processId, sequenceAtSend, out var sequence, out var text, out var refusal), refusal);
+        Assert.Equal("owned", text);
+        Assert.NotEqual(sequenceAtSend, sequence);
+        // Another process (process ids are multiples of 4, so this one never exists).
+        Assert.False(ClipboardGuard.TryReadCopyOf(processId + 1, sequenceAtSend, out _, out text, out refusal));
+        Assert.Equal("foreignClipboardWrite", refusal);
+        Assert.Null(text);
+        // No change since the send.
+        Assert.False(ClipboardGuard.TryReadCopyOf(processId, ClipboardGuard.SequenceNumber, out _, out _, out refusal));
+        Assert.Equal("foreignClipboardWrite", refusal);
+        // Contents with no owner window.
+        Set((UnicodeText, [.. Encoding.Unicode.GetBytes("ownerless"), 0, 0]));
+        Assert.False(ClipboardGuard.TryReadCopyOf(processId, sequenceAtSend, out _, out _, out refusal));
+        Assert.Equal("foreignClipboardWrite", refusal);
+    }
+
     /// <summary>Skips the test when there is no Win32 clipboard to open (not Windows, or no session clipboard).</summary>
     private static void RequireClipboard()
     {

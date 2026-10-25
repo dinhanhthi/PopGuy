@@ -91,8 +91,8 @@ public sealed record SelectionCaptureResult(
 /// process): snapshot, send (only while the source is still the foreground window and nobody wrote the clipboard since
 /// the snapshot), wait up to 500 ms for the clipboard to change, read the text at the settle point 150 ms later (OLE
 /// apps write twice), and restore the user's clipboard 300 ms after the change, unless someone copied again meanwhile.
-/// The change is taken for the copy only if the source process owns the clipboard's contents and they changed at most
-/// twice since the send; anything else is a foreign write, never read and never restored over.
+/// The change is taken for the copy only if the source process owns the clipboard's contents and they changed since
+/// the send; anything else is a foreign write, never read and never restored over.
 /// </summary>
 public static class SelectionCapture
 {
