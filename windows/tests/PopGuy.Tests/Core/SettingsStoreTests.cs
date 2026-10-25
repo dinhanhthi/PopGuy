@@ -99,6 +99,29 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Empty(Directory.GetFiles(_paths.DataDirectory, "settings.corrupt-*.json"));
     }
 
+    // Regression: after a load that could not read the file, the first change must build on the file's settings, not
+    // on the in-memory defaults, and must not replace the file while it still cannot be read.
+    [Fact]
+    public void UpdateAfterAnUnreadableLoadKeepsTheFileSettings()
+    {
+        WriteSettingsFile("""{ "triggerChord": false }""");
+        using var fileLock = new FileStream(_paths.SettingsFile, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var store = new SettingsStore(_paths);
+        var changes = 0;
+        store.Changed += (_, _) => changes++;
+
+        Assert.Throws<IOException>(() => store.Update(s => s with { TriggerOnSelectEnabled = true }));
+        Assert.Equal(0, changes);
+        fileLock.Dispose();
+        store.Update(s => s with { TriggerOnSelectEnabled = true });
+
+        var reloaded = new SettingsStore(_paths).Current;
+        Assert.False(store.Current.TriggerChordEnabled);
+        Assert.False(reloaded.TriggerChordEnabled);
+        Assert.True(reloaded.TriggerOnSelectEnabled);
+        Assert.Equal(1, changes);
+    }
+
     // Security: API keys live in Windows Credential Manager only, never in settings.json.
     [Fact]
     public void SerializedSettingsContainNoApiKey()

@@ -9,19 +9,21 @@ namespace PopGuy.Core.Settings;
 /// it): the new settings are written atomically, then <see cref="Changed"/> fires. A file that does not decode is
 /// renamed <c>settings.corrupt-&lt;UTC timestamp&gt;.json</c> (never overwriting an earlier backup) and the defaults
 /// load. A file that cannot be read (locked, no access) or backed up is left in place and the defaults load without
-/// being saved, so only a user change overwrites it. Load-time I/O errors never fail the constructor.
+/// being saved; the next <see cref="Update"/> reads it again first, so a change never replaces it with the defaults.
+/// Load-time I/O errors never fail the constructor.
 /// </summary>
 public sealed class SettingsStore
 {
     private readonly string _path;
+    private bool _keepFile;
 
     public SettingsStore(AppPaths paths)
     {
         _path = paths.SettingsFile;
-        var loaded = Load(out var keepFile);
+        var loaded = Load(out _keepFile);
         Current = ToolbarLayout.Reconciled(loaded);
         // Persist the first-launch toolbar migration now; a reconciled order waits for the next change (macOS parity).
-        if (loaded.PrincipalActionIds is null && !keepFile)
+        if (loaded.PrincipalActionIds is null && !_keepFile)
         {
             try
             {
@@ -41,12 +43,23 @@ public sealed class SettingsStore
 
     /// <summary>
     /// Applies <paramref name="change"/>, saves, then sets <see cref="Current"/> and raises <see cref="Changed"/>. When
-    /// the save fails, <see cref="Current"/> keeps the old value and the exception propagates.
+    /// the load left the file in place, it is read again first and the change applies to what it holds (a corrupt file
+    /// is backed up and the change applies to the defaults); a file that still cannot be read or backed up throws an
+    /// <see cref="IOException"/> instead of being replaced. When the save fails, <see cref="Current"/> keeps the old
+    /// value and the exception propagates.
     /// </summary>
     public void Update(Func<AppSettings, AppSettings> change)
     {
-        var updated = change(Current);
+        var current = Current;
+        if (_keepFile)
+        {
+            current = ToolbarLayout.Reconciled(Load(out var keepFile));
+            if (keepFile)
+                throw new IOException("settings.json still cannot be read, so it was not overwritten.");
+        }
+        var updated = change(current);
         Save(updated);
+        _keepFile = false;
         Current = updated;
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -84,7 +97,7 @@ public sealed class SettingsStore
 
     // MARK: - File
 
-    /// <summary><paramref name="keepFile"/>: the file could not be read or backed up, so no save may replace it until a change.</summary>
+    /// <summary><paramref name="keepFile"/>: the file could not be read or backed up, so no save may replace it.</summary>
     private AppSettings Load(out bool keepFile)
     {
         keepFile = false;

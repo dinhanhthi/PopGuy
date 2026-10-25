@@ -51,8 +51,9 @@ public static class PresentationGate
             return Result(PresentationVerdict.Reentrant);
 
         // Both ignore lists fail open on an unknown source (macOS parity): the caller must pass whatever it can read.
-        if (exe is not null && settings.IgnoredAppsEnabled &&
-            settings.IgnoredAppExeNames.Select(ExeFileName).Contains(ExeFileName(exe), StringComparer.OrdinalIgnoreCase))
+        // A blank or null entry (settings.json can hold null in a list) matches nothing.
+        if (ExeFileName(exe) is { } name && settings.IgnoredAppsEnabled &&
+            settings.IgnoredAppExeNames.Any(e => string.Equals(ExeFileName(e), name, StringComparison.OrdinalIgnoreCase)))
             return Result(PresentationVerdict.IgnoredApp);
 
         if (host is not null && settings.IgnoredDomainsEnabled && settings.IgnoredDomains.Any(d => HostMatches(host, d)))
@@ -77,9 +78,9 @@ public static class PresentationGate
     /// no scheme, user info, port, path, query, leading "." or "www.", trailing "."; null unless it has a dot or is
     /// "localhost".
     /// </summary>
-    private static string? NormalizeDomain(string raw)
+    private static string? NormalizeDomain(string? raw)
     {
-        var s = raw.Trim().ToLowerInvariant();
+        var s = raw?.Trim().ToLowerInvariant() ?? "";
         if (s.IndexOf("://", StringComparison.Ordinal) is var scheme and >= 0)
             s = s[(scheme + 3)..];
         if (s.IndexOfAny(['/', '?', '#']) is var end and >= 0)
@@ -93,10 +94,13 @@ public static class PresentationGate
         return s.Contains('.') || s == "localhost" ? s : null;
     }
 
-    /// <summary>The file name of a trimmed exe name or full path, splitting on both separators on any OS.</summary>
-    private static string ExeFileName(string exe)
+    /// <summary>
+    /// The file name of a trimmed exe name or full path, splitting on both separators on any OS; null when there is none.
+    /// </summary>
+    private static string? ExeFileName(string? exe)
     {
-        var trimmed = exe.Trim();
-        return trimmed[(trimmed.LastIndexOfAny(['\\', '/']) + 1)..];
+        var trimmed = exe?.Trim() ?? "";
+        var name = trimmed[(trimmed.LastIndexOfAny(['\\', '/']) + 1)..];
+        return name.Length > 0 ? name : null;
     }
 }

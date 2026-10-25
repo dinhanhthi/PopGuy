@@ -40,10 +40,13 @@ public sealed class PresentationGateTests
         { "ignored exe, any case", Shown with { SourceExeName = "KeePass.exe" }, Settings, PresentationVerdict.IgnoredApp },
         { "ignored exe, entry padded", Shown with { SourceExeName = "1password.exe" }, Settings, PresentationVerdict.IgnoredApp },
         { "ignored exe, full path", Shown with { SourceExeName = @"C:\Program Files\KeePass\KeePass.exe" }, Settings, PresentationVerdict.IgnoredApp },
+        { "null exe entry matches nothing", Shown, Settings with { IgnoredAppExeNames = [null!, "keepass.exe"] }, PresentationVerdict.Show },
+        { "blank exe entries match an empty source", Shown with { SourceExeName = "" }, Settings with { IgnoredAppExeNames = [" ", @"C:\foo\"] }, PresentationVerdict.Show },
         { "ignored apps off", Shown with { SourceExeName = "keepass.exe" }, Settings with { IgnoredAppsEnabled = false }, PresentationVerdict.Show },
         { "own process is never ignored", Shown with { SourceExeName = "PopGuy.exe", IsOwnProcess = true, SourceHost = "notion.so" }, Settings, PresentationVerdict.Show },
         { "ignored subdomain", Shown with { SourceHost = "team.notion.so" }, Settings, PresentationVerdict.IgnoredDomain },
         { "suffix is not a subdomain", Shown with { SourceHost = "evilnotion.so" }, Settings, PresentationVerdict.Show },
+        { "null domain entry matches nothing", Shown with { SourceHost = "example.com" }, Settings with { IgnoredDomains = [null!, "notion.so"] }, PresentationVerdict.Show },
         { "ignored domains off", Shown with { SourceHost = "notion.so" }, Settings with { IgnoredDomainsEnabled = false }, PresentationVerdict.Show },
         { "no enabled action", Shown, NoActions, PresentationVerdict.NoEnabledAction },
     };
