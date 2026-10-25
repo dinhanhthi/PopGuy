@@ -125,6 +125,7 @@ internal static class Probes
                     ["isEditable"] = selection.IsEditable,
                     ["isTruncated"] = selection.IsTruncated,
                     ["focusedElementHint"] = selection.FocusedElementHint,
+                    ["readFailed"] = selection.ReadFailed,
                     ["rects"] = selection.SelectionRects
                         .Select(r => new Dictionary<string, int> { ["x"] = r.X, ["y"] = r.Y, ["width"] = r.Width, ["height"] = r.Height })
                         .ToArray(),
@@ -408,7 +409,7 @@ internal sealed class SpikeSession
             }
             else
             {
-                var decision = CaptureFallbackPolicy.Decide(selection.Status, source, selection.FocusedElementHint);
+                var decision = CaptureFallbackPolicy.Decide(selection, source);
                 fallback = decision.Reason;
                 if (!decision.Allowed || !ClipboardTransaction.TryBegin(out transaction, out refusal))
                 {
@@ -479,6 +480,7 @@ internal sealed class SpikeSession
                 ("isEditable", selection.IsEditable),
                 ("isTruncated", selection.IsTruncated),
                 ("focusedElementHint", selection.FocusedElementHint),
+                ("uiaReadFailed", selection.ReadFailed),
                 ("method", method),
                 ("fallback", fallback),
                 ("refusal", refusal),

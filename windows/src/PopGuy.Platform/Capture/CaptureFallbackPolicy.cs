@@ -11,8 +11,10 @@ namespace PopGuy.Platform.Capture;
 /// "captured" (UI Automation read it: no fallback needed), "passwordField", "console" (a console or terminal: a copy
 /// key there may interrupt the running command), "remoteDesktop" (a remote desktop or VM viewer, which forwards the
 /// keys to a remote session that may be a terminal), "integratedTerminal" (an editor's xterm.js terminal has the
-/// focus), "unavailable" (allowed: no text pattern), "emptyKnownEditor" (allowed: an editor that hides its selection
-/// from UI Automation), "empty" (refused: the app has no selection).
+/// focus), "uiaReadFailed" (the UI Automation read failed outright: nothing is known about the focused element),
+/// "unknownFocusInEditor" (an editor that hosts xterm.js terminals, with no focused-element hint to rule one out),
+/// "unavailable" (allowed: no text pattern), "emptyKnownEditor" (allowed: an editor that hides its selection from UI
+/// Automation), "empty" (refused: the app has no selection).
 /// </param>
 public readonly record struct CaptureFallbackDecision(bool Allowed, string Reason);
 
@@ -31,9 +33,12 @@ public readonly record struct CaptureFallbackDecision(bool Allowed, string Reaso
 /// prl_client_app);</item>
 /// <item>never when the focused element is an xterm.js terminal (its helper textarea: the UI Automation AutomationId
 /// or ClassName contains "xterm"), as in VS Code's or Cursor's integrated terminal;</item>
-/// <item>on <see cref="UiaCaptureStatus.Unavailable"/> (no text pattern) in any other app;</item>
-/// <item>on <see cref="UiaCaptureStatus.Empty"/> only in the Monaco/Electron editors that show UI Automation an empty
-/// hidden textarea (Code, Code - Insiders, Cursor, VSCodium, Windsurf): elsewhere an empty selection is just empty.</item>
+/// <item>never when the UI Automation read failed outright (<see cref="UiaSelection.ReadFailed"/>), and never in the
+/// Monaco/Electron editors that host xterm.js terminals (Code, Code - Insiders, Cursor, VSCodium, Windsurf) without a
+/// focused-element hint: the hint is the only way to tell their terminal pane apart;</item>
+/// <item>on <see cref="UiaCaptureStatus.Unavailable"/> (no text pattern) in any other case;</item>
+/// <item>on <see cref="UiaCaptureStatus.Empty"/> only in those editors, which show UI Automation an empty hidden
+/// textarea: elsewhere an empty selection is just empty.</item>
 /// </list>
 /// Names compare case-insensitively; process names come without ".exe".
 /// </summary>
@@ -77,10 +82,12 @@ public static class CaptureFallbackPolicy
     /// </summary>
     /// <param name="focusedElementHint">
     /// The focused element's UI Automation AutomationId and ClassName (<see cref="UiaSelection.FocusedElementHint"/>),
-    /// or null when unknown: one containing "xterm" is a terminal, whatever the app.
+    /// or null when unknown: one containing "xterm" is a terminal, whatever the app; null or empty in one of the editors
+    /// that host xterm.js terminals is refused.
     /// </param>
+    /// <param name="readFailed">The UI Automation read failed outright (<see cref="UiaSelection.ReadFailed"/>): refused.</param>
     public static CaptureFallbackDecision Decide(
-        UiaCaptureStatus status, string? windowClass, string? processName, string? focusedElementHint = null)
+        UiaCaptureStatus status, string? windowClass, string? processName, string? focusedElementHint, bool readFailed)
     {
         if (status == UiaCaptureStatus.Captured) return new(false, "captured");
         if (status == UiaCaptureStatus.PasswordField) return new(false, "passwordField");
@@ -92,18 +99,19 @@ public static class CaptureFallbackPolicy
         {
             return new(false, "integratedTerminal");
         }
+        if (readFailed) return new(false, "uiaReadFailed");
+        var isTerminalHostEditor = processName is not null && HiddenSelectionEditors.Contains(processName);
+        if (isTerminalHostEditor && string.IsNullOrEmpty(focusedElementHint)) return new(false, "unknownFocusInEditor");
         if (status == UiaCaptureStatus.Unavailable) return new(true, "unavailable");
-        return processName is not null && HiddenSelectionEditors.Contains(processName)
-            ? new(true, "emptyKnownEditor")
-            : new(false, "empty");
+        return isTerminalHostEditor ? new(true, "emptyKnownEditor") : new(false, "empty");
     }
 
     /// <summary>
-    /// <see cref="Decide(UiaCaptureStatus, string?, string?, string?)"/> for the top-level window
-    /// <paramref name="window"/>.
+    /// <see cref="Decide(UiaCaptureStatus, string?, string?, string?, bool)"/> for <paramref name="selection"/> (its
+    /// status, focused-element hint and read failure) in the top-level window <paramref name="window"/>.
     /// </summary>
-    public static CaptureFallbackDecision Decide(UiaCaptureStatus status, nint window, string? focusedElementHint) =>
-        Decide(status, ClassNameOf(window), ProcessNameOf(window), focusedElementHint);
+    public static CaptureFallbackDecision Decide(UiaSelection selection, nint window) =>
+        Decide(selection.Status, ClassNameOf(window), ProcessNameOf(window), selection.FocusedElementHint, selection.ReadFailed);
 
     /// <summary>The window's class name, or null.</summary>
     public static string? ClassNameOf(nint window)

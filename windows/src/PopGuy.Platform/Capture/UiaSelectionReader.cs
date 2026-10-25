@@ -17,7 +17,10 @@ public enum UiaCaptureStatus
     /// <summary>The focused element supports text selection, but nothing (or only white space) is selected.</summary>
     Empty,
 
-    /// <summary>No focused element, no text pattern, a UI Automation error, or no answer within the timeout.</summary>
+    /// <summary>
+    /// No text pattern, or the read failed outright (<see cref="UiaSelection.ReadFailed"/>: no focused element, a UI
+    /// Automation error, or no answer within the timeout).
+    /// </summary>
     Unavailable,
 
     /// <summary>
@@ -34,18 +37,26 @@ public enum UiaCaptureStatus
 /// <param name="SelectionRects">The selection's bounding rectangles in screen pixels (one per line), possibly empty.</param>
 /// <param name="FocusedElementHint">
 /// The focused element's AutomationId and ClassName (never its text), joined with a space, for
-/// <see cref="CaptureFallbackPolicy"/> (an xterm.js terminal shows "xterm" there); null when unknown.
+/// <see cref="CaptureFallbackPolicy"/> (an xterm.js terminal shows "xterm" there); null when unknown (both empty, or
+/// the read failed before it), and kept on every result read after it, a failed one too.
 /// </param>
 /// <param name="IsTruncated">The selection was longer than 1,000,000 characters: <paramref name="Text"/> holds the first million.</param>
+/// <param name="ReadFailed">
+/// The read failed outright (always with <see cref="UiaCaptureStatus.Unavailable"/>): no focused element, a UI
+/// Automation error (the hint lookup or the selection read included), or no answer within the timeout. Unlike a
+/// missing text pattern, nothing is known about the focused element, so <see cref="CaptureFallbackPolicy"/> refuses.
+/// </param>
 public sealed record UiaSelection(
     UiaCaptureStatus Status,
     string Text,
     bool IsEditable,
     IReadOnlyList<Rectangle> SelectionRects,
     string? FocusedElementHint = null,
-    bool IsTruncated = false)
+    bool IsTruncated = false,
+    bool ReadFailed = false)
 {
     internal static readonly UiaSelection Unavailable = new(UiaCaptureStatus.Unavailable, "", false, []);
+    internal static readonly UiaSelection Failed = Unavailable with { ReadFailed = true };
     internal static readonly UiaSelection PasswordField = new(UiaCaptureStatus.PasswordField, "", false, []);
 }
 
@@ -67,8 +78,9 @@ public static class UiaSelectionReader
 
     /// <summary>
     /// Reads the focused selection on a dedicated MTA thread and waits for it up to 1.5 s (then
-    /// <see cref="UiaCaptureStatus.Unavailable"/>; the abandoned thread ends whenever UI Automation returns). A first
-    /// read that is <see cref="UiaCaptureStatus.Unavailable"/> is tried once more 150 ms later, within the same 1.5 s:
+    /// <see cref="UiaCaptureStatus.Unavailable"/> with <see cref="UiaSelection.ReadFailed"/>; the abandoned thread ends
+    /// whenever UI Automation returns). A first read that is <see cref="UiaCaptureStatus.Unavailable"/> (failed or not)
+    /// is tried once more 150 ms later, within the same 1.5 s:
     /// Chromium apps (Chrome, Edge, Electron) turn their accessibility tree on only when a UI Automation client first
     /// asks, so the first read after launch finds no text pattern. Blocks the caller for 1.5 s at most: call it off the
     /// UI thread.
@@ -90,7 +102,7 @@ public static class UiaSelectionReader
         }) { IsBackground = true, Name = "PopGuy UIA read" };
         thread.SetApartmentState(ApartmentState.MTA);
         thread.Start();
-        return thread.Join(Timeout) ? result ?? UiaSelection.Unavailable : UiaSelection.Unavailable;
+        return thread.Join(Timeout) ? result ?? UiaSelection.Failed : UiaSelection.Failed;
     }
 
     private static UiaSelection ReadCore()
@@ -99,14 +111,17 @@ public static class UiaSelectionReader
         IUIAutomationElement? element = null;
         IUIAutomationTextPattern? textPattern = null;
         IUIAutomationTextRangeArray? ranges = null;
+        // Read before the selection, and kept on every result after it (the failed ones too): the hint is what tells an
+        // editor's integrated terminal apart (CaptureFallbackPolicy).
+        string? hint = null;
         try
         {
             automation = (IUIAutomation)new CUIAutomation8();
             element = automation.GetFocusedElement();
-            if (element is null) return UiaSelection.Unavailable;
+            if (element is null) return UiaSelection.Failed;
             // Before any text is read: a password field's text never leaves it.
             if (element.CurrentIsPassword) return UiaSelection.PasswordField;
-            var hint = FocusedElementHintOf(element);
+            hint = FocusedElementHintOf(element);
             textPattern = element.GetCurrentPattern(UIA_PATTERN_ID.UIA_TextPatternId) as IUIAutomationTextPattern;
             if (textPattern is null) return UiaSelection.Unavailable with { FocusedElementHint = hint };
 
@@ -154,8 +169,8 @@ public static class UiaSelectionReader
         catch (Exception)
         {
             // COM errors map to many exception types (COMException, UnauthorizedAccessException, ...), and an
-            // exception escaping this background thread would end the process.
-            return UiaSelection.Unavailable;
+            // exception escaping this background thread would end the process. A failed read, not a missing pattern.
+            return UiaSelection.Failed with { FocusedElementHint = hint };
         }
         finally
         {
@@ -219,19 +234,13 @@ public static class UiaSelectionReader
 
     /// <summary>
     /// The focused element's AutomationId and ClassName joined with a space (identifiers, never text), or null when
-    /// both are empty or UI Automation fails here: the hint is optional, the read goes on without it.
+    /// both are empty. A UI Automation error here fails the whole read (<see cref="UiaSelection.ReadFailed"/>): without
+    /// the hint, an integrated terminal cannot be told apart.
     /// </summary>
     private static string? FocusedElementHintOf(IUIAutomationElement element)
     {
-        try
-        {
-            var hint = $"{ReadBstr(element.CurrentAutomationId)} {ReadBstr(element.CurrentClassName)}".Trim();
-            return hint.Length > 0 ? hint : null;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
+        var hint = $"{ReadBstr(element.CurrentAutomationId)} {ReadBstr(element.CurrentClassName)}".Trim();
+        return hint.Length > 0 ? hint : null;
     }
 
     private static string ReadBstr(BSTR value)
