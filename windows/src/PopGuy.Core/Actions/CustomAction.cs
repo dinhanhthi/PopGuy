@@ -52,6 +52,12 @@ public sealed record CustomAction
         or CustomActionType.AppleScript or CustomActionType.ShellScript;
 
     /// <summary>
+    /// False for the macOS-only types (AppleScript, Shortcuts): they are kept, so a settings file round-trips, but the
+    /// toolbar hides them and lists them as "skipped on Windows".
+    /// </summary>
+    public bool RunnableOnWindows => Type is not (CustomActionType.AppleScript or CustomActionType.RunShortcut);
+
+    /// <summary>
     /// Whether the action shows on the toolbar for <paramref name="selection"/>. Only scriptable types with a
     /// non-empty <see cref="AppliesWhenRegex"/> filter: visible iff the regex matches the first
     /// <see cref="MaxRegexInputLength"/> characters. An invalid or timed-out pattern fails open (shown). Cosmetic
