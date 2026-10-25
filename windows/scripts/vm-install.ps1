@@ -13,15 +13,20 @@
     app\PopGuy.exe, or a folder that contains win-arm64\app and/or win-x64\app.
 
 .PARAMETER Launch
-    Start PopGuy.exe after installing. Without -Wait the app is created through
-    WMI (Win32_Process.Create), so it is not a child of this script: the VM tool
-    runs each command in a job and kills the whole process tree when the command
-    returns, which would end a Start-Process child at once. The new ProcessId is
-    printed. With -Wait the caller waits, so the app is a normal child process.
+    Start PopGuy.exe after installing. Without -Wait the app is started through
+    explorer.exe, which hands the launch to the shell, and the new process id is
+    printed. Why: the VM tool runs each command in a job and kills the whole
+    process tree when the command returns, which ends a Start-Process child at
+    once. A process created through WMI (Win32_Process.Create) lands on a
+    non-interactive desktop, so its window never shows, and a scheduled-task
+    launch shows the window but renders no XAML text. With -Wait the caller
+    waits, so the app is a normal child process.
 
 .PARAMETER AppArgs
-    Alias -Args. Arguments passed to PopGuy.exe. A non-empty list implies -Launch. The values
-    are never printed (they may hold paths of QA key files), only their count.
+    Alias -Args. Arguments passed to PopGuy.exe. A non-empty list implies -Launch
+    and needs -Wait (explorer.exe cannot pass arguments): run vm-install with
+    -Wait inside a long-timeout VM command. The values are never printed (they
+    may hold paths of QA key files), only their count.
 
 .PARAMETER Wait
     Wait for PopGuy to exit, print its exit code and exit with that code. The app
@@ -75,14 +80,10 @@ function Find-AppFolder {
     throw "PopGuy.exe not found for $arch under '$Folder' (looked in '$flat' and '$perArch')."
 }
 
-function ConvertTo-ArgvToken([string]$Value) {
-    # Quoted for CommandLineToArgvW: backslashes before a quote and at the end are doubled, quotes escaped.
-    $escaped = $Value -replace '(\\*)"', '$1$1\"'
-    $escaped = $escaped -replace '(\\+)$', '$1$1'
-    return '"' + $escaped + '"'
-}
-
 try {
+    if ($AppArgs.Count -gt 0 -and -not $Wait) {
+        throw 'App arguments need -Wait: the VM tool kills child processes when the command returns. Run vm-install with -Wait inside a long-timeout vmpal_exec call.'
+    }
     if (-not (Test-Path -LiteralPath $Folder -PathType Container)) {
         throw "Folder '$Folder' is not reachable from this session (an elevated session may not see the Z: drive). Copy the folder to C:\PopGuyQA\builds\<run> first and pass that path."
     }
@@ -112,19 +113,23 @@ try {
     $exe = Join-Path $Dest 'PopGuy.exe'
 
     if (-not $Wait) {
-        # Created by WMI, outside this job: the VM tool kills the job's process tree when the command returns.
-        $tokens = @(ConvertTo-ArgvToken $exe)
-        foreach ($arg in $AppArgs) {
-            $tokens += ConvertTo-ArgvToken $arg
+        # Through the shell, outside this job (see -Launch). Any earlier PopGuy was stopped above;
+        # the margin covers clock granularity.
+        $since = (Get-Date).AddSeconds(-1)
+        # explorer.exe exits with 1 even when the launch works: its exit code is ignored.
+        & "$env:WINDIR\explorer.exe" $exe
+        $started = $null
+        $deadline = (Get-Date).AddSeconds(10)
+        while (-not $started -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Milliseconds 250
+            $started = Get-Process PopGuy -ErrorAction SilentlyContinue |
+                Where-Object { $_.StartTime -ge $since } |
+                Select-Object -First 1
         }
-        $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
-            CommandLine      = ($tokens -join ' ')
-            CurrentDirectory = $Dest
+        if (-not $started) {
+            throw "PopGuy did not start within 10 s (launched through explorer.exe)."
         }
-        if ($created.ReturnValue -ne 0) {
-            throw "Win32_Process.Create failed with code $($created.ReturnValue) for $exe."
-        }
-        Write-Host "Launched $exe with $($AppArgs.Count) argument(s), process id $($created.ProcessId)."
+        Write-Host "Launched $exe, process id $($started.Id)."
         exit 0
     }
 
