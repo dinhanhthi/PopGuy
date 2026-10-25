@@ -1,0 +1,477 @@
+[
+  {
+    "id": "00000000-0000-4000-9000-000000000001",
+    "title": "Windows AI",
+    "actionDescription": "",
+    "icon": {
+      "type": "emoji",
+      "value": "✨"
+    },
+    "systemPrompt": "Rewrite {{text}} plainly.",
+    "providerKind": "openai",
+    "model": "gpt-5",
+    "isEnabled": true,
+    "type": "ai",
+    "targetLanguage": "en",
+    "tone": "neutral",
+    "speakSettings": {
+      "defaultAccent": "usEnglish",
+      "quickSwitchAccents": [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate": 0.5,
+      "pitch": 1,
+      "dictionaryAudioEnabled": true,
+      "selectedEngine": "system",
+      "cloudCharLimit": 600
+    },
+    "ttsConfig": {
+      "voiceOverrides": {}
+    },
+    "dictionaryConfig": {
+      "provider": "macOSBuiltin",
+      "definitionLanguage": "en",
+      "isEnabled": false,
+      "speakSettings": {
+        "defaultAccent": "usEnglish",
+        "quickSwitchAccents": [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate": 0.5,
+        "pitch": 1,
+        "dictionaryAudioEnabled": true,
+        "selectedEngine": "system",
+        "cloudCharLimit": 600
+      },
+      "accent": "usEnglish"
+    },
+    "scriptSource": "",
+    "afterRun": "closeToolbar",
+    "appliesWhenRegex": "",
+    "isFromPlugin": false,
+    "libraryPresetID": "ai.humanize"
+  },
+  {
+    "id": "00000000-0000-4000-9000-000000000002",
+    "title": "Windows Translate",
+    "actionDescription": "",
+    "icon": {
+      "type": "sfSymbol",
+      "value": "globe"
+    },
+    "systemPrompt": "",
+    "providerKind": "google_translate",
+    "model": "claude-sonnet-5-5",
+    "isEnabled": true,
+    "type": "translation",
+    "targetLanguage": "de",
+    "tone": "casual",
+    "speakSettings": {
+      "defaultAccent": "usEnglish",
+      "quickSwitchAccents": [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate": 0.5,
+      "pitch": 1,
+      "dictionaryAudioEnabled": true,
+      "selectedEngine": "system",
+      "cloudCharLimit": 600
+    },
+    "ttsConfig": {
+      "voiceOverrides": {}
+    },
+    "dictionaryConfig": {
+      "provider": "macOSBuiltin",
+      "definitionLanguage": "en",
+      "isEnabled": false,
+      "speakSettings": {
+        "defaultAccent": "usEnglish",
+        "quickSwitchAccents": [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate": 0.5,
+        "pitch": 1,
+        "dictionaryAudioEnabled": true,
+        "selectedEngine": "system",
+        "cloudCharLimit": 600
+      },
+      "accent": "usEnglish"
+    },
+    "scriptSource": "",
+    "afterRun": "closeToolbar",
+    "appliesWhenRegex": "",
+    "isFromPlugin": false
+  },
+  {
+    "id": "00000000-0000-4000-9000-000000000003",
+    "title": "Windows Speak",
+    "actionDescription": "",
+    "icon": {
+      "type": "sfSymbol",
+      "value": "speaker.wave.3"
+    },
+    "systemPrompt": "",
+    "providerKind": "anthropic",
+    "model": "claude-sonnet-5-5",
+    "isEnabled": true,
+    "type": "speech",
+    "targetLanguage": "en",
+    "tone": "neutral",
+    "speakSettings": {
+      "defaultAccent": "usEnglish",
+      "quickSwitchAccents": [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate": 0.5,
+      "pitch": 1,
+      "dictionaryAudioEnabled": true,
+      "selectedEngine": "cloud:azure_tts",
+      "cloudCharLimit": 600
+    },
+    "ttsConfig": {
+      "voiceOverrides": {},
+      "region": "eastus"
+    },
+    "dictionaryConfig": {
+      "provider": "macOSBuiltin",
+      "definitionLanguage": "en",
+      "isEnabled": false,
+      "speakSettings": {
+        "defaultAccent": "usEnglish",
+        "quickSwitchAccents": [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate": 0.5,
+        "pitch": 1,
+        "dictionaryAudioEnabled": true,
+        "selectedEngine": "system",
+        "cloudCharLimit": 600
+      },
+      "accent": "usEnglish"
+    },
+    "scriptSource": "",
+    "afterRun": "closeToolbar",
+    "appliesWhenRegex": "",
+    "isFromPlugin": false
+  },
+  {
+    "id": "00000000-0000-4000-9000-000000000004",
+    "title": "Windows Define",
+    "actionDescription": "",
+    "icon": {
+      "type": "emoji",
+      "value": "\uD83D\uDCDA"
+    },
+    "systemPrompt": "",
+    "providerKind": "ollama",
+    "model": "claude-sonnet-5-5",
+    "isEnabled": true,
+    "type": "dictionary",
+    "targetLanguage": "en",
+    "tone": "neutral",
+    "speakSettings": {
+      "defaultAccent": "usEnglish",
+      "quickSwitchAccents": [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate": 0.5,
+      "pitch": 1,
+      "dictionaryAudioEnabled": true,
+      "selectedEngine": "system",
+      "cloudCharLimit": 600
+    },
+    "ttsConfig": {
+      "voiceOverrides": {}
+    },
+    "dictionaryConfig": {
+      "provider": "minhqnd",
+      "definitionLanguage": "vi",
+      "isEnabled": false,
+      "speakSettings": {
+        "defaultAccent": "usEnglish",
+        "quickSwitchAccents": [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate": 0.5,
+        "pitch": 1,
+        "dictionaryAudioEnabled": true,
+        "selectedEngine": "system",
+        "cloudCharLimit": 600
+      },
+      "accent": "usEnglish"
+    },
+    "scriptSource": "",
+    "afterRun": "closeToolbar",
+    "appliesWhenRegex": "",
+    "isFromPlugin": false
+  },
+  {
+    "id": "00000000-0000-4000-9000-000000000005",
+    "title": "Windows Search",
+    "actionDescription": "",
+    "icon": {
+      "type": "sfSymbol",
+      "value": "safari"
+    },
+    "systemPrompt": "",
+    "providerKind": "gemini",
+    "model": "claude-sonnet-5-5",
+    "isEnabled": true,
+    "type": "openURL",
+    "targetLanguage": "en",
+    "tone": "neutral",
+    "speakSettings": {
+      "defaultAccent": "usEnglish",
+      "quickSwitchAccents": [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate": 0.5,
+      "pitch": 1,
+      "dictionaryAudioEnabled": true,
+      "selectedEngine": "system",
+      "cloudCharLimit": 600
+    },
+    "ttsConfig": {
+      "voiceOverrides": {}
+    },
+    "dictionaryConfig": {
+      "provider": "macOSBuiltin",
+      "definitionLanguage": "en",
+      "isEnabled": false,
+      "speakSettings": {
+        "defaultAccent": "usEnglish",
+        "quickSwitchAccents": [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate": 0.5,
+        "pitch": 1,
+        "dictionaryAudioEnabled": true,
+        "selectedEngine": "system",
+        "cloudCharLimit": 600
+      },
+      "accent": "usEnglish"
+    },
+    "scriptSource": "https://www.bing.com/search?q={text}",
+    "afterRun": "closeToolbar",
+    "appliesWhenRegex": "",
+    "isFromPlugin": false
+  },
+  {
+    "id": "00000000-0000-4000-9000-000000000006",
+    "title": "Windows Shortcut",
+    "actionDescription": "",
+    "icon": {
+      "type": "sfSymbol",
+      "value": "bolt"
+    },
+    "systemPrompt": "",
+    "providerKind": "custom",
+    "model": "claude-sonnet-5-5",
+    "isEnabled": true,
+    "type": "runShortcut",
+    "targetLanguage": "en",
+    "tone": "neutral",
+    "speakSettings": {
+      "defaultAccent": "usEnglish",
+      "quickSwitchAccents": [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate": 0.5,
+      "pitch": 1,
+      "dictionaryAudioEnabled": true,
+      "selectedEngine": "system",
+      "cloudCharLimit": 600
+    },
+    "ttsConfig": {
+      "voiceOverrides": {}
+    },
+    "dictionaryConfig": {
+      "provider": "macOSBuiltin",
+      "definitionLanguage": "en",
+      "isEnabled": false,
+      "speakSettings": {
+        "defaultAccent": "usEnglish",
+        "quickSwitchAccents": [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate": 0.5,
+        "pitch": 1,
+        "dictionaryAudioEnabled": true,
+        "selectedEngine": "system",
+        "cloudCharLimit": 600
+      },
+      "accent": "usEnglish"
+    },
+    "scriptSource": "Make PDF",
+    "afterRun": "closeToolbar",
+    "appliesWhenRegex": "",
+    "isFromPlugin": false
+  },
+  {
+    "id": "00000000-0000-4000-9000-000000000007",
+    "title": "Windows AppleScript",
+    "actionDescription": "",
+    "icon": {
+      "type": "emoji",
+      "value": "\uD83D\uDCDC"
+    },
+    "systemPrompt": "",
+    "providerKind": "claude_cli",
+    "model": "claude-sonnet-5-5",
+    "isEnabled": true,
+    "type": "appleScript",
+    "targetLanguage": "en",
+    "tone": "neutral",
+    "speakSettings": {
+      "defaultAccent": "usEnglish",
+      "quickSwitchAccents": [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate": 0.5,
+      "pitch": 1,
+      "dictionaryAudioEnabled": true,
+      "selectedEngine": "system",
+      "cloudCharLimit": 600
+    },
+    "ttsConfig": {
+      "voiceOverrides": {}
+    },
+    "dictionaryConfig": {
+      "provider": "macOSBuiltin",
+      "definitionLanguage": "en",
+      "isEnabled": false,
+      "speakSettings": {
+        "defaultAccent": "usEnglish",
+        "quickSwitchAccents": [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate": 0.5,
+        "pitch": 1,
+        "dictionaryAudioEnabled": true,
+        "selectedEngine": "system",
+        "cloudCharLimit": 600
+      },
+      "accent": "usEnglish"
+    },
+    "scriptSource": "display dialog \"{text}\"",
+    "afterRun": "closeToolbar",
+    "appliesWhenRegex": "",
+    "isFromPlugin": false
+  },
+  {
+    "id": "00000000-0000-4000-9000-000000000008",
+    "title": "Windows PowerShell",
+    "actionDescription": "",
+    "icon": {
+      "type": "sfSymbol",
+      "value": "terminal.fill"
+    },
+    "systemPrompt": "",
+    "providerKind": "codex_cli",
+    "model": "claude-sonnet-5-5",
+    "isEnabled": true,
+    "type": "shellScript",
+    "targetLanguage": "en",
+    "tone": "neutral",
+    "speakSettings": {
+      "defaultAccent": "usEnglish",
+      "quickSwitchAccents": [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate": 0.5,
+      "pitch": 1,
+      "dictionaryAudioEnabled": true,
+      "selectedEngine": "system",
+      "cloudCharLimit": 600
+    },
+    "ttsConfig": {
+      "voiceOverrides": {}
+    },
+    "dictionaryConfig": {
+      "provider": "macOSBuiltin",
+      "definitionLanguage": "en",
+      "isEnabled": false,
+      "speakSettings": {
+        "defaultAccent": "usEnglish",
+        "quickSwitchAccents": [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate": 0.5,
+        "pitch": 1,
+        "dictionaryAudioEnabled": true,
+        "selectedEngine": "system",
+        "cloudCharLimit": 600
+      },
+      "accent": "usEnglish"
+    },
+    "scriptSource": "Get-Date",
+    "afterRun": "showResult",
+    "appliesWhenRegex": "",
+    "isFromPlugin": false,
+    "shell": "powershell"
+  }
+]

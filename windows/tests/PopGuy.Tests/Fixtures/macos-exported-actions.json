@@ -1,0 +1,490 @@
+[
+  {
+    "actionDescription" : "",
+    "afterRun" : "closeToolbar",
+    "appliesWhenRegex" : "",
+    "dictionaryConfig" : {
+      "accent" : "usEnglish",
+      "definitionLanguage" : "en",
+      "isEnabled" : false,
+      "provider" : "macOSBuiltin",
+      "speakSettings" : {
+        "cloudCharLimit" : 600,
+        "defaultAccent" : "usEnglish",
+        "dictionaryAudioEnabled" : true,
+        "pitch" : 1,
+        "quickSwitchAccents" : [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate" : 0.5,
+        "selectedEngine" : "system"
+      }
+    },
+    "icon" : {
+      "type" : "emoji",
+      "value" : "🪄"
+    },
+    "id" : "00000000-0000-4000-8000-000000000001",
+    "isEnabled" : true,
+    "isFromPlugin" : false,
+    "model" : "claude-sonnet-5-5",
+    "providerKind" : "anthropic",
+    "scriptSource" : "",
+    "speakSettings" : {
+      "cloudCharLimit" : 600,
+      "defaultAccent" : "usEnglish",
+      "dictionaryAudioEnabled" : true,
+      "pitch" : 1,
+      "quickSwitchAccents" : [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate" : 0.5,
+      "selectedEngine" : "system"
+    },
+    "systemPrompt" : "Rewrite {{text}} plainly.",
+    "targetLanguage" : "en",
+    "title" : "Mac AI",
+    "tone" : "neutral",
+    "ttsConfig" : {
+      "voiceOverrides" : {
+
+      }
+    },
+    "type" : "ai"
+  },
+  {
+    "actionDescription" : "",
+    "afterRun" : "closeToolbar",
+    "appliesWhenRegex" : "",
+    "dictionaryConfig" : {
+      "accent" : "usEnglish",
+      "definitionLanguage" : "en",
+      "isEnabled" : false,
+      "provider" : "macOSBuiltin",
+      "speakSettings" : {
+        "cloudCharLimit" : 600,
+        "defaultAccent" : "usEnglish",
+        "dictionaryAudioEnabled" : true,
+        "pitch" : 1,
+        "quickSwitchAccents" : [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate" : 0.5,
+        "selectedEngine" : "system"
+      }
+    },
+    "icon" : {
+      "type" : "sfSymbol",
+      "value" : "character.bubble"
+    },
+    "id" : "00000000-0000-4000-8000-000000000002",
+    "isEnabled" : true,
+    "isFromPlugin" : false,
+    "model" : "claude-sonnet-5-5",
+    "providerKind" : "deepl",
+    "scriptSource" : "",
+    "speakSettings" : {
+      "cloudCharLimit" : 600,
+      "defaultAccent" : "usEnglish",
+      "dictionaryAudioEnabled" : true,
+      "pitch" : 1,
+      "quickSwitchAccents" : [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate" : 0.5,
+      "selectedEngine" : "system"
+    },
+    "systemPrompt" : "",
+    "targetLanguage" : "fr",
+    "title" : "Mac Translate",
+    "tone" : "formal",
+    "ttsConfig" : {
+      "voiceOverrides" : {
+
+      }
+    },
+    "type" : "translation"
+  },
+  {
+    "actionDescription" : "",
+    "afterRun" : "closeToolbar",
+    "appliesWhenRegex" : "",
+    "dictionaryConfig" : {
+      "accent" : "usEnglish",
+      "definitionLanguage" : "en",
+      "isEnabled" : false,
+      "provider" : "macOSBuiltin",
+      "speakSettings" : {
+        "cloudCharLimit" : 600,
+        "defaultAccent" : "usEnglish",
+        "dictionaryAudioEnabled" : true,
+        "pitch" : 1,
+        "quickSwitchAccents" : [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate" : 0.5,
+        "selectedEngine" : "system"
+      }
+    },
+    "icon" : {
+      "type" : "sfSymbol",
+      "value" : "speaker.wave.2"
+    },
+    "id" : "00000000-0000-4000-8000-000000000003",
+    "isEnabled" : true,
+    "isFromPlugin" : false,
+    "model" : "claude-sonnet-5-5",
+    "providerKind" : "openai",
+    "scriptSource" : "",
+    "speakSettings" : {
+      "cloudCharLimit" : 600,
+      "defaultAccent" : "usEnglish",
+      "dictionaryAudioEnabled" : true,
+      "pitch" : 1,
+      "quickSwitchAccents" : [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate" : 0.5,
+      "selectedEngine" : "cloud:openai_tts"
+    },
+    "systemPrompt" : "",
+    "targetLanguage" : "en",
+    "title" : "Mac Speak",
+    "tone" : "neutral",
+    "ttsConfig" : {
+      "voiceOverrides" : {
+        "fr" : "marin"
+      }
+    },
+    "type" : "speech"
+  },
+  {
+    "actionDescription" : "",
+    "afterRun" : "closeToolbar",
+    "appliesWhenRegex" : "",
+    "dictionaryConfig" : {
+      "accent" : "usEnglish",
+      "definitionLanguage" : "vi",
+      "isEnabled" : false,
+      "provider" : "freeDictionaryAPI",
+      "speakSettings" : {
+        "cloudCharLimit" : 600,
+        "defaultAccent" : "usEnglish",
+        "dictionaryAudioEnabled" : true,
+        "pitch" : 1,
+        "quickSwitchAccents" : [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate" : 0.5,
+        "selectedEngine" : "system"
+      }
+    },
+    "icon" : {
+      "type" : "emoji",
+      "value" : "📖"
+    },
+    "id" : "00000000-0000-4000-8000-000000000004",
+    "isEnabled" : true,
+    "isFromPlugin" : false,
+    "model" : "claude-sonnet-5-5",
+    "providerKind" : "gemini",
+    "scriptSource" : "",
+    "speakSettings" : {
+      "cloudCharLimit" : 600,
+      "defaultAccent" : "usEnglish",
+      "dictionaryAudioEnabled" : true,
+      "pitch" : 1,
+      "quickSwitchAccents" : [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate" : 0.5,
+      "selectedEngine" : "system"
+    },
+    "systemPrompt" : "",
+    "targetLanguage" : "en",
+    "title" : "Mac Define",
+    "tone" : "neutral",
+    "ttsConfig" : {
+      "voiceOverrides" : {
+
+      }
+    },
+    "type" : "dictionary"
+  },
+  {
+    "actionDescription" : "",
+    "afterRun" : "closeToolbar",
+    "appliesWhenRegex" : "^\\S+$",
+    "dictionaryConfig" : {
+      "accent" : "usEnglish",
+      "definitionLanguage" : "en",
+      "isEnabled" : false,
+      "provider" : "macOSBuiltin",
+      "speakSettings" : {
+        "cloudCharLimit" : 600,
+        "defaultAccent" : "usEnglish",
+        "dictionaryAudioEnabled" : true,
+        "pitch" : 1,
+        "quickSwitchAccents" : [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate" : 0.5,
+        "selectedEngine" : "system"
+      }
+    },
+    "icon" : {
+      "type" : "sfSymbol",
+      "value" : "magnifyingglass"
+    },
+    "id" : "00000000-0000-4000-8000-000000000005",
+    "isEnabled" : true,
+    "isFromPlugin" : false,
+    "model" : "claude-sonnet-5-5",
+    "providerKind" : "ollama",
+    "scriptSource" : "https:\/\/example.com\/search?q={text}",
+    "speakSettings" : {
+      "cloudCharLimit" : 600,
+      "defaultAccent" : "usEnglish",
+      "dictionaryAudioEnabled" : true,
+      "pitch" : 1,
+      "quickSwitchAccents" : [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate" : 0.5,
+      "selectedEngine" : "system"
+    },
+    "systemPrompt" : "",
+    "targetLanguage" : "en",
+    "title" : "Mac Search",
+    "tone" : "neutral",
+    "ttsConfig" : {
+      "voiceOverrides" : {
+
+      }
+    },
+    "type" : "openURL"
+  },
+  {
+    "actionDescription" : "",
+    "afterRun" : "showResult",
+    "appliesWhenRegex" : "",
+    "dictionaryConfig" : {
+      "accent" : "usEnglish",
+      "definitionLanguage" : "en",
+      "isEnabled" : false,
+      "provider" : "macOSBuiltin",
+      "speakSettings" : {
+        "cloudCharLimit" : 600,
+        "defaultAccent" : "usEnglish",
+        "dictionaryAudioEnabled" : true,
+        "pitch" : 1,
+        "quickSwitchAccents" : [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate" : 0.5,
+        "selectedEngine" : "system"
+      }
+    },
+    "icon" : {
+      "type" : "sfSymbol",
+      "value" : "square.stack.3d.up"
+    },
+    "id" : "00000000-0000-4000-8000-000000000006",
+    "isEnabled" : true,
+    "isFromPlugin" : false,
+    "model" : "claude-sonnet-5-5",
+    "providerKind" : "glm",
+    "scriptSource" : "Make PDF",
+    "speakSettings" : {
+      "cloudCharLimit" : 600,
+      "defaultAccent" : "usEnglish",
+      "dictionaryAudioEnabled" : true,
+      "pitch" : 1,
+      "quickSwitchAccents" : [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate" : 0.5,
+      "selectedEngine" : "system"
+    },
+    "systemPrompt" : "",
+    "targetLanguage" : "en",
+    "title" : "Mac Shortcut",
+    "tone" : "neutral",
+    "ttsConfig" : {
+      "voiceOverrides" : {
+
+      }
+    },
+    "type" : "runShortcut"
+  },
+  {
+    "actionDescription" : "",
+    "afterRun" : "copyResult",
+    "appliesWhenRegex" : "",
+    "dictionaryConfig" : {
+      "accent" : "usEnglish",
+      "definitionLanguage" : "en",
+      "isEnabled" : false,
+      "provider" : "macOSBuiltin",
+      "speakSettings" : {
+        "cloudCharLimit" : 600,
+        "defaultAccent" : "usEnglish",
+        "dictionaryAudioEnabled" : true,
+        "pitch" : 1,
+        "quickSwitchAccents" : [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate" : 0.5,
+        "selectedEngine" : "system"
+      }
+    },
+    "icon" : {
+      "type" : "emoji",
+      "value" : "🍎"
+    },
+    "id" : "00000000-0000-4000-8000-000000000007",
+    "isEnabled" : true,
+    "isFromPlugin" : false,
+    "model" : "claude-sonnet-5-5",
+    "providerKind" : "openrouter",
+    "scriptSource" : "display dialog \"{text}\"",
+    "speakSettings" : {
+      "cloudCharLimit" : 600,
+      "defaultAccent" : "usEnglish",
+      "dictionaryAudioEnabled" : true,
+      "pitch" : 1,
+      "quickSwitchAccents" : [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate" : 0.5,
+      "selectedEngine" : "system"
+    },
+    "systemPrompt" : "",
+    "targetLanguage" : "en",
+    "title" : "Mac AppleScript",
+    "tone" : "neutral",
+    "ttsConfig" : {
+      "voiceOverrides" : {
+
+      }
+    },
+    "type" : "appleScript"
+  },
+  {
+    "actionDescription" : "",
+    "afterRun" : "pasteResult",
+    "appliesWhenRegex" : "",
+    "dictionaryConfig" : {
+      "accent" : "usEnglish",
+      "definitionLanguage" : "en",
+      "isEnabled" : false,
+      "provider" : "macOSBuiltin",
+      "speakSettings" : {
+        "cloudCharLimit" : 600,
+        "defaultAccent" : "usEnglish",
+        "dictionaryAudioEnabled" : true,
+        "pitch" : 1,
+        "quickSwitchAccents" : [
+          "usEnglish",
+          "ukEnglish",
+          "french",
+          "spanish",
+          "german"
+        ],
+        "rate" : 0.5,
+        "selectedEngine" : "system"
+      }
+    },
+    "icon" : {
+      "type" : "sfSymbol",
+      "value" : "terminal"
+    },
+    "id" : "00000000-0000-4000-8000-000000000008",
+    "isEnabled" : true,
+    "isFromPlugin" : false,
+    "model" : "claude-sonnet-5-5",
+    "providerKind" : "mlx_local",
+    "scriptSource" : "echo \"$POPGUY_TEXT\" | wc -w",
+    "speakSettings" : {
+      "cloudCharLimit" : 600,
+      "defaultAccent" : "usEnglish",
+      "dictionaryAudioEnabled" : true,
+      "pitch" : 1,
+      "quickSwitchAccents" : [
+        "usEnglish",
+        "ukEnglish",
+        "french",
+        "spanish",
+        "german"
+      ],
+      "rate" : 0.5,
+      "selectedEngine" : "system"
+    },
+    "systemPrompt" : "",
+    "targetLanguage" : "en",
+    "title" : "Mac Shell",
+    "tone" : "neutral",
+    "ttsConfig" : {
+      "voiceOverrides" : {
+
+      }
+    },
+    "type" : "shellScript"
+  }
+]
