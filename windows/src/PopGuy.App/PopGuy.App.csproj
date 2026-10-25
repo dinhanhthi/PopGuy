@@ -28,4 +28,8 @@
     <PackageReference Include="Microsoft.WindowsAppSDK.DWrite" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PopGuy.Platform\PopGuy.Platform.csproj" />
+  </ItemGroup>
 </Project>

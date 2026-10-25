@@ -5,5 +5,6 @@
   </Configurations>
   <Folder Name="/src/">
     <Project Path="src/PopGuy.App/PopGuy.App.csproj" />
+    <Project Path="src/PopGuy.Platform/PopGuy.Platform.csproj" />
   </Folder>
 </Solution>
