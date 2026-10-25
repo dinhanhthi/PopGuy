@@ -1,0 +1,225 @@
+name: Windows
+
+# Builds the Windows port (windows/): runs the unit tests once they exist on x64 and ARM64, and publishes an
+# unpackaged, self-contained app folder per architecture for the QA VM (artifact PopGuy-win-<arch>).
+# No MSIX, no signing, no certificate and no secrets: the app runs straight from the folder.
+
+on:
+  push:
+    branches: [windows, main]
+    paths:
+      - 'windows/**'
+      - '.github/workflows/windows.yml'
+  pull_request:
+    paths:
+      - 'windows/**'
+      - '.github/workflows/windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: windows/global.json
+
+      # A job-level hashFiles() guard never runs (checkout has not happened yet), so probe here.
+      - id: probe
+        name: Probe for tests
+        run: |
+          $hasTests = Test-Path windows/tests/PopGuy.Tests/PopGuy.Tests.csproj
+          "has_tests=$($hasTests.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: No tests yet
+        if: steps.probe.outputs.has_tests != 'true'
+        run: "'no tests yet: windows/tests/PopGuy.Tests/PopGuy.Tests.csproj does not exist'"
+
+      # Run from windows/ so global.json applies.
+      - name: Test
+        if: steps.probe.outputs.has_tests == 'true'
+        working-directory: windows
+        run: dotnet test tests/PopGuy.Tests/PopGuy.Tests.csproj
+
+  # Same as test, on a native ARM64 runner (the QA VM is ARM64).
+  test-arm64:
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: windows/global.json
+
+      - id: probe
+        name: Probe for tests
+        run: |
+          "Runner: $env:RUNNER_ARCH, OS arch: $([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)"
+          $hasTests = Test-Path windows/tests/PopGuy.Tests/PopGuy.Tests.csproj
+          "has_tests=$($hasTests.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: No tests yet
+        if: steps.probe.outputs.has_tests != 'true'
+        run: "'no tests yet: windows/tests/PopGuy.Tests/PopGuy.Tests.csproj does not exist'"
+
+      - name: Test
+        if: steps.probe.outputs.has_tests == 'true'
+        working-directory: windows
+        run: dotnet test tests/PopGuy.Tests/PopGuy.Tests.csproj
+
+  package:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    env:
+      ARCH: ${{ matrix.arch }}
+      PLATFORM_NAME: ${{ matrix.arch == 'arm64' && 'ARM64' || 'x64' }}
+    steps:
+      - name: Set paths
+        run: |
+          "STAGE_DIR=$env:RUNNER_TEMP\artifact" >> $env:GITHUB_ENV
+          "APP_DIR=$env:RUNNER_TEMP\artifact\app" >> $env:GITHUB_ENV
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: windows/global.json
+
+      # Unpackaged (WindowsPackageType None) and self-contained (.NET and the Windows App SDK runtime are copied
+      # next to PopGuy.exe), so the published folder runs on a clean machine without installing any runtime.
+      # An x64 runner cross-publishes ARM64.
+      - name: Publish
+        working-directory: windows
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          dotnet publish src/PopGuy.App/PopGuy.App.csproj -c Debug -r "win-$env:ARCH" "-p:Platform=$env:PLATFORM_NAME" "-p:Version=0.0.$env:RUN_NUMBER" -o $env:APP_DIR
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # Fails unless the folder is a runnable unpackaged self-contained WinUI app for this architecture: the Windows
+      # App SDK runtime and WinUI binaries, a .pri resource index, and the WinRT activatable-class registrations
+      # (an unpackaged app has no package manifest, so they must be in the app's own manifest).
+      - name: Check artifact contents
+        run: |
+          function Get-PeMachine([string]$path) {
+            $fs = [IO.File]::OpenRead($path)
+            try {
+              $br = New-Object IO.BinaryReader($fs)
+              if ($br.ReadUInt16() -ne 0x5A4D) { throw "No MZ header: $path" }
+              $fs.Position = 0x3C
+              $fs.Position = $br.ReadInt32()
+              if ($br.ReadUInt32() -ne 0x4550) { throw "No PE signature: $path" }
+              return [int]$br.ReadUInt16()
+            } finally { $fs.Dispose() }
+          }
+          $expected = if ($env:ARCH -eq 'arm64') { 0xAA64 } else { 0x8664 }
+          $errors = @()
+
+          foreach ($name in @('PopGuy.exe', 'Microsoft.WindowsAppRuntime.dll', 'Microsoft.ui.xaml.dll')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $env:APP_DIR $name))) {
+              $errors += "Missing $name in the publish folder (is the app still unpackaged and self-contained?)"
+            }
+          }
+
+          foreach ($name in @('PopGuy.exe', 'Microsoft.ui.xaml.dll')) {
+            $path = Join-Path $env:APP_DIR $name
+            if (-not (Test-Path -LiteralPath $path)) { continue }
+            $machine = Get-PeMachine $path
+            '{0,-30} 0x{1:X4}' -f $name, $machine
+            if ($machine -ne $expected) { $errors += ('{0}: machine 0x{1:X4}, expected 0x{2:X4}' -f $name, $machine, $expected) }
+          }
+
+          $pri = @(Get-ChildItem -LiteralPath $env:APP_DIR -File -Filter '*.pri')
+          if ($pri.Count -eq 0) { $errors += 'No *.pri (resources.pri or PopGuy.pri) in the publish folder' }
+          else { "PRI files: $(($pri | ForEach-Object Name) -join ', ')" }
+
+          # The activatable classes are either in a side-by-side PopGuy.exe.manifest or embedded in PopGuy.exe.
+          $manifest = Join-Path $env:APP_DIR 'PopGuy.exe.manifest'
+          if (Test-Path -LiteralPath $manifest) {
+            "Manifest: $manifest (side-by-side file)"
+          } elseif (Test-Path -LiteralPath (Join-Path $env:APP_DIR 'PopGuy.exe')) {
+            # mt.exe is not on PATH on hosted runners: take the newest Windows SDK's copy, else the one in the
+            # Microsoft.Windows.SDK.BuildTools NuGet package restored by the publish.
+            $mt = $null
+            $kits = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+            if (Test-Path -LiteralPath $kits) {
+              $mt = Get-ChildItem -LiteralPath $kits -Directory |
+                Where-Object { $_.Name -match '^10\.' } |
+                Sort-Object { [version]$_.Name } -Descending |
+                ForEach-Object { Join-Path $_.FullName 'x64\mt.exe' } |
+                Where-Object { Test-Path -LiteralPath $_ } |
+                Select-Object -First 1
+            }
+            if (-not $mt) {
+              $nuget = if ($env:NUGET_PACKAGES) { $env:NUGET_PACKAGES } else { Join-Path $env:USERPROFILE '.nuget\packages' }
+              $mt = Get-ChildItem -Path (Join-Path $nuget 'microsoft.windows.sdk.buildtools') -Recurse -File -Filter 'mt.exe' -ErrorAction SilentlyContinue |
+                Where-Object { $_.FullName -match '\\x64\\' } |
+                Select-Object -First 1 -ExpandProperty FullName
+            }
+            if (-not $mt) {
+              $errors += 'mt.exe not found (Windows Kits or Microsoft.Windows.SDK.BuildTools): cannot read the embedded manifest'
+              $manifest = $null
+            } else {
+              "mt.exe: $mt"
+              $manifest = Join-Path $env:RUNNER_TEMP 'PopGuy.embedded.manifest.xml'
+              $exe = Join-Path $env:APP_DIR 'PopGuy.exe'
+              & $mt -nologo "-inputresource:$exe;#1" "-out:$manifest"
+              if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $manifest)) {
+                $errors += "mt.exe could not extract an embedded manifest from PopGuy.exe (exit $LASTEXITCODE) and there is no PopGuy.exe.manifest"
+                $manifest = $null
+              } else {
+                "Manifest: embedded in PopGuy.exe"
+              }
+            }
+          } else {
+            $manifest = $null
+          }
+          if ($manifest) {
+            $classes = @(Select-String -LiteralPath $manifest -Pattern 'activatableClass')
+            "activatableClass entries: $($classes.Count)"
+            $classes | Select-Object -First 5 | ForEach-Object { '  ' + $_.Line.Trim() }
+            if ($classes.Count -eq 0) {
+              $errors += 'No WinRT activatableClass entries in the app manifest: an unpackaged self-contained WinUI app cannot activate its classes without them'
+            }
+          }
+
+          if ($errors) { $errors | ForEach-Object { Write-Host "::error::$_" }; throw "Artifact contents check failed ($($errors.Count) problems)" }
+          'Artifact contents OK.'
+
+      - name: Stage artifact
+        run: |
+          Copy-Item -LiteralPath windows/scripts/vm-install.ps1 -Destination $env:STAGE_DIR
+          if (Get-ChildItem -LiteralPath $env:STAGE_DIR -Recurse -File -Include '*.pfx', '*.p12') { throw 'Private key in artifact' }
+          $files = @(Get-ChildItem -LiteralPath $env:STAGE_DIR -Recurse -File)
+          "Artifact: $($files.Count) files, $([math]::Round(($files | Measure-Object Length -Sum).Sum / 1MB, 1)) MB"
+          $files | Where-Object { $_.DirectoryName -eq $env:STAGE_DIR -or $_.Extension -in '.exe', '.pri', '.manifest' } |
+            ForEach-Object { $_.FullName.Substring($env:STAGE_DIR.Length + 1) }
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PopGuy-win-${{ matrix.arch }}
+          path: ${{ runner.temp }}/artifact
+          retention-days: 14
+          if-no-files-found: error
