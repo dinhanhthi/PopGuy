@@ -64,8 +64,8 @@ public sealed record HistoryRecord
 
 /// <summary>
 /// The capped log of action runs in history.json (macOS <c>HistoryStore.swift</c>): newest first, at most
-/// <see cref="MaxEntries"/>. Writes are atomic and run in the background, one after another; <see cref="FlushAsync"/>
-/// waits for them. A missing or corrupt file loads as empty, and write errors are swallowed (history is not critical
+/// <see cref="MaxEntries"/>. Writes are atomic and run in the background, one after another; records added while a write
+/// is queued share it (only the latest list is written). <see cref="FlushAsync"/> waits for them. A missing or corrupt file loads as empty, and write errors are swallowed (history is not critical
 /// state). Callers check the historyEnabled setting before recording.
 /// </summary>
 public sealed class HistoryStore
@@ -79,6 +79,7 @@ public sealed class HistoryStore
     private readonly Lock _gate = new();
     private readonly List<HistoryRecord> _records;
     private Task _writes = Task.CompletedTask;
+    private bool _writeQueued;
 
     public HistoryStore(AppPaths paths)
     {
@@ -116,8 +117,11 @@ public sealed class HistoryStore
             _records.Insert(0, stored);
             if (_records.Count > MaxEntries)
                 _records.RemoveRange(MaxEntries, _records.Count - MaxEntries);
-            HistoryRecord[] snapshot = [.. _records];
-            _writes = _writes.ContinueWith(_ => Write(snapshot), TaskScheduler.Default);
+            // A queued write that has not started yet is always the last one, and it snapshots when it starts.
+            if (_writeQueued)
+                return;
+            _writeQueued = true;
+            _writes = _writes.ContinueWith(_ => WriteLatest(), TaskScheduler.Default);
         }
     }
 
@@ -163,8 +167,14 @@ public sealed class HistoryStore
         }
     }
 
-    private void Write(HistoryRecord[] records)
+    private void WriteLatest()
     {
+        HistoryRecord[] records;
+        lock (_gate)
+        {
+            _writeQueued = false;
+            records = [.. _records];
+        }
         try
         {
             PopGuyJson.WriteFileAtomically(_path, records);

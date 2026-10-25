@@ -50,7 +50,9 @@ public static class PresentationGate
         if (input.IsShowing && inProgress && input.Text == input.CurrentText)
             return Result(PresentationVerdict.Reentrant);
 
-        if (exe is not null && settings.IgnoredAppsEnabled && settings.IgnoredAppExeNames.Contains(exe, StringComparer.OrdinalIgnoreCase))
+        // Both ignore lists fail open on an unknown source (macOS parity): the caller must pass whatever it can read.
+        if (exe is not null && settings.IgnoredAppsEnabled &&
+            settings.IgnoredAppExeNames.Select(ExeFileName).Contains(ExeFileName(exe), StringComparer.OrdinalIgnoreCase))
             return Result(PresentationVerdict.IgnoredApp);
 
         if (host is not null && settings.IgnoredDomainsEnabled && settings.IgnoredDomains.Any(d => HostMatches(host, d)))
@@ -64,9 +66,37 @@ public static class PresentationGate
 
     /// <summary>
     /// True when <paramref name="host"/> is <paramref name="domain"/> or one of its subdomains: "notion.so" also covers
-    /// "team.notion.so", never "evilnotion.so". Both are expected normalized (no "www."); case is ignored.
+    /// "team.notion.so", never "evilnotion.so". Both sides are normalized first (<see cref="NormalizeDomain"/>); an entry
+    /// that normalizes to nothing matches nothing.
     /// </summary>
     public static bool HostMatches(string host, string domain) =>
-        host.Equals(domain, StringComparison.OrdinalIgnoreCase) ||
-        host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase);
+        NormalizeDomain(host) is { } h && NormalizeDomain(domain) is { } d && (h == d || h.EndsWith("." + d, StringComparison.Ordinal));
+
+    /// <summary>
+    /// The bare lowercase host of a typed domain or URL (macOS <c>BrowserURLReader.normalizeDomain</c>, without IDNA):
+    /// no scheme, user info, port, path, query, leading "." or "www.", trailing "."; null unless it has a dot or is
+    /// "localhost".
+    /// </summary>
+    private static string? NormalizeDomain(string raw)
+    {
+        var s = raw.Trim().ToLowerInvariant();
+        if (s.IndexOf("://", StringComparison.Ordinal) is var scheme and >= 0)
+            s = s[(scheme + 3)..];
+        if (s.IndexOfAny(['/', '?', '#']) is var end and >= 0)
+            s = s[..end];
+        s = s[(s.LastIndexOf('@') + 1)..];
+        if (s.IndexOf(':') is var port and >= 0)
+            s = s[..port];
+        s = s.Trim('.');
+        if (s.StartsWith("www.", StringComparison.Ordinal))
+            s = s[4..];
+        return s.Contains('.') || s == "localhost" ? s : null;
+    }
+
+    /// <summary>The file name of a trimmed exe name or full path, splitting on both separators on any OS.</summary>
+    private static string ExeFileName(string exe)
+    {
+        var trimmed = exe.Trim();
+        return trimmed[(trimmed.LastIndexOfAny(['\\', '/']) + 1)..];
+    }
 }

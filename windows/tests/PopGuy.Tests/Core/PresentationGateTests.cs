@@ -11,7 +11,7 @@ public sealed class PresentationGateTests
 {
     private static readonly AppSettings Settings = new()
     {
-        IgnoredAppExeNames = ["keepass.exe", "popguy.exe"],
+        IgnoredAppExeNames = ["keepass.exe", "popguy.exe", " 1Password.exe "],
         IgnoredDomainsEnabled = true,
         IgnoredDomains = ["notion.so"],
     };
@@ -38,6 +38,8 @@ public sealed class PresentationGateTests
         { "speak playing, same text", Shown with { SpeakActive = true }, Settings, PresentationVerdict.Reentrant },
         { "listen again shown, same text", Shown with { CanReplaySpeak = true }, Settings, PresentationVerdict.Reentrant },
         { "ignored exe, any case", Shown with { SourceExeName = "KeePass.exe" }, Settings, PresentationVerdict.IgnoredApp },
+        { "ignored exe, entry padded", Shown with { SourceExeName = "1password.exe" }, Settings, PresentationVerdict.IgnoredApp },
+        { "ignored exe, full path", Shown with { SourceExeName = @"C:\Program Files\KeePass\KeePass.exe" }, Settings, PresentationVerdict.IgnoredApp },
         { "ignored apps off", Shown with { SourceExeName = "keepass.exe" }, Settings with { IgnoredAppsEnabled = false }, PresentationVerdict.Show },
         { "own process is never ignored", Shown with { SourceExeName = "PopGuy.exe", IsOwnProcess = true, SourceHost = "notion.so" }, Settings, PresentationVerdict.Show },
         { "ignored subdomain", Shown with { SourceHost = "team.notion.so" }, Settings, PresentationVerdict.IgnoredDomain },
@@ -56,4 +58,22 @@ public sealed class PresentationGateTests
         if (input.IsOwnProcess)
             Assert.Equal(new PresentationResult(PresentationVerdict.Show, null, null), result);
     }
+
+    // Security (privacy control): a user-typed entry or a browser host in another form must still match, and an entry
+    // that normalizes to nothing must match nothing.
+    [Theory]
+    [InlineData("team.notion.so", "notion.so", true)]
+    [InlineData("evilnotion.so", "notion.so", false)]
+    [InlineData("bank.com", "www.bank.com", true)]
+    [InlineData("bank.com", ".bank.com", true)]
+    [InlineData("bank.com", " bank.com", true)]
+    [InlineData("bank.com", "https://bank.com", true)]
+    [InlineData("bank.com", "Bank.com/", true)]
+    [InlineData("login.bank.com", "https://user@bank.com:443/path?q=1#top", true)]
+    [InlineData("bank.com.", "bank.com", true)]
+    [InlineData("www.bank.com", "bank.com", true)]
+    [InlineData("bank.com.", "", false)]
+    [InlineData("bank.com", "/", false)]
+    public void HostMatchesNormalizesBothSides(string host, string entry, bool expected) =>
+        Assert.Equal(expected, PresentationGate.HostMatches(host, entry));
 }

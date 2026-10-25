@@ -68,16 +68,35 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
-    public void CorruptFileLoadsDefaultsAndKeepsABackup()
+    public void CorruptFileLoadsDefaultsAndKeepsEveryBackup()
     {
         const string corrupt = """{ "triggerChord": false, """;
         WriteSettingsFile(corrupt);
 
         var s = new SettingsStore(_paths).Current;
+        WriteSettingsFile("{");
+        _ = new SettingsStore(_paths);
 
         Assert.True(s.TriggerChordEnabled);
-        var backup = Assert.Single(Directory.GetFiles(_paths.DataDirectory, "settings.corrupt-*.json"));
-        Assert.Equal(corrupt, File.ReadAllText(backup));
+        var backups = Directory.GetFiles(_paths.DataDirectory, "settings.corrupt-*.json").Select(File.ReadAllText).Order();
+        Assert.Equal(["{", corrupt], backups);
+    }
+
+    // Regression: a file another process holds open (antivirus, a sync tool) is not corrupt. Startup must not throw, and
+    // the file must not be renamed or overwritten by the first-launch save.
+    [Fact]
+    public void UnreadableFileLoadsDefaultsAndLeavesTheFileInPlace()
+    {
+        const string original = """{ "triggerChord": false }""";
+        WriteSettingsFile(original);
+
+        AppSettings s;
+        using (new FileStream(_paths.SettingsFile, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            s = new SettingsStore(_paths).Current;
+
+        Assert.True(s.TriggerChordEnabled);
+        Assert.Equal(original, File.ReadAllText(_paths.SettingsFile));
+        Assert.Empty(Directory.GetFiles(_paths.DataDirectory, "settings.corrupt-*.json"));
     }
 
     // Security: API keys live in Windows Credential Manager only, never in settings.json.
