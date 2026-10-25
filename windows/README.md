@@ -11,7 +11,7 @@ The Windows port of PopGuy: C# on .NET 10 with WinUI 3 (Windows App SDK), for Wi
 | `Directory.Build.props` | Shared settings: nullable on, warnings are errors. |
 | `Directory.Packages.props` | Central package versions. |
 | `src/PopGuy.Core` | `net10.0`, no Windows APIs: models, JSON, import gate, and (later phases) settings, providers and the action engine. Builds and tests on macOS. |
-| `src/PopGuy.Platform` | `net10.0-windows10.0.26100.0`, AnyCPU: Win32 / UI Automation / clipboard / input through CsWin32. All types are `internal`. |
+| `src/PopGuy.Platform` | `net10.0-windows10.0.26100.0`, AnyCPU: Win32 / UI Automation / clipboard / input through CsWin32. CsWin32-generated types are `internal`; App uses Platform's public wrappers. |
 | `src/PopGuy.App` | The WinUI 3 app (assembly `PopGuy`, root namespace `PopGuy`, so App code uses `namespace PopGuy.<Folder>`). |
 | `tests/PopGuy.Tests` | xUnit v3 tests for Core (references Core only). |
 | `scripts/vm-install.ps1` | Installs a CI build in the QA VM. |

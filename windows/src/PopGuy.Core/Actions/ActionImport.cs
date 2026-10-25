@@ -64,8 +64,9 @@ public static class ActionImport
         {
             return ActionImportResult.Rejected(ImportRejection.Unreadable);
         }
-        // A top-level or element null is not caught by the nullable annotations.
-        if (decoded is null || decoded.Contains(null))
+        // A top-level, element or dictionary-value null is not caught by the nullable annotations (macOS refuses these).
+        if (decoded is null || decoded.Contains(null)
+            || decoded.Any(a => a!.TtsConfig.VoiceOverrides.Values.Contains(null!)))
             return ActionImportResult.Rejected(ImportRejection.Unreadable);
 
         // macOS keeps the first 100; Windows refuses the file instead (plan 4.2).

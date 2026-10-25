@@ -30,6 +30,24 @@ public class ActionImportTests
         Assert.Equal(ActionImport.MaxActions, atLimit.Actions.Count);
     }
 
+    [Theory]
+    [InlineData("""[{"title": 5}]""")]
+    [InlineData("[null]")]
+    [InlineData("""{"fr": null}""")]
+    public void MalformedFileIsRefusedNotThrown(string fragment)
+    {
+        // A fragment that is not a JSON array is a voiceOverrides value inside an otherwise valid action.
+        var json = fragment.StartsWith('[')
+            ? fragment
+            : System.Text.Encoding.UTF8.GetString(Encode([Action(CustomActionType.Speech)]))
+                .Replace("\"voiceOverrides\": {}", $"\"voiceOverrides\": {fragment}");
+        Assert.Contains(fragment, json);
+
+        var result = ActionImport.SanitizeImported(System.Text.Encoding.UTF8.GetBytes(json));
+
+        Assert.Equal(ImportRejection.Unreadable, result.Rejection);
+    }
+
     [Fact]
     public void ImportedActionsGetFreshIdentityAndDisallowedProvidersAreSkipped()
     {
