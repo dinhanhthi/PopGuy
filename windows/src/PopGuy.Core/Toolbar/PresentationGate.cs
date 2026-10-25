@@ -1,0 +1,72 @@
+using PopGuy.Core.Settings;
+
+namespace PopGuy.Core.Toolbar;
+
+/// <summary>Why a selection event shows the toolbar or is dropped, so callers can log it.</summary>
+public enum PresentationVerdict { Show, EmptyText, Reentrant, IgnoredApp, IgnoredDomain, NoEnabledAction }
+
+/// <summary>A selection event and the toolbar's state when it arrives.</summary>
+/// <param name="Text">The captured selection.</param>
+/// <param name="IsShowing">The toolbar is on screen.</param>
+/// <param name="CurrentText">The selection the toolbar is showing for.</param>
+/// <param name="ActionInProgress">The action state is not idle (loading, result or error on screen).</param>
+/// <param name="SpeakActive">Speak is loading or playing (its phase is not idle).</param>
+/// <param name="CanReplaySpeak">The "Listen again" button is on screen.</param>
+/// <param name="SourceExeName">The foreground app's executable file name (e.g. "notepad.exe"), if known.</param>
+/// <param name="IsOwnProcess">The foreground app is PopGuy itself (e.g. its Settings window).</param>
+/// <param name="SourceHost">The browser tab's host, read only while ignored domains are on.</param>
+public readonly record struct PresentationInput(
+    string Text,
+    bool IsShowing = false,
+    string CurrentText = "",
+    bool ActionInProgress = false,
+    bool SpeakActive = false,
+    bool CanReplaySpeak = false,
+    string? SourceExeName = null,
+    bool IsOwnProcess = false,
+    string? SourceHost = null);
+
+/// <summary>The verdict, plus the source to hand to the toolbar (unset for PopGuy's own process).</summary>
+public readonly record struct PresentationResult(PresentationVerdict Verdict, string? SourceExeName, string? SourceHost);
+
+/// <summary>
+/// Whether a selection event presents the toolbar, in the order of macOS <c>ToolbarController.handleEvent</c>.
+/// </summary>
+public static class PresentationGate
+{
+    public static PresentationResult Evaluate(PresentationInput input, AppSettings settings)
+    {
+        // PopGuy itself is never the source, so "Ignore this app" can never disable PopGuy.
+        var exe = input.IsOwnProcess ? null : input.SourceExeName;
+        var host = input.IsOwnProcess ? null : input.SourceHost;
+        PresentationResult Result(PresentationVerdict verdict) => new(verdict, exe, host);
+
+        if (input.Text.Length == 0)
+            return Result(PresentationVerdict.EmptyText);
+
+        // A trailing same-text event (an accessibility notification, the mouse-up of a toolbar click) must not reset an
+        // action on screen or move the panel. Speak never sets the action state, so it counts separately.
+        var inProgress = input.ActionInProgress || input.SpeakActive || input.CanReplaySpeak;
+        if (input.IsShowing && inProgress && input.Text == input.CurrentText)
+            return Result(PresentationVerdict.Reentrant);
+
+        if (exe is not null && settings.IgnoredAppsEnabled && settings.IgnoredAppExeNames.Contains(exe, StringComparer.OrdinalIgnoreCase))
+            return Result(PresentationVerdict.IgnoredApp);
+
+        if (host is not null && settings.IgnoredDomainsEnabled && settings.IgnoredDomains.Any(d => HostMatches(host, d)))
+            return Result(PresentationVerdict.IgnoredDomain);
+
+        if (ToolbarLayout.EnabledOrdered(settings).Count == 0)
+            return Result(PresentationVerdict.NoEnabledAction);
+
+        return Result(PresentationVerdict.Show);
+    }
+
+    /// <summary>
+    /// True when <paramref name="host"/> is <paramref name="domain"/> or one of its subdomains: "notion.so" also covers
+    /// "team.notion.so", never "evilnotion.so". Both are expected normalized (no "www."); case is ignored.
+    /// </summary>
+    public static bool HostMatches(string host, string domain) =>
+        host.Equals(domain, StringComparison.OrdinalIgnoreCase) ||
+        host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase);
+}
