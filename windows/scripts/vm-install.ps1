@@ -13,14 +13,19 @@
     app\PopGuy.exe, or a folder that contains win-arm64\app and/or win-x64\app.
 
 .PARAMETER Launch
-    Start PopGuy.exe after installing.
+    Start PopGuy.exe after installing. Without -Wait the app is created through
+    WMI (Win32_Process.Create), so it is not a child of this script: the VM tool
+    runs each command in a job and kills the whole process tree when the command
+    returns, which would end a Start-Process child at once. The new ProcessId is
+    printed. With -Wait the caller waits, so the app is a normal child process.
 
 .PARAMETER AppArgs
     Alias -Args. Arguments passed to PopGuy.exe. A non-empty list implies -Launch. The values
     are never printed (they may hold paths of QA key files), only their count.
 
 .PARAMETER Wait
-    Wait for PopGuy to exit, print its exit code and exit with that code.
+    Wait for PopGuy to exit, print its exit code and exit with that code. The app
+    runs as a child of this script (see -Launch).
 
 .PARAMETER Dest
     Where the app is copied. Default: C:\PopGuyQA\builds\<leaf name of -Folder>.
@@ -70,6 +75,13 @@ function Find-AppFolder {
     throw "PopGuy.exe not found for $arch under '$Folder' (looked in '$flat' and '$perArch')."
 }
 
+function ConvertTo-ArgvToken([string]$Value) {
+    # Quoted for CommandLineToArgvW: backslashes before a quote and at the end are doubled, quotes escaped.
+    $escaped = $Value -replace '(\\*)"', '$1$1\"'
+    $escaped = $escaped -replace '(\\+)$', '$1$1'
+    return '"' + $escaped + '"'
+}
+
 try {
     if (-not (Test-Path -LiteralPath $Folder -PathType Container)) {
         throw "Folder '$Folder' is not reachable from this session (an elevated session may not see the Z: drive). Copy the folder to C:\PopGuyQA\builds\<run> first and pass that path."
@@ -98,6 +110,24 @@ try {
     }
 
     $exe = Join-Path $Dest 'PopGuy.exe'
+
+    if (-not $Wait) {
+        # Created by WMI, outside this job: the VM tool kills the job's process tree when the command returns.
+        $tokens = @(ConvertTo-ArgvToken $exe)
+        foreach ($arg in $AppArgs) {
+            $tokens += ConvertTo-ArgvToken $arg
+        }
+        $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+            CommandLine      = ($tokens -join ' ')
+            CurrentDirectory = $Dest
+        }
+        if ($created.ReturnValue -ne 0) {
+            throw "Win32_Process.Create failed with code $($created.ReturnValue) for $exe."
+        }
+        Write-Host "Launched $exe with $($AppArgs.Count) argument(s), process id $($created.ProcessId)."
+        exit 0
+    }
+
     $startArgs = @{
         FilePath         = $exe
         WorkingDirectory = $Dest
@@ -111,13 +141,10 @@ try {
     $null = $proc.Handle
     Write-Host "Launched $exe with $($AppArgs.Count) argument(s)."
 
-    if ($Wait) {
-        $proc.WaitForExit()
-        $code = $proc.ExitCode
-        Write-Host "PopGuy exited with code $code"
-        exit $code
-    }
-    exit 0
+    $proc.WaitForExit()
+    $code = $proc.ExitCode
+    Write-Host "PopGuy exited with code $code"
+    exit $code
 }
 catch {
     [Console]::Error.WriteLine("vm-install: $($_.Exception.Message)")
