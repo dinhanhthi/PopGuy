@@ -37,7 +37,9 @@ jobs:
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          global-json-file: windows/global.json
+          # Pinned, not global-json-file: on SDK release days the resolver picks a version whose files are not on
+          # the download feed yet (10.0.403 on 2026-10-25), which fails every job. global.json still rolls forward.
+          dotnet-version: 10.0.402
 
       # A job-level hashFiles() guard never runs (checkout has not happened yet), so probe here.
       - id: probe
@@ -66,7 +68,9 @@ jobs:
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          global-json-file: windows/global.json
+          # Pinned, not global-json-file: on SDK release days the resolver picks a version whose files are not on
+          # the download feed yet (10.0.403 on 2026-10-25), which fails every job. global.json still rolls forward.
+          dotnet-version: 10.0.402
 
       - id: probe
         name: Probe for tests
@@ -105,7 +109,9 @@ jobs:
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          global-json-file: windows/global.json
+          # Pinned, not global-json-file: on SDK release days the resolver picks a version whose files are not on
+          # the download feed yet (10.0.403 on 2026-10-25), which fails every job. global.json still rolls forward.
+          dotnet-version: 10.0.402
 
       # Unpackaged (WindowsPackageType None) and self-contained (.NET and the Windows App SDK runtime are copied
       # next to PopGuy.exe), so the published folder runs on a clean machine without installing any runtime.
