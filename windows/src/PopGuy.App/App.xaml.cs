@@ -28,6 +28,8 @@ public partial class App : Application
     {
 #if DEBUG
         WriteLaunchProbe();
+        // Phase 3 spike harnesses (--spike, --probe-uia): no main window, exit when done.
+        if (PopGuy.Debug.Probes.TryStart(Exit)) return;
 #endif
         _window = new MainWindow();
         _window.Activate();
