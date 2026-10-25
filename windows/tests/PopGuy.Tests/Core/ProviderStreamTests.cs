@@ -44,12 +44,14 @@ public sealed class ProviderStreamTests
         Assert.Equal(["héllo 😀 wörld", "日本語"], payloads);
     }
 
-    [Fact]
-    public async Task ErrorBodyEchoingTheApiKeyIsRedacted()
+    // The keys match none of the generic patterns, so only the exact-key rules can remove them; the second is echoed
+    // percent-encoded, as a server quoting a URL query would.
+    [Theory]
+    [InlineData("pg-test-7f3a9c1e5b2d", "pg-test-7f3a9c1e5b2d")]
+    [InlineData("pg/test+7f3a=9c", "pg%2Ftest%2B7f3a%3D9c")]
+    public async Task ErrorBodyEchoingTheApiKeyIsRedacted(string apiKey, string echoed)
     {
-        // The key matches none of the generic patterns, so only the exact-key rule can remove it.
-        const string apiKey = "pg-test-7f3a9c1e5b2d";
-        var body = $$$"""{"error":{"message":"Incorrect API key provided: {{{apiKey}}}","header":"Bearer other-secret-token"}}""";
+        var body = $$$"""{"error":{"message":"Incorrect API key provided: {{{echoed}}}","header":"Bearer other-secret-token"}}""";
         var handler = new FakeHttpHandler(HttpStatusCode.Unauthorized, body);
 
         var error = await Assert.ThrowsAsync<ProviderError>(() => Payloads(handler, apiKey));
@@ -58,7 +60,24 @@ public sealed class ProviderStreamTests
         Assert.Equal(401, error.StatusCode);
         Assert.StartsWith("HTTP 401: {\"error\":{\"message\":\"Incorrect API key provided: ", error.Message);
         Assert.DoesNotContain(apiKey, error.ToString());
+        Assert.DoesNotContain(echoed, error.ToString());
         Assert.DoesNotContain("other-secret-token", error.ToString());
+    }
+
+    // A redirect would forward the key headers and, for 307/308, the selected text to wherever it points.
+    [Fact]
+    public async Task RedirectIsNotFollowed()
+    {
+        var handler = new FakeHttpHandler(HttpStatusCode.TemporaryRedirect, "");
+
+        var error = await Assert.ThrowsAsync<ProviderError>(() => Payloads(handler, Key));
+
+        Assert.Equal(ProviderErrorKind.Http, error.Kind);
+        Assert.Equal(307, error.StatusCode);
+        Assert.Single(handler.Requests);
+        // The fake handler stands in for the real one, so check the real one's setting too.
+        using var shared = ProviderHttp.CreateSharedHandler();
+        Assert.False(shared.AllowAutoRedirect);
     }
 
     private const string Key = "pg-test-key";
@@ -191,6 +210,8 @@ public sealed class ProviderStreamTests
         "API error (overloaded_error): Overloaded")]
     [InlineData("gemini", """{"error":{"code":429,"message":"Quota exceeded","status":"RESOURCE_EXHAUSTED"}}""",
         "API error (RESOURCE_EXHAUSTED): Quota exceeded")]
+    [InlineData("anthropic", """{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key pg-test-key"}}""",
+        "API error (authentication_error): invalid x-api-key [redacted]")]
     public async Task InStreamErrorEventThrowsApiError(string adapter, string errorPayload, string expectedMessage)
     {
         Func<ProviderHttp, IProvider> create = adapter == "anthropic"

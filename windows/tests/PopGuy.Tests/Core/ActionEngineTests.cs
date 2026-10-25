@@ -191,6 +191,11 @@ public sealed class ActionEngineTests
             ProviderKind.Custom, " not a url ",
             "Transport error: Invalid endpoint URL for Custom (OpenAI-compatible): \"not a url\". Check the base URL in Settings."
         },
+        // The echoed URL drops its user:password part.
+        {
+            ProviderKind.Custom, "http://user:secret@[bad/v1",
+            "Transport error: Invalid endpoint URL for Custom (OpenAI-compatible): \"http://[bad/v1\". Check the base URL in Settings."
+        },
     };
 
     [Theory]

@@ -57,7 +57,7 @@ public sealed class OpenAIProvider(string apiKey, ProviderKind? providerKind = n
         var root = (baseUrl?.AbsoluteUri ?? defaultBase).TrimEnd('/');
         return Uri.TryCreate($"{root}/chat/completions", UriKind.Absolute, out var url)
             ? url
-            : throw ProviderError.Transport($"{invalidMessage}: {root}");
+            : throw ProviderError.Transport($"{invalidMessage}: {ProviderHttp.StripUserInfo(root)}");
     }
 
     internal static JsonObject ChatBody(string model, string? systemPrompt, string input)

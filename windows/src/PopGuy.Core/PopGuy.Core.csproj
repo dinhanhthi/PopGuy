@@ -4,4 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>PopGuy.Core</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PopGuy.Tests" />
+  </ItemGroup>
 </Project>

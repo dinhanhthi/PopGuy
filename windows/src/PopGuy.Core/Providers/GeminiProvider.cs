@@ -32,7 +32,7 @@ public sealed class GeminiProvider(string apiKey, ProviderHttp? http = null) : I
         var root = (options.BaseUrl?.AbsoluteUri ?? NativeBase).TrimEnd('/');
         var endpoint = $"{root}/models/{Uri.EscapeDataString(model)}:streamGenerateContent?alt=sse";
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var url))
-            throw ProviderError.Transport($"Invalid Gemini endpoint URL: {endpoint}");
+            throw ProviderError.Transport($"Invalid Gemini endpoint URL: {ProviderHttp.StripUserInfo(endpoint)}");
 
         var generationConfig = new JsonObject { ["maxOutputTokens"] = options.MaxTokens };
         if (model.ToLowerInvariant().Contains("flash", StringComparison.Ordinal))
@@ -50,14 +50,14 @@ public sealed class GeminiProvider(string apiKey, ProviderHttp? http = null) : I
 
         await foreach (var payload in _http.StreamSseAsync(request, apiKey, ct))
         {
-            if (ParseText(payload) is { } text)
+            if (ParseText(payload, apiKey) is { } text)
                 yield return text;
         }
     }
 
     private static JsonArray TextParts(string text) => new(new JsonObject { ["text"] = text });
 
-    private static string? ParseText(string payload)
+    private static string? ParseText(string payload, string apiKey)
     {
         var json = ProviderJson.Parse(payload);
         var error = json.Get("error");
@@ -65,7 +65,7 @@ public sealed class GeminiProvider(string apiKey, ProviderHttp? http = null) : I
         {
             throw ProviderError.Api(
                 error.Get("status").String() ?? "UNKNOWN",
-                error.Get("message").String() ?? "Gemini error event received");
+                ProviderHttp.Redact(error.Get("message").String() ?? "Gemini error event received", apiKey));
         }
         var parts = json.Get("candidates").First().Get("content").Get("parts").Items();
         var text = string.Concat(parts.Select(part => ((JsonElement?)part).Get("text").String()));

@@ -34,6 +34,9 @@ public sealed class ProviderFactory
     /// <summary>Adds or replaces the adapter of <paramref name="kind"/>; the function receives the API key.</summary>
     public void Register(ProviderKind kind, Func<string, IProvider> create) => _registry[kind] = create;
 
+    /// <summary>Whether an adapter is registered for <paramref name="kind"/>.</summary>
+    public bool IsRegistered(ProviderKind kind) => _registry.ContainsKey(kind);
+
     /// <summary>The adapter for <paramref name="kind"/>; throws when no adapter is registered for it.</summary>
     public IProvider Create(ProviderKind kind, string apiKey) =>
         _registry.TryGetValue(kind, out var create)

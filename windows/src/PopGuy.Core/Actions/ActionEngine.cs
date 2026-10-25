@@ -210,7 +210,7 @@ public sealed class ActionEngine(ProviderFactory factory, Func<ProviderKind, str
         {
             throw ProviderError.Transport(trimmed.Length == 0
                 ? $"No endpoint configured for {DisplayName(kind)}. Set the base URL in Settings."
-                : $"Invalid endpoint URL for {DisplayName(kind)}: \"{trimmed}\". Check the base URL in Settings.");
+                : $"Invalid endpoint URL for {DisplayName(kind)}: \"{ProviderHttp.StripUserInfo(trimmed)}\". Check the base URL in Settings.");
         }
         return url;
     }
@@ -219,16 +219,12 @@ public sealed class ActionEngine(ProviderFactory factory, Func<ProviderKind, str
     // Phase 11, the local model before Phase 21).
     private IProvider CreateProvider(ProviderKind kind)
     {
-        var key = apiKey(kind) ?? "";
-        try
-        {
-            return factory.Create(kind, key);
-        }
-        catch (InvalidOperationException)
+        if (!factory.IsRegistered(kind))
         {
             throw ProviderError.Transport(
                 $"{DisplayName(kind)} is not available in PopGuy for Windows yet. Choose another provider in Settings.");
         }
+        return factory.Create(kind, apiKey(kind) ?? "");
     }
 
     private static (string SystemPrompt, ProviderOptions Options) BuildPromptAndOptions(

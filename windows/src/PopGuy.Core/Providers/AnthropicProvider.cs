@@ -41,12 +41,12 @@ public sealed class AnthropicProvider(string apiKey, ProviderHttp? http = null) 
 
         await foreach (var payload in _http.StreamSseAsync(request, apiKey, ct))
         {
-            if (ParseText(payload) is { } text)
+            if (ParseText(payload, apiKey) is { } text)
                 yield return text;
         }
     }
 
-    private static string? ParseText(string payload)
+    private static string? ParseText(string payload, string apiKey)
     {
         var json = ProviderJson.Parse(payload);
         var type = json.Get("type").String();
@@ -55,7 +55,7 @@ public sealed class AnthropicProvider(string apiKey, ProviderHttp? http = null) 
             var error = json.Get("error");
             throw ProviderError.Api(
                 error.Get("type").String() ?? "unknown_error",
-                error.Get("message").String() ?? "Anthropic error event received");
+                ProviderHttp.Redact(error.Get("message").String() ?? "Anthropic error event received", apiKey));
         }
         var delta = json.Get("delta");
         return type == "content_block_delta" && delta.Get("type").String() == "text_delta"

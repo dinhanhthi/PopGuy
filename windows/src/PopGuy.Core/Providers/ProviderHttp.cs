@@ -46,12 +46,17 @@ public sealed class ProviderHttp
     ];
 
     /// <summary>The app-wide instance; like macOS's ephemeral session it keeps no cookies or credentials.</summary>
-    public static ProviderHttp Shared { get; } = new(new SocketsHttpHandler
+    public static ProviderHttp Shared { get; } = new(CreateSharedHandler());
+
+    // No redirects: one would forward the key (custom headers, the query) and, for 307/308, the POST body to another
+    // host. No provider API redirects, so a 3xx surfaces as an HTTP error.
+    internal static SocketsHttpHandler CreateSharedHandler() => new()
     {
         ConnectTimeout = ConnectTimeout,
         UseCookies = false,
         PooledConnectionLifetime = TimeSpan.FromMinutes(5),
-    });
+        AllowAutoRedirect = false,
+    };
 
     private readonly HttpClient _client;
 
@@ -100,14 +105,33 @@ public sealed class ProviderHttp
         }
     }
 
-    /// <summary>Replaces the exact key and common credential shapes with a placeholder.</summary>
+    /// <summary>Replaces the exact key (raw or percent-encoded) and common credential shapes with a placeholder.</summary>
     public static string Redact(string text, string? apiKey)
     {
         if (!string.IsNullOrEmpty(apiKey))
+        {
+            var escaped = Uri.EscapeDataString(apiKey);
+            if (escaped != apiKey)
+                text = text.Replace(escaped, Redacted, StringComparison.Ordinal);
             text = text.Replace(apiKey, Redacted, StringComparison.Ordinal);
+        }
         foreach (var pattern in SecretPatterns)
             text = pattern.Replace(text, Redacted);
         return text;
+    }
+
+    /// <summary>Drops the <c>user:password@</c> part of a URL echoed in an error, even when the string does not parse.</summary>
+    internal static string StripUserInfo(string url)
+    {
+        var start = url.IndexOf("://", StringComparison.Ordinal);
+        if (start < 0)
+            return url;
+        start += 3;
+        var end = url.IndexOfAny(['/', '?', '#'], start);
+        if (end < 0)
+            end = url.Length;
+        var at = url.LastIndexOf('@', end - 1, end - start);
+        return at < 0 ? url : url[..start] + url[(at + 1)..];
     }
 
     private async Task<HttpResponseMessage> SendCheckedAsync(HttpRequestMessage request, string? apiKey, Deadline deadline)
