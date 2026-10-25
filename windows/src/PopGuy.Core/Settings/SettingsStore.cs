@@ -16,7 +16,11 @@ public sealed class SettingsStore
     public SettingsStore(AppPaths paths)
     {
         _path = paths.SettingsFile;
-        Current = Load();
+        var loaded = Load();
+        Current = ToolbarLayout.Reconciled(loaded);
+        // Persist the first-launch toolbar migration now; a reconciled order waits for the next change (macOS parity).
+        if (loaded.PrincipalActionIds is null)
+            Save(Current);
     }
 
     public AppSettings Current { get; private set; }
@@ -83,19 +87,5 @@ public sealed class SettingsStore
         return new AppSettings();
     }
 
-    /// <summary>Writes a temp file next to settings.json, flushes it to disk, then swaps it in.</summary>
-    private void Save(AppSettings settings)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        var temp = _path + ".tmp";
-        using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
-        {
-            JsonSerializer.Serialize(stream, settings, PopGuyJson.Options);
-            stream.Flush(flushToDisk: true);
-        }
-        if (File.Exists(_path))
-            File.Replace(temp, _path, destinationBackupFileName: null);
-        else
-            File.Move(temp, _path);
-    }
+    private void Save(AppSettings settings) => PopGuyJson.WriteFileAtomically(_path, settings);
 }

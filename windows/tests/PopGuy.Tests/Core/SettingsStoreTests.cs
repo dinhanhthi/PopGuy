@@ -76,7 +76,6 @@ public sealed class SettingsStoreTests : IDisposable
         var s = new SettingsStore(_paths).Current;
 
         Assert.True(s.TriggerChordEnabled);
-        Assert.False(File.Exists(_paths.SettingsFile));
         var backup = Assert.Single(Directory.GetFiles(_paths.DataDirectory, "settings.corrupt-*.json"));
         Assert.Equal(corrupt, File.ReadAllText(backup));
     }
@@ -130,5 +129,40 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.DoesNotContain(id, s.ActionOrder);
         Assert.Empty(s.PrincipalActionIds!);
         Assert.Empty(s.LabeledActionIds);
+    }
+
+    // First launch (principalActionIDs never set): every enabled action goes inline (macOS parity, no caps), saved at
+    // once. An explicit empty list is the user's choice of everything in More and is kept.
+    [Fact]
+    public void FirstLaunchPutsEveryEnabledActionInline()
+    {
+        WriteSettingsFile("""{ "promptEnabled": true, "dictionaryConfig": { "isEnabled": true } }""");
+
+        var s = new SettingsStore(_paths).Current;
+
+        Assert.Equal(AppSettings.DefaultBuiltinOrder, ToolbarLayout.PrincipalOrdered(s));
+        Assert.Empty(ToolbarLayout.OverflowOrdered(s));
+        Assert.Equal(7, new SettingsStore(_paths).Current.PrincipalActionIds!.Count);
+
+        WriteSettingsFile("""{ "principalActionIDs": [] }""");
+        Assert.Empty(new SettingsStore(_paths).Current.PrincipalActionIds!);
+    }
+
+    // ToolbarLayoutEditTests.moreToToolbarAtIndex: a More action dragged to the toolbar lands at that index.
+    [Fact]
+    public void MoveFromMoreToToolbarLandsAtTheIndex()
+    {
+        var store = new SettingsStore(_paths);
+        for (var i = 0; i < 3; i++)
+            store.AddCustomAction(new CustomAction { Title = $"More {i}", SystemPrompt = "p" });
+        var more = ToolbarLayout.OverflowOrdered(store.Current);
+        var principalCount = ToolbarLayout.PrincipalOrdered(store.Current).Count;
+
+        store.Update(s => ToolbarLayout.MoveAction(s, more[1], toPrincipal: true, atIndex: 2));
+
+        var principal = ToolbarLayout.PrincipalOrdered(store.Current);
+        Assert.Equal(principalCount + 1, principal.Count);
+        Assert.Equal(more[1], principal[2]);
+        Assert.Equal([more[0], more[2]], ToolbarLayout.OverflowOrdered(store.Current));
     }
 }

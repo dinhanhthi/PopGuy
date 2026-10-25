@@ -14,6 +14,22 @@ public static class PopGuyJson
 {
     public static JsonSerializerOptions Options { get; } = CreateOptions();
 
+    /// <summary>Writes <paramref name="value"/> to a temp file next to <paramref name="path"/>, flushes it to disk, then swaps it in.</summary>
+    internal static void WriteFileAtomically<T>(string path, T value)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var temp = path + ".tmp";
+        using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            JsonSerializer.Serialize(stream, value, Options);
+            stream.Flush(flushToDisk: true);
+        }
+        if (File.Exists(path))
+            File.Replace(temp, path, destinationBackupFileName: null);
+        else
+            File.Move(temp, path);
+    }
+
     private static JsonSerializerOptions CreateOptions()
     {
         var options = new JsonSerializerOptions

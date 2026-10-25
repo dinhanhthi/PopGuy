@@ -12,6 +12,8 @@ public sealed record AppPaths(string DataDirectory, string CacheDirectory)
 
     public string SettingsFile => Path.Combine(DataDirectory, "settings.json");
 
+    public string HistoryFile => Path.Combine(DataDirectory, "history.json");
+
     public static AppPaths Resolve() => Resolve(Environment.GetEnvironmentVariable(DataRootVariable));
 
     /// <summary>The paths under <paramref name="dataRoot"/>, or the per-user folders when it is null or empty.</summary>
