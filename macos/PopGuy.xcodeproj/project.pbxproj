@@ -65,7 +65,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		B7E4D9C52AF64C2E9B8D7A6C /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = SOURCE_ROOT; };
+		B7E4D9C52AF64C2E9B8D7A6C /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE; path = ../LICENSE; sourceTree = SOURCE_ROOT; };
 		D34244462FD4A56C001600A8 /* PopGuy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PopGuy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D34244532FD4A56D001600A8 /* PopGuyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PopGuyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D342445D2FD4A56D001600A8 /* PopGuyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PopGuyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
