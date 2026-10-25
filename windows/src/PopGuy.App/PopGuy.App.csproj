@@ -37,6 +37,12 @@
     <ProjectReference Include="..\PopGuy.Platform\PopGuy.Platform.csproj" />
   </ItemGroup>
 
+  <!-- Unpackaged: ms-appx:/// resolves to files next to PopGuy.exe, so the toolbar logo must be copied out. -->
+  <ItemGroup>
+    <Content Remove="Assets\ToolbarLogo.png" />
+    <Content Include="Assets\ToolbarLogo.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- The Phase 3 spike toolbar is a DEBUG harness (like Debug/Probes.cs): left out of every other build. -->
   <ItemGroup Condition="'$(Configuration)' != 'Debug'">
     <Page Remove="Debug\SpikeToolbarWindow.xaml" />

@@ -65,6 +65,9 @@ public sealed partial class ToolbarWindow : Window
     {
         ViewModel = new ToolbarViewModel(session, DispatcherQueue.GetForCurrentThread());
         InitializeComponent();
+        // A Window's x:Bind bindings start on its content's Loading, which this never-activated window did not get
+        // (VM QA: every state panel showed at once). Start them now; ShowAt refreshes them again.
+        Bindings.Update();
 
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
@@ -158,6 +161,7 @@ public sealed partial class ToolbarWindow : Window
         _workArea = work.IsEmpty ? FallbackWorkArea : work;
 
         // The new content's size now, not after the show (layout runs on this thread).
+        Bindings.Update();
         Card.UpdateLayout();
         if (Card.ActualWidth > 0 && Card.ActualHeight > 0) _cardSize = new(Card.ActualWidth, Card.ActualHeight);
         var scale = MonitorInfo.Scale(midpoint);
