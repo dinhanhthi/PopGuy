@@ -130,8 +130,9 @@ public static class PasteBack
             var abortReason = "foregroundChanged";
             var sent = InputSynth.SendPaste(isUserKeyDown, () =>
             {
-                // The focus may have moved during the modifier wait: probe again, the foreground check last.
-                if (LateRefusal(UiaSelectionReader.ProbePasteTarget(), windowClass, processName) is { } late)
+                // The focus may have moved during the modifier wait: probe again with the same rules, the foreground
+                // check last.
+                if (TargetRefusal(UiaSelectionReader.ProbePasteTarget(), windowClass, processName) is { } late)
                 {
                     abortReason = late;
                     return false;
@@ -167,10 +168,6 @@ public static class PasteBack
         if (target.IsEditable == false) return "readOnly";
         return target.IsEditable is null && (processName is null || !KnownEditableHosts.Contains(processName)) ? "editabilityUnknown" : null;
     }
-
-    /// <summary>The re-probe's refusal right before Ctrl+V: the focus moved to a password field or an xterm.js terminal.</summary>
-    private static string? LateRefusal(UiaPasteTarget target, string? windowClass, string? processName) =>
-        target.IsPassword ? "passwordField" : CaptureFallbackPolicy.UnsafeTargetReason(windowClass, processName, target.FocusedElementHint);
 
     /// <summary>Polls until <paramref name="source"/> is the foreground window, for 300 ms at most.</summary>
     private static async Task<bool> WaitForForegroundAsync(nint source)

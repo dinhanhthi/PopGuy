@@ -105,12 +105,6 @@ public static class SelectionCapture
     private static readonly TimeSpan RestoreDelay = TimeSpan.FromMilliseconds(300);
 
     /// <summary>
-    /// The most clipboard changes one copy may make: OLE apps write twice (their data object, then the flushed formats).
-    /// Unmeasured for multi-format copies (Office, Chromium): raise it if QA logs "foreignClipboardWrite" for a plain copy.
-    /// </summary>
-    internal const uint MaxCopyChanges = 2;
-
-    /// <summary>
     /// Captures the selection in <paramref name="app"/> (the foreground app when the trigger fired). Runs on the
     /// thread pool; takes up to about 2 s with a copy (1.5 s for UI Automation alone). A copy's result comes after the
     /// clipboard restore.
@@ -183,13 +177,13 @@ public static class SelectionCapture
             var waited = false;
             if (landed)
             {
-                var owned = ClipboardGuard.TryReadCopyOf(sourceProcessId, sequenceAtSend, MaxCopyChanges, out var copySequence, out text, out var readRefusal);
+                var owned = ClipboardGuard.TryReadCopyOf(sourceProcessId, sequenceAtSend, out var copySequence, out text, out var readRefusal);
                 if (!owned && readRefusal == "clipboardBusy")
                 {
                     // Someone held the clipboard open: once more at the restore point, so the copy is not left on it.
                     await Task.Delay(RestoreDelay - SettleDelay).ConfigureAwait(false);
                     waited = true;
-                    owned = ClipboardGuard.TryReadCopyOf(sourceProcessId, sequenceAtSend, MaxCopyChanges, out copySequence, out text, out readRefusal);
+                    owned = ClipboardGuard.TryReadCopyOf(sourceProcessId, sequenceAtSend, out copySequence, out text, out readRefusal);
                 }
                 if (!owned)
                 {

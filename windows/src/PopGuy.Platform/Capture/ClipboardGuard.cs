@@ -418,14 +418,15 @@ public static class ClipboardGuard
 
     /// <summary>
     /// The text of a synthetic copy, read only if the clipboard's contents are <paramref name="processId"/>'s (the
-    /// window GetClipboardOwner reports belongs to it; contents with no owner window are refused) and changed at most
-    /// <paramref name="maxChanges"/> times since <paramref name="sequenceAtSend"/>, all checked with the clipboard open so
-    /// nobody can change it in between. False, nothing read, with <paramref name="refusal"/> "foreignClipboardWrite" (or
+    /// window GetClipboardOwner reports belongs to it; contents with no owner window are refused) and changed since
+    /// <paramref name="sequenceAtSend"/>, all checked with the clipboard open so nobody can change it in between. The
+    /// number of changes is not a guard: one multi-format write moves the sequence number several times (7 for an
+    /// empty plus three formats on windows-latest). False, nothing read, with <paramref name="refusal"/> "foreignClipboardWrite" (or
     /// "clipboardBusy": it could not be opened). <paramref name="sequence"/> is the number checked: the contents that
     /// are PopGuy's to replace on restore.
     /// </summary>
     internal static bool TryReadCopyOf(
-        uint processId, uint sequenceAtSend, uint maxChanges, out uint sequence, out string? text, [NotNullWhen(false)] out string? refusal)
+        uint processId, uint sequenceAtSend, out uint sequence, out string? text, [NotNullWhen(false)] out string? refusal)
     {
         sequence = 0;
         text = null;
@@ -437,9 +438,8 @@ public static class ClipboardGuard
         try
         {
             sequence = PInvoke.GetClipboardSequenceNumber();
-            var changes = unchecked(sequence - sequenceAtSend);
             PInvoke.GetWindowThreadProcessId(PInvoke.GetClipboardOwner(), out var ownerProcessId);
-            if (changes > maxChanges || processId == 0 || ownerProcessId != processId)
+            if (sequence == sequenceAtSend || processId == 0 || ownerProcessId != processId)
             {
                 refusal = "foreignClipboardWrite";
                 return false;
