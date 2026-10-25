@@ -11,4 +11,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.CsWin32" PrivateAssets="all" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PopGuy.Core\PopGuy.Core.csproj" />
+  </ItemGroup>
 </Project>
