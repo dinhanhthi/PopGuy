@@ -1,10 +1,7 @@
 using System.Drawing;
-using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Dwm;
-using Windows.Win32.Graphics.Gdi;
-using Windows.Win32.UI.HiDpi;
 using Windows.Win32.UI.Input.KeyboardAndMouse;
 using Windows.Win32.UI.Shell;
 using Windows.Win32.UI.WindowsAndMessaging;
@@ -246,28 +243,13 @@ public static class ToolbarWindowStyle
     public static Point CursorPosition() => PInvoke.GetCursorPos(out var point) ? point : Point.Empty;
 
     /// <summary>The effective DPI of the monitor under <paramref name="point"/> (or the nearest one); 96 when unreadable.</summary>
-    public static uint DpiAt(Point point)
-    {
-        var monitor = PInvoke.MonitorFromPoint(point, MONITOR_FROM_FLAGS.MONITOR_DEFAULTTONEAREST);
-        if (monitor.IsNull) return 96;
-        return PInvoke.GetDpiForMonitor(monitor, MONITOR_DPI_TYPE.MDT_EFFECTIVE_DPI, out var dpi, out _).Succeeded && dpi > 0
-            ? dpi
-            : 96;
-    }
+    public static uint DpiAt(Point point) => MonitorInfo.Dpi(point);
 
     /// <summary>
     /// The work area (the monitor without the taskbar) of the monitor under <paramref name="point"/> (or the nearest
     /// one); empty when unreadable.
     /// </summary>
-    public static Rectangle MonitorWorkArea(Point point)
-    {
-        var monitor = PInvoke.MonitorFromPoint(point, MONITOR_FROM_FLAGS.MONITOR_DEFAULTTONEAREST);
-        if (monitor.IsNull) return Rectangle.Empty;
-        var info = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
-        if (!PInvoke.GetMonitorInfo(monitor, ref info)) return Rectangle.Empty;
-        var work = info.rcWork;
-        return Rectangle.FromLTRB(work.left, work.top, work.right, work.bottom);
-    }
+    public static Rectangle MonitorWorkArea(Point point) => MonitorInfo.WorkArea(point);
 
     private static string ClassNameOf(HWND window)
     {

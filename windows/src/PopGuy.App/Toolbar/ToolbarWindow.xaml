@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The floating toolbar (macOS ToolbarView.swift; the look is Fluent). The card sizes to its content inside a Canvas,
+    so its size is the window's (top edge fixed). Every button has AllowFocusOnInteraction="False": focus would activate
+    the window and take the foreground from the source app. The card's background is Transparent, never unset: an unset
+    background does not hit-test, and the padding is the drag handle. No tooltips anywhere (the buttons carry labels);
+    the selectable text blocks have no context or selection flyout (their command bars attach default tooltips).
+-->
+<Window
+    x:Class="PopGuy.Toolbar.ToolbarWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="PopGuy toolbar">
+
+    <!-- No background: the acrylic backdrop shows through. -->
+    <Canvas x:Name="RootCanvas">
+        <StackPanel x:Name="Card" Background="Transparent">
+
+            <!-- Action bar: logo, the inline actions (built in code from the settings), Close. -->
+            <StackPanel
+                x:Name="Bar"
+                Padding="8,6,8,6"
+                HorizontalAlignment="Left"
+                Orientation="Horizontal"
+                Spacing="4">
+                <Image
+                    Width="26"
+                    Height="26"
+                    Margin="0,0,4,0"
+                    VerticalAlignment="Center"
+                    Source="ms-appx:///Assets/ToolbarLogo.png"
+                    Visibility="{x:Bind ViewModel.ShowsLogo, Mode=OneWay}" />
+                <StackPanel
+                    x:Name="ActionRow"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="4" />
+                <Button
+                    x:Name="CloseButton"
+                    VerticalAlignment="Center"
+                    AllowFocusOnInteraction="False"
+                    Visibility="{x:Bind ViewModel.ShowsClose, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            FontSize="14"
+                            Glyph="&#xE711;" />
+                        <TextBlock Text="Close" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <!-- Body: its width is set in code (the bar's width, at least 340), so the text wraps. -->
+            <StackPanel x:Name="Body" Visibility="{x:Bind ViewModel.ShowsBody, Mode=OneWay}">
+                <Rectangle
+                    Height="1"
+                    Margin="8,0,8,0"
+                    Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                <!-- Running: the spinner, or the streamed text so far, then Stop. -->
+                <StackPanel
+                    Padding="12,14,12,14"
+                    Spacing="8"
+                    Visibility="{x:Bind ViewModel.IsRunning, Mode=OneWay}">
+                    <ProgressRing
+                        Width="20"
+                        Height="20"
+                        HorizontalAlignment="Center"
+                        IsActive="{x:Bind ViewModel.ShowsSpinner, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.ShowsSpinner, Mode=OneWay}" />
+                    <ScrollViewer MaxHeight="280" Visibility="{x:Bind ViewModel.ShowsProgressText, Mode=OneWay}">
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                            Style="{StaticResource BodyTextBlockStyle}"
+                            Text="{x:Bind ViewModel.ProgressText, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+                    </ScrollViewer>
+                    <Button
+                        x:Name="StopButton"
+                        HorizontalAlignment="Center"
+                        AllowFocusOnInteraction="False">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon
+                                FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                FontSize="14"
+                                Glyph="&#xE71A;" />
+                            <TextBlock Text="Stop" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- Result: the selectable text, then Copy, Paste back (editable sources only), Regenerate. -->
+                <StackPanel
+                    Padding="12,14,12,14"
+                    Spacing="8"
+                    Visibility="{x:Bind ViewModel.IsResult, Mode=OneWay}">
+                    <ScrollViewer MaxHeight="280">
+                        <TextBlock
+                            ContextFlyout="{x:Null}"
+                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                            IsTextSelectionEnabled="True"
+                            SelectionFlyout="{x:Null}"
+                            Style="{StaticResource BodyTextBlockStyle}"
+                            Text="{x:Bind ViewModel.ResultText, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+                    </ScrollViewer>
+                    <StackPanel
+                        Margin="0,8,0,0"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <Button x:Name="CopyButton" AllowFocusOnInteraction="False">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon
+                                    x:Name="CopyIcon"
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    FontSize="14"
+                                    Glyph="&#xE8C8;" />
+                                <TextBlock x:Name="CopyLabel" Text="Copy" />
+                            </StackPanel>
+                        </Button>
+                        <Button
+                            x:Name="PasteBackButton"
+                            AllowFocusOnInteraction="False"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Visibility="{x:Bind ViewModel.ShowsPasteBack, Mode=OneWay}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    FontSize="14"
+                                    Glyph="&#xE77F;" />
+                                <TextBlock Text="Paste back" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="RegenerateButton" AllowFocusOnInteraction="False">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    FontSize="14"
+                                    Glyph="&#xE72C;" />
+                                <TextBlock Text="Regenerate" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{x:Bind ViewModel.Notice, Mode=OneWay}"
+                        TextWrapping="Wrap"
+                        Visibility="{x:Bind ViewModel.HasNotice, Mode=OneWay}" />
+                </StackPanel>
+
+                <!-- Error: the warning and the selectable message, then Retry for a failed run. -->
+                <StackPanel
+                    Padding="12,14,12,14"
+                    Spacing="8"
+                    Visibility="{x:Bind ViewModel.IsError, Mode=OneWay}">
+                    <Grid ColumnSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            Margin="0,2,0,0"
+                            VerticalAlignment="Top"
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            FontSize="14"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Glyph="&#xE7BA;" />
+                        <TextBlock
+                            Grid.Column="1"
+                            ContextFlyout="{x:Null}"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            IsTextSelectionEnabled="True"
+                            SelectionFlyout="{x:Null}"
+                            Style="{StaticResource BodyTextBlockStyle}"
+                            Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+                    </Grid>
+                    <Button
+                        x:Name="RetryButton"
+                        AllowFocusOnInteraction="False"
+                        Visibility="{x:Bind ViewModel.CanRetry, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon
+                                FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                FontSize="14"
+                                Glyph="&#xE72C;" />
+                            <TextBlock Text="Retry" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </Canvas>
+</Window>
