@@ -88,6 +88,25 @@ jobs:
         working-directory: windows
         run: dotnet test tests/PopGuy.Tests/PopGuy.Tests.csproj
 
+  # The Platform tests: the capture policy, and the clipboard guard on the runner's real clipboard.
+  test-platform:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # Pinned, not global-json-file: on SDK release days the resolver picks a version whose files are not on
+          # the download feed yet (10.0.403 on 2026-10-25), which fails every job. global.json still rolls forward.
+          dotnet-version: 10.0.402
+
+      # Normal verbosity prints each skip's reason (the OpenClipboard error when the clipboard tests skip).
+      - name: Test
+        working-directory: windows
+        run: dotnet test tests/PopGuy.Platform.Tests/PopGuy.Platform.Tests.csproj --logger "console;verbosity=normal"
+
   package:
     runs-on: windows-latest
     strategy:

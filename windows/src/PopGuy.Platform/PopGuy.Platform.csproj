@@ -15,4 +15,8 @@
   <ItemGroup>
     <ProjectReference Include="..\PopGuy.Core\PopGuy.Core.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PopGuy.Platform.Tests" />
+  </ItemGroup>
 </Project>

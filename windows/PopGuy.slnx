@@ -9,6 +9,7 @@
     <Project Path="src/PopGuy.Platform/PopGuy.Platform.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/PopGuy.Platform.Tests/PopGuy.Platform.Tests.csproj" />
     <Project Path="tests/PopGuy.Tests/PopGuy.Tests.csproj" />
   </Folder>
 </Solution>
