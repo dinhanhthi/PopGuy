@@ -147,6 +147,38 @@
                         Text="{x:Bind ViewModel.Notice, Mode=OneWay}"
                         TextWrapping="Wrap"
                         Visibility="{x:Bind ViewModel.HasNotice, Mode=OneWay}" />
+
+                    <!-- The close confirmation (spec-1 §3.8): inline, since the toolbar never activates (no dialog). -->
+                    <StackPanel
+                        Margin="0,8,0,0"
+                        Spacing="8"
+                        Visibility="{x:Bind ViewModel.IsConfirmingClose, Mode=OneWay}">
+                        <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                        <TextBlock
+                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                            Text="Close without using the result?"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Use Copy or Paste back to keep the result, or close anyway."
+                            TextWrapping="Wrap" />
+                        <Button
+                            x:Name="CloseAnywayButton"
+                            HorizontalAlignment="Stretch"
+                            AllowFocusOnInteraction="False"
+                            Content="Close Anyway" />
+                        <Button
+                            x:Name="DisableConfirmButton"
+                            HorizontalAlignment="Stretch"
+                            AllowFocusOnInteraction="False"
+                            Content="Turn This Setting Off" />
+                        <Button
+                            x:Name="KeepOpenButton"
+                            HorizontalAlignment="Stretch"
+                            AllowFocusOnInteraction="False"
+                            Content="Keep Open" />
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- Error: the warning and the selectable message, then Retry for a failed run. -->

@@ -16,6 +16,8 @@
     <Version>0.1.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\PopGuy.ico</ApplicationIcon>
+    <!-- Program.cs is the entry point (single instance); the XAML compiler must not generate a Main. -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <!-- Never PublishTrimmed or NativeAOT: Platform's CsWin32 classic COM interop breaks under trimming and AOT. -->
   </PropertyGroup>
 
@@ -27,6 +29,8 @@
     <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" />
     <PackageReference Include="Microsoft.WindowsAppSDK.DWrite" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
+    <!-- SettingsCard and SettingsExpander for the Settings window (Phase 12 on). -->
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" />
   </ItemGroup>
 
   <ItemGroup>

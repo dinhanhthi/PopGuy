@@ -27,7 +27,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     [
         nameof(IsRunning), nameof(IsResult), nameof(IsError), nameof(ShowsBody), nameof(ShowsClose), nameof(ActionsEnabled),
         nameof(ShowsSpinner), nameof(ShowsProgressText), nameof(ProgressText), nameof(ResultText), nameof(ErrorMessage),
-        nameof(CanRetry), nameof(ShowsPasteBack), nameof(Notice), nameof(HasNotice),
+        nameof(CanRetry), nameof(ShowsPasteBack), nameof(Notice), nameof(HasNotice), nameof(IsConfirmingClose),
     ];
 
     private readonly ToolbarSession _session;
@@ -35,6 +35,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     private ToolbarState _state = ToolbarState.Idle;
     private string? _failMessage;
     private string _notice = "";
+    private bool _confirmingClose;
     private IReadOnlyList<ToolbarActionItem> _actions = [];
     private bool _showsLogo = true;
     private bool _isEditable;
@@ -63,6 +64,12 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     /// <summary>Close was clicked: a dismiss request (the controller applies the close confirmation).</summary>
     public event Action? CloseRequested;
+
+    /// <summary>"Close Anyway" in the close confirmation.</summary>
+    public event Action? CloseAnywayRequested;
+
+    /// <summary>"Turn This Setting Off" in the close confirmation: the controller turns confirmCloseAfterResult off and closes.</summary>
+    public event Action? DisableCloseConfirmationRequested;
 
     /// <summary>The inline row (<see cref="ToolbarLayout.PrincipalOrdered"/>), in order.</summary>
     public IReadOnlyList<ToolbarActionItem> Actions
@@ -131,6 +138,9 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public bool HasNotice => _notice.Length > 0;
 
+    /// <summary>"Close without using the result?" shows below the result (spec-1 §3.8; inline, the toolbar never activates).</summary>
+    public bool IsConfirmingClose => _confirmingClose && IsResult;
+
     // Controller → view model.
 
     /// <summary>
@@ -178,6 +188,13 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         Refresh();
     }
 
+    /// <summary>Shows the close confirmation below the result (the controller calls it for a dismiss request on a result).</summary>
+    public void ShowCloseConfirmation()
+    {
+        _confirmingClose = true;
+        Refresh();
+    }
+
     /// <summary>The session's state changed: refresh now on the UI thread (click reacts first), else on the next tick.</summary>
     private void OnSessionChanged()
     {
@@ -205,6 +222,17 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public void RequestClose() => CloseRequested?.Invoke();
 
+    public void RequestCloseAnyway() => CloseAnywayRequested?.Invoke();
+
+    public void RequestDisableCloseConfirmation() => DisableCloseConfirmationRequested?.Invoke();
+
+    /// <summary>"Keep Open": the confirmation goes, the toolbar and its result stay.</summary>
+    public void KeepOpen()
+    {
+        _confirmingClose = false;
+        Refresh();
+    }
+
     /// <summary>Regenerate (on a result) and Retry (on a failed run): the same selection and action again.</summary>
     public void Regenerate()
     {
@@ -217,6 +245,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     {
         _failMessage = null;
         _notice = "";
+        _confirmingClose = false;
     }
 
     private void Refresh()

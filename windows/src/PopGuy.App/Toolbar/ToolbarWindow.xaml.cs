@@ -95,6 +95,9 @@ public sealed partial class ToolbarWindow : Window
         PasteBackButton.Click += OnPasteBackClick;
         RegenerateButton.Click += OnRegenerateClick;
         RetryButton.Click += OnRegenerateClick;
+        CloseAnywayButton.Click += OnCloseAnywayClick;
+        DisableConfirmButton.Click += OnDisableConfirmClick;
+        KeepOpenButton.Click += OnKeepOpenClick;
         ViewModel.PropertyChanged += OnViewModelChanged;
 
         // Every press and release, the buttons' (handled) too: the foreground hand-back.
@@ -128,7 +131,8 @@ public sealed partial class ToolbarWindow : Window
     /// Shows the toolbar for <paramref name="source"/> without activating it, placed by
     /// <see cref="PanelPositioning.PanelOrigin"/> (spec-1 §3.2) in the work area of the monitor holding the selection.
     /// Call <see cref="ToolbarViewModel.Present"/> first, so the toolbar is sized for the new content. Also re-presents
-    /// a toolbar that is already showing (the position is always recomputed).
+    /// a toolbar that is already showing: the position is recomputed, unless the user dragged the toolbar since it was
+    /// shown (a drag disables auto-reposition until the next show; the size still follows the content).
     /// </summary>
     /// <param name="pointer">The gesture's release point; null for the chord and the hotkeys (placed below the selection).</param>
     /// <param name="grewDownward">The drag direction; null when unknown.</param>
@@ -138,6 +142,12 @@ public sealed partial class ToolbarWindow : Window
         if (_closed) return;
         StopDrag();
         _handBackTo = source.Hwnd;
+        if (IsShown && UserDragged)
+        {
+            // Where the user put it, in the work area of the monitor it was dropped on; FitToCard resizes it.
+            AppWindow.Show(activateWindow: false);
+            return;
+        }
         UserDragged = false;
 
         var selectionRect = selection.Width > 0 && selection.Height > 0
@@ -299,6 +309,21 @@ public sealed partial class ToolbarWindow : Window
     private void OnRegenerateClick(object sender, RoutedEventArgs e)
     {
         if (!_closed) ViewModel.Regenerate();
+    }
+
+    private void OnCloseAnywayClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.RequestCloseAnyway();
+    }
+
+    private void OnDisableConfirmClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.RequestDisableCloseConfirmation();
+    }
+
+    private void OnKeepOpenClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.KeepOpen();
     }
 
     // The foreground hand-back: WS_EX_NOACTIVATE does not hold for every press, so after each one the source gets the
@@ -468,6 +493,9 @@ public sealed partial class ToolbarWindow : Window
         PasteBackButton.Click -= OnPasteBackClick;
         RegenerateButton.Click -= OnRegenerateClick;
         RetryButton.Click -= OnRegenerateClick;
+        CloseAnywayButton.Click -= OnCloseAnywayClick;
+        DisableConfirmButton.Click -= OnDisableConfirmClick;
+        KeepOpenButton.Click -= OnKeepOpenClick;
         foreach (var child in ActionRow.Children)
         {
             if (child is Button button) button.Click -= OnActionClick;
