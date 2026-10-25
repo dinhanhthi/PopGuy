@@ -1,6 +1,9 @@
 using System.Diagnostics;
+using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace PopGuy.Core.Providers;
@@ -212,4 +215,41 @@ public sealed class ProviderHttp
             base.Dispose(disposing);
         }
     }
+}
+
+/// <summary>
+/// JSON helpers shared by the adapters. Lookups are lenient, as macOS's optional casts: a missing key or a value of
+/// another shape reads as null, so a payload that does not match is skipped rather than thrown.
+/// </summary>
+internal static class ProviderJson
+{
+    /// <summary>A request body sent as <c>Content-Type: application/json</c> (no charset, as on macOS).</summary>
+    public static StringContent Content(JsonObject body) =>
+        new(body.ToJsonString(), new MediaTypeHeaderValue("application/json"));
+
+    /// <summary>The root of <paramref name="payload"/>, or null when it is not JSON.</summary>
+    public static JsonElement? Parse(string payload)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(payload);
+            return doc.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    public static JsonElement? Get(this JsonElement? element, string key) =>
+        element is { ValueKind: JsonValueKind.Object } obj && obj.TryGetProperty(key, out var value) ? value : null;
+
+    public static JsonElement? First(this JsonElement? element) =>
+        element is { ValueKind: JsonValueKind.Array } array && array.GetArrayLength() > 0 ? array[0] : null;
+
+    public static IEnumerable<JsonElement> Items(this JsonElement? element) =>
+        element is { ValueKind: JsonValueKind.Array } array ? array.EnumerateArray() : [];
+
+    public static string? String(this JsonElement? element) =>
+        element is { ValueKind: JsonValueKind.String } value ? value.GetString() : null;
 }
