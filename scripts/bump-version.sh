@@ -26,7 +26,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PBXPROJ="$REPO_ROOT/PopGuy.xcodeproj/project.pbxproj"
+PBXPROJ="$REPO_ROOT/macos/PopGuy.xcodeproj/project.pbxproj"
 NEW_MARKETING="${1:-}"
 
 [[ -f "$PBXPROJ" ]] || { echo "error: $PBXPROJ not found" >&2; exit 1; }
@@ -58,4 +58,4 @@ fi
 echo
 grep -n "MARKETING_VERSION\|CURRENT_PROJECT_VERSION" "$PBXPROJ"
 echo
-echo "Review, then commit:  git diff PopGuy.xcodeproj/project.pbxproj"
+echo "Review, then commit:  git diff macos/PopGuy.xcodeproj/project.pbxproj"

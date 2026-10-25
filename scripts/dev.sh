@@ -33,13 +33,13 @@ echo "==> Building (Debug)…"
 # -skipMacroValidation: mlx-swift-lm's MLXHuggingFace uses a Swift macro that otherwise needs
 # a one-time "Trust & Enable" click in Xcode after every dependency bump.
 xcodebuild \
-  -project PopGuy.xcodeproj \
+  -project macos/PopGuy.xcodeproj \
   -scheme PopGuy \
   -configuration Debug \
   -skipMacroValidation \
   $CLEAN_ACTION build
 
-PRODUCTS="$(xcodebuild -project PopGuy.xcodeproj -scheme PopGuy -configuration Debug \
+PRODUCTS="$(xcodebuild -project macos/PopGuy.xcodeproj -scheme PopGuy -configuration Debug \
   -skipMacroValidation -showBuildSettings 2>/dev/null \
   | awk -F' = ' '/^ *BUILT_PRODUCTS_DIR = /{print $2; exit}')"
 APP="$PRODUCTS/PopGuy.app"

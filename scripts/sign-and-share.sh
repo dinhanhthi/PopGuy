@@ -49,7 +49,7 @@ else
   # depends on the Apple Development cert / personal-team provisioning
   # (which expires after ~7 days). We apply our own signature in step 3.
   rm -rf "$ARCHIVE"
-  xcodebuild -scheme "$SCHEME" -configuration Release \
+  xcodebuild -project macos/PopGuy.xcodeproj -scheme "$SCHEME" -configuration Release \
     -archivePath "$ARCHIVE" \
     CODE_SIGNING_ALLOWED=NO \
     archive >/dev/null
