@@ -403,32 +403,76 @@ public static class ClipboardGuard
     /// The clipboard's text (CF_UNICODETEXT), or null if there is none, it is over 16 MB, or the clipboard could not be
     /// opened.
     /// </summary>
-    public static unsafe string? ReadText()
+    public static string? ReadText()
     {
         if (!Open()) return null;
         try
         {
-            var handle = PInvoke.GetClipboardData((uint)CLIPBOARD_FORMAT.CF_UNICODETEXT);
-            if (handle.IsNull) return null;
-            var memory = new HGLOBAL(handle.Value);
-            var size = (long)PInvoke.GlobalSize(memory);
-            if (size > MaxTextBytes) return null;
-            var source = (char*)PInvoke.GlobalLock(memory);
-            if (source is null) return null;
-            try
-            {
-                var chars = new ReadOnlySpan<char>(source, (int)(size / sizeof(char)));
-                var end = chars.IndexOf('\0');
-                return new string(end < 0 ? chars : chars[..end]);
-            }
-            finally
-            {
-                PInvoke.GlobalUnlock(memory);
-            }
+            return ReadOpenText();
         }
         finally
         {
             PInvoke.CloseClipboard();
+        }
+    }
+
+    /// <summary>
+    /// The text of a synthetic copy, read only if the clipboard's contents are <paramref name="processId"/>'s (the
+    /// window GetClipboardOwner reports belongs to it; contents with no owner window are refused) and changed at most
+    /// <paramref name="maxChanges"/> times since <paramref name="sequenceAtSend"/>, all checked with the clipboard open so
+    /// nobody can change it in between. False, nothing read, with <paramref name="refusal"/> "foreignClipboardWrite" (or
+    /// "clipboardBusy": it could not be opened). <paramref name="sequence"/> is the number checked: the contents that
+    /// are PopGuy's to replace on restore.
+    /// </summary>
+    internal static bool TryReadCopyOf(
+        uint processId, uint sequenceAtSend, uint maxChanges, out uint sequence, out string? text, [NotNullWhen(false)] out string? refusal)
+    {
+        sequence = 0;
+        text = null;
+        if (!Open())
+        {
+            refusal = "clipboardBusy";
+            return false;
+        }
+        try
+        {
+            sequence = PInvoke.GetClipboardSequenceNumber();
+            var changes = unchecked(sequence - sequenceAtSend);
+            PInvoke.GetWindowThreadProcessId(PInvoke.GetClipboardOwner(), out var ownerProcessId);
+            if (changes > maxChanges || processId == 0 || ownerProcessId != processId)
+            {
+                refusal = "foreignClipboardWrite";
+                return false;
+            }
+            text = ReadOpenText();
+            refusal = null;
+            return true;
+        }
+        finally
+        {
+            PInvoke.CloseClipboard();
+        }
+    }
+
+    /// <summary>The open clipboard's CF_UNICODETEXT, or null if there is none or it is over 16 MB.</summary>
+    private static unsafe string? ReadOpenText()
+    {
+        var handle = PInvoke.GetClipboardData((uint)CLIPBOARD_FORMAT.CF_UNICODETEXT);
+        if (handle.IsNull) return null;
+        var memory = new HGLOBAL(handle.Value);
+        var size = (long)PInvoke.GlobalSize(memory);
+        if (size > MaxTextBytes) return null;
+        var source = (char*)PInvoke.GlobalLock(memory);
+        if (source is null) return null;
+        try
+        {
+            var chars = new ReadOnlySpan<char>(source, (int)(size / sizeof(char)));
+            var end = chars.IndexOf('\0');
+            return new string(end < 0 ? chars : chars[..end]);
+        }
+        finally
+        {
+            PInvoke.GlobalUnlock(memory);
         }
     }
 
@@ -643,6 +687,12 @@ public sealed class ClipboardTransaction : IDisposable
     /// someone else before this call would be taken for PopGuy's.
     /// </summary>
     public void MarkCurrentAsOwn() => _ownSequence = ClipboardGuard.SequenceNumber;
+
+    /// <summary>
+    /// <see cref="MarkCurrentAsOwn"/> for the contents of sequence number <paramref name="sequence"/>, checked earlier
+    /// with the clipboard open (<see cref="ClipboardGuard.TryReadCopyOf"/>), so a later change is never taken for PopGuy's.
+    /// </summary>
+    internal void MarkAsOwn(uint sequence) => _ownSequence = sequence;
 
     /// <summary>
     /// Puts the snapshot back if the clipboard still holds PopGuy's change: <see cref="ClipboardRestoreResult.Unchanged"/>

@@ -91,6 +91,80 @@ public sealed class ClipboardGuardTests
         Set();
     }
 
+    // The process-wide gate: a refusal releases it, a running transaction holds it, and a double dispose releases it once.
+    [Fact]
+    public void TransactionRefusesABusyClipboardAndReleasesTheGate()
+    {
+        RequireClipboard();
+        Assert.True(ClipboardGuard.WriteText("gate", excludeFromHistory: false));
+        using var opened = new ManualResetEventSlim();
+        using var close = new ManualResetEventSlim();
+        // Another thread holds it: the thread that opened the clipboard could open it again.
+        var held = false;
+        var holdError = "";
+        var holder = new Thread(() =>
+        {
+            // No assert here: an exception on this thread would take the test host down.
+            held = TryOpen(out holdError);
+            opened.Set();
+            if (!held) return;
+            close.Wait();
+            PInvoke.CloseClipboard();
+        });
+        holder.Start();
+        try
+        {
+            Assert.True(opened.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+            Assert.True(held, holdError);
+            Assert.False(ClipboardTransaction.TryBegin(out _, out var refusal));
+            Assert.Equal("clipboardBusy", refusal);
+        }
+        finally
+        {
+            close.Set();
+            holder.Join();
+        }
+
+        // A gate left held would make this wait 2 s and refuse "transactionInProgress".
+        Assert.True(ClipboardTransaction.TryBegin(out var transaction, out var next), next);
+        transaction.Dispose();
+    }
+
+    [Fact]
+    public async Task ARunningTransactionHoldsTheGateUntilDisposedOnce()
+    {
+        RequireClipboard();
+        Assert.True(ClipboardGuard.WriteText("gate", excludeFromHistory: false));
+        Assert.True(ClipboardTransaction.TryBegin(out var first, out var refusal), refusal);
+
+        var (began, other, otherRefusal) = await Task.Run(() => (ClipboardTransaction.TryBegin(out var t, out var r), t, r), TestContext.Current.CancellationToken);
+        Assert.False(began);
+        Assert.Null(other);
+        Assert.Equal("transactionInProgress", otherRefusal);
+
+        first.Dispose();
+        // A second dispose must not release the gate again (SemaphoreSlim would throw over its maximum).
+        first.Dispose();
+        Assert.True(ClipboardTransaction.TryBegin(out var third, out refusal), refusal);
+        third.Dispose();
+    }
+
+    // The capture accepts a copy only if the sequence number moved at most MaxCopyChanges times, so one multi-format
+    // write (Chromium/Electron set text, HTML and their own formats in one session) must stay within it.
+    [Fact]
+    public void OneMultiFormatWriteStaysWithinTheCopyChangeLimit()
+    {
+        RequireClipboard();
+        var before = PInvoke.GetClipboardSequenceNumber();
+
+        Set((UnicodeText, Encoding.Unicode.GetBytes("copy\0")),
+            (Register("HTML Format"), Encoding.UTF8.GetBytes("<b>copy</b>\0")),
+            (Register("PopGuy.Tests.Editor"), [1, 2, 3]));
+
+        var changes = PInvoke.GetClipboardSequenceNumber() - before;
+        Assert.True(changes <= SelectionCapture.MaxCopyChanges, $"One write moved the sequence number {changes} times.");
+    }
+
     /// <summary>Skips the test when there is no Win32 clipboard to open (not Windows, or no session clipboard).</summary>
     private static void RequireClipboard()
     {

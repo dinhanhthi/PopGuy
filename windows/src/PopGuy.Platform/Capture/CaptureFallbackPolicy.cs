@@ -28,10 +28,12 @@ public readonly record struct CaptureFallbackDecision(bool Allowed, string Reaso
 /// <item>never in a password field, and never in a console or terminal: the window classes ConsoleWindowClass,
 /// CASCADIA_HOSTING_WINDOW_CLASS, VirtualConsoleClass (ConEmu, Cmder), PuTTY, KiTTY and mintty, or the processes
 /// conhost, WindowsTerminal, OpenConsole, cmd, powershell, pwsh, wsl, alacritty, wezterm-gui, mintty, putty, kitty
-/// (KiTTY and kitty), MobaXterm, ConEmu, ConEmu64, ConEmuC, ConEmuC64, Tabby, Hyper, SecureCRT and Xshell;</item>
+/// (KiTTY and kitty), MobaXterm, ConEmu, ConEmu64, ConEmuC, ConEmuC64, Tabby, Hyper, SecureCRT, Xshell, Termius and
+/// Warp;</item>
 /// <item>never in a remote desktop or VM viewer, which forwards the keys to a remote session (the window class
 /// TscShellContainerClass, or the processes mstsc, vmconnect, vmware, vmware-vmx, VirtualBoxVM, prl_client_app,
-/// Citrix's wfica32, CDViewer, CitrixReceiver and SelfService, AnyDesk, TeamViewer, and Parsec's parsecd);</item>
+/// Citrix's wfica32, CDViewer, CitrixReceiver and SelfService, AnyDesk, TeamViewer, Parsec's parsecd, msrdc (Windows
+/// App, Remote Desktop client), vmware-view (Horizon), RustDesk, Moonlight and mRemoteNG);</item>
 /// <item>never when the process name could not be read, unless the window class is a known-safe app's (Notepad,
 /// WordPad, Word, Excel, PowerPoint, Outlook, Firefox): the name is what rules out most terminals and remote
 /// sessions;</item>
@@ -57,6 +59,7 @@ public static class CaptureFallbackPolicy
     {
         "conhost", "WindowsTerminal", "OpenConsole", "cmd", "powershell", "pwsh", "wsl", "alacritty", "wezterm-gui", "mintty",
         "putty", "kitty", "MobaXterm", "ConEmu", "ConEmu64", "ConEmuC", "ConEmuC64", "Tabby", "Hyper", "SecureCRT", "Xshell",
+        "Termius", "Warp",
     };
 
     private static readonly HashSet<string> RemoteDesktopWindowClasses = new(StringComparer.OrdinalIgnoreCase)
@@ -68,6 +71,7 @@ public static class CaptureFallbackPolicy
     {
         "mstsc", "vmconnect", "vmware", "vmware-vmx", "VirtualBoxVM", "prl_client_app",
         "wfica32", "CDViewer", "CitrixReceiver", "SelfService", "AnyDesk", "TeamViewer", "parsecd",
+        "msrdc", "vmware-view", "RustDesk", "Moonlight", "mRemoteNG",
     };
 
     /// <summary>Top-level window classes of apps that are neither terminals nor remote sessions, whatever their process.</summary>

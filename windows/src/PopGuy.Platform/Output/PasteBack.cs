@@ -29,9 +29,11 @@ public enum PasteBackStatus
 /// <see cref="CaptureFallbackPolicy.UnsafeTargetReason"/> ("console", "remoteDesktop", "unknownProcess",
 /// "integratedTerminal"); "unknownFocusInEditor" (an editor that hosts xterm.js terminals, with no focused-element hint
 /// to rule its terminal out); "passwordField"; "readOnly" (the focused element's value pattern is read-only);
-/// "sourceGone" (the source window was closed); "sourceNotForeground" (the source did not come to the front within
-/// 300 ms); a <see cref="ClipboardTransaction.TryBegin"/> refusal; "writeFailed"; "foregroundChanged" (the source lost
-/// the foreground before Ctrl+V, nothing sent); "notInserted" (SendInput did not insert every event).
+/// "editabilityUnknown" (UI Automation could not tell whether the focused element is editable, and the app is not a
+/// known editable host); "sourceGone" (the source window was closed); "sourceNotForeground" (the source did not come
+/// to the front within 300 ms); a <see cref="ClipboardTransaction.TryBegin"/> refusal; "writeFailed"; "foregroundChanged" (the source lost
+/// the foreground before Ctrl+V, nothing sent); "passwordField" or "integratedTerminal" again when the focus moved there
+/// during the modifier wait (nothing sent); "notInserted" (SendInput did not insert every event).
 /// </param>
 /// <param name="ClipboardRestore">How the clipboard came back; null when it was never written.</param>
 public sealed record PasteBackResult(PasteBackStatus Status, string Reason, ClipboardRestoreResult? ClipboardRestore = null);
@@ -45,10 +47,12 @@ public sealed record PasteBackResult(PasteBackStatus Status, string Reason, Clip
 /// <para>
 /// Gating: the targets <see cref="CaptureFallbackPolicy"/> refuses for a synthetic copy are refused here too (consoles,
 /// terminals and SSH clients, remote desktop and VM viewers, a process whose name cannot be read, xterm.js panes, and
-/// an editor that hosts them without a focused-element hint), so multi-line AI output never reaches a shell. The
-/// focused element must be editable where UI Automation can tell cheaply: a password field or a read-only value pattern
-/// is refused; with no value pattern or no answer, the paste goes ahead (the toolbar shows Paste back only for an
-/// editable capture).
+/// an editor that hosts them without a focused-element hint), so multi-line AI output never reaches a shell. Fails
+/// closed: a password field or a read-only value pattern is refused, and so is an element UI Automation cannot call
+/// editable (no value pattern, no answer), unless the app is a known editable host (Notepad, WordPad, Office, the
+/// xterm.js-hosting editors, Chromium and Firefox browsers). IDEs that host terminals without an xterm.js hint
+/// (JetBrains, Visual Studio) are left off that list on purpose. Right before Ctrl+V (after the modifier wait), the
+/// focused element is probed again: a password field or an xterm.js terminal there aborts the paste.
 /// </para>
 /// </summary>
 public static class PasteBack
@@ -66,6 +70,17 @@ public static class PasteBack
 
     /// <summary>After giving the foreground back: the source's focus settles before its focused element is read.</summary>
     private static readonly TimeSpan ForegroundSettleDelay = TimeSpan.FromMilliseconds(50);
+
+    /// <summary>
+    /// Apps known to take a paste wherever their focus is, so an unknown editability does not refuse there: Notepad,
+    /// WordPad, Office, the xterm.js-hosting editors (whose terminal rules still apply) and Chromium/Firefox browsers.
+    /// </summary>
+    private static readonly HashSet<string> KnownEditableHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "notepad", "wordpad", "winword", "outlook", "powerpnt", "excel", "onenote",
+        "Code", "Code - Insiders", "Cursor", "Windsurf", "VSCodium",
+        "msedge", "chrome", "firefox", "brave",
+    };
 
     /// <summary>
     /// Pastes <paramref name="text"/> into <paramref name="source"/> (the capture's <see cref="ForegroundApp"/>). When
@@ -112,8 +127,18 @@ public static class PasteBack
                 // The transaction already put the snapshot back; this tries again if even that failed.
                 return Refused("writeFailed") with { ClipboardRestore = transaction.Restore() };
             }
-            var sent = InputSynth.SendPaste(isUserKeyDown, () => ForegroundGuard.IsStill(source));
-            if (sent == InputSendResult.Aborted) return Refused("foregroundChanged") with { ClipboardRestore = transaction.Restore() };
+            var abortReason = "foregroundChanged";
+            var sent = InputSynth.SendPaste(isUserKeyDown, () =>
+            {
+                // The focus may have moved during the modifier wait: probe again, the foreground check last.
+                if (LateRefusal(UiaSelectionReader.ProbePasteTarget(), windowClass, processName) is { } late)
+                {
+                    abortReason = late;
+                    return false;
+                }
+                return ForegroundGuard.IsStill(source);
+            });
+            if (sent == InputSendResult.Aborted) return Refused(abortReason) with { ClipboardRestore = transaction.Restore() };
 
             await Task.Delay(RestoreDelay).ConfigureAwait(false);
             var restore = transaction.Restore();
@@ -125,10 +150,10 @@ public static class PasteBack
 
     /// <summary>
     /// The refusal for the focused element in the source: <see cref="CaptureFallbackPolicy.UnsafeTargetReason"/> with
-    /// its hint, an xterm.js-hosting editor without a hint, a password field, or a read-only value pattern; null to
-    /// paste (an unknown editability included).
+    /// its hint, an xterm.js-hosting editor without a hint, a password field, a read-only value pattern, or an unknown
+    /// editability outside <see cref="KnownEditableHosts"/>; null to paste. Pure: no system calls.
     /// </summary>
-    private static string? TargetRefusal(UiaPasteTarget target, string? windowClass, string? processName)
+    internal static string? TargetRefusal(UiaPasteTarget target, string? windowClass, string? processName)
     {
         if (CaptureFallbackPolicy.UnsafeTargetReason(windowClass, processName, target.FocusedElementHint) is { } unsafeReason)
         {
@@ -139,8 +164,13 @@ public static class PasteBack
             return "unknownFocusInEditor";
         }
         if (target.IsPassword) return "passwordField";
-        return target.IsEditable == false ? "readOnly" : null;
+        if (target.IsEditable == false) return "readOnly";
+        return target.IsEditable is null && (processName is null || !KnownEditableHosts.Contains(processName)) ? "editabilityUnknown" : null;
     }
+
+    /// <summary>The re-probe's refusal right before Ctrl+V: the focus moved to a password field or an xterm.js terminal.</summary>
+    private static string? LateRefusal(UiaPasteTarget target, string? windowClass, string? processName) =>
+        target.IsPassword ? "passwordField" : CaptureFallbackPolicy.UnsafeTargetReason(windowClass, processName, target.FocusedElementHint);
 
     /// <summary>Polls until <paramref name="source"/> is the foreground window, for 300 ms at most.</summary>
     private static async Task<bool> WaitForForegroundAsync(nint source)

@@ -11,7 +11,7 @@ namespace PopGuy.Platform.Input;
 /// <param name="App">The foreground app when the chord fired (the capture's source).</param>
 /// <param name="ClipboardText">
 /// The text the user's own copy put on the clipboard (read once the copy settled), or null when the clipboard did not
-/// change since the first tap, holds no text, or could not be read. Use it only when UI Automation captures nothing,
+/// change since the first tap (or the first tap had no clipboard sequence number), holds no text, or could not be read. Use it only when UI Automation captures nothing,
 /// never when UI Automation reports a password field (the user's copy may hold the password), and only in memory
 /// (never log it).
 /// </param>
@@ -182,7 +182,8 @@ public sealed class ChordMonitor
         await Task.Delay(SettleDelay).ConfigureAwait(false);
         var settled = ClipboardGuard.SequenceNumber;
         // Unchanged since the first tap: neither press copied anything (no selection), so the text is not the selection.
-        var text = settled != arming ? ClipboardGuard.ReadText() : null;
+        // Without the first tap's number, a change cannot be told from stale contents: no text.
+        var text = arming is { } first && settled != first ? ClipboardGuard.ReadText() : null;
         return (string.IsNullOrWhiteSpace(text) ? null : text, settled);
     }
 

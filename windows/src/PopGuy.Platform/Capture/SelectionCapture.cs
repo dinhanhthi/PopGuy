@@ -66,7 +66,8 @@ public enum SelectionCaptureMethod
 /// A short reason for logs: "uia" (UI Automation captured it); "uipi" (blocked); "noGesture" (passive: no drag in a
 /// Monaco editor); a <see cref="CaptureFallbackDecision.Reason"/> (a refusal, or, for a copy, why it was allowed); a
 /// <see cref="ClipboardTransaction.TryBegin"/> refusal; "foregroundChanged" (the source lost the foreground before the
-/// copy, nothing sent); "notInserted", "copyNotLanded" or "copyEmpty" (the copy brought no text).
+/// copy, nothing sent); "foreignClipboardWrite" (another app or process wrote the clipboard around the copy: nothing
+/// read, and the restore never overwrites that write); "notInserted", "copyNotLanded" or "copyEmpty" (the copy brought no text).
 /// </param>
 /// <param name="SelectionRects">UI Automation's selection rectangles (screen pixels); empty for a copy, which has none.</param>
 /// <param name="UiaStatus">How the UI Automation read ended.</param>
@@ -87,9 +88,11 @@ public sealed record SelectionCaptureResult(
 /// Captures the source app's selection (spec-1 §2.1, §2.4): UI Automation first; when it captures nothing, a synthetic
 /// copy (Ctrl+Insert, <see cref="InputSynth.SendCopy"/>) where the mode, <see cref="CaptureFallbackPolicy"/> and the
 /// target's privilege level allow it. The copy runs inside a <see cref="ClipboardTransaction"/> (one at a time per
-/// process): snapshot, send (only while the source is still the foreground window), wait up to 500 ms for the
-/// clipboard to change, read the text at the settle point 150 ms later (OLE apps write twice), and restore the user's
-/// clipboard 300 ms after the change, unless someone copied again meanwhile.
+/// process): snapshot, send (only while the source is still the foreground window and nobody wrote the clipboard since
+/// the snapshot), wait up to 500 ms for the clipboard to change, read the text at the settle point 150 ms later (OLE
+/// apps write twice), and restore the user's clipboard 300 ms after the change, unless someone copied again meanwhile.
+/// The change is taken for the copy only if the source process owns the clipboard's contents and they changed at most
+/// twice since the send; anything else is a foreign write, never read and never restored over.
 /// </summary>
 public static class SelectionCapture
 {
@@ -100,6 +103,12 @@ public static class SelectionCapture
 
     /// <summary>After the copy's change: the user's clipboard comes back.</summary>
     private static readonly TimeSpan RestoreDelay = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>
+    /// The most clipboard changes one copy may make: OLE apps write twice (their data object, then the flushed formats).
+    /// Unmeasured for multi-format copies (Office, Chromium): raise it if QA logs "foreignClipboardWrite" for a plain copy.
+    /// </summary>
+    internal const uint MaxCopyChanges = 2;
 
     /// <summary>
     /// Captures the selection in <paramref name="app"/> (the foreground app when the trigger fired). Runs on the
@@ -139,32 +148,57 @@ public static class SelectionCapture
         var decision = CaptureFallbackPolicy.Decide(
             uia.Status, CaptureFallbackPolicy.ClassNameOf(app.Hwnd), processName, uia.FocusedElementHint, uia.ReadFailed);
         if (!decision.Allowed) return NotCaptured(uia, decision.Reason);
-        return await CopyAsync(mode, app.Hwnd, uia, decision.Reason, isUserKeyDown).ConfigureAwait(false);
+        return await CopyAsync(mode, app.Hwnd, app.ProcessId, uia, decision.Reason, isUserKeyDown).ConfigureAwait(false);
     }
 
     private static async Task<SelectionCaptureResult> CopyAsync(
-        CaptureMode mode, nint source, UiaSelection uia, string allowedReason, Func<uint, bool>? isUserKeyDown)
+        CaptureMode mode, nint source, uint sourceProcessId, UiaSelection uia, string allowedReason, Func<uint, bool>? isUserKeyDown)
     {
         if (!ClipboardTransaction.TryBegin(out var transaction, out var refusal)) return NotCaptured(uia, refusal);
         using (transaction)
         {
             // The UI Automation read and the snapshot took time: the copy would hit another window.
             if (!ForegroundGuard.IsStill(source)) return NotCaptured(uia, "foregroundChanged");
-            var sent = InputSynth.SendCopy(isUserKeyDown, () => ForegroundGuard.IsStill(source));
-            if (sent == InputSendResult.Aborted) return NotCaptured(uia, "foregroundChanged");
+            var abortReason = "foregroundChanged";
+            var sequenceAtSend = transaction.SequenceBefore;
+            var sent = InputSynth.SendCopy(isUserKeyDown, () =>
+            {
+                // Right before the send: a write since the snapshot is someone else's, and the restore would erase it.
+                sequenceAtSend = ClipboardGuard.SequenceNumber;
+                if (sequenceAtSend != transaction.SequenceBefore)
+                {
+                    abortReason = "foreignClipboardWrite";
+                    return false;
+                }
+                return ForegroundGuard.IsStill(source);
+            });
+            if (sent == InputSendResult.Aborted) return NotCaptured(uia, abortReason);
 
-            ClipboardGuard.WaitForChange(transaction.SequenceBefore, CopyTimeout);
+            ClipboardGuard.WaitForChange(sequenceAtSend, CopyTimeout);
             await Task.Delay(SettleDelay).ConfigureAwait(false);
-            // A copy that landed after the 500 ms wait counts too (any change since the snapshot is taken for it), so the
-            // restore does not skip and leave the synthetic copy on the clipboard.
-            var landed = ClipboardGuard.SequenceNumber != transaction.SequenceBefore;
+            // A copy that landed after the 500 ms wait counts too, so the restore does not skip and leave the synthetic
+            // copy on the clipboard; but only the source's own write is read and marked as PopGuy's.
+            var landed = ClipboardGuard.SequenceNumber != sequenceAtSend;
             string? text = null;
+            var waited = false;
             if (landed)
             {
-                transaction.MarkCurrentAsOwn();
-                text = ClipboardGuard.ReadText();
+                var owned = ClipboardGuard.TryReadCopyOf(sourceProcessId, sequenceAtSend, MaxCopyChanges, out var copySequence, out text, out var readRefusal);
+                if (!owned && readRefusal == "clipboardBusy")
+                {
+                    // Someone held the clipboard open: once more at the restore point, so the copy is not left on it.
+                    await Task.Delay(RestoreDelay - SettleDelay).ConfigureAwait(false);
+                    waited = true;
+                    owned = ClipboardGuard.TryReadCopyOf(sourceProcessId, sequenceAtSend, MaxCopyChanges, out copySequence, out text, out readRefusal);
+                }
+                if (!owned)
+                {
+                    // Not marked as PopGuy's: the restore skips rather than overwrite a foreign write.
+                    return NotCaptured(uia, readRefusal!) with { ClipboardRestore = transaction.Restore() };
+                }
+                transaction.MarkAsOwn(copySequence);
             }
-            await Task.Delay(RestoreDelay - SettleDelay).ConfigureAwait(false);
+            if (!waited) await Task.Delay(RestoreDelay - SettleDelay).ConfigureAwait(false);
             var restore = transaction.Restore();
 
             if (string.IsNullOrWhiteSpace(text))

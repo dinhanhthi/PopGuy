@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using PopGuy.Core;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Secrets;
@@ -24,6 +26,9 @@ public sealed class CredentialStoreTests
         {
             _store.Set(id, "sk-first-é漢");
             Assert.Equal("sk-first-é漢", _store.Get(id));
+            // An empty secret is a stored "" (an empty blob), not a missing one.
+            _store.Set(id, "");
+            Assert.Equal("", _store.Get(id));
             _store.Set(id, "sk-second");
             Assert.Equal("sk-second", _store.Get(id));
 
@@ -74,6 +79,9 @@ public sealed class CredentialStoreTests
             var json = File.ReadAllBytes(paths.SettingsFile);
             Assert.True(json.AsSpan().IndexOf("https://example.invalid/v1"u8) >= 0);
             Assert.True(json.AsSpan().IndexOf(Encoding.UTF8.GetBytes(key)) < 0);
+            // No field that could hold a key, even an empty one.
+            using var document = JsonDocument.Parse(json);
+            Assert.DoesNotContain(PropertyNames(document.RootElement), name => SecretName.IsMatch(name));
             Assert.Equal(key, _store.Get(id));
         }
         finally
@@ -82,6 +90,15 @@ public sealed class CredentialStoreTests
             if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
         }
     }
+
+    private static readonly Regex SecretName = new("api_?key|secret|token", RegexOptions.IgnoreCase);
+
+    private static IEnumerable<string> PropertyNames(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Object => element.EnumerateObject().SelectMany(p => PropertyNames(p.Value).Prepend(p.Name)),
+        JsonValueKind.Array => element.EnumerateArray().SelectMany(PropertyNames),
+        _ => [],
+    };
 
     private static void RequireWindows()
     {
