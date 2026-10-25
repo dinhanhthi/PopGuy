@@ -18,9 +18,11 @@ namespace PopGuy.Debug;
 /// The Phase 3 spike toolbar (Task 3.4): a borderless, topmost tool window at the pointer that must never take the
 /// foreground from the source app (the app whose text is selected). Tier 1 of the plan: WS_EX_NOACTIVATE plus
 /// <c>AllowFocusOnInteraction="False"</c> buttons, a WM_MOUSEACTIVATE → MA_NOACTIVATE subclass on every HWND, and a
-/// foreground hand-back after each press. It reports what it sees through <see cref="Logged"/> (one record per click,
-/// with the measured <c>activation</c>: never, handedBack or stuck) and the button clicks through <see cref="Clicked"/>.
-/// UI thread only.
+/// foreground hand-back after each press. The Prompt box is the one exception: its bounds are the activation region,
+/// where the subclass answers MA_ACTIVATE so Windows activates the toolbar for that click; text input ends (activation
+/// off, the foreground handed back) on Escape, Enter, focus loss, deactivation, any other press, and hide. It reports
+/// what it sees through <see cref="Logged"/> (one record per click, with the measured <c>activation</c>: never,
+/// handedBack or stuck) and the button clicks through <see cref="Clicked"/>. UI thread only.
 /// </summary>
 public sealed partial class SpikeToolbarWindow : Window
 {
@@ -38,12 +40,23 @@ public sealed partial class SpikeToolbarWindow : Window
     private static readonly TimeSpan FirstCheck = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan SecondCheck = TimeSpan.FromMilliseconds(300);
 
+    /// <summary>How often a drag reads the pointer (the window cannot capture it while it is not the foreground).</summary>
+    private static readonly TimeSpan DragPollInterval = TimeSpan.FromMilliseconds(15);
+
     private readonly List<string> _messages = [];
     private bool _closed;
     private bool _textInput;
     private bool _dragging;
-    private Point _pressed;
     private XamlRoot? _xamlRoot;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _dragTimer;
+
+    /// <summary>The drag's start: the pointer and the window's top-left corner (physical pixels), and the moves so far.</summary>
+    private DrawingPoint _dragPointer;
+    private DrawingPoint _dragOrigin;
+    private int _dragMoves;
+
+    /// <summary>The Prompt box's bounds last given to the subclass (client pixels).</summary>
+    private DrawingRectangle _activationRegion;
 
     /// <summary>The bar's last laid-out size in DIPs; the start size before the first layout.</summary>
     private Size _barSize = new(StartWidth, StartHeight);
@@ -70,6 +83,10 @@ public sealed partial class SpikeToolbarWindow : Window
         }
         Hwnd = Win32Interop.GetWindowFromWindowId(AppWindow.Id);
         var styled = ToolbarWindowStyle.Apply(Hwnd);
+        _dragTimer = DispatcherQueue.CreateTimer();
+        _dragTimer.Interval = DragPollInterval;
+        _dragTimer.IsRepeating = true;
+        _dragTimer.Tick += OnDragTick;
 
         string backdrop;
         if (DesktopAcrylicController.IsSupported())
@@ -95,6 +112,10 @@ public sealed partial class SpikeToolbarWindow : Window
         ImproveButton.PointerEntered += OnImproveEntered;
         ImproveButton.PointerExited += OnImproveExited;
         PromptBox.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnPromptPressed), true);
+        PromptBox.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnPromptKeyDown), true);
+        PromptBox.LostFocus += OnPromptLostFocus;
+        PromptBox.SizeChanged += OnPromptSizeChanged;
+        Activated += OnActivated;
 
         // Every press and release, the buttons' and the Prompt box's (handled) too.
         Bar.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnAnyPointerPressed), true);
@@ -137,7 +158,7 @@ public sealed partial class SpikeToolbarWindow : Window
             _pendingStartRecord = null;
             Log("toolbarCreated", start);
         }
-        EndTextInput();
+        EndTextInput("show", handBack: false);
         TooltipPopup.IsOpen = false;
         Source = source;
 
@@ -193,7 +214,8 @@ public sealed partial class SpikeToolbarWindow : Window
     public void Dismiss(string reason, bool handBack)
     {
         if (_closed || !IsShown) return;
-        EndTextInput();
+        StopDrag();
+        EndTextInput("dismiss", handBack: false);
         var handedBack = handBack && ToolbarWindowStyle.HandBackForeground(Hwnd, Source);
         TooltipPopup.IsOpen = false;
         AppWindow.Hide();
@@ -207,7 +229,7 @@ public sealed partial class SpikeToolbarWindow : Window
     /// </summary>
     public bool ReturnForegroundToSource()
     {
-        EndTextInput();
+        EndTextInput("paste", handBack: false);
         if (ToolbarWindowStyle.ForegroundWindow() == Source) return true;
         return ToolbarWindowStyle.SetForeground(Source);
     }
@@ -220,6 +242,7 @@ public sealed partial class SpikeToolbarWindow : Window
     private void OnButtonClick(object sender, RoutedEventArgs e)
     {
         if (_closed || sender is not Button { Tag: string name }) return;
+        EndTextInput("button", handBack: true);
         Clicked?.Invoke(name);
     }
 
@@ -229,6 +252,8 @@ public sealed partial class SpikeToolbarWindow : Window
         // The window to hand back to: the foreground now, unless it is the toolbar (then the one from before).
         var foreground = ToolbarWindowStyle.RememberForeground(Hwnd);
         if (foreground != 0) Source = foreground;
+        // A press anywhere but the Prompt box ends text input: the toolbar must not stay the foreground.
+        if (TargetOf(e.OriginalSource as DependencyObject) != "prompt") EndTextInput("press", handBack: true);
         _fgAtPress = ToolbarWindowStyle.ForegroundWindow();
         _wasForeground = ToolbarWindowStyle.IsToolbarOrOwned(_fgAtPress, Hwnd);
         _handedBack = false;
@@ -296,31 +321,131 @@ public sealed partial class SpikeToolbarWindow : Window
         return "background";
     }
 
-    // Text input: the only time the toolbar is activated on purpose.
+    // Text input: the only time the toolbar is activated on purpose. The click itself activates it (the Prompt box is
+    // the subclass's activation region, answered MA_ACTIVATE); SetForegroundWindow here is the second lever.
 
     private void OnPromptPressed(object sender, PointerRoutedEventArgs e)
     {
         if (_closed || _textInput) return;
         _textInput = true;
+        var fgAtPress = ToolbarWindowStyle.ForegroundWindow();
+        var activatedByClick = fgAtPress == Hwnd;
         var allowed = ToolbarWindowStyle.AllowActivation(Hwnd, true);
-        Activate();
-        var focused = PromptBox.Focus(FocusState.Pointer);
+        bool? setForeground = activatedByClick ? null : ToolbarWindowStyle.SetForeground(Hwnd);
+        var fgAfter = ToolbarWindowStyle.ForegroundWindow();
+        // Focus once the window is active (the press is still being handled now).
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!_closed && _textInput) PromptBox.Focus(FocusState.Pointer);
+        });
         Log("textInput", new()
         {
             ["fgBefore"] = Hex(Source),
-            ["fgAfter"] = Hex(ToolbarWindowStyle.ForegroundWindow()),
+            ["fgAtPress"] = Hex(fgAtPress),
+            ["activatedByClick"] = activatedByClick,
             ["activationAllowed"] = allowed,
-            ["focused"] = focused,
+            ["setForeground"] = setForeground,
+            ["fgAfter"] = Hex(fgAfter),
+            ["toolbarForeground"] = fgAfter == Hwnd,
+            ["region"] = RegionText(_activationRegion),
+        });
+        _ = CheckTextInputAsync();
+    }
+
+    /// <summary>
+    /// 100 ms after the press: logs whether the toolbar is the foreground and the Prompt box focused. When the toolbar
+    /// did not become the foreground, text input ends at once (typing goes to the source anyway), so activation never
+    /// stays on.
+    /// </summary>
+    private async Task CheckTextInputAsync()
+    {
+        try
+        {
+            await Task.Delay(FirstCheck);
+            if (_closed || !_textInput) return;
+            var foreground = ToolbarWindowStyle.ForegroundWindow();
+            var focused = _xamlRoot is not null && ReferenceEquals(FocusManager.GetFocusedElement(_xamlRoot), PromptBox);
+            Log("textInputCheck", new()
+            {
+                ["fg100"] = Hex(foreground),
+                ["toolbarForeground"] = foreground == Hwnd,
+                ["promptFocused"] = focused,
+            });
+            if (foreground != Hwnd) EndTextInput("not foreground", handBack: false);
+        }
+        catch (Exception ex)
+        {
+            Log("error", new() { ["where"] = "text input check", ["message"] = ex.Message });
+        }
+    }
+
+    private void OnPromptKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (_closed || !_textInput) return;
+        if (e.Key is not (Windows.System.VirtualKey.Escape or Windows.System.VirtualKey.Enter)) return;
+        // Enter would submit the prompt in the real toolbar; the spike logs the length only, never the text.
+        if (e.Key == Windows.System.VirtualKey.Enter) Log("promptSubmitted", new() { ["textLength"] = PromptBox.Text.Length });
+        e.Handled = true;
+        EndTextInput(e.Key == Windows.System.VirtualKey.Enter ? "enter" : "escape", handBack: true);
+    }
+
+    private void OnPromptLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) EndTextInput("focus lost", handBack: true);
+    }
+
+    /// <summary>Another window took the foreground (a click elsewhere): it keeps it, only activation goes off.</summary>
+    private void OnActivated(object sender, WindowActivatedEventArgs args)
+    {
+        if (!_closed && args.WindowActivationState == WindowActivationState.Deactivated) EndTextInput("deactivated", handBack: false);
+    }
+
+    /// <summary>
+    /// Ends text input: clicks stop activating the toolbar (WS_EX_NOACTIVATE back on) and, with
+    /// <paramref name="handBack"/>, the source gets the foreground back if the toolbar has it. Also when only the
+    /// subclass turned activation on (a click in the region whose press never reached the Prompt box).
+    /// </summary>
+    private void EndTextInput(string reason, bool handBack)
+    {
+        if (!_textInput && !ToolbarWindowStyle.IsActivationAllowed(Hwnd)) return;
+        _textInput = false;
+        var noActivate = ToolbarWindowStyle.AllowActivation(Hwnd, false);
+        var handedBack = handBack && ToolbarWindowStyle.HandBackForeground(Hwnd, Source);
+        Log("textInputEnded", new()
+        {
+            ["reason"] = reason,
+            ["noActivateRestored"] = noActivate,
+            ["handedBack"] = handedBack,
+            ["fgAfter"] = Hex(ToolbarWindowStyle.ForegroundWindow()),
+            // Where the focus went: tells a focus move WinUI made itself from the user's.
+            ["focusedNow"] = _xamlRoot is null ? null : FocusManager.GetFocusedElement(_xamlRoot)?.GetType().Name,
         });
     }
 
-    /// <summary>Clicks stop activating the toolbar again; the caller hands the foreground back.</summary>
-    private void EndTextInput()
+    /// <summary>The Prompt box's bounds in client pixels become the subclass's activation region.</summary>
+    private void UpdateActivationRegion()
     {
-        if (!_textInput) return;
-        _textInput = false;
-        ToolbarWindowStyle.AllowActivation(Hwnd, false);
+        if (_xamlRoot is null || PromptBox.ActualWidth <= 0 || PromptBox.ActualHeight <= 0) return;
+        var scale = _xamlRoot.RasterizationScale;
+        if (scale <= 0 || !double.IsFinite(scale)) return;
+        var bounds = PromptBox.TransformToVisual(RootCanvas)
+            .TransformBounds(new Rect(0, 0, PromptBox.ActualWidth, PromptBox.ActualHeight));
+        var region = DrawingRectangle.FromLTRB(
+            (int)Math.Floor(bounds.Left * scale), (int)Math.Floor(bounds.Top * scale),
+            (int)Math.Ceiling(bounds.Right * scale), (int)Math.Ceiling(bounds.Bottom * scale));
+        if (region == _activationRegion) return;
+        _activationRegion = region;
+        ToolbarWindowStyle.SetActivationRegion(Hwnd, region);
+        Log("activationRegion", new() { ["region"] = RegionText(region), ["scale"] = scale });
     }
+
+    private void OnPromptSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!_closed) UpdateActivationRegion();
+    }
+
+    private static string RegionText(DrawingRectangle r) =>
+        string.Create(CultureInfo.InvariantCulture, $"{r.X},{r.Y} {r.Width}x{r.Height}");
 
     // The one tooltip: does a popup below the window activate it?
 
@@ -342,36 +467,75 @@ public sealed partial class SpikeToolbarWindow : Window
         if (!_closed) TooltipPopup.IsOpen = false;
     }
 
-    // Drag: no title bar, so a press on the bar's background captures the pointer and moves the window by how far
-    // the pointer left its press point (the window moves under it, so that point stays put relative to it).
+    // Drag: no title bar, so a press on the bar's background (Transparent, so it hit-tests) moves the window by how far
+    // the pointer moved since the press, in screen pixels. A window that is not the foreground cannot really capture
+    // the pointer (Windows sends it the pointer's moves only while the pointer is over it), so the drag also reads the
+    // pointer and the button every 15 ms and ends when the button is up. The press never activates the toolbar (it is
+    // outside the activation region).
 
     private void OnBackgroundPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (_closed || _textInput) return;
+        if (_closed || _dragging) return;
         var point = e.GetCurrentPoint(Bar);
-        if (!point.Properties.IsLeftButtonPressed || !Bar.CapturePointer(e.Pointer)) return;
-        _pressed = point.Position;
+        if (!point.Properties.IsLeftButtonPressed) return;
+        EndTextInput("drag", handBack: true);
+        var captured = Bar.CapturePointer(e.Pointer);
+        _dragPointer = ToolbarWindowStyle.CursorPosition();
+        _dragOrigin = ToolbarWindowStyle.WindowRect(Hwnd).Location;
+        _dragMoves = 0;
         _dragging = true;
+        _dragTimer.Start();
         e.Handled = true;
+        Log("dragStarted", new()
+        {
+            ["captured"] = captured,
+            ["pointerX"] = _dragPointer.X,
+            ["pointerY"] = _dragPointer.Y,
+            ["x"] = _dragOrigin.X,
+            ["y"] = _dragOrigin.Y,
+        });
     }
 
     private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
     {
-        if (!_dragging || _closed || _xamlRoot is null) return;
-        var position = e.GetCurrentPoint(Bar).Position;
-        var scale = _xamlRoot.RasterizationScale;
-        var dx = (int)Math.Round((position.X - _pressed.X) * scale);
-        var dy = (int)Math.Round((position.Y - _pressed.Y) * scale);
-        if (dx == 0 && dy == 0) return;
-        var frame = ToolbarWindowStyle.WindowRect(Hwnd);
-        if (!frame.IsEmpty) ToolbarWindowStyle.Move(Hwnd, frame.X + dx, frame.Y + dy);
+        if (!_dragging || _closed) return;
+        DragToPointer();
         e.Handled = true;
+    }
+
+    private void OnDragTick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
+    {
+        if (!_dragging || _closed)
+        {
+            sender.Stop();
+            return;
+        }
+        if (!ToolbarWindowStyle.IsPrimaryButtonDown())
+        {
+            // Released where the window did not see it (outside it, without a capture).
+            StopDrag();
+            EndDrag("button up");
+            return;
+        }
+        DragToPointer();
+    }
+
+    /// <summary>The window's top-left corner follows the pointer from where the drag started.</summary>
+    private void DragToPointer()
+    {
+        var pointer = ToolbarWindowStyle.CursorPosition();
+        var x = _dragOrigin.X + pointer.X - _dragPointer.X;
+        var y = _dragOrigin.Y + pointer.Y - _dragPointer.Y;
+        var frame = ToolbarWindowStyle.WindowRect(Hwnd);
+        if (frame.IsEmpty || (frame.X == x && frame.Y == y)) return;
+        if (ToolbarWindowStyle.Move(Hwnd, x, y)) _dragMoves++;
     }
 
     private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
     {
         if (!_dragging) return;
-        _dragging = false;
+        DragToPointer();
+        StopDrag();
         if (!_closed) Bar.ReleasePointerCapture(e.Pointer);
         e.Handled = true;
         EndDrag("released");
@@ -379,16 +543,24 @@ public sealed partial class SpikeToolbarWindow : Window
 
     private void OnPointerCaptureLost(object sender, PointerRoutedEventArgs e)
     {
-        if (!_dragging) return;
-        _dragging = false;
+        // Without a real capture, the capture goes as soon as the pointer leaves: the poll goes on until the button is up.
+        if (!_dragging || ToolbarWindowStyle.IsPrimaryButtonDown()) return;
+        StopDrag();
         EndDrag("capture lost");
+    }
+
+    /// <summary>Stops the drag (no log): the poll ends with it.</summary>
+    private void StopDrag()
+    {
+        _dragging = false;
+        _dragTimer.Stop();
     }
 
     private void EndDrag(string how)
     {
         if (_closed) return;
         var frame = ToolbarWindowStyle.WindowRect(Hwnd);
-        Log("dragEnded", new() { ["how"] = how, ["x"] = frame.X, ["y"] = frame.Y });
+        Log("dragEnded", new() { ["how"] = how, ["moves"] = _dragMoves, ["x"] = frame.X, ["y"] = frame.Y });
         _handedBack |= ToolbarWindowStyle.HandBackForeground(Hwnd, Source);
     }
 
@@ -419,6 +591,7 @@ public sealed partial class SpikeToolbarWindow : Window
         var scale = _xamlRoot.RasterizationScale;
         if (scale <= 0 || !double.IsFinite(scale)) return;
         _barSize = new Size(Bar.ActualWidth, Bar.ActualHeight);
+        UpdateActivationRegion();
         var width = Pixels(_barSize.Width, scale);
         var height = Pixels(_barSize.Height, scale);
         var frame = ToolbarWindowStyle.WindowRect(Hwnd);
@@ -458,6 +631,12 @@ public sealed partial class SpikeToolbarWindow : Window
     {
         _closed = true;
         IsShown = false;
+        _dragging = false;
+        _dragTimer.Stop();
+        _dragTimer.Tick -= OnDragTick;
+        Activated -= OnActivated;
+        PromptBox.LostFocus -= OnPromptLostFocus;
+        PromptBox.SizeChanged -= OnPromptSizeChanged;
         ImproveButton.Click -= OnButtonClick;
         CopyButton.Click -= OnButtonClick;
         PasteButton.Click -= OnButtonClick;

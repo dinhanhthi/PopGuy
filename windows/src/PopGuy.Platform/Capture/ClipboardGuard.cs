@@ -89,6 +89,26 @@ public static class ClipboardGuard
     /// <summary>A snapshot whose HGLOBAL formats exceed this in total is stored as too large.</summary>
     internal const long MaxSnapshotBytes = 64L * 1024 * 1024;
 
+    /// <summary>A single HGLOBAL format over this is left out of the snapshot (never copied).</summary>
+    internal const long MaxFormatBytes = 16L * 1024 * 1024;
+
+    /// <summary>
+    /// The registered formats OLE puts on the clipboard for its own bookkeeping. "DataObject" and "Ole Private Data"
+    /// point at the owner's IDataObject: copied back after that owner is gone, they make OLE readers (OleGetClipboard,
+    /// so WinForms, WPF, WinUI and Office apps) talk to a dead object and see an empty clipboard or hang. Left out, OLE
+    /// builds its data object from the plain Win32 formats instead.
+    /// </summary>
+    private static readonly string[] OleInternalFormatNames = ["DataObject", "Ole Private Data", "OleClipboardPersistOnFlush"];
+
+    /// <summary>Registered format ids are fixed for the session: the verdict per id, so a snapshot looks each name up once.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<uint, bool> OleInternalFormats = new();
+
+    /// <summary>Registered format ids start here (lower ids are the standard and private formats).</summary>
+    private const uint FirstRegisteredFormat = 0xC000;
+
+    /// <summary>Longer than any name in <see cref="OleInternalFormatNames"/>, so a longer name never matches.</summary>
+    private const int FormatNameCapacity = 64;
+
     private const int OpenAttempts = 10;
     private static readonly TimeSpan OpenRetryDelay = TimeSpan.FromMilliseconds(10);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(10);
@@ -100,7 +120,10 @@ public static class ClipboardGuard
     /// <summary>
     /// Copies the clipboard's contents. Skips CF_BITMAP (Windows synthesizes it from CF_DIB), CF_METAFILEPICT
     /// (synthesized from CF_ENHMETAFILE), CF_PALETTE, owner-display, private and GDI-object formats (none are HGLOBAL
-    /// data). Null if the clipboard could not be opened. The clipboard stays open only while the bytes are copied.
+    /// data), OLE's own registered formats (<see cref="IsOleInternal"/>), and any format over 16 MB. Each format's size
+    /// is checked before its bytes are copied; one that would take the total over 64 MB stops the copy and makes the
+    /// snapshot <see cref="ClipboardSnapshot.IsTooLarge"/>. Null if the clipboard could not be opened. The clipboard
+    /// stays open only while the formats are read and copied.
     /// </summary>
     public static unsafe ClipboardSnapshot? Snapshot()
     {
@@ -121,19 +144,21 @@ public static class ClipboardGuard
                     if (!metafile.IsNull) enhMetaFile = PInvoke.CopyEnhMetaFile(new HENHMETAFILE(metafile.Value), default(PCWSTR));
                     continue;
                 }
-                if (IsSkipped(format)) continue;
+                if (IsSkipped(format) || IsOleInternal(format)) continue;
 
                 // Null: a delayed render the owner refused.
                 var handle = PInvoke.GetClipboardData(format);
                 if (handle.IsNull) continue;
                 var memory = new HGLOBAL(handle.Value);
                 var size = (long)PInvoke.GlobalSize(memory);
-                total += size;
-                if (total > MaxSnapshotBytes)
+                if (size > MaxFormatBytes) continue;
+                if (total + size > MaxSnapshotBytes)
                 {
+                    total += size;
                     tooLarge = true;
                     break;
                 }
+                total += size;
                 var source = PInvoke.GlobalLock(memory);
                 if (source is null) continue;
                 try
@@ -294,6 +319,21 @@ public static class ClipboardGuard
         || format is >= (uint)CLIPBOARD_FORMAT.CF_OWNERDISPLAY and <= (uint)CLIPBOARD_FORMAT.CF_DSPENHMETAFILE
         || format is >= (uint)CLIPBOARD_FORMAT.CF_PRIVATEFIRST and <= (uint)CLIPBOARD_FORMAT.CF_GDIOBJLAST;
 
+    /// <summary>A registered format of OLE's own (<see cref="OleInternalFormatNames"/>), never part of a snapshot.</summary>
+    private static bool IsOleInternal(uint format) =>
+        format >= FirstRegisteredFormat && OleInternalFormats.GetOrAdd(format, static id =>
+        {
+            Span<char> buffer = stackalloc char[FormatNameCapacity];
+            var length = PInvoke.GetClipboardFormatName(id, buffer);
+            if (length <= 0) return false;
+            var name = buffer[..length];
+            foreach (var oleName in OleInternalFormatNames)
+            {
+                if (name.Equals(oleName, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        });
+
     /// <summary>The registered formats that keep text out of clipboard history and monitors.</summary>
     private static class RegisteredFormats
     {
@@ -310,14 +350,24 @@ public static class ClipboardGuard
 /// <para>
 /// A clipboard format listener on its own message-only window and dedicated thread (never the hook thread, so a slow
 /// or delayed-render snapshot cannot stall the hooks) posts each update's sequence number to a worker, which takes a
-/// full snapshot. One snapshot is taken at creation, so the first chord after launch can restore. A snapshot whose
-/// sequence number changed by the time the clipboard was closed is torn and dropped. An entry is evicted 5 s after a
-/// newer one replaced it, except the newest entry from before the latest arming tap, which stays until the next one.
+/// full snapshot once the burst is over: 150 ms after the last update (at most 1 s after the first), and only if the
+/// sequence number is still the last one posted. Apps often change the clipboard twice in a row (an OLE app sets its
+/// data object, then flushes it into real formats), and a snapshot in between would hold the clipboard open while the
+/// app tries to open it again, which then fails. One snapshot is taken at creation, so the first chord after launch
+/// can restore. A snapshot whose sequence number changed by the time the clipboard was closed is torn and dropped. An
+/// entry is evicted 5 s after a newer one replaced it, except the newest entry from before the latest arming tap,
+/// which stays until the next one.
 /// </para>
 /// </summary>
 public sealed class ClipboardHistoryCache : IDisposable
 {
     private static readonly TimeSpan MaxAge = TimeSpan.FromSeconds(5);
+
+    /// <summary>The snapshot waits until no update came for this long.</summary>
+    private static readonly TimeSpan Debounce = TimeSpan.FromMilliseconds(150);
+
+    /// <summary>An app that changes the clipboard without a pause still gets snapshotted this long after the first update.</summary>
+    private static readonly TimeSpan MaxDebounce = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan WorkerStopTimeout = TimeSpan.FromSeconds(2);
 
     private readonly Action<string>? _log;
@@ -404,8 +454,24 @@ public sealed class ClipboardHistoryCache : IDisposable
 
     private async Task ProcessUpdatesAsync()
     {
-        await foreach (var sequenceNumber in _updates.Reader.ReadAllAsync().ConfigureAwait(false))
+        var reader = _updates.Reader;
+        while (await reader.WaitToReadAsync().ConfigureAwait(false))
         {
+            // The burst: every update until none came for 150 ms (or 1 s passed); the last one is snapshotted.
+            uint sequenceNumber = 0;
+            while (reader.TryRead(out var update)) sequenceNumber = update;
+            var burst = Stopwatch.StartNew();
+            while (burst.Elapsed < MaxDebounce)
+            {
+                await Task.Delay(Debounce).ConfigureAwait(false);
+                var more = false;
+                while (reader.TryRead(out var update))
+                {
+                    sequenceNumber = update;
+                    more = true;
+                }
+                if (!more) break;
+            }
             try
             {
                 Capture(sequenceNumber);

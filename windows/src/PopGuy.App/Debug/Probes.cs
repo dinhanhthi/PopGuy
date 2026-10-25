@@ -331,9 +331,10 @@ internal sealed class SpikeSession
     }
 
     /// <summary>
-    /// Captures the foreground app's selection and shows the toolbar. UI Automation first; when unavailable, a Ctrl+C
-    /// through the clipboard (restored 300 ms later). For the chord, the clipboard from before the user's first Ctrl+C
-    /// comes back 300 ms after the capture (the cache's snapshot at the arming sequence number).
+    /// Captures the foreground app's selection and shows the toolbar. UI Automation first; when it captures nothing
+    /// (unavailable or empty), a Ctrl+C through the clipboard (restored 300 ms later). For the chord, the clipboard from
+    /// before the user's first Ctrl+C comes back 300 ms after the capture (the cache's snapshot at the arming sequence
+    /// number).
     /// </summary>
     private async Task CaptureAsync(string kind, uint? armingSequence, bool? injected)
     {
@@ -350,7 +351,8 @@ internal sealed class SpikeSession
         string? text;
         ClipboardSnapshot? own = null;
         bool? copySent = null;
-        if (selection.Status != UiaCaptureStatus.Unavailable)
+        // Empty too: Monaco (VS Code) shows UI Automation only its hidden textarea, which reads as an empty selection.
+        if (selection.Status == UiaCaptureStatus.Captured)
         {
             method = "uia";
             text = selection.Text;

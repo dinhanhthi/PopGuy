@@ -3,8 +3,10 @@
     Phase 3 spike toolbar (DEBUG harness, "spike" in Probes.cs): checks that a WinUI window can sit at the pointer
     without taking the foreground from the app whose text is selected. The bar sizes to its content inside a Canvas,
     so its size is the window's. Its buttons never take the focus (AllowFocusOnInteraction): focus would activate the
-    window. Only the Prompt box activates it, for typing. The one tooltip is a custom Popup (never the built-in tooltips),
-    unconstrained, so it opens below the window as its own window.
+    window. Only the Prompt box activates it, for typing (its bounds are the window's activation region). The bar's
+    background is Transparent, never unset: an unset background does not hit-test, and the padding is the drag handle.
+    The one tooltip is a custom Popup (never the built-in tooltips), unconstrained, so it opens below the window as its
+    own window.
 -->
 <Window
     x:Class="PopGuy.Debug.SpikeToolbarWindow"

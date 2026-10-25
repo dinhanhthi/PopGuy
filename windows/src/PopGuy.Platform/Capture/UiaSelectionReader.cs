@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using Windows.Win32;
@@ -38,15 +39,32 @@ public static class UiaSelectionReader
     /// <summary>UI Automation blocks while the target app is hung; the read gives up after this.</summary>
     private static readonly TimeSpan Timeout = TimeSpan.FromMilliseconds(1500);
 
+    /// <summary>A first read that comes back unavailable is tried once more after this.</summary>
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(150);
+
     /// <summary>
     /// Reads the focused selection on a dedicated MTA thread and waits for it up to 1.5 s (then
-    /// <see cref="UiaCaptureStatus.Unavailable"/>; the abandoned thread ends whenever UI Automation returns). Blocks
-    /// the caller for that long at most: call it off the UI thread.
+    /// <see cref="UiaCaptureStatus.Unavailable"/>; the abandoned thread ends whenever UI Automation returns). A first
+    /// read that is <see cref="UiaCaptureStatus.Unavailable"/> is tried once more 150 ms later, within the same 1.5 s:
+    /// Chromium apps (Chrome, Edge, Electron) turn their accessibility tree on only when a UI Automation client first
+    /// asks, so the first read after launch finds no text pattern. Blocks the caller for 1.5 s at most: call it off the
+    /// UI thread.
     /// </summary>
     public static UiaSelection ReadFocused()
     {
         UiaSelection? result = null;
-        var thread = new Thread(() => result = ReadCore()) { IsBackground = true, Name = "PopGuy UIA read" };
+        var watch = Stopwatch.StartNew();
+        var thread = new Thread(() =>
+        {
+            var first = ReadCore();
+            if (first.Status != UiaCaptureStatus.Unavailable || watch.Elapsed + RetryDelay >= Timeout)
+            {
+                result = first;
+                return;
+            }
+            Thread.Sleep(RetryDelay);
+            result = ReadCore();
+        }) { IsBackground = true, Name = "PopGuy UIA read" };
         thread.SetApartmentState(ApartmentState.MTA);
         thread.Start();
         return thread.Join(Timeout) ? result ?? UiaSelection.Unavailable : UiaSelection.Unavailable;
