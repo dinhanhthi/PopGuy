@@ -82,6 +82,22 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(["{", corrupt], backups);
     }
 
+    // Regression: the nullable annotations don't cover collection elements, so a null element must count as corrupt
+    // instead of crashing startup in the layout reconciliation.
+    [Theory]
+    [InlineData("""{ "customActions": [null] }""")]
+    [InlineData("""{ "shortcutBindings": [null] }""")]
+    [InlineData("""{ "ttsProviderConfigs": { "openai": null } }""")]
+    public void NullListElementCountsAsCorrupt(string json)
+    {
+        WriteSettingsFile(json);
+
+        var s = new SettingsStore(_paths).Current;
+
+        Assert.Empty(s.CustomActions);
+        Assert.Single(Directory.GetFiles(_paths.DataDirectory, "settings.corrupt-*.json"));
+    }
+
     // Regression: a file another process holds open (antivirus, a sync tool) is not corrupt. Startup must not throw, and
     // the file must not be renamed or overwritten by the first-launch save.
     [Fact]

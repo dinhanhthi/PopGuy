@@ -106,7 +106,8 @@ public sealed class SettingsStore
         try
         {
             // ReadAllText drops a UTF-8 BOM, which the JSON reader refuses.
-            if (JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_path), PopGuyJson.Options) is { } loaded)
+            if (JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_path), PopGuyJson.Options) is { } loaded
+                && !HasNullElement(loaded))
                 return loaded;
         }
         catch (JsonException)
@@ -121,6 +122,13 @@ public sealed class SettingsStore
         keepFile = !BackUpCorruptFile();
         return new AppSettings();
     }
+
+    // The nullable annotations don't cover collection elements or dictionary values: a null there is corrupt too.
+    private static bool HasNullElement(AppSettings s) =>
+        s.CustomActions.Contains(null!) || s.ShortcutBindings.Contains(null!) || s.BabylonDictionaries.Contains(null!)
+        || s.TtsProviderConfigs.Values.Contains(null!) || s.IgnoredAppExeNames.Contains(null!)
+        || s.IgnoredDomains.Contains(null!) || s.ActionOrder.Contains(null!) || s.LabeledActionIds.Contains(null!)
+        || s.PrincipalActionIds?.Contains(null!) == true;
 
     private bool BackUpCorruptFile()
     {

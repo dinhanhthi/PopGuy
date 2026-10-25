@@ -159,7 +159,9 @@ public sealed class HistoryStore
     {
         try
         {
-            return JsonSerializer.Deserialize<List<HistoryRecord>>(File.ReadAllText(_path), PopGuyJson.Options) ?? [];
+            // A null element is not caught by the nullable annotations; drop it.
+            var records = JsonSerializer.Deserialize<List<HistoryRecord?>>(File.ReadAllText(_path), PopGuyJson.Options) ?? [];
+            return [.. records.OfType<HistoryRecord>()];
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
         {
