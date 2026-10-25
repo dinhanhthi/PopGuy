@@ -30,6 +30,19 @@ public enum UiaCaptureStatus
     PasswordField,
 }
 
+/// <summary>What the cheap probe (<see cref="UiaSelectionReader.Probe"/>) found, without reading any text.</summary>
+public enum UiaProbeResult
+{
+    /// <summary>The focused element has a non-empty text selection.</summary>
+    Present,
+
+    /// <summary>The focused element has no selection (or is a password field, which is never read).</summary>
+    Absent,
+
+    /// <summary>No focused element, no text pattern, a UI Automation error, or no answer within the timeout.</summary>
+    Inconclusive,
+}
+
 /// <summary>The focused element's selection, read through UI Automation.</summary>
 /// <param name="Status">How the read ended; <paramref name="Text"/> is empty unless <see cref="UiaCaptureStatus.Captured"/>.</param>
 /// <param name="Text">The selected text (ranges joined with new lines).</param>
@@ -76,6 +89,9 @@ public static class UiaSelectionReader
     /// <summary>A first read that comes back unavailable is tried once more after this.</summary>
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(150);
 
+    /// <summary>The probe runs on every passive trigger, so it gives up sooner than a full read.</summary>
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromMilliseconds(500);
+
     /// <summary>
     /// Reads the focused selection on a dedicated MTA thread and waits for it up to 1.5 s (then
     /// <see cref="UiaCaptureStatus.Unavailable"/> with <see cref="UiaSelection.ReadFailed"/>; the abandoned thread ends
@@ -87,22 +103,71 @@ public static class UiaSelectionReader
     /// </summary>
     public static UiaSelection ReadFocused()
     {
-        UiaSelection? result = null;
         var watch = Stopwatch.StartNew();
-        var thread = new Thread(() =>
+        return RunOnMtaThread("PopGuy UIA read", Timeout, UiaSelection.Failed, () =>
         {
             var first = ReadCore();
-            if (first.Status != UiaCaptureStatus.Unavailable || watch.Elapsed + RetryDelay >= Timeout)
-            {
-                result = first;
-                return;
-            }
+            if (first.Status != UiaCaptureStatus.Unavailable || watch.Elapsed + RetryDelay >= Timeout) return first;
             Thread.Sleep(RetryDelay);
-            result = ReadCore();
-        }) { IsBackground = true, Name = "PopGuy UIA read" };
+            return ReadCore();
+        });
+    }
+
+    /// <summary>
+    /// The cheap probe for the passive pipeline (spec-1 §2.2): whether the focused element has a selection, from the
+    /// selection's endpoints only (its text is never read). No retry; <see cref="UiaProbeResult.Inconclusive"/> after
+    /// 500 ms. Blocks the caller for 500 ms at most: call it off the UI thread.
+    /// </summary>
+    public static UiaProbeResult Probe() =>
+        RunOnMtaThread("PopGuy UIA probe", ProbeTimeout, UiaProbeResult.Inconclusive, ProbeCore);
+
+    /// <summary>
+    /// Runs <paramref name="read"/> on a dedicated MTA thread and waits up to <paramref name="timeout"/>; then
+    /// <paramref name="onTimeout"/> (the abandoned thread ends whenever UI Automation returns).
+    /// </summary>
+    private static T RunOnMtaThread<T>(string name, TimeSpan timeout, T onTimeout, Func<T> read)
+    {
+        var result = onTimeout;
+        var thread = new Thread(() => result = read()) { IsBackground = true, Name = name };
         thread.SetApartmentState(ApartmentState.MTA);
         thread.Start();
-        return thread.Join(Timeout) ? result ?? UiaSelection.Failed : UiaSelection.Failed;
+        return thread.Join(timeout) ? result : onTimeout;
+    }
+
+    private static UiaProbeResult ProbeCore()
+    {
+        IUIAutomation? automation = null;
+        IUIAutomationElement? element = null;
+        IUIAutomationTextPattern? textPattern = null;
+        IUIAutomationTextRangeArray? ranges = null;
+        IUIAutomationTextRange? range = null;
+        try
+        {
+            automation = (IUIAutomation)new CUIAutomation8();
+            element = automation.GetFocusedElement();
+            if (element is null) return UiaProbeResult.Inconclusive;
+            if (element.CurrentIsPassword) return UiaProbeResult.Absent;
+            textPattern = element.GetCurrentPattern(UIA_PATTERN_ID.UIA_TextPatternId) as IUIAutomationTextPattern;
+            if (textPattern is null) return UiaProbeResult.Inconclusive;
+            ranges = textPattern.GetSelection();
+            if (ranges is null || ranges.Length == 0) return UiaProbeResult.Absent;
+            range = ranges.GetElement(0);
+            var length = range.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start, range, TextPatternRangeEndpoint.TextPatternRangeEndpoint_End);
+            return length != 0 ? UiaProbeResult.Present : UiaProbeResult.Absent;
+        }
+        catch (Exception)
+        {
+            // As in ReadCore: COM errors map to many exception types, and none may escape this thread.
+            return UiaProbeResult.Inconclusive;
+        }
+        finally
+        {
+            Release(range);
+            Release(ranges);
+            Release(textPattern);
+            Release(element);
+            Release(automation);
+        }
     }
 
     private static UiaSelection ReadCore()

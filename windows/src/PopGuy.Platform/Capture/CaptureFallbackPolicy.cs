@@ -10,7 +10,8 @@ namespace PopGuy.Platform.Capture;
 /// <param name="Reason">
 /// "captured" (UI Automation read it: no fallback needed), "passwordField", "console" (a console or terminal: a copy
 /// key there may interrupt the running command), "remoteDesktop" (a remote desktop or VM viewer, which forwards the
-/// keys to a remote session that may be a terminal), "integratedTerminal" (an editor's xterm.js terminal has the
+/// keys to a remote session that may be a terminal), "unknownProcess" (the process name could not be read, and the
+/// window class is not one known to be safe), "integratedTerminal" (an editor's xterm.js terminal has the
 /// focus), "uiaReadFailed" (the UI Automation read failed outright: nothing is known about the focused element),
 /// "unknownFocusInEditor" (an editor that hosts xterm.js terminals, with no focused-element hint to rule one out),
 /// "unavailable" (allowed: no text pattern), "emptyKnownEditor" (allowed: an editor that hides its selection from UI
@@ -29,8 +30,11 @@ public readonly record struct CaptureFallbackDecision(bool Allowed, string Reaso
 /// conhost, WindowsTerminal, OpenConsole, cmd, powershell, pwsh, wsl, alacritty, wezterm-gui, mintty, putty, kitty
 /// (KiTTY and kitty), MobaXterm, ConEmu, ConEmu64, ConEmuC, ConEmuC64, Tabby, Hyper, SecureCRT and Xshell;</item>
 /// <item>never in a remote desktop or VM viewer, which forwards the keys to a remote session (the window class
-/// TscShellContainerClass, or the processes mstsc, vmconnect, vmware, vmware-vmx, VirtualBoxVM and
-/// prl_client_app);</item>
+/// TscShellContainerClass, or the processes mstsc, vmconnect, vmware, vmware-vmx, VirtualBoxVM, prl_client_app,
+/// Citrix's wfica32, CDViewer, CitrixReceiver and SelfService, AnyDesk, TeamViewer, and Parsec's parsecd);</item>
+/// <item>never when the process name could not be read, unless the window class is a known-safe app's (Notepad,
+/// WordPad, Word, Excel, PowerPoint, Outlook, Firefox): the name is what rules out most terminals and remote
+/// sessions;</item>
 /// <item>never when the focused element is an xterm.js terminal (its helper textarea: the UI Automation AutomationId
 /// or ClassName contains "xterm"), as in VS Code's or Cursor's integrated terminal;</item>
 /// <item>never when the UI Automation read failed outright (<see cref="UiaSelection.ReadFailed"/>), and never in the
@@ -63,6 +67,13 @@ public static class CaptureFallbackPolicy
     private static readonly HashSet<string> RemoteDesktopProcesses = new(StringComparer.OrdinalIgnoreCase)
     {
         "mstsc", "vmconnect", "vmware", "vmware-vmx", "VirtualBoxVM", "prl_client_app",
+        "wfica32", "CDViewer", "CitrixReceiver", "SelfService", "AnyDesk", "TeamViewer", "parsecd",
+    };
+
+    /// <summary>Top-level window classes of apps that are neither terminals nor remote sessions, whatever their process.</summary>
+    private static readonly HashSet<string> KnownSafeWindowClasses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Notepad", "WordPadClass", "OpusApp", "XLMAIN", "PPTFrameClass", "rctrl_renwnd32", "MozillaWindowClass",
     };
 
     /// <summary>xterm.js's helper textarea (VS Code's, Cursor's integrated terminal) shows this in its AutomationId or ClassName.</summary>
@@ -78,7 +89,7 @@ public static class CaptureFallbackPolicy
     /// <summary>
     /// The decision for UI Automation's <paramref name="status"/> in the foreground window of class
     /// <paramref name="windowClass"/>, owned by the process <paramref name="processName"/> (null when unknown: then
-    /// only the window class can rule out a console, and an empty selection is refused). Pure: no system calls.
+    /// refused unless the window class is known to be safe). Pure: no system calls.
     /// </summary>
     /// <param name="focusedElementHint">
     /// The focused element's UI Automation AutomationId and ClassName (<see cref="UiaSelection.FocusedElementHint"/>),
@@ -94,6 +105,10 @@ public static class CaptureFallbackPolicy
         if (windowClass is not null && ConsoleWindowClasses.Contains(windowClass)) return new(false, "console");
         if (processName is not null && ConsoleProcesses.Contains(processName)) return new(false, "console");
         if (windowClass is not null && RemoteDesktopWindowClasses.Contains(windowClass)) return new(false, "remoteDesktop");
+        if (processName is null && (windowClass is null || !KnownSafeWindowClasses.Contains(windowClass)))
+        {
+            return new(false, "unknownProcess");
+        }
         if (processName is not null && RemoteDesktopProcesses.Contains(processName)) return new(false, "remoteDesktop");
         if (focusedElementHint is not null && focusedElementHint.Contains(XtermMarker, StringComparison.OrdinalIgnoreCase))
         {

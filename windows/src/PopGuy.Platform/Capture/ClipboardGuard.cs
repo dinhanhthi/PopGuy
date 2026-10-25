@@ -55,9 +55,9 @@ public sealed class ClipboardSnapshot : IDisposable
     public bool IsTooLarge { get; }
 
     /// <summary>
-    /// Formats with data that the snapshot left out: over 16 MB, or unreadable (the memory could not be locked). A
-    /// restore would lose them, so a snapshot with any is never restored. Not counted: the formats Windows synthesizes
-    /// and OLE's own (never needed back).
+    /// Formats with data that the snapshot left out: unreadable (the memory could not be locked, the metafile could not
+    /// be copied). A restore would lose them, so a snapshot with any is never restored. Not counted: the formats Windows
+    /// synthesizes and OLE's own (never needed back).
     /// </summary>
     public int SkippedFormatCount { get; }
 
@@ -173,8 +173,8 @@ public static class ClipboardGuard
     /// <summary>A snapshot whose HGLOBAL formats exceed this in total is stored as too large.</summary>
     internal const long MaxSnapshotBytes = 64L * 1024 * 1024;
 
-    /// <summary>A single HGLOBAL format over this is left out of the snapshot (never copied), and <see cref="ReadText"/> refuses text over it.</summary>
-    internal const long MaxFormatBytes = 16L * 1024 * 1024;
+    /// <summary><see cref="ReadText"/> refuses text over this.</summary>
+    internal const long MaxTextBytes = 16L * 1024 * 1024;
 
     /// <summary>
     /// The registered formats OLE puts on the clipboard for its own bookkeeping. "DataObject" and "Ole Private Data"
@@ -203,10 +203,11 @@ public static class ClipboardGuard
 
     /// <summary>
     /// Copies the clipboard's contents. Skips CF_BITMAP (Windows synthesizes it from CF_DIB), CF_METAFILEPICT
-    /// (synthesized from CF_ENHMETAFILE), CF_PALETTE, owner-display, private and GDI-object formats (none are HGLOBAL
-    /// data), OLE's own registered formats (<see cref="IsOleInternal"/>), and any format over 16 MB (counted in
-    /// <see cref="ClipboardSnapshot.SkippedFormatCount"/>). Each format's size is checked before its bytes are copied;
-    /// one that would take the total over 64 MB stops the copy and makes the snapshot
+    /// (synthesized from CF_ENHMETAFILE), CF_DIB when CF_DIBV5 is there (Windows synthesizes CF_DIB and CF_BITMAP from
+    /// CF_DIBV5, so a 4K screenshot is copied once, about 33 MB, not twice), CF_PALETTE, owner-display, private and
+    /// GDI-object formats (none are HGLOBAL data), and OLE's own registered formats (<see cref="IsOleInternal"/>).
+    /// Each format's size is checked before its bytes are copied; one that would take the total over 64 MB stops the
+    /// copy and makes the snapshot
     /// <see cref="ClipboardSnapshot.IsTooLarge"/>. Null if the clipboard could not be opened. The clipboard stays open
     /// only while the formats are read and copied.
     /// <para>
@@ -242,6 +243,7 @@ public static class ClipboardGuard
                 available.Add(format);
             }
             excluded = IsExcludedFromMonitoring(available);
+            var hasDibV5 = available.Contains((uint)CLIPBOARD_FORMAT.CF_DIBV5);
             if (excluded && omitExcludedData)
             {
                 return new ClipboardSnapshot(sequenceNumber, [], default, 0, isTooLarge: false, 0, isExcludedFromMonitoring: true, isDataOmitted: true);
@@ -257,17 +259,13 @@ public static class ClipboardGuard
                     continue;
                 }
                 if (IsSkipped(format) || IsOleInternal(format)) continue;
+                if (format == (uint)CLIPBOARD_FORMAT.CF_DIB && hasDibV5) continue;
 
                 // Null: a delayed render the owner refused (there is no data to lose).
                 var handle = PInvoke.GetClipboardData(format);
                 if (handle.IsNull) continue;
                 var memory = new HGLOBAL(handle.Value);
                 var size = (long)PInvoke.GlobalSize(memory);
-                if (size > MaxFormatBytes)
-                {
-                    skipped++;
-                    continue;
-                }
                 if (total + size > MaxSnapshotBytes)
                 {
                     total += size;
@@ -414,7 +412,7 @@ public static class ClipboardGuard
             if (handle.IsNull) return null;
             var memory = new HGLOBAL(handle.Value);
             var size = (long)PInvoke.GlobalSize(memory);
-            if (size > MaxFormatBytes) return null;
+            if (size > MaxTextBytes) return null;
             var source = (char*)PInvoke.GlobalLock(memory);
             if (source is null) return null;
             try
@@ -558,12 +556,26 @@ public static class ClipboardGuard
 /// <item><see cref="Restore"/> after the delay: it puts the snapshot back only if the clipboard still holds PopGuy's
 /// change, never over a newer copy by the user.</item>
 /// </list>
-/// Dispose zeroes the snapshot; it never restores by itself. Any thread, one at a time.
+/// Dispose zeroes the snapshot; it never restores by itself. Any thread.
+/// <para>
+/// One transaction at a time per process: <see cref="TryBegin"/> waits for the previous one to be disposed, so a paste
+/// can never snapshot (and later restore) the clipboard while a capture's synthetic copy is still on it.
+/// </para>
 /// </summary>
 public sealed class ClipboardTransaction : IDisposable
 {
+    /// <summary>
+    /// Held from <see cref="TryBegin"/> to <see cref="Dispose"/>. Internal so a clipboard restore outside a transaction
+    /// (the Ctrl+C+C chord's) can take it too.
+    /// </summary>
+    internal static readonly SemaphoreSlim Gate = new(1, 1);
+
+    /// <summary>How long <see cref="TryBegin"/> waits for the running transaction (a capture lasts about 1.3 s at most).</summary>
+    private static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(2);
+
     private readonly ClipboardSnapshot _snapshot;
     private uint? _ownSequence;
+    private int _disposed;
 
     private ClipboardTransaction(ClipboardSnapshot snapshot) => _snapshot = snapshot;
 
@@ -574,21 +586,38 @@ public sealed class ClipboardTransaction : IDisposable
     public long SavedBytes => _snapshot.TotalBytes;
 
     /// <summary>
-    /// Snapshots the clipboard. False, with <paramref name="refusal"/> "clipboardBusy" (it could not be opened),
-    /// "tooLarge" (over 64 MB) or "formatsSkipped" (a format over 16 MB or unreadable), when the user's clipboard
-    /// could not be brought back: the caller must then leave the clipboard alone (no write, no synthetic Ctrl+Insert copy).
+    /// Waits up to 2 s for the running transaction to end, then snapshots the clipboard. False, with
+    /// <paramref name="refusal"/> "transactionInProgress" (another transaction is still running), "clipboardBusy" (it
+    /// could not be opened), "tooLarge" (over 64 MB) or "formatsSkipped" (a format unreadable), when the user's
+    /// clipboard could not be brought back: the caller must then leave the clipboard alone (no write, no synthetic
+    /// Ctrl+Insert copy). Blocks: call it off the UI thread.
     /// </summary>
     public static bool TryBegin([NotNullWhen(true)] out ClipboardTransaction? transaction, [NotNullWhen(false)] out string? refusal)
     {
         transaction = null;
-        var snapshot = ClipboardGuard.Snapshot();
-        refusal = snapshot is null ? "clipboardBusy"
-            : snapshot.IsTooLarge ? "tooLarge"
-            : snapshot.SkippedFormatCount > 0 ? "formatsSkipped"
-            : null;
+        if (!Gate.Wait(GateTimeout))
+        {
+            refusal = "transactionInProgress";
+            return false;
+        }
+        ClipboardSnapshot? snapshot = null;
+        try
+        {
+            snapshot = ClipboardGuard.Snapshot();
+            refusal = snapshot is null ? "clipboardBusy"
+                : snapshot.IsTooLarge ? "tooLarge"
+                : snapshot.SkippedFormatCount > 0 ? "formatsSkipped"
+                : null;
+        }
+        catch
+        {
+            Gate.Release();
+            throw;
+        }
         if (refusal is not null)
         {
             snapshot?.Dispose();
+            Gate.Release();
             return false;
         }
         transaction = new ClipboardTransaction(snapshot!);
@@ -628,8 +657,13 @@ public sealed class ClipboardTransaction : IDisposable
             : ClipboardRestoreResult.SkippedClipboardChanged;
     }
 
-    /// <summary>Zeroes and frees the snapshot. Does not restore.</summary>
-    public void Dispose() => _snapshot.Dispose();
+    /// <summary>Zeroes and frees the snapshot and lets the next transaction begin. Does not restore.</summary>
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
+        _snapshot.Dispose();
+        Gate.Release();
+    }
 }
 
 /// <summary>
