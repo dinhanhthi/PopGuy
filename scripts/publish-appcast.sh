@@ -47,7 +47,7 @@ cp build/appcast-archives/appcast.xml appcast.xml
 
 echo "==> Committing and pushing appcast.xml"
 git add appcast.xml
-git commit -m "release: appcast v$VERSION"
+git commit -m "release: appcast v$VERSION" -- appcast.xml
 git push
 
 echo
