@@ -33,9 +33,9 @@ echo "Last tag: $LAST_TAG"
 # Commits since last tag — exclude website/, appcast, version bump, and meta commits
 if [ -n "$LAST_TAG" ]; then
   git log "$LAST_TAG..HEAD" --oneline --no-merges \
-    -- ':!website/' ':!appcast.xml'
+    -- ':!website/' ':!appcast.xml' ':!windows/' ':!.github/workflows/windows*.yml'
 else
-  git log --oneline --no-merges -- ':!website/' ':!appcast.xml'
+  git log --oneline --no-merges -- ':!website/' ':!appcast.xml' ':!windows/' ':!.github/workflows/windows*.yml'
 fi
 ```
 
@@ -84,7 +84,7 @@ Rules:
 
 Get current version from project:
 ```bash
-grep "MARKETING_VERSION" PopGuy.xcodeproj/project.pbxproj | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'
+grep "MARKETING_VERSION" macos/PopGuy.xcodeproj/project.pbxproj | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'
 ```
 
 Compute the new version from current + bump level and print it (no confirmation — continue
@@ -130,7 +130,7 @@ record, then continue — do not wait for review.
 ### Step B4: Update files
 
 
-**1. Update CHANGELOG.md** — prepend the new `## [X.Y.Z]` section after `## [Unreleased]`.
+**1. Update macos/CHANGELOG.md** — prepend the new `## [X.Y.Z]` section after `## [Unreleased]`.
 Keep existing entries intact.
 
 **2. Bump version** using the project script:
@@ -140,7 +140,7 @@ scripts/bump-version.sh X.Y.Z
 This edits `MARKETING_VERSION` and increments `CURRENT_PROJECT_VERSION` in
 `project.pbxproj`. Verify the diff:
 ```bash
-git diff PopGuy.xcodeproj/project.pbxproj
+git diff macos/PopGuy.xcodeproj/project.pbxproj
 ```
 
 ### Step B5: Hand off to cf-ship
@@ -149,8 +149,8 @@ Proceed with the **standard cf-ship workflow** (verify → commit → push).
 Use `release: vX.Y.Z` as the commit hint/message.
 
 **Files to stage:**
-- `CHANGELOG.md`
-- `PopGuy.xcodeproj/project.pbxproj`
+- `macos/CHANGELOG.md`
+- `macos/PopGuy.xcodeproj/project.pbxproj`
 
 ---
 
@@ -205,5 +205,5 @@ Shipped (local flow):
 - **If a step is unclear, pick the most conservative option and continue** (e.g. PATCH over
   MINOR). Mention the choice in the final summary, then update this SKILL.md to encode it so
   the same doubt never comes up again.
-- **Only commit these files per release:** `CHANGELOG.md`, `PopGuy.xcodeproj/project.pbxproj`
+- **Only commit these files per release:** `macos/CHANGELOG.md`, `macos/PopGuy.xcodeproj/project.pbxproj`
   (and `appcast.xml` in Step A3). Never stage build artifacts, secrets, or `ExportOptions.plist`.

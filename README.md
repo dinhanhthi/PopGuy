@@ -51,14 +51,14 @@ plaintext.
 ```sh
 git clone https://github.com/dinhanhthi/PopGuy.git
 cd PopGuy
-open PopGuy.xcodeproj      # press ▶ to run
+open macos/PopGuy.xcodeproj      # press ▶ to run
 ```
 
 Headless build / test:
 
 ```sh
-xcodebuild build -scheme PopGuy -destination 'platform=macOS'
-xcodebuild test  -scheme PopGuy -destination 'platform=macOS'
+xcodebuild build -project macos/PopGuy.xcodeproj -scheme PopGuy -destination 'platform=macOS'
+xcodebuild test  -project macos/PopGuy.xcodeproj -scheme PopGuy -destination 'platform=macOS'
 ```
 
 Then grant **Accessibility** (above) and add your provider API keys in **PopGuy → Settings**.
@@ -76,6 +76,14 @@ time. To make it stick, sign with a stable local certificate:
 
 This is a local development cert only — **not** a Developer ID, and no Apple Developer
 Program membership is required.
+
+## Repository layout
+
+- `macos/` — the macOS app (Xcode project, sources, tests, `CHANGELOG.md`)
+- `windows/` — the Windows port (coming)
+- `website/` — the landing page and docs site
+- `scripts/` — macOS release scripts
+- `assets/` — logos and artwork (app icon, README images)
 
 ## Contributing
 

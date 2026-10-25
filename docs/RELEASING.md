@@ -20,7 +20,7 @@ stable URL and lists each build with an EdDSA signature.
 | --------------------------------------------- | --------------------------------------------------------------------------------- |
 | Repo                                          | `https://github.com/dinhanhthi/PopGuy`                                            |
 | Apple Team ID                                 | `86H6CNLN4C`                                                                      |
-| Feed URL (`SUFeedURL` in `PopGuy/Info.plist`) | `https://dinhanhthi.github.io/PopGuy/appcast.xml`                                 |
+| Feed URL (`SUFeedURL` in `macos/PopGuy/Info.plist`) | `https://dinhanhthi.github.io/PopGuy/appcast.xml`                                 |
 | Sparkle compare key                           | `CFBundleVersion` (= `CURRENT_PROJECT_VERSION`) — **must increase every release** |
 | Marketing version                             | `CFBundleShortVersionString` (= `MARKETING_VERSION`) — user-facing                |
 
@@ -126,7 +126,7 @@ Generate the keypair once:
 ```
 
 - It stores the **private** key in your **login Keychain** (never on disk, never in git).
-- It prints the **public** key. Copy it into `PopGuy/Info.plist`, replacing the
+- It prints the **public** key. Copy it into `macos/PopGuy/Info.plist`, replacing the
 placeholder `REPLACE_WITH_generate_keys_OUTPUT` (and delete the `TODO` comment above it).
 
 > **Until the real public key replaces the placeholder, the updater is inert** — that
@@ -207,7 +207,7 @@ bundles) are set to the same numbers — test-bundle versions are cosmetic.
 Confirm and commit the bump:
 
 ```sh
-git diff PopGuy.xcodeproj/project.pbxproj
+git diff macos/PopGuy.xcodeproj/project.pbxproj
 ```
 
 ---
@@ -223,7 +223,7 @@ git diff PopGuy.xcodeproj/project.pbxproj
 Archive the Release build:
 
 ```sh
-xcodebuild -project PopGuy.xcodeproj -scheme PopGuy -configuration Release \
+xcodebuild -project macos/PopGuy.xcodeproj -scheme PopGuy -configuration Release \
   -archivePath build/PopGuy.xcarchive archive
 ```
 
@@ -294,7 +294,7 @@ spctl -a -vv -t exec PopGuy.app    # should report: accepted, source=Notarized D
 
 ## 3. Write the changelog entry
 
-`CHANGELOG.md` (repo root, tracked) is the **single source of truth**
+`macos/CHANGELOG.md` (tracked) is the **single source of truth**
 for release notes: the same
 section feeds both the GitHub release body and the Sparkle appcast notes. Add a section
 for this version in [Keep a Changelog](https://keepachangelog.com/) format:
@@ -337,7 +337,7 @@ It:
 - derives `VERSION` from `MARKETING_VERSION` → `TAG=vVERSION` (tag always == app version),
 - checks you are on `main`, the zip filename contains `VERSION`, `gh` is authenticated,
 and the tag does not already exist (local + origin),
-- extracts the `## [VERSION]` section from `CHANGELOG.md` (repo root; fails if missing/empty),
+- extracts the `## [VERSION]` section from `macos/CHANGELOG.md` (fails if missing/empty),
 - writes it to `PopGuy-VERSION.md` next to the zip — the notes file `generate_appcast`
 embeds into the appcast in §5,
 - after a `[y/N]` confirm, creates + pushes the annotated tag and runs
@@ -412,9 +412,9 @@ curl -fsSL https://dinhanhthi.github.io/PopGuy/appcast.xml | head
 ## Quick checklist
 
 - [ ] `Developer ID Application` signing + notarized + stapled (`spctl` accepted)
-- [ ] Real `SUPublicEDKey` in `PopGuy/Info.plist` (placeholder removed)
+- [ ] Real `SUPublicEDKey` in `macos/PopGuy/Info.plist` (placeholder removed)
 - [ ] `CFBundleVersion` strictly greater than the last shipped build
-- [ ] `CHANGELOG.md` (repo root) has a `## [X.Y.Z]` section matching `MARKETING_VERSION`
+- [ ] `macos/CHANGELOG.md` has a `## [X.Y.Z]` section matching `MARKETING_VERSION`
 - [ ] `scripts/publish-release.sh <zip>` ran → tag `vX.Y.Z` pushed + GitHub Release created
 - [ ] `appcast.xml` regenerated (EdDSA-signed) and hosted at `SUFeedURL`
 - [ ] GitHub Release `.zip` URL matches the appcast enclosure
