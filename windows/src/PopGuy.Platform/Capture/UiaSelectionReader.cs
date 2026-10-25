@@ -73,6 +73,19 @@ public sealed record UiaSelection(
     internal static readonly UiaSelection PasswordField = new(UiaCaptureStatus.PasswordField, "", false, []);
 }
 
+/// <summary>The focused element as a paste target (<see cref="UiaSelectionReader.ProbePasteTarget"/>), without its text.</summary>
+/// <param name="IsEditable">
+/// True by the capture's rule (<see cref="UiaSelection.IsEditable"/>: a value pattern that is not read-only, or a
+/// focusable Edit or Document control); else false when its value pattern is read-only; null when unknown (no value
+/// pattern, no focused element, a UI Automation error or no answer in time).
+/// </param>
+/// <param name="FocusedElementHint">As <see cref="UiaSelection.FocusedElementHint"/>; null when unknown.</param>
+/// <param name="IsPassword">The focused element is a password field.</param>
+public sealed record UiaPasteTarget(bool? IsEditable, string? FocusedElementHint, bool IsPassword = false)
+{
+    internal static readonly UiaPasteTarget Unknown = new(null, null);
+}
+
 /// <summary>
 /// Reads the focused element's text selection through UI Automation (CUIAutomation8 → focused element → text pattern).
 /// The primary capture path; the Ctrl+C fallback (<see cref="ClipboardTransaction"/>) covers apps without a text
@@ -122,6 +135,14 @@ public static class UiaSelectionReader
         RunOnMtaThread("PopGuy UIA probe", ProbeTimeout, UiaProbeResult.Inconclusive, ProbeCore);
 
     /// <summary>
+    /// The focused element as a paste target: its value pattern's read-only state, its hint and whether it is a password
+    /// field; no text or range is read. <see cref="UiaPasteTarget.Unknown"/> after 500 ms or on an error. Blocks the
+    /// caller for 500 ms at most: call it off the UI thread.
+    /// </summary>
+    public static UiaPasteTarget ProbePasteTarget() =>
+        RunOnMtaThread("PopGuy UIA paste target", ProbeTimeout, UiaPasteTarget.Unknown, PasteTargetCore);
+
+    /// <summary>
     /// Runs <paramref name="read"/> on a dedicated MTA thread and waits up to <paramref name="timeout"/>; then
     /// <paramref name="onTimeout"/> (the abandoned thread ends whenever UI Automation returns).
     /// </summary>
@@ -165,6 +186,36 @@ public static class UiaSelectionReader
             Release(range);
             Release(ranges);
             Release(textPattern);
+            Release(element);
+            Release(automation);
+        }
+    }
+
+    private static UiaPasteTarget PasteTargetCore()
+    {
+        IUIAutomation? automation = null;
+        IUIAutomationElement? element = null;
+        IUIAutomationValuePattern? valuePattern = null;
+        try
+        {
+            automation = (IUIAutomation)new CUIAutomation8();
+            element = automation.GetFocusedElement();
+            if (element is null) return UiaPasteTarget.Unknown;
+            var hint = FocusedElementHintOf(element);
+            if (element.CurrentIsPassword) return new(false, hint, IsPassword: true);
+            // The capture's rule first, so a paste never refuses a target the capture called editable.
+            if (IsEditable(element, rangeReadOnly: false)) return new(true, hint);
+            valuePattern = element.GetCurrentPattern(UIA_PATTERN_ID.UIA_ValuePatternId) as IUIAutomationValuePattern;
+            return new(valuePattern is not null && valuePattern.CurrentIsReadOnly ? false : null, hint);
+        }
+        catch (Exception)
+        {
+            // As in ReadCore: COM errors map to many exception types, and none may escape this thread.
+            return UiaPasteTarget.Unknown;
+        }
+        finally
+        {
+            Release(valuePattern);
             Release(element);
             Release(automation);
         }

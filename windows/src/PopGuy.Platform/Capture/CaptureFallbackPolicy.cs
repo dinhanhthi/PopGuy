@@ -102,24 +102,39 @@ public static class CaptureFallbackPolicy
     {
         if (status == UiaCaptureStatus.Captured) return new(false, "captured");
         if (status == UiaCaptureStatus.PasswordField) return new(false, "passwordField");
-        if (windowClass is not null && ConsoleWindowClasses.Contains(windowClass)) return new(false, "console");
-        if (processName is not null && ConsoleProcesses.Contains(processName)) return new(false, "console");
-        if (windowClass is not null && RemoteDesktopWindowClasses.Contains(windowClass)) return new(false, "remoteDesktop");
-        if (processName is null && (windowClass is null || !KnownSafeWindowClasses.Contains(windowClass)))
-        {
-            return new(false, "unknownProcess");
-        }
-        if (processName is not null && RemoteDesktopProcesses.Contains(processName)) return new(false, "remoteDesktop");
-        if (focusedElementHint is not null && focusedElementHint.Contains(XtermMarker, StringComparison.OrdinalIgnoreCase))
-        {
-            return new(false, "integratedTerminal");
-        }
+        if (UnsafeTargetReason(windowClass, processName, focusedElementHint) is { } unsafeReason) return new(false, unsafeReason);
         if (readFailed) return new(false, "uiaReadFailed");
-        var isTerminalHostEditor = processName is not null && HiddenSelectionEditors.Contains(processName);
+        var isTerminalHostEditor = HostsXtermTerminals(processName);
         if (isTerminalHostEditor && string.IsNullOrEmpty(focusedElementHint)) return new(false, "unknownFocusInEditor");
         if (status == UiaCaptureStatus.Unavailable) return new(true, "unavailable");
         return isTerminalHostEditor ? new(true, "emptyKnownEditor") : new(false, "empty");
     }
+
+    /// <summary>
+    /// Why no synthetic key (the copy, or <see cref="Output.PasteBack"/>'s paste) may go to this target, whatever the
+    /// selection: "console", "remoteDesktop", "unknownProcess" or "integratedTerminal" (the rules on the class); null
+    /// when none applies. Pure: no system calls.
+    /// </summary>
+    public static string? UnsafeTargetReason(string? windowClass, string? processName, string? focusedElementHint)
+    {
+        if (windowClass is not null && ConsoleWindowClasses.Contains(windowClass)) return "console";
+        if (processName is not null && ConsoleProcesses.Contains(processName)) return "console";
+        if (windowClass is not null && RemoteDesktopWindowClasses.Contains(windowClass)) return "remoteDesktop";
+        if (processName is null && (windowClass is null || !KnownSafeWindowClasses.Contains(windowClass))) return "unknownProcess";
+        if (processName is not null && RemoteDesktopProcesses.Contains(processName)) return "remoteDesktop";
+        if (focusedElementHint is not null && focusedElementHint.Contains(XtermMarker, StringComparison.OrdinalIgnoreCase))
+        {
+            return "integratedTerminal";
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The process is one of the Monaco/Electron editors that host xterm.js terminals (Code, Code - Insiders, Cursor,
+    /// VSCodium, Windsurf): without a focused-element hint, their terminal pane cannot be told apart.
+    /// </summary>
+    public static bool HostsXtermTerminals(string? processName) =>
+        processName is not null && HiddenSelectionEditors.Contains(processName);
 
     /// <summary>
     /// <see cref="Decide(UiaCaptureStatus, string?, string?, string?, bool)"/> for <paramref name="selection"/> (its
