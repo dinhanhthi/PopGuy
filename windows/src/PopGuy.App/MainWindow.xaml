@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="PopGuy.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="PopGuy">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <!-- No background: Mica shows through. -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Title bar: the whole row drags the window; the caption buttons sit on its right. -->
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Background="Transparent">
+            <TextBlock
+                Margin="16,0,0,0"
+                VerticalAlignment="Center"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="PopGuy" />
+        </Grid>
+
+        <StackPanel
+            Grid.Row="1"
+            Margin="24,8,24,24"
+            Spacing="8">
+            <TextBlock
+                Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                Style="{StaticResource TitleTextBlockStyle}"
+                Text="PopGuy for Windows" />
+            <TextBlock
+                x:Name="VersionText"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource BodyTextBlockStyle}" />
+            <TextBlock
+                x:Name="DataRootText"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                IsTextSelectionEnabled="True"
+                Style="{StaticResource BodyTextBlockStyle}" />
+        </StackPanel>
+    </Grid>
+</Window>

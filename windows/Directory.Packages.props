@@ -1,0 +1,40 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <!-- Windows App SDK component packages at the versions the 2.5.1 metapackage pins. The App references these, not
+       the metapackage, for a smaller self-contained payload (no ML or AI components). -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.WindowsAppSDK.Base" Version="2.0.4" />
+    <PackageVersion Include="Microsoft.WindowsAppSDK.Foundation" Version="2.3.12" />
+    <PackageVersion Include="Microsoft.WindowsAppSDK.WinUI" Version="2.3.9" />
+    <PackageVersion Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.1.9" />
+    <PackageVersion Include="Microsoft.WindowsAppSDK.DWrite" Version="2.1.0" />
+    <!-- Unused: the documented fallback if the component packages fail the unpackaged build or launch (plan 2.5, 2.6). -->
+    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <PackageVersion Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.9169" />
+    <PackageVersion Include="Microsoft.Windows.CsWin32" Version="0.3.366" />
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- SettingsCard and SettingsExpander. The 8.3 preview: it depends on the Microsoft.WindowsAppSDK.WinUI component
+         package (unified with the one above), where every 8.2 release pulls the Windows App SDK 1.6 metapackage. -->
+    <PackageVersion Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.3.260402-preview2" />
+  </ItemGroup>
+
+  <!-- Core, updates and the local model. -->
+  <ItemGroup>
+    <PackageVersion Include="Velopack" Version="1.2.161" />
+    <PackageVersion Include="YamlDotNet" Version="18.1.0" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+    <PackageVersion Include="LLamaSharp" Version="0.30.0" />
+    <PackageVersion Include="LLamaSharp.Backend.Cpu" Version="0.30.0" />
+  </ItemGroup>
+
+  <!-- Tests. -->
+  <ItemGroup>
+    <!-- xunit.v3 without Microsoft Testing Platform: the .NET 10 SDK runs it through VSTest, so the dotnet test filter syntax keeps working. -->
+    <PackageVersion Include="xunit.v3.mtp-off" Version="4.0.2" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
+  </ItemGroup>
+</Project>
