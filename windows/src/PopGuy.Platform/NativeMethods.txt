@@ -113,6 +113,7 @@ ScreenToClient
 MA_ACTIVATE
 GetSystemMetrics
 SYSTEM_METRICS_INDEX
+GetDoubleClickTime
 OpenProcess
 PROCESS_ACCESS_RIGHTS
 QueryFullProcessImageNameW
