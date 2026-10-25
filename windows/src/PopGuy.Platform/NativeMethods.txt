@@ -65,3 +65,17 @@ DefSubclassProc
 GetAsyncKeyState
 EnumChildWindows
 GetWindowRect
+GetModuleHandleW
+PostMessageW
+PostQuitMessage
+TranslateMessage
+DispatchMessageW
+DestroyWindow
+UnregisterClassW
+HWND_MESSAGE
+WM_APP
+WM_CLIPBOARDUPDATE
+GlobalFree
+DeleteEnhMetaFile
+SafeArrayDestroy
+SysFreeString
