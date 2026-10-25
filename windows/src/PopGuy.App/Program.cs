@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppLifecycle;
@@ -73,16 +72,10 @@ public static class Program
         {
             // The running instance did not take it: exit anyway, a second resident PopGuy would double every hook.
         }
-        // This process was launched by the user, so it may give the foreground away: to the running instance's window.
-        try
-        {
-            using var running = Process.GetProcessById((int)owner.ProcessId);
-            ToolbarWindowStyle.SetForeground(running.MainWindowHandle);
-        }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException)
-        {
-            // It exited meanwhile.
-        }
+        // This process was launched by the user, so it may give the foreground away: the running instance activates its
+        // own main window (OnRelaunched). Never SetForegroundWindow on its MainWindowHandle, which can be the topmost
+        // toolbar and would take the foreground from the source app.
+        ToolbarWindowStyle.AllowForegroundFor(owner.ProcessId);
         return true;
     }
 

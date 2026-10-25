@@ -269,7 +269,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
                     ActionKind.Improve => Builtin(id, "Improve", "wand.and.stars"),
                     ActionKind.Shorten => Builtin(id, "Shorten", "text.badge.minus"),
                     ActionKind.Proofread => Builtin(id, "Proofread", "checkmark.bubble"),
-                    ActionKind.Prompt => Builtin(id, "Prompt", "bubble.and.pencil"),
+                    // No prompt input until Phase 9.3: the button would do nothing.
+                    ActionKind.Prompt => null,
                     ActionKind.Translate => Builtin(id, "Translate", "character.bubble"),
                     _ => null,
                 };

@@ -147,6 +147,12 @@ public static class ToolbarWindowStyle
     public static bool SetForeground(nint window) => IsAlive(window) && PInvoke.SetForegroundWindow((HWND)window);
 
     /// <summary>
+    /// Lets <paramref name="processId"/> take the foreground itself (it must then activate its own window). Only works
+    /// while this process may set the foreground (it has it, or received the last input).
+    /// </summary>
+    public static bool AllowForegroundFor(uint processId) => PInvoke.AllowSetForegroundWindow(processId);
+
+    /// <summary>
     /// Lets the toolbar be activated (text input: WS_EX_NOACTIVATE off) or stops it again (on), and records it for the
     /// <see cref="SubclassNoActivate"/> log. A click in the activation region turns it on by itself; the App turns it
     /// off when text input ends, then hands the foreground back. Clicks outside the activation region never activate

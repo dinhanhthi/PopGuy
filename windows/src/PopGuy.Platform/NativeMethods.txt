@@ -45,6 +45,7 @@ GetMessageW
 PostThreadMessageW
 GetForegroundWindow
 SetForegroundWindow
+AllowSetForegroundWindow
 GetWindowThreadProcessId
 GetCursorPos
 MonitorFromPoint

@@ -213,10 +213,11 @@ internal sealed class ToolbarController : IDisposable
             if (!_window.IsShown) StartCapture(source, autoRun: null);
             return;
         }
-        if (id.Type is ActionIdentifierType.Speak or ActionIdentifierType.Dictionary)
+        if (id.Type is ActionIdentifierType.Speak or ActionIdentifierType.Dictionary
+            || id == ActionIdentifier.Builtin(ActionKind.Prompt))
         {
-            // Speak (Phase 17) and Look up (Phase 18) do not exist yet.
-            _log($"hotkey: {id.Type} is not available yet");
+            // Speak (Phase 17), Look up (Phase 18) and the prompt input (Phase 9.3) do not exist yet.
+            _log($"hotkey: {id} is not available yet");
             return;
         }
         if (!ToolbarLayout.IsEnabled(settings, id)) return;
