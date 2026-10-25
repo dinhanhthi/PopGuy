@@ -4,11 +4,39 @@ using Windows.Win32.UI.Input.KeyboardAndMouse;
 
 namespace PopGuy.Platform.Input;
 
+/// <summary>How a synthetic chord ended.</summary>
+public enum InputSendResult
+{
+    /// <summary>SendInput inserted every event (a UIPI block is not reported: check the effect).</summary>
+    Sent,
+
+    /// <summary>SendInput did not insert every event.</summary>
+    NotInserted,
+
+    /// <summary>
+    /// Nothing was sent: the caller's <c>stillAllowed</c> check failed right before SendInput (e.g. the foreground
+    /// window changed during the modifier wait).
+    /// </summary>
+    Aborted,
+}
+
 /// <summary>
-/// Synthetic Ctrl+C and Ctrl+V into the foreground app, through SendInput. Every event carries
+/// Synthetic copy (Ctrl+Insert) and paste (Ctrl+V) into the foreground app, through SendInput. Every event carries
 /// <see cref="Marker"/> in its extra info, so PopGuy's own low-level hooks can tell them from the user's keys.
 /// <para>
-/// Held modifiers: a hotkey's modifiers are usually still down when it fires, and Ctrl+Alt+C is not Ctrl+C. A send
+/// The copy is Ctrl+Insert, not Ctrl+C: Ctrl+Insert is the standard Windows copy accelerator (edit controls, rich
+/// edit, Chromium/Electron, Office), while in a console or terminal Ctrl+C is an interrupt (SIGINT) that stops the
+/// running command. Terminals (Windows Terminal, VS Code's integrated terminal) treat Ctrl+Insert as copy or ignore
+/// it, never as an interrupt, so a copy that slips past <see cref="Capture.CaptureFallbackPolicy"/> cannot kill a
+/// command. Paste stays Ctrl+V (Shift+Insert is not universal, and the paste target is the user's own editable field).
+/// </para>
+/// <para>
+/// Foreground recheck: a send takes an optional <c>stillAllowed</c> check, called after the modifier wait and
+/// immediately before SendInput; false aborts the send (<see cref="InputSendResult.Aborted"/>, nothing sent), so the
+/// keys never reach a window that became the foreground meanwhile (a terminal, a password field).
+/// </para>
+/// <para>
+/// Held modifiers: a hotkey's modifiers are usually still down when it fires, and Ctrl+Alt+V is not Ctrl+V. A send
 /// first waits up to 500 ms (polling every 10 ms) for the user to release every modifier. Any still held at the
 /// deadline are released (key-ups) before the chord and, afterwards, the ones the user still holds are pressed again
 /// (key-downs, also marked), so a key the user keeps holding (a third C of a chord, the hotkey letter's auto-repeat)
@@ -21,8 +49,8 @@ namespace PopGuy.Platform.Input;
 /// user's next press of it.
 /// </para>
 /// <para>
-/// The return value only says whether SendInput inserted every event. It does not reveal a UIPI block (an elevated
-/// foreground app silently drops the events): check the effect (e.g. the clipboard's sequence number) instead.
+/// <see cref="InputSendResult.Sent"/> only says that SendInput inserted every event. It does not reveal a UIPI block
+/// (an elevated foreground app silently drops the events): check the effect (e.g. the clipboard's sequence number).
 /// </para>
 /// </summary>
 public static class InputSynth
@@ -50,20 +78,23 @@ public static class InputSynth
     private const VIRTUAL_KEY MaskKey = (VIRTUAL_KEY)0xE8;
 
     /// <summary>
-    /// Sends Ctrl+C (held modifiers handled as described on the class). Blocks up to 500 ms: call it off the UI thread.
-    /// False if SendInput did not insert every event (a UIPI block is not reported).
+    /// Sends the copy chord, Ctrl+Insert (never Ctrl+C: see the class), with held modifiers handled as described on the
+    /// class. Blocks up to 500 ms: call it off the UI thread.
     /// </summary>
     /// <param name="isUserKeyDown">Whether the user still holds a virtual key (PopGuy's own events ignored); null: never press modifiers again.</param>
-    public static bool SendCopy(Func<uint, bool>? isUserKeyDown = null) => SendChord(VIRTUAL_KEY.VK_C, isUserKeyDown);
+    /// <param name="stillAllowed">Checked after the modifier wait, right before SendInput; false: nothing is sent (<see cref="InputSendResult.Aborted"/>).</param>
+    public static InputSendResult SendCopy(Func<uint, bool>? isUserKeyDown = null, Func<bool>? stillAllowed = null) =>
+        SendChord(VIRTUAL_KEY.VK_INSERT, isUserKeyDown, stillAllowed);
 
     /// <summary>
     /// Sends Ctrl+V (held modifiers handled as described on the class). Blocks up to 500 ms: call it off the UI thread.
-    /// False if SendInput did not insert every event (a UIPI block is not reported).
     /// </summary>
     /// <param name="isUserKeyDown">Whether the user still holds a virtual key (PopGuy's own events ignored); null: never press modifiers again.</param>
-    public static bool SendPaste(Func<uint, bool>? isUserKeyDown = null) => SendChord(VIRTUAL_KEY.VK_V, isUserKeyDown);
+    /// <param name="stillAllowed">Checked after the modifier wait, right before SendInput; false: nothing is sent (<see cref="InputSendResult.Aborted"/>).</param>
+    public static InputSendResult SendPaste(Func<uint, bool>? isUserKeyDown = null, Func<bool>? stillAllowed = null) =>
+        SendChord(VIRTUAL_KEY.VK_V, isUserKeyDown, stillAllowed);
 
-    private static bool SendChord(VIRTUAL_KEY key, Func<uint, bool>? isUserKeyDown)
+    private static InputSendResult SendChord(VIRTUAL_KEY key, Func<uint, bool>? isUserKeyDown, Func<bool>? stillAllowed)
     {
         var held = WaitForModifierRelease();
 
@@ -74,17 +105,24 @@ public static class InputSynth
         inputs.Add(Key(key, up: false));
         inputs.Add(Key(key, up: true));
         inputs.Add(Key(VIRTUAL_KEY.VK_LCONTROL, up: true));
+        // Last check, after the wait: nothing has been sent yet, so an abort needs no cleanup.
+        if (stillAllowed is not null && !stillAllowed()) return InputSendResult.Aborted;
         // One call: the events reach the input stream together, never interleaved with the user's.
         var ok = Send(inputs);
 
-        if (held.Count == 0 || isUserKeyDown is null) return ok;
-        var stillHeld = held.Where(vk => isUserKeyDown((uint)vk)).ToList();
-        if (stillHeld.Count == 0) return ok;
-        var repress = new List<INPUT>(stillHeld.Count + 2);
-        foreach (var vk in stillHeld) repress.Add(Key(vk, up: false));
-        // A key while Alt or Win is down: the user's own release of it then opens no menu.
-        if (stillHeld.Any(IsAltOrWin)) AddMaskTap(repress);
-        return Send(repress) && ok;
+        if (held.Count > 0 && isUserKeyDown is not null)
+        {
+            var stillHeld = held.Where(vk => isUserKeyDown((uint)vk)).ToList();
+            if (stillHeld.Count > 0)
+            {
+                var repress = new List<INPUT>(stillHeld.Count + 2);
+                foreach (var vk in stillHeld) repress.Add(Key(vk, up: false));
+                // A key while Alt or Win is down: the user's own release of it then opens no menu.
+                if (stillHeld.Any(IsAltOrWin)) AddMaskTap(repress);
+                ok = Send(repress) && ok;
+            }
+        }
+        return ok ? InputSendResult.Sent : InputSendResult.NotInserted;
     }
 
     /// <summary>Polls until no modifier is down or 500 ms passed; returns the ones still down.</summary>
@@ -116,7 +154,8 @@ public static class InputSynth
     private static INPUT Key(VIRTUAL_KEY vk, bool up)
     {
         var flags = up ? KEYBD_EVENT_FLAGS.KEYEVENTF_KEYUP : 0;
-        if (vk is VIRTUAL_KEY.VK_RCONTROL or VIRTUAL_KEY.VK_RMENU or VIRTUAL_KEY.VK_LWIN or VIRTUAL_KEY.VK_RWIN)
+        // Insert too: without the flag, it is the numeric keypad's 0/Ins key, which NumLock turns into a "0".
+        if (vk is VIRTUAL_KEY.VK_RCONTROL or VIRTUAL_KEY.VK_RMENU or VIRTUAL_KEY.VK_LWIN or VIRTUAL_KEY.VK_RWIN or VIRTUAL_KEY.VK_INSERT)
         {
             flags |= KEYBD_EVENT_FLAGS.KEYEVENTF_EXTENDEDKEY;
         }

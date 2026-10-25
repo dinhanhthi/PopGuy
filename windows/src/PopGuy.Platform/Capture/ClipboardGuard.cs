@@ -14,8 +14,9 @@ namespace PopGuy.Platform.Capture;
 
 /// <summary>
 /// A copy of the clipboard's contents: every HGLOBAL format's bytes, plus a copy of the enhanced metafile. Owns that
-/// metafile copy and the bytes, so dispose it (which also zeroes the bytes). A snapshot over 64 MB is
-/// <see cref="IsTooLarge"/>: it holds no data and is never restored.
+/// metafile copy and the bytes, so dispose it (which also zeroes the bytes). Only a snapshot that is
+/// <see cref="IsComplete"/> is ever restored: one over 64 MB (<see cref="IsTooLarge"/>, which holds no data), with a
+/// format left out, or with its data omitted would bring the clipboard back only partly.
 /// </summary>
 public sealed class ClipboardSnapshot : IDisposable
 {
@@ -50,12 +51,13 @@ public sealed class ClipboardSnapshot : IDisposable
     /// <summary>The bytes of the HGLOBAL formats (counted up to the 64 MB limit when <see cref="IsTooLarge"/>).</summary>
     public long TotalBytes { get; }
 
-    /// <summary>The formats went over 64 MB in total: the snapshot holds no data and <see cref="ClipboardGuard.Restore"/> refuses it.</summary>
+    /// <summary>The formats went over 64 MB in total: the snapshot holds no data and is never restored.</summary>
     public bool IsTooLarge { get; }
 
     /// <summary>
     /// Formats with data that the snapshot left out: over 16 MB, or unreadable (the memory could not be locked). A
-    /// restore would lose them. Not counted: the formats Windows synthesizes and OLE's own (never needed back).
+    /// restore would lose them, so a snapshot with any is never restored. Not counted: the formats Windows synthesizes
+    /// and OLE's own (never needed back).
     /// </summary>
     public int SkippedFormatCount { get; }
 
@@ -89,24 +91,29 @@ public sealed class ClipboardSnapshot : IDisposable
 
     /// <summary>
     /// Empties the clipboard (which the caller has opened) and sets every held format, but only once it is sure it
-    /// can: a snapshot disposed meanwhile (an eviction racing a restore) leaves the clipboard untouched. False then, or
-    /// if a format was refused.
+    /// can: a snapshot disposed meanwhile (an eviction racing a restore) or not <see cref="IsComplete"/> leaves the
+    /// clipboard untouched. False then, or if a format was refused; the clipboard is then emptied again, never left
+    /// half-restored (matching <see cref="ClipboardGuard.WriteText(string, bool, ClipboardSnapshot?)"/>).
     /// </summary>
     internal bool EmptyAndSetFormats()
     {
         lock (_gate)
         {
-            if (_disposed || IsTooLarge || IsDataOmitted) return false;
-            return PInvoke.EmptyClipboard() && SetFormatsLocked();
+            if (_disposed || !IsComplete) return false;
+            if (!PInvoke.EmptyClipboard()) return false;
+            if (SetFormatsLocked()) return true;
+            // Still open: nobody saw the partial restore.
+            PInvoke.EmptyClipboard();
+            return false;
         }
     }
 
-    /// <summary>Sets every held format on the clipboard, which the caller has opened and emptied.</summary>
+    /// <summary>Sets every held format on the clipboard, which the caller has opened and emptied (only if <see cref="IsComplete"/>).</summary>
     internal bool SetFormats()
     {
         lock (_gate)
         {
-            if (_disposed || IsTooLarge || IsDataOmitted) return false;
+            if (_disposed || !IsComplete) return false;
             return SetFormatsLocked();
         }
     }
@@ -144,7 +151,10 @@ public enum ClipboardRestoreResult
     /// </summary>
     SkippedClipboardChanged,
 
-    /// <summary>The snapshot cannot be restored: too large, data omitted, or disposed.</summary>
+    /// <summary>
+    /// The snapshot cannot be restored: not <see cref="ClipboardSnapshot.IsComplete"/> (too large, a format left out,
+    /// data omitted), so a restore would bring the clipboard back only partly.
+    /// </summary>
     NotRestorable,
 
     /// <summary>The clipboard could not be opened or a format was refused.</summary>
@@ -202,7 +212,7 @@ public static class ClipboardGuard
     /// <para>
     /// The rule for every caller: a null snapshot, or one that is not <see cref="ClipboardSnapshot.IsComplete"/>
     /// (too large, formats left out), cannot bring the user's clipboard back. Stop BEFORE anything writes to the
-    /// clipboard: no <see cref="WriteText"/>, no synthetic Ctrl+C. <see cref="ClipboardTransaction.TryBegin"/> enforces
+    /// clipboard: no <see cref="WriteText"/>, no synthetic copy (Ctrl+Insert). <see cref="ClipboardTransaction.TryBegin"/> enforces
     /// this order; use it rather than calling this directly.
     /// </para>
     /// </summary>
@@ -302,13 +312,14 @@ public static class ClipboardGuard
 
     /// <summary>
     /// Replaces the clipboard's contents with <paramref name="snapshot"/>, whatever the clipboard holds now. False if
-    /// the clipboard could not be opened, the snapshot is too large, data-less or disposed, or a format was refused.
+    /// the clipboard could not be opened, the snapshot is not <see cref="ClipboardSnapshot.IsComplete"/> or is
+    /// disposed, or a format was refused (the clipboard is then left empty, never half-restored).
     /// After a delay, prefer <see cref="RestoreIfUnchanged"/> (or <see cref="ClipboardTransaction.Restore"/>): a change
     /// made meanwhile by someone else must not be overwritten.
     /// </summary>
     public static bool Restore(ClipboardSnapshot snapshot)
     {
-        if (snapshot.IsTooLarge || snapshot.IsDataOmitted || !Open()) return false;
+        if (!snapshot.IsComplete || !Open()) return false;
         try
         {
             return snapshot.EmptyAndSetFormats();
@@ -324,10 +335,13 @@ public static class ClipboardGuard
     /// <paramref name="expectedSequence"/> (the contents PopGuy caused), checked with the clipboard open so nobody can
     /// change it in between. Otherwise <see cref="ClipboardRestoreResult.SkippedClipboardChanged"/>, or
     /// <see cref="ClipboardRestoreResult.Unchanged"/> when the clipboard holds the snapshot's own contents.
+    /// <see cref="ClipboardRestoreResult.NotRestorable"/> (clipboard untouched) when the snapshot is not
+    /// <see cref="ClipboardSnapshot.IsComplete"/>; <see cref="ClipboardRestoreResult.Failed"/> when a format was
+    /// refused (the clipboard is then left empty, never half-restored).
     /// </summary>
     public static ClipboardRestoreResult RestoreIfUnchanged(ClipboardSnapshot snapshot, uint expectedSequence)
     {
-        if (snapshot.IsTooLarge || snapshot.IsDataOmitted) return ClipboardRestoreResult.NotRestorable;
+        if (!snapshot.IsComplete) return ClipboardRestoreResult.NotRestorable;
         if (!Open()) return ClipboardRestoreResult.Failed;
         try
         {
@@ -535,12 +549,12 @@ public static class ClipboardGuard
 }
 
 /// <summary>
-/// The safe order for any PopGuy change to the clipboard (a paste through it, a synthetic Ctrl+C):
+/// The safe order for any PopGuy change to the clipboard (a paste through it, a synthetic Ctrl+Insert copy):
 /// <list type="number">
 /// <item><see cref="TryBegin"/> takes the snapshot and refuses (nothing touched yet) when it is missing or not
-/// <see cref="ClipboardSnapshot.IsComplete"/>: then do not write and do not send Ctrl+C.</item>
+/// <see cref="ClipboardSnapshot.IsComplete"/>: then do not write and do not send the synthetic copy.</item>
 /// <item>Change the clipboard: <see cref="WriteText"/> (which records PopGuy's own write and, on failure, puts the
-/// snapshot back at once), or a synthetic Ctrl+C followed by <see cref="MarkCurrentAsOwn"/> once the copy landed.</item>
+/// snapshot back at once), or a synthetic copy (Ctrl+Insert) followed by <see cref="MarkCurrentAsOwn"/> once the copy landed.</item>
 /// <item><see cref="Restore"/> after the delay: it puts the snapshot back only if the clipboard still holds PopGuy's
 /// change, never over a newer copy by the user.</item>
 /// </list>
@@ -562,7 +576,7 @@ public sealed class ClipboardTransaction : IDisposable
     /// <summary>
     /// Snapshots the clipboard. False, with <paramref name="refusal"/> "clipboardBusy" (it could not be opened),
     /// "tooLarge" (over 64 MB) or "formatsSkipped" (a format over 16 MB or unreadable), when the user's clipboard
-    /// could not be brought back: the caller must then leave the clipboard alone (no write, no synthetic Ctrl+C).
+    /// could not be brought back: the caller must then leave the clipboard alone (no write, no synthetic Ctrl+Insert copy).
     /// </summary>
     public static bool TryBegin([NotNullWhen(true)] out ClipboardTransaction? transaction, [NotNullWhen(false)] out string? refusal)
     {
@@ -594,7 +608,7 @@ public sealed class ClipboardTransaction : IDisposable
     }
 
     /// <summary>
-    /// Records the clipboard's current contents as PopGuy's own change (the copy its synthetic Ctrl+C asked the source
+    /// Records the clipboard's current contents as PopGuy's own change (the copy its synthetic Ctrl+Insert asked the source
     /// app for), so <see cref="Restore"/> may replace them. Call it once the copy has settled: OLE apps write twice
     /// (their data object, then the flushed formats), and a restore after a later write would be skipped. A change by
     /// someone else before this call would be taken for PopGuy's.
@@ -730,7 +744,8 @@ public sealed class ClipboardHistoryCache : IDisposable
     /// <summary>
     /// Gets the snapshot taken at <paramref name="sequenceNumber"/> (the clipboard before the chord's copy). The cache
     /// owns it: do not dispose it; a restore after its eviction returns false. Restore it with
-    /// <see cref="ClipboardGuard.RestoreIfUnchanged"/>, and check <see cref="ClipboardSnapshot.IsTooLarge"/>.
+    /// <see cref="ClipboardGuard.RestoreIfUnchanged"/>, and check <see cref="ClipboardSnapshot.IsComplete"/> first: an
+    /// incomplete snapshot (too large, a format left out) is never restored, and the clipboard keeps the chord's copy.
     /// </summary>
     public bool TryGetBefore(uint sequenceNumber, [NotNullWhen(true)] out ClipboardSnapshot? snapshot)
     {
@@ -832,6 +847,10 @@ public sealed class ClipboardHistoryCache : IDisposable
         if (snapshot.IsTooLarge)
         {
             _log?.Invoke($"clipboard cache: snapshot {sequenceNumber} is too large ({snapshot.TotalBytes}+ bytes), never restored");
+        }
+        else if (snapshot.SkippedFormatCount > 0)
+        {
+            _log?.Invoke($"clipboard cache: snapshot {sequenceNumber} left out {snapshot.SkippedFormatCount} format(s), never restored");
         }
         Add(sequenceNumber, snapshot);
     }

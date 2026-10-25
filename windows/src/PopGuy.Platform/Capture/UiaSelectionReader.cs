@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using Windows.Win32;
+using Windows.Win32.Foundation;
 using Windows.Win32.System.Com;
 using Windows.Win32.UI.Accessibility;
 
@@ -31,7 +32,18 @@ public enum UiaCaptureStatus
 /// <param name="Text">The selected text (ranges joined with new lines).</param>
 /// <param name="IsEditable">The element takes typing, so a paste can replace the selection.</param>
 /// <param name="SelectionRects">The selection's bounding rectangles in screen pixels (one per line), possibly empty.</param>
-public sealed record UiaSelection(UiaCaptureStatus Status, string Text, bool IsEditable, IReadOnlyList<Rectangle> SelectionRects)
+/// <param name="FocusedElementHint">
+/// The focused element's AutomationId and ClassName (never its text), joined with a space, for
+/// <see cref="CaptureFallbackPolicy"/> (an xterm.js terminal shows "xterm" there); null when unknown.
+/// </param>
+/// <param name="IsTruncated">The selection was longer than 1,000,000 characters: <paramref name="Text"/> holds the first million.</param>
+public sealed record UiaSelection(
+    UiaCaptureStatus Status,
+    string Text,
+    bool IsEditable,
+    IReadOnlyList<Rectangle> SelectionRects,
+    string? FocusedElementHint = null,
+    bool IsTruncated = false)
 {
     internal static readonly UiaSelection Unavailable = new(UiaCaptureStatus.Unavailable, "", false, []);
     internal static readonly UiaSelection PasswordField = new(UiaCaptureStatus.PasswordField, "", false, []);
@@ -46,6 +58,9 @@ public static class UiaSelectionReader
 {
     /// <summary>UI Automation blocks while the target app is hung; the read gives up after this.</summary>
     private static readonly TimeSpan Timeout = TimeSpan.FromMilliseconds(1500);
+
+    /// <summary>The most text a read returns (all ranges together); a longer selection is cut and marked truncated.</summary>
+    internal const int MaxTextLength = 1_000_000;
 
     /// <summary>A first read that comes back unavailable is tried once more after this.</summary>
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(150);
@@ -91,20 +106,36 @@ public static class UiaSelectionReader
             if (element is null) return UiaSelection.Unavailable;
             // Before any text is read: a password field's text never leaves it.
             if (element.CurrentIsPassword) return UiaSelection.PasswordField;
+            var hint = FocusedElementHintOf(element);
             textPattern = element.GetCurrentPattern(UIA_PATTERN_ID.UIA_TextPatternId) as IUIAutomationTextPattern;
-            if (textPattern is null) return UiaSelection.Unavailable;
+            if (textPattern is null) return UiaSelection.Unavailable with { FocusedElementHint = hint };
 
             ranges = textPattern.GetSelection();
             var count = ranges?.Length ?? 0;
             var texts = new List<string>(count);
             var rects = new List<Rectangle>();
             bool? rangeReadOnly = null;
+            var remaining = MaxTextLength;
+            var truncated = false;
             for (var i = 0; i < count; i++)
             {
+                if (remaining <= 0)
+                {
+                    truncated = true;
+                    break;
+                }
                 var range = ranges!.GetElement(i);
                 try
                 {
-                    texts.Add(ReadText(range));
+                    // One character more than the budget: tells a selection of exactly the budget from a longer one.
+                    var rangeText = ReadText(range, remaining + 1);
+                    if (rangeText.Length > remaining)
+                    {
+                        rangeText = rangeText[..remaining];
+                        truncated = true;
+                    }
+                    remaining -= rangeText.Length;
+                    texts.Add(rangeText);
                     ReadRects(range, rects);
                     rangeReadOnly ??= IsReadOnly(range);
                 }
@@ -117,8 +148,8 @@ public static class UiaSelectionReader
             var text = string.Join("\n", texts);
             var isEditable = IsEditable(element, rangeReadOnly ?? false);
             return string.IsNullOrWhiteSpace(text)
-                ? new UiaSelection(UiaCaptureStatus.Empty, "", isEditable, rects)
-                : new UiaSelection(UiaCaptureStatus.Captured, text, isEditable, rects);
+                ? new UiaSelection(UiaCaptureStatus.Empty, "", isEditable, rects, hint)
+                : new UiaSelection(UiaCaptureStatus.Captured, text, isEditable, rects, hint, truncated);
         }
         catch (Exception)
         {
@@ -186,18 +217,37 @@ public static class UiaSelectionReader
         }
     }
 
-    private static string ReadText(IUIAutomationTextRange range)
+    /// <summary>
+    /// The focused element's AutomationId and ClassName joined with a space (identifiers, never text), or null when
+    /// both are empty or UI Automation fails here: the hint is optional, the read goes on without it.
+    /// </summary>
+    private static string? FocusedElementHintOf(IUIAutomationElement element)
     {
-        var text = range.GetText(-1);
         try
         {
-            return text.ToString() ?? "";
+            var hint = $"{ReadBstr(element.CurrentAutomationId)} {ReadBstr(element.CurrentClassName)}".Trim();
+            return hint.Length > 0 ? hint : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static string ReadBstr(BSTR value)
+    {
+        try
+        {
+            return value.ToString() ?? "";
         }
         finally
         {
-            PInvoke.SysFreeString(text);
+            PInvoke.SysFreeString(value);
         }
     }
+
+    /// <summary>The range's text, at most <paramref name="maxLength"/> characters.</summary>
+    private static string ReadText(IUIAutomationTextRange range, int maxLength) => ReadBstr(range.GetText(maxLength));
 
     /// <summary>Appends the range's rectangles: a SAFEARRAY of doubles, four per rectangle (left, top, width, height).</summary>
     private static unsafe void ReadRects(IUIAutomationTextRange range, List<Rectangle> rects)
