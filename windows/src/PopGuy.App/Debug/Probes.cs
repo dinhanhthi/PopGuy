@@ -1,30 +1,61 @@
 #if DEBUG
 using System.ComponentModel;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using PopGuy.Core;
+using PopGuy.Core.Actions;
+using PopGuy.Core.Json;
+using PopGuy.Core.Secrets;
+using PopGuy.Core.Settings;
 using PopGuy.Platform.Capture;
 using PopGuy.Platform.Input;
+using PopGuy.Platform.SystemServices;
 using PopGuy.Platform.Windowing;
 
 namespace PopGuy.Debug;
 
 /// <summary>
-/// DEBUG harnesses for the Phase 3 spike gate (plan task 3.4), started from the command line instead of the main
-/// window, writing to %APPDATA%\PopGuy\Probes. Selected text is never written, only its length.
+/// DEBUG harnesses for the Phase 3 spike gate (plan task 3.4) and the Phase 8 VM QA (plan task 8.4), started from the
+/// command line instead of the main window, writing to %APPDATA%\PopGuy\Probes. Selected text is never written, only
+/// its length; API keys never at all.
 /// <list type="bullet">
 /// <item><c>--spike &lt;seconds&gt;</c>: a resident run (<see cref="SpikeSession"/>) for that long, then exit.</item>
 /// <item><c>--probe-uia &lt;delaySeconds&gt;</c>: after the delay, one UI Automation read of the focused selection into
 /// <c>probe-uia-&lt;ts&gt;.json</c>, then exit.</item>
+/// <item><c>--import-key &lt;provider|tts:raw&gt; &lt;path&gt;</c>: saves the key in a UTF-8 text file to Credential
+/// Manager (<see cref="SecretIds"/>), replacing an older one, then exit.</item>
+/// <item><c>--seed-settings &lt;provider&gt; &lt;model&gt; [baseUrl]</c>: maps the built-in actions to that provider and
+/// model, then exit.</item>
+/// <item><c>--selftest-toolbar</c>: not an exiting harness; the app starts as usual and shows the toolbar with
+/// <see cref="SelfTestText"/> as a result (see <c>App.OnLaunched</c>).</item>
 /// </list>
-/// Exit code 0, or 1 after an exception (written to <c>error-&lt;ts&gt;.txt</c>).
+/// Exit code 0, or 1 after an exception (written to <c>error-&lt;ts&gt;.txt</c>) or a refused import or seed. The import
+/// and the seed write their one status line to stdout and to <c>import-key.txt</c> / <c>seed-settings.txt</c>
+/// (replaced each run): stdout is empty unless redirected, as PopGuy has no console.
 /// </summary>
 internal static class Probes
 {
     internal static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
 
     internal static string Folder { get; } = Path.Combine(App.DataRoot, "Probes");
+
+    /// <summary>A key file larger than this is refused before it is read.</summary>
+    private const int MaxKeyFileBytes = 64 * 1024;
+
+    /// <summary>The <c>--selftest-toolbar</c> result: several lines, one long enough to wrap.</summary>
+    internal const string SelfTestText =
+        "PopGuy toolbar self-test.\n" +
+        "This is a canned result: no provider was called and nothing goes to history.\n\n" +
+        "This paragraph is long on purpose, so the result area has to wrap it across several lines and the toolbar has " +
+        "to grow to fit it without cutting anything off.\n" +
+        "Last line.";
+
+    /// <summary>The command line asks for the toolbar self-test.</summary>
+    internal static bool SelfTestToolbarRequested => Environment.GetCommandLineArgs().Contains("--selftest-toolbar");
 
     /// <summary>
     /// Starts the harness the process's command line asks for (not LaunchActivatedEventArgs, which unpackaged apps get
@@ -35,7 +66,9 @@ internal static class Probes
         var args = Environment.GetCommandLineArgs();
         var spike = Array.IndexOf(args, "--spike");
         var probeUia = Array.IndexOf(args, "--probe-uia");
-        if (spike < 0 && probeUia < 0) return false;
+        var importKey = Array.IndexOf(args, "--import-key");
+        var seedSettings = Array.IndexOf(args, "--seed-settings");
+        if (spike < 0 && probeUia < 0 && importKey < 0 && seedSettings < 0) return false;
 
         var dispatcher = DispatcherQueue.GetForCurrentThread();
         // A crash on the UI thread still leaves its error file and a non-zero exit code.
@@ -53,7 +86,9 @@ internal static class Probes
         try
         {
             Directory.CreateDirectory(Folder);
-            if (spike >= 0) SpikeSession.Start(SecondsAfter(args, spike, minimum: 1), dispatcher, Finish);
+            if (importKey >= 0) Finish(ImportKey(args, importKey));
+            else if (seedSettings >= 0) Finish(SeedSettings(args, seedSettings));
+            else if (spike >= 0) SpikeSession.Start(SecondsAfter(args, spike, minimum: 1), dispatcher, Finish);
             else RunProbeUia(SecondsAfter(args, probeUia, minimum: 0), Finish);
         }
         catch (Exception e)
@@ -106,6 +141,118 @@ internal static class Probes
             return seconds;
         }
         throw new ArgumentException($"{args[index]} needs a whole number of seconds (at least {minimum}).");
+    }
+
+    /// <summary>
+    /// <c>--import-key</c>: the file's UTF-8 text without a BOM and surrounding whitespace, saved at
+    /// <see cref="SecretIds.Provider"/> (or <see cref="SecretIds.Tts"/> for <c>tts:&lt;raw&gt;</c>). Reports
+    /// <c>imported &lt;provider&gt;</c>, or only the error kind: never the key, its length or the file's contents.
+    /// </summary>
+    private static int ImportKey(string[] args, int index)
+    {
+        const string Name = "import-key";
+        var raw = ArgAt(args, index + 1);
+        var path = ArgAt(args, index + 2);
+        if (raw is null || path is null) return Report(Name, "usage: --import-key <provider|tts:raw> <path>", 1);
+        string? id = raw.StartsWith("tts:", StringComparison.Ordinal)
+            ? RawValueEnumConverter<TtsProviderKind>.TryParse(raw[4..], out var tts) ? SecretIds.Tts(tts) : null
+            : RawValueEnumConverter<ProviderKind>.TryParse(raw, out var kind) ? SecretIds.Provider(kind) : null;
+        if (id is null) return Report(Name, "unknownProvider", 1);
+
+        byte[]? bytes = null;
+        try
+        {
+            var file = new FileInfo(path);
+            if (!file.Exists) return Report(Name, "fileMissing", 1);
+            if (file.Length > MaxKeyFileBytes) return Report(Name, "tooLarge", 1);
+            bytes = File.ReadAllBytes(path);
+            var text = bytes.AsSpan();
+            if (text.StartsWith(Encoding.UTF8.Preamble)) text = text[Encoding.UTF8.Preamble.Length..];
+            // Trimmed as bytes, so the key exists as one string only.
+            text = text.Trim(" \t\r\n"u8);
+            if (text.IsEmpty) return Report(Name, "empty", 1);
+            var key = Encoding.UTF8.GetString(text);
+            if (Encoding.UTF8.GetByteCount(key) > CredentialStore.MaxSecretBytes) return Report(Name, "tooLarge", 1);
+            new CredentialStore().Set(id, key);
+            return Report(Name, $"imported {raw}", 0);
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return Report(Name, "fileMissing", 1);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return Report(Name, "fileUnreadable", 1);
+        }
+        catch (Win32Exception e)
+        {
+            return Report(Name, $"credWriteFailed {e.NativeErrorCode}", 1);
+        }
+        finally
+        {
+            if (bytes is not null) CryptographicOperations.ZeroMemory(bytes);
+        }
+    }
+
+    /// <summary>
+    /// <c>--seed-settings</c>: Improve, Shorten, Proofread, Translate and Prompt get the provider and model (their tone and
+    /// custom prompt stay); the base URL, when given, becomes the Custom or Ollama one (ignored for other providers).
+    /// </summary>
+    private static int SeedSettings(string[] args, int index)
+    {
+        const string Name = "seed-settings";
+        var raw = ArgAt(args, index + 1);
+        var baseUrl = ArgAt(args, index + 3);
+        if (raw is null || ArgAt(args, index + 2) is not { Length: > 0 } model)
+            return Report(Name, "usage: --seed-settings <provider> <model> [baseUrl]", 1);
+        if (!RawValueEnumConverter<ProviderKind>.TryParse(raw, out var kind)) return Report(Name, "unknownProvider", 1);
+
+        ActionConfig Seeded(ActionConfig config) => config with { ProviderKind = kind, Model = model };
+        try
+        {
+            new SettingsStore(AppPaths.Resolve()).Update(s =>
+            {
+                var seeded = s with
+                {
+                    ImproveConfig = Seeded(s.ImproveConfig),
+                    ShortenConfig = Seeded(s.ShortenConfig),
+                    ProofreadConfig = Seeded(s.ProofreadConfig),
+                    TranslateConfig = Seeded(s.TranslateConfig),
+                    PromptConfig = Seeded(s.PromptConfig),
+                };
+                return (baseUrl, kind) switch
+                {
+                    ({ } url, ProviderKind.Custom) => seeded with { CustomBaseUrl = url },
+                    ({ } url, ProviderKind.Ollama) => seeded with { OllamaBaseUrl = url },
+                    _ => seeded,
+                };
+            });
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return Report(Name, $"settingsWriteFailed {e.GetType().Name}", 1);
+        }
+        return Report(Name, $"seeded {raw} {model}", 0);
+    }
+
+    /// <summary>The argument at <paramref name="index"/>, or null when there is none (or it is the next "--" option).</summary>
+    private static string? ArgAt(string[] args, int index) =>
+        index < args.Length && !args[index].StartsWith("--", StringComparison.Ordinal) ? args[index] : null;
+
+    /// <summary>Writes <paramref name="line"/> to stdout and to <c>&lt;name&gt;.txt</c> (replaced); returns <paramref name="code"/>.</summary>
+    private static int Report(string name, string line, int code)
+    {
+        Console.Out.WriteLine(line);
+        Console.Out.Flush();
+        try
+        {
+            File.WriteAllText(Path.Combine(Folder, $"{name}.txt"), line + Environment.NewLine);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            System.Diagnostics.Debug.WriteLine($"PopGuy {name} status not written: {e.Message}");
+        }
+        return code;
     }
 
     private static void RunProbeUia(int delaySeconds, Action<int> finish)

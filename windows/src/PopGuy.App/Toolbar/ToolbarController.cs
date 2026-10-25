@@ -299,6 +299,26 @@ internal sealed class ToolbarController : IDisposable
         if (autoRun is { } id) RunAction(id);
     }
 
+#if DEBUG
+    /// <summary>
+    /// DEBUG only (<c>--selftest-toolbar</c>): shows the toolbar at the cursor with <paramref name="text"/> as a result
+    /// for <paramref name="source"/>, without a capture or a run, and past <see cref="PresentationGate"/> (which would
+    /// drop PopGuy's own window). Copy, Paste back and dismissal then behave as usual. UI thread.
+    /// </summary>
+    public void ShowCanned(string text, ForegroundApp source)
+    {
+        _current = new CapturedSelection(text, IsEditable: true, Rectangle.Empty, source);
+        _presentation++;
+        _pasting = false;
+        _viewModel.Present(_settings.Current, isEditable: true);
+        // Before ShowAt: it sizes the window for the content it finds.
+        _session.ShowCanned(text);
+        _window.ShowAt(PopGuy.Platform.Windowing.ToolbarWindowStyle.CursorPosition(), grewDownward: null, Rectangle.Empty, source);
+        _shown = true;
+        _log($"selftest: canned result, {text.Length} chars");
+    }
+#endif
+
     /// <summary>An action button or hotkey: runs the action on the current selection, if it is enabled.</summary>
     private void RunAction(ActionIdentifier id)
     {

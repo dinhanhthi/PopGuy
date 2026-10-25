@@ -149,6 +149,23 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
         Changed?.Invoke();
     }
 
+#if DEBUG
+    /// <summary>
+    /// DEBUG only, for the App's <c>--selftest-toolbar</c>: shows <paramref name="text"/> as a result without a run (no
+    /// provider, no history). Regenerate does nothing afterwards (there is no last run).
+    /// </summary>
+    public void ShowCanned(string text)
+    {
+        lock (_gate)
+        {
+            CancelLocked();
+            _lastRun = null;
+            _state = new ToolbarState.Result(text);
+        }
+        Changed?.Invoke();
+    }
+#endif
+
     private sealed record Resolved(EngineAction Action, string ActionName, ProviderKind Kind, string Model, string Language);
 
     // The EngineAction mapping of macOS ActionEngineHandler (Phase 6 → 8 follow-up).

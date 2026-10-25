@@ -91,6 +91,11 @@ internal sealed class AppServices : IDisposable
         }
     }
 
+#if DEBUG
+    /// <summary>DEBUG only (<c>--selftest-toolbar</c>): see <see cref="ToolbarController.ShowCanned"/>. UI thread.</summary>
+    public void ShowCannedToolbar(string text, ForegroundApp source) => _controller.ShowCanned(text, source);
+#endif
+
     /// <summary>The stored key of <paramref name="kind"/>, or null (none saved, or Credential Manager refused: logged, never the key).</summary>
     private string? ApiKey(ProviderKind kind)
     {

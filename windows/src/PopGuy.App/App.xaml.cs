@@ -32,8 +32,12 @@ public partial class App : Application
     {
 #if DEBUG
         WriteLaunchProbe();
-        // Phase 3 spike harnesses (--spike, --probe-uia): no main window, exit when done.
+        // DEBUG harnesses (--spike, --probe-uia, --import-key, --seed-settings): no main window, exit when done.
         if (PopGuy.Debug.Probes.TryStart(Exit)) return;
+        // --selftest-toolbar: Paste back goes to the app in front before the hello window takes the foreground.
+        var selfTestSource = PopGuy.Debug.Probes.SelfTestToolbarRequested
+            ? PopGuy.Platform.SystemServices.ForegroundApp.Snapshot()
+            : null;
 #endif
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         // The hello window is the "PopGuy is running" window until the tray arrives (Phase 12): closing it quits.
@@ -45,6 +49,9 @@ public partial class App : Application
         {
             _services = AppServices.Start(_dispatcher);
             UnhandledException += OnUnhandledException;
+#if DEBUG
+            if (selfTestSource is not null) _services.ShowCannedToolbar(PopGuy.Debug.Probes.SelfTestText, selfTestSource);
+#endif
         }
         catch (Exception e)
         {
