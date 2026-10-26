@@ -35,7 +35,8 @@ namespace PopGuy.Settings.Pages;
 /// each apply, a shortcut Windows refused shows on its card. A change from elsewhere shows while the page is open.
 /// Export writes the custom actions to a JSON file; Import (a JSON file) and the plugin menu (a JSON or .popclipextz
 /// file, a .popclipext folder, a pasted snippet) read off the UI thread, then show <see cref="PluginImportConsentDialog"/>
-/// in the panel. Nothing imported runs or opens before the user adds it and clicks it.
+/// in the panel. Nothing imported runs or opens before the user adds it and clicks it. The library button opens
+/// <see cref="ActionLibraryPanel"/>, whose Install adds a preset as a custom action.
 /// </summary>
 public sealed partial class ActionsPage : Page
 {
@@ -67,6 +68,8 @@ public sealed partial class ActionsPage : Page
         HoverTooltip.SetText(ImportButton, "Import custom actions");
         PluginButton.Flyout = PluginMenu();
         HoverTooltip.SetText(PluginButton, "Import plugin");
+        LibraryButton.Click += (_, _) => OpenLibrary();
+        HoverTooltip.SetText(LibraryButton, "Browse Action Library");
 
         foreach (var (_, name) in ActionsViewModel.Filters) TypeFilterBox.Items.Add(name);
         TypeFilterBox.SelectedIndex = 0;
@@ -202,6 +205,15 @@ public sealed partial class ActionsPage : Page
         var editor = new CustomActionEditPanel();
         editor.Initialize(_model, action, panels);
         panels.Present(editor, editor.InitialFocus);
+    }
+
+    /// <summary>Shows the Action Library at once, over the window (macOS showingLibrary); an install refreshes the cards through the settings change.</summary>
+    private void OpenLibrary()
+    {
+        if (_model is null || SlideOverPanel.Of(this) is not { } panels) return;
+        var library = new ActionLibraryPanel();
+        library.Initialize(_model, panels);
+        panels.Present(library, library.InitialFocus, minWidth: ActionLibraryPanel.SheetMinWidth);
     }
 
     // Export and import (macOS exportActions, importActions, importPluginFromFile, the snippet sheet).

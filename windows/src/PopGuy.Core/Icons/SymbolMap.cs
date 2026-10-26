@@ -2,10 +2,10 @@ namespace PopGuy.Core.Icons;
 
 /// <summary>
 /// SF Symbol names (the icons of built-in and custom actions, shared with macOS settings) → Segoe Fluent Icons glyphs.
-/// Covers every name in macOS <c>IconPickerView.swift</c>'s curated list plus the built-ins' symbols; each glyph is named
-/// after its Segoe Fluent Icons entry. A name with no close glyph gets the nearest one; an unknown name (typed by hand on
-/// macOS, or newer than this table) gets <see cref="Sparkles"/>. Only long-standing glyphs: the newer ones are missing
-/// from the font on earlier Windows 11 builds.
+/// Covers every name in macOS <c>IconPickerView.swift</c>'s curated list plus the built-ins' and the Action Library's
+/// symbols; each glyph is named after its Segoe Fluent Icons entry. A name with no close glyph gets the nearest one; an
+/// unknown name (typed by hand on macOS, or newer than this table) gets <see cref="Sparkles"/>. Only long-standing
+/// glyphs: the newer ones are missing from the font on earlier Windows 11 builds.
 /// </summary>
 public static class SymbolMap
 {
@@ -247,5 +247,22 @@ public static class SymbolMap
         ["waveform"] = "\uE8D6", // Audio
         ["character.book.closed.fill"] = "\uE82D", // Dictionary
         ["text.magnifyingglass"] = "\uE721", // Search
+
+        // Action Library presets and categories not in the curated list.
+        ["map"] = "\uE707", // MapPin
+        ["mappin.and.ellipse"] = "\uE707", // MapPin
+        ["play.rectangle"] = "\uE714", // Video
+        ["film"] = "\uE8B2", // Movies
+        ["cart"] = "\uE7BF", // ShoppingCart
+        ["cross.case"] = "\uE95E", // Health
+        ["person.wave.2"] = "\uE77B", // Contact
+        ["characters.uppercase"] = "\uE8E8", // FontIncrease
+        ["characters.lowercase"] = "\uE8E7", // FontDecrease
+        ["minus"] = "\uE738", // Remove
+        ["arrow.left.and.right"] = "\uE8AB", // Switch
+        ["arrow.down.to.line"] = "\uE896", // Download
+        ["arrow.uturn.down"] = "\uE7A7", // Undo
+        ["shuffle"] = "\uE8B1", // Shuffle
+        ["textformat.123"] = "\uE8EF", // Calculator
     };
 }

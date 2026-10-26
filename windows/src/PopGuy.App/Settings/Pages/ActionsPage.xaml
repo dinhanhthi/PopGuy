@@ -4,8 +4,8 @@
     then the search box and the type filter) above the scrolling action cards, one per action in the action order. The
     cards are built in code (ActionsPage.xaml.cs, Controls/ActionCard). Add action and a custom card's Edit open the
     Add/Edit panel (Panels/CustomActionEditPanel); Import and the plugin menu end in the consent panel
-    (Panels/PluginImportConsentDialog). Speak and Look up get their cards in Phase 19; the Action Library comes in Phase 16.
-    The header is the window's.
+    (Panels/PluginImportConsentDialog); the library button opens the Action Library (Panels/ActionLibraryPanel). Speak and
+    Look up get their cards in Phase 19. The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.ActionsPage"
@@ -29,7 +29,7 @@
             <!-- The live toolbar preview: drag to reorder or to move actions to and from More actions. -->
             <controls:ToolbarLayoutEditor x:Name="LayoutEditor" />
 
-            <!-- The toolbar's Settings button (macOS keeps this switch on the Actions page), then Add action, Export, Import and the plugin menu (built in code). -->
+            <!-- The toolbar's Settings button (macOS keeps this switch on the Actions page), then Add action, Export, Import, the plugin menu (built in code) and the Action Library. -->
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -60,6 +60,9 @@
                     </Button>
                     <Button x:Name="PluginButton" AutomationProperties.Name="Import plugin">
                         <FontIcon FontSize="14" Glyph="&#xEA86;" />
+                    </Button>
+                    <Button x:Name="LibraryButton" AutomationProperties.Name="Browse Action Library">
+                        <FontIcon FontSize="14" Glyph="&#xE8F1;" />
                     </Button>
                 </StackPanel>
             </Grid>

@@ -10,7 +10,7 @@ namespace PopGuy.Settings.Panels;
 
 /// <summary>
 /// The Settings window's slide-over (macOS SlideOverPanel.swift): a dimmed backdrop over the whole window content and,
-/// on the right, a sheet 3/4 of the window wide (never under 480 DIPs) that slides in. Esc or a click on the backdrop
+/// on the right, a sheet 3/4 of the window wide (never under 480 DIPs, or the minimum the content asks for) that slides in. Esc or a click on the backdrop
 /// closes it. One panel at a time: presenting another replaces it. The window hosts one above its content; a page finds
 /// it with <see cref="Of"/>. The content lays out its own header with <see cref="HeaderPadding"/> (the macOS
 /// ActionLibraryView structure: the same gap above and below the header, which never moves on resize). The backdrop and
@@ -26,6 +26,7 @@ public sealed partial class SlideOverPanel : Grid
     private readonly Border _sheet;
     private readonly TranslateTransform _slide = new();
     private Storyboard? _animation;
+    private double _minWidth = MinSheetWidth;
     private Action? _closed;
     private UIElement? _returnFocus;
 
@@ -76,15 +77,16 @@ public sealed partial class SlideOverPanel : Grid
     /// <summary>
     /// Shows <paramref name="content"/> at once and slides it in; <paramref name="initialFocus"/> (else the first control
     /// in it) takes the focus, so Esc reaches the panel. <paramref name="closed"/> runs once the panel has closed, however
-    /// it closed.
+    /// it closed. <paramref name="minWidth"/>: the sheet's minimum width (macOS ActionLibraryView asks for 560).
     /// </summary>
-    public void Present(FrameworkElement content, UIElement? initialFocus = null, Action? closed = null)
+    public void Present(FrameworkElement content, UIElement? initialFocus = null, Action? closed = null, double minWidth = MinSheetWidth)
     {
         // Open or still sliding out: that one finishes first.
         if (_sheet.Child is not null) Finish();
         HoverTooltip.Dismiss();
         _returnFocus = XamlRoot is { } root ? FocusManager.GetFocusedElement(root) as UIElement : null;
         _closed = closed;
+        _minWidth = minWidth;
         _sheet.Child = content;
         IsOpen = true;
         Visibility = Visibility.Visible;
@@ -129,11 +131,11 @@ public sealed partial class SlideOverPanel : Grid
         if (width > 0) _sheet.Width = width;
     }
 
-    /// <summary>3/4 of the host (never under 480, never over the host). The host's width: the panel is laid out only once shown.</summary>
+    /// <summary>3/4 of the host (never under the minimum, never over the host). The host's width: the panel is laid out only once shown.</summary>
     private double SheetWidth()
     {
         var width = Parent is FrameworkElement host && host.ActualWidth > 0 ? host.ActualWidth : ActualWidth;
-        return Math.Min(width, Math.Max(width * WidthFraction, MinSheetWidth));
+        return Math.Min(width, Math.Max(width * WidthFraction, _minWidth));
     }
 
     /// <summary>

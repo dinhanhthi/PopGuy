@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using PopGuy.Core.Actions;
+using PopGuy.Core.Library;
 using PopGuy.Core.Providers;
 using PopGuy.Core.Secrets;
 using PopGuy.Core.Settings;
@@ -94,6 +95,30 @@ internal sealed class ActionsViewModel
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             _log($"settings: imported actions not saved, {e.GetType().Name}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The Action Library's Install (macOS SettingsView onInstall): the preset's installable action is added at the end of
+    /// the action order, never through the import path (not from a plugin). A preset the sanitizer refuses, or a failed
+    /// write, is logged and false.
+    /// </summary>
+    public bool InstallPreset(LibraryPreset preset)
+    {
+        if (ActionLibrary.InstallableAction(preset, _settings.Current) is not { } action)
+        {
+            _log($"settings: library preset {preset.Id} refused by the sanitizer");
+            return false;
+        }
+        try
+        {
+            _settings.AddCustomAction(action);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log($"settings: library preset {preset.Id} not saved, {e.GetType().Name}");
             return false;
         }
     }
