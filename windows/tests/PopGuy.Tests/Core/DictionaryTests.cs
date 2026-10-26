@@ -1,8 +1,10 @@
+using System.IO.Compression;
 using System.Net;
 using System.Text;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Dictionaries;
 using PopGuy.Core.Providers;
+using PopGuy.Core.Settings;
 using PopGuy.Core.Speak;
 using PopGuy.Tests.Support;
 
@@ -11,10 +13,19 @@ namespace PopGuy.Tests.Core;
 // Key feature and untrusted input: the dictionary engine (macOS DictionaryEngine.swift, spec-4 §3.4) returns every
 // provider's definition in provider order whatever finishes first; the minhqnd and Free Dictionary API responses
 // (§3.5) map to entries, a miss is "not found" and a malformed body a typed error; audio URLs from the JSON are https
-// only (§1.6-1.7), and the pronunciation download is capped.
-public sealed class DictionaryTests
+// only (§1.6-1.7), and the pronunciation download is capped. A user-loaded Babylon .bgl file (§3.6-3.7) is untrusted:
+// every size is bounded, a malformed file is a typed error, and its SQLite index is rebuilt when the file changes.
+public sealed class DictionaryTests : IDisposable
 {
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "PopGuyTests-" + Guid.NewGuid().ToString("N"));
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_root))
+            Directory.Delete(_root, recursive: true);
+    }
 
     // freedictionaryapi.com, trimmed from a real "serendipity" response.
     private const string FreeDictionaryPayload = """
@@ -308,4 +319,121 @@ public sealed class DictionaryTests
     [InlineData("covid19", false)]
     [InlineData("pneumonoultramicroscopicsilicovolcanoconiosiss", false)]
     public void SingleWordRule(string text, bool expected) => Assert.Equal(expected, SpeakRules.IsSingleWord(text));
+
+    // Spec-4 §3.5-3.7: an enabled file takes part (a disabled one does not), its index answers through an alternate
+    // whatever the case, and the definition comes back as plain text without its HTML.
+    [Fact]
+    public async Task BabylonLooksUpAnIndexedFileCaseInsensitively()
+    {
+        var dictionary = Babylon(WriteBgl(EntryBlock(1, "hello", "xin chào<br><b>first</b>", "hi")));
+        var cache = new BabylonIndexCache(Path.Combine(_root, "BabylonIndexes"));
+
+        Assert.Null(DictionaryEngine.DefaultProviders(() => [dictionary with { IsEnabled = false }], babylonIndex: cache)(
+            DictionaryProviderKind.BabylonBgl));
+        var provider = DictionaryEngine.DefaultProviders(() => [dictionary], babylonIndex: cache)(
+            DictionaryProviderKind.BabylonBgl);
+        var entry = await provider!.LookupAsync(" HI ", null, "vi", Ct);
+
+        Assert.Equal("HI", entry.Headword);
+        Assert.Equal("Babylon (BGL)", entry.SourceName);
+        Assert.True(entry.IsPlainTextOnly);
+        Assert.Equal("Vietnamese English\nxin chào\nfirst", entry.RawText);
+        var indexFile = $"{dictionary.Id.ToString().ToUpperInvariant()}.sqlite";
+        Assert.True(File.Exists(Path.Combine(_root, "BabylonIndexes", indexFile)));
+    }
+
+    // The index is keyed on the file's size and modification time: unchanged, it is reused without reading the file
+    // again; a new modification time rebuilds it.
+    [Fact]
+    public async Task BabylonIndexIsRebuiltWhenTheFileChanges()
+    {
+        var dictionary = Babylon(WriteBgl(EntryBlock(1, "hello", "first")));
+        var modified = File.GetLastWriteTimeUtc(dictionary.FilePath);
+        var size = new FileInfo(dictionary.FilePath).Length;
+        var cache = new BabylonIndexCache(Path.Combine(_root, "BabylonIndexes"));
+        Assert.Equal("first", Assert.Single(await cache.LookupAsync(dictionary, "hello", Ct)).Definition);
+
+        WriteBgl(EntryBlock(1, "hello", "secnd"));
+        File.SetLastWriteTimeUtc(dictionary.FilePath, modified);
+        Assert.Equal(size, new FileInfo(dictionary.FilePath).Length);
+        Assert.Equal("first", Assert.Single(await cache.LookupAsync(dictionary, "hello", Ct)).Definition);
+
+        File.SetLastWriteTimeUtc(dictionary.FilePath, modified.AddMinutes(1));
+        Assert.Equal("secnd", Assert.Single(await cache.LookupAsync(dictionary, "hello", Ct)).Definition);
+    }
+
+    // A malformed or hostile file is a Decoding error, never a crash, a hang or an unbounded allocation.
+    [Theory]
+    [InlineData("tooShort", "BGL file is too short.")]
+    [InlineData("truncated", "BGL block length exceeds stream size.")]
+    [InlineData("gzipOffsetPastEnd", "Invalid BGL gzip offset.")]
+    [InlineData("blockPastEnd", "BGL block length exceeds stream size.")]
+    [InlineData("blockTooLarge", "BGL block is too large.")]
+    [InlineData("wordPastBlock", "BGL entry length exceeds block size.")]
+    [InlineData("inflatesPastCap", "BGL data inflates past the size limit.")]
+    public void BabylonRefusesMalformedFiles(string mutation, string detail)
+    {
+        var valid = Bgl(EntryBlock(1, "hello", new string('\0', 200)));
+        var bytes = mutation switch
+        {
+            "tooShort" => valid[..10],
+            // Ends inside the entry block (zeros keep the trailer's size field small).
+            "truncated" => valid[..^60],
+            "gzipOffsetPastEnd" => [.. valid[..4], 0xFF, 0xFF, .. valid[6..]],
+            "blockPastEnd" => Bgl([0x01, 0xFF, (byte)'a', (byte)'b']),
+            "blockTooLarge" => Bgl([0x31, 0x7F, 0xFF, 0xFF, 0xFF]),
+            "wordPastBlock" => Bgl([0x01, 0x02, 200, (byte)'a']),
+            // 128 KiB of empty blocks past a 64 KiB cap, with a trailer that claims 0 bytes.
+            _ => [.. Bgl(new byte[128 * 1024], CompressionLevel.Optimal)[..^4], 0, 0, 0, 0],
+        };
+
+        var error = Assert.Throws<DictionaryLookupException>(() =>
+            new BabylonBglParser(maxDecompressedBytes: 64 * 1024).Read(bytes).ToList());
+        Assert.Equal(DictionaryLookupErrorKind.Decoding, error.Kind);
+        Assert.Equal(DictionaryLookupException.Decoding(detail).Message, error.Message);
+    }
+
+    private BabylonDictionary Babylon(string path) => new()
+    {
+        Id = Guid.Parse("00000000-0000-0000-0000-0000000000ab"),
+        DisplayName = "Vietnamese English",
+        FilePath = path,
+        IsEnabled = true,
+        EntryCount = 1,
+    };
+
+    /// <summary>Writes the .bgl file of the Babylon tests (always the same path) and returns its path.</summary>
+    private string WriteBgl(byte[] blocks)
+    {
+        Directory.CreateDirectory(_root);
+        var path = Path.Combine(_root, "dictionary.bgl");
+        File.WriteAllBytes(path, Bgl(blocks));
+        return path;
+    }
+
+    /// <summary>A v1 BGL: the header, then the gzip member at offset 6. Stored (uncompressed) deflate by default, so the
+    /// file size depends only on the block length.</summary>
+    private static byte[] Bgl(byte[] blocks, CompressionLevel level = CompressionLevel.NoCompression)
+    {
+        var gzip = new MemoryStream();
+        using (var stream = new GZipStream(gzip, level, leaveOpen: true))
+            stream.Write(blocks);
+        return [0x12, 0x34, 0x00, 0x01, 0x00, 0x06, .. gzip.ToArray()];
+    }
+
+    /// <summary>A short entry block (macOS DictionaryEngineTests.entryBlock): 1-byte word length, 2-byte definition
+    /// length, then 1-byte-length alternates; the block length is one byte.</summary>
+    private static byte[] EntryBlock(byte type, string word, string definition, params string[] alternates)
+    {
+        var wordBytes = Encoding.UTF8.GetBytes(word);
+        var definitionBytes = Encoding.UTF8.GetBytes(definition);
+        List<byte> payload =
+        [
+            (byte)wordBytes.Length, .. wordBytes,
+            (byte)(definitionBytes.Length >> 8), (byte)definitionBytes.Length, .. definitionBytes,
+        ];
+        foreach (var alternate in alternates.Select(Encoding.UTF8.GetBytes))
+            payload.AddRange([(byte)alternate.Length, .. alternate]);
+        return [(byte)(type & 0x0f), (byte)payload.Count, .. payload];
+    }
 }

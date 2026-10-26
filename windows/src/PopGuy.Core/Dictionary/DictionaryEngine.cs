@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Providers;
+using PopGuy.Core.Settings;
 
 namespace PopGuy.Core.Dictionaries;
 
@@ -9,7 +10,7 @@ namespace PopGuy.Core.Dictionaries;
 /// Dictionary lookups through one provider or all of them (macOS DictionaryEngine.swift, spec-4 §3.4).
 /// <para>
 /// A provider takes part when the factory returns one for its kind. Windows has no macOS Dictionary (Dictionary
-/// Services), so <see cref="DictionaryProviderKind.MacOSBuiltin"/> never does; Babylon joins with its own phase.
+/// Services), so <see cref="DictionaryProviderKind.MacOSBuiltin"/> never does; Babylon does while a .bgl file is enabled.
 /// </para>
 /// UNTRUSTED DATA: the looked-up term is never logged, nor put in an error.
 /// </summary>
@@ -19,7 +20,27 @@ public sealed class DictionaryEngine
 
     /// <param name="providers">The provider for a kind; null when Windows has none. Default: the online providers.</param>
     public DictionaryEngine(Func<DictionaryProviderKind, IDictionaryProvider?>? providers = null) =>
-        _providers = providers ?? OnlineProviders(ProviderHttp.Shared);
+        _providers = providers ?? DefaultProviders(() => []);
+
+    /// <summary>
+    /// minhqnd and Free Dictionary API, plus Babylon over <paramref name="babylonDictionaries"/> (read at each lookup, e.g.
+    /// from the settings), which takes part only while one of them is enabled (spec-4 §3.2).
+    /// </summary>
+    public static Func<DictionaryProviderKind, IDictionaryProvider?> DefaultProviders(
+        Func<IReadOnlyList<BabylonDictionary>> babylonDictionaries, ProviderHttp? http = null,
+        BabylonIndexCache? babylonIndex = null)
+    {
+        http ??= ProviderHttp.Shared;
+        IDictionaryProvider minhqnd = new MinhqndProvider(http), free = new FreeDictionaryProvider(http);
+        return kind => kind switch
+        {
+            DictionaryProviderKind.Minhqnd => minhqnd,
+            DictionaryProviderKind.FreeDictionaryApi => free,
+            DictionaryProviderKind.BabylonBgl when babylonDictionaries() is var files && files.Any(f => f.IsEnabled) =>
+                new BabylonProvider(files, babylonIndex ?? BabylonIndexCache.Shared),
+            _ => null,
+        };
+    }
 
     /// <summary>A custom Dictionary action: only <c>config.Provider</c>. A provider Windows lacks finds nothing.</summary>
     public Task<DictionaryEntry> LookupAsync(string term, DictionaryConfig config, CancellationToken ct = default) =>
@@ -66,17 +87,6 @@ public sealed class DictionaryEngine
         if (results.Count > 0)
             return results;
         throw failures.TryPeek(out var first) ? first : DictionaryLookupException.NotFound();
-    }
-
-    private static Func<DictionaryProviderKind, IDictionaryProvider?> OnlineProviders(ProviderHttp http)
-    {
-        IDictionaryProvider minhqnd = new MinhqndProvider(http), free = new FreeDictionaryProvider(http);
-        return kind => kind switch
-        {
-            DictionaryProviderKind.Minhqnd => minhqnd,
-            DictionaryProviderKind.FreeDictionaryApi => free,
-            _ => null,
-        };
     }
 }
 

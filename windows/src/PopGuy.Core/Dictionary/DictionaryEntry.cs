@@ -29,7 +29,7 @@ public sealed record Sense(string Definition, IReadOnlyList<string> Examples, IR
 /// <summary>One provider's definition; Look up shows one tab per result when there are several.</summary>
 public sealed record DictionaryProviderResult(DictionaryProviderKind ProviderKind, DictionaryEntry Entry);
 
-/// <summary>A dictionary source (minhqnd, Free Dictionary API; Babylon in a later phase).</summary>
+/// <summary>A dictionary source (minhqnd, Free Dictionary API, the user's Babylon .bgl files).</summary>
 public interface IDictionaryProvider
 {
     /// <summary>

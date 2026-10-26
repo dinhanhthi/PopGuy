@@ -10,5 +10,7 @@
   <ItemGroup>
     <!-- PopClip Config.yaml: parsed as events into plain dictionaries and lists, never into typed objects. -->
     <PackageReference Include="YamlDotNet" />
+    <!-- Babylon .bgl indexes; ships the native SQLite library for every runtime. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" />
   </ItemGroup>
 </Project>
