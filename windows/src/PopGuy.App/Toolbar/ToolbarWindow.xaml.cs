@@ -44,6 +44,9 @@ public sealed partial class ToolbarWindow : Window
     /// <summary>The body's minimum width, so a short bar does not wrap the result into a narrow column (spec-1 §3.3).</summary>
     private const double MinBodyWidth = 340;
 
+    /// <summary>The result panel's left and right padding together (12 + 12 DIP in the XAML).</summary>
+    private const double ResultHorizontalPadding = 24;
+
     /// <summary>The work area when no monitor can be read (spec-1 §3.2).</summary>
     private static readonly DrawingRectangle FallbackWorkArea = new(0, 0, 1280, 800);
 
@@ -88,6 +91,9 @@ public sealed partial class ToolbarWindow : Window
     private bool _promptShown;
     private bool _refineShown;
     private bool _editorShown;
+
+    /// <summary>A body fit is queued for after the current bindings (<see cref="QueueFitBodyWidth"/>).</summary>
+    private bool _bodyFitQueued;
 
     /// <summary>The work area the toolbar is kept in: the selection's monitor at show, the window's after a drag.</summary>
     private DrawingRectangle _workArea = FallbackWorkArea;
@@ -611,6 +617,7 @@ public sealed partial class ToolbarWindow : Window
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_closed) return;
+        QueueFitBodyWidth();
         switch (e.PropertyName)
         {
             case nameof(ToolbarViewModel.Actions):
@@ -956,10 +963,29 @@ public sealed partial class ToolbarWindow : Window
         UpdateActivationRegion();
     }
 
-    /// <summary>The body is as wide as the bar, and at least <see cref="MinBodyWidth"/>, so its text wraps (spec-1 §3.3).</summary>
-    private void OnBarSizeChanged(object sender, SizeChangedEventArgs e)
+    private void OnBarSizeChanged(object sender, SizeChangedEventArgs e) => FitBodyWidth();
+
+    /// <summary>
+    /// The body is as wide as the bar, at least <see cref="MinBodyWidth"/>, so its text wraps (spec-1 §3.3), and wide
+    /// enough for the result buttons, which never wrap (VM QA: Refine was cut off at the minimum width).
+    /// </summary>
+    private void FitBodyWidth()
     {
-        if (!_closed) Body.Width = Math.Max(Bar.ActualWidth, MinBodyWidth);
+        if (_closed) return;
+        ResultActions.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        Body.Width = Math.Max(Math.Max(Bar.ActualWidth, MinBodyWidth), ResultActions.DesiredSize.Width + ResultHorizontalPadding);
+    }
+
+    /// <summary>Fits the body once this change's bindings have run, so the result row holds its new buttons.</summary>
+    private void QueueFitBodyWidth()
+    {
+        if (_bodyFitQueued) return;
+        _bodyFitQueued = true;
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+        {
+            _bodyFitQueued = false;
+            FitBodyWidth();
+        });
     }
 
     private void OnCardSizeChanged(object sender, SizeChangedEventArgs e)
