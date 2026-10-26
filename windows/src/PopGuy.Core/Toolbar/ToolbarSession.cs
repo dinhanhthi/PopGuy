@@ -3,6 +3,7 @@ using PopGuy.Core.Actions;
 using PopGuy.Core.Diff;
 using PopGuy.Core.History;
 using PopGuy.Core.Providers;
+using PopGuy.Core.Scripts;
 using PopGuy.Core.Settings;
 
 namespace PopGuy.Core.Toolbar;
@@ -61,13 +62,23 @@ public sealed record ToolbarRun(ActionIdentifier Action, string Text)
 }
 
 /// <summary>
+/// A script action finished (spec-4 §4.4): the App applies <paramref name="AfterRun"/> (close the toolbar, copy or paste
+/// <paramref name="Output"/>) while <see cref="ToolbarSession.IsCurrentRun"/> holds for <paramref name="Generation"/>.
+/// Show result and Do nothing are already the session's state.
+/// </summary>
+public sealed record ScriptRunFinished(AfterRunBehavior AfterRun, string? Output, int Generation);
+
+/// <summary>
 /// Runs one provider action at a time and holds the toolbar state. <see cref="Changed"/> is raised on any thread (the
 /// App marshals to its UI thread): on every state transition, and while streaming at most once per
 /// <see cref="ProgressInterval"/>. A run that is stopped or replaced leaves no trace: no state change, no history
 /// (macOS generation guard, spec-2 §2.7). There is no automatic retry (spec-2 §2.8): Retry and Regenerate run again.
-/// It also holds the text inputs' state: the prompt input, the refine input and the editable result.
+/// It also holds the text inputs' state: the prompt input, the refine input and the editable result. A scriptable
+/// custom action runs through <paramref name="scripts"/> (none: it changes nothing) under the same rules.
 /// </summary>
-public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Func<AppSettings> settings, TimeProvider? clock = null)
+public sealed class ToolbarSession(
+    ActionEngine engine, HistoryStore history, Func<AppSettings> settings, TimeProvider? clock = null,
+    IScriptActionRunner? scripts = null)
 {
     /// <summary>
     /// The minimum time between two progress notifications. macOS appends per token and lets SwiftUI coalesce; WinUI
@@ -101,6 +112,9 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
     private IReadOnlySet<int> _rejected = new HashSet<int>();
 
     public event Action? Changed;
+
+    /// <summary>A script run ended without an error and was not stopped or replaced. Raised on any thread.</summary>
+    public event Action<ScriptRunFinished>? ScriptFinished;
 
     public ToolbarState State
     {
@@ -257,9 +271,9 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
     }
 
     /// <summary>
-    /// Cancels any run in flight and streams <paramref name="run"/>. The task completes when the run ends; the App need
-    /// not await it. Actions that are not provider-backed (Speak, Look up, script types, a missing custom action, Prompt
-    /// without text) change nothing.
+    /// Cancels any run in flight and streams <paramref name="run"/> (or runs its script). The task completes when the
+    /// run ends; the App need not await it. Actions that are not provider-backed (Speak, Look up, a missing custom
+    /// action, Prompt without text) change nothing.
     /// </summary>
     public Task RunAsync(ToolbarRun run) => Start(run, followUp: null);
 
@@ -337,11 +351,23 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
     }
 #endif
 
+    /// <summary>
+    /// No run started and no Stop since the script run that raised <see cref="ScriptFinished"/> with
+    /// <paramref name="generation"/>.
+    /// </summary>
+    public bool IsCurrentRun(int generation)
+    {
+        lock (_gate)
+            return generation == _generation;
+    }
+
     // A new run (or a refine) replaces the one in flight; editing and the refine input end, and a Prompt run closes
     // the prompt input (macOS startPrompt). Every other run leaves the prompt input as it is, as on macOS.
     private Task Start(ToolbarRun run, FollowUp? followUp)
     {
         var s = settings();
+        if (followUp is null && ScriptAction(run, s) is { } script)
+            return scripts is null ? Task.CompletedTask : StartScript(run, script, s);
         if (Resolve(run, s) is not { } resolved)
             return Task.CompletedTask;
 
@@ -363,6 +389,87 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
         }
         Changed?.Invoke();
         return Stream(run, resolved, s, followUp, generation, ct);
+    }
+
+    private static CustomAction? ScriptAction(ToolbarRun run, AppSettings s) =>
+        run.Action.Type == ActionIdentifierType.Custom
+            ? s.CustomActions.FirstOrDefault(a => a.Id == run.Action.CustomId && a.IsScriptable)
+            : null;
+
+    // macOS ToolbarViewModel's scriptable branch (spec-4 §4.4). No refine (no provider), no diff.
+    private Task StartScript(ToolbarRun run, CustomAction action, AppSettings s)
+    {
+        int generation;
+        CancellationToken ct;
+        lock (_gate)
+        {
+            CancelLocked();
+            generation = _generation;
+            _cts = new CancellationTokenSource();
+            ct = _cts.Token;
+            _lastRun = run;
+            _lastKind = null;
+            _state = new ToolbarState.Running("");
+            _editing = false;
+            _refineInputActive = false;
+        }
+        Changed?.Invoke();
+        return RunScript(run, action, s, generation, ct);
+    }
+
+    private async Task RunScript(ToolbarRun run, CustomAction action, AppSettings s, int generation, CancellationToken ct)
+    {
+        var startedAt = _clock.GetUtcNow();
+        var text = run.Text.Trim();
+        string? output = null;
+        string? error = null;
+        try
+        {
+            output = (await scripts!.RunAsync(action, text, run.Text, ct)).Text;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return; // Stopped or replaced: the newer generation owns the state.
+        }
+        catch (Exception e)
+        {
+            error = e.Message;
+        }
+
+        var shown = error is null && action.AfterRun == AfterRunBehavior.ShowResult && !string.IsNullOrEmpty(output);
+        ToolbarState final = error is not null ? new ToolbarState.Error(error)
+            : shown ? new ToolbarState.Result(output!)
+            : ToolbarState.Idle;
+        lock (_gate)
+        {
+            if (generation != _generation)
+                return;
+            _state = final;
+            ClearDiffLocked();
+            _edited = shown ? output! : "";
+            _cts?.Dispose();
+            _cts = null;
+        }
+        Changed?.Invoke();
+
+        if (s.HistoryEnabled && !run.SkipHistory)
+        {
+            history.Record(new HistoryRecord
+            {
+                ActionName = action.Title,
+                ProviderLabel = action.Type.DisplayName(),
+                Model = "",
+                SourceBundleId = run.SourceExeName,
+                SourceAppName = run.SourceAppName ?? run.SourceExeName,
+                DurationMs = (int)(_clock.GetUtcNow() - startedAt).TotalMilliseconds,
+                Success = error is null,
+                ErrorMessage = error,
+                Input = text,
+                Output = output ?? "",
+            }, s.HistoryStoreFullText);
+        }
+        if (error is null)
+            ScriptFinished?.Invoke(new ScriptRunFinished(action.AfterRun, output, generation));
     }
 
     private sealed record Resolved(EngineAction Action, string ActionName, ProviderKind Kind, string Model, string Language);

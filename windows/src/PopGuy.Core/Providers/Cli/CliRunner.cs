@@ -66,14 +66,17 @@ public sealed class CliRunner
     /// <summary>
     /// Starts <paramref name="name"/> (or <paramref name="executablePath"/> when set) with <paramref name="arguments"/>
     /// in a fresh working directory holding <paramref name="workFiles"/> (file name to constant content, never user
-    /// data), writes <paramref name="input"/> to its stdin and yields its non-empty stdout lines (split on LF). Throws
+    /// data), writes <paramref name="input"/> to its stdin and yields its non-empty stdout lines (split on LF; empty ones
+    /// too with <paramref name="keepEmptyLines"/>). <paramref name="extraEnvironment"/> is added to the allowlisted
+    /// environment (a script action's selection variables). Throws
     /// <see cref="ProviderError"/>: Transport when the CLI is missing, cannot start or times out, Http with the exit
     /// code and the stderr cause on a non-zero exit. Cancelling or disposing the enumerator stops the CLI in the
     /// background (stdin closed, then its process tree killed after 3 s).
     /// </summary>
     public async IAsyncEnumerable<string> StreamLinesAsync(
         string name, string? executablePath, IReadOnlyList<string> arguments, string input,
-        IReadOnlyDictionary<string, string>? workFiles = null, [EnumeratorCancellation] CancellationToken ct = default)
+        IReadOnlyDictionary<string, string>? workFiles = null, IReadOnlyDictionary<string, string>? extraEnvironment = null,
+        bool keepEmptyLines = false, [EnumeratorCancellation] CancellationToken ct = default)
     {
         // The run goes on in the background, feeding a channel, so disposing the enumerator only asks for a stop and
         // returns at once.
@@ -84,7 +87,8 @@ public sealed class CliRunner
         {
             try
             {
-                await RunAsync(name, executablePath, arguments, input, workFiles, control, line => channel.Writer.TryWrite(line));
+                await RunAsync(name, executablePath, arguments, input, workFiles, extraEnvironment, keepEmptyLines, control,
+                    line => channel.Writer.TryWrite(line));
                 channel.Writer.TryComplete();
             }
             catch (Exception error)
@@ -146,7 +150,8 @@ public sealed class CliRunner
 
     private async Task RunAsync(
         string name, string? executablePath, IReadOnlyList<string> arguments, string input,
-        IReadOnlyDictionary<string, string>? workFiles, ProcessControl control, Action<string> yield)
+        IReadOnlyDictionary<string, string>? workFiles, IReadOnlyDictionary<string, string>? extraEnvironment,
+        bool keepEmptyLines, ProcessControl control, Action<string> yield)
     {
         var executable = _shell.Executable(name, executablePath)
                          ?? throw (string.IsNullOrWhiteSpace(executablePath)
@@ -156,8 +161,10 @@ public sealed class CliRunner
         try
         {
             WriteWorkFiles(workDirectory, workFiles);
-            var info = ShellEnvironment.StartInfo(
-                executable, arguments, ShellEnvironment.BaseEnvironment(_shell.Path, _shell.Variable), workDirectory);
+            var environment = ShellEnvironment.BaseEnvironment(_shell.Path, _shell.Variable);
+            foreach (var (key, value) in extraEnvironment ?? new Dictionary<string, string>())
+                environment[key] = value;
+            var info = ShellEnvironment.StartInfo(executable, arguments, environment, workDirectory);
             using var process = new Process { StartInfo = info };
             try
             {
@@ -183,7 +190,7 @@ public sealed class CliRunner
                         throw ProviderError.Transport($"Could not start {executable.DisplayPath}: {error.Message}");
                     }
                 }
-                await RunStartedAsync(name, process, input, control, yield);
+                await RunStartedAsync(name, process, input, keepEmptyLines, control, yield);
             }
             finally
             {
@@ -203,7 +210,8 @@ public sealed class CliRunner
             File.WriteAllText(Path.Combine(workDirectory, fileName), content);
     }
 
-    private async Task RunStartedAsync(string name, Process process, string input, ProcessControl control, Action<string> yield)
+    private async Task RunStartedAsync(
+        string name, Process process, string input, bool keepEmptyLines, ProcessControl control, Action<string> yield)
     {
         // The only WaitForExitAsync on this process: each call adds and removes an Exited handler, and concurrent
         // calls can lose one (the event's add/remove is not thread-safe), leaving that wait pending forever.
@@ -224,11 +232,11 @@ public sealed class CliRunner
         // Split on LF only (U+2028/U+2029 may appear unescaped inside JSON strings).
         var line = new MemoryStream();
         Exception? failure = null;
-        void Consume()
+        void Consume(bool keepEmpty)
         {
             var text = Encoding.UTF8.GetString(line.GetBuffer(), 0, (int)line.Length);
             line.SetLength(0);
-            if (failure is null && text.Length > 0)
+            if (failure is null && (text.Length > 0 || keepEmpty))
                 yield(text);
         }
         await PumpAsync(process.StandardOutput.BaseStream, exitGrace, (buffer, count) =>
@@ -242,7 +250,7 @@ public sealed class CliRunner
                     continue;
                 line.Write(buffer, start, i - start);
                 start = i + 1;
-                Consume();
+                Consume(keepEmptyLines);
             }
             line.Write(buffer, start, count - start);
             if (line.Length <= LineLimit)
@@ -251,7 +259,8 @@ public sealed class CliRunner
             failure = ProviderError.UnexpectedResponse($"{name} sent a line longer than 4 MB.");
             control.Stop(StopReason.Failed);
         });
-        Consume();
+        // The unterminated last line only; an output ending in LF has none.
+        Consume(keepEmpty: false);
         await exited;
         await errors;
         var status = process.ExitCode;

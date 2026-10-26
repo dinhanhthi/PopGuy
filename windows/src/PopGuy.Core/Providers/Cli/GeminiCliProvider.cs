@@ -30,7 +30,7 @@ public sealed class GeminiCliProvider(CliRunner runner) : IProvider
         string? systemPrompt, string input, string model, ProviderOptions options, CancellationToken ct = default) =>
         ParseAsync(
             runner.StreamLinesAsync(
-                Name, options.ExecutablePath, Arguments(model), CliRunner.DataPrompt(systemPrompt, input), WorkFiles, ct),
+                Name, options.ExecutablePath, Arguments(model), CliRunner.DataPrompt(systemPrompt, input), WorkFiles, ct: ct),
             ct);
 
     /// <summary>The policy file's name, relative to the CLI's working directory (the run's fresh temp folder).</summary>

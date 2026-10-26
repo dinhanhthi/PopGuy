@@ -18,7 +18,7 @@ namespace PopGuy.Toolbar;
 /// Prompt hotkey opens the prompt input). The passive selections of <see cref="SelectionPipeline"/> (a drag, a keyboard
 /// selection, a double-click) are routed by spec-1 §1.3 and shown at the gesture; only a double-click with an assigned
 /// action runs one. It also handles the toolbar's clicks (actions, the prompt, Stop, Copy, Paste back, Close, Ignore
-/// this app, Settings) and the dismissal rules of spec-1 §3.8.
+/// this app, Settings), a script action's after-run delivery (spec-4 §4.4) and the dismissal rules of spec-1 §3.8.
 /// <para>
 /// Threading: the chord and hotkey events and the three input loops run on the thread pool; everything that touches the
 /// window, the view model or the presentation state runs on the UI thread (<see cref="DispatcherQueue"/>). Captures
@@ -119,6 +119,7 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.DisableCloseConfirmationRequested += OnDisableCloseConfirmation;
         _viewModel.IgnoreAppRequested += OnIgnoreApp;
         _viewModel.SettingsRequested += OnSettingsRequested;
+        _session.ScriptFinished += OnScriptFinished;
         ApplySettings();
 
         var token = _stop.Token;
@@ -146,6 +147,7 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.DisableCloseConfirmationRequested -= OnDisableCloseConfirmation;
         _viewModel.IgnoreAppRequested -= OnIgnoreApp;
         _viewModel.SettingsRequested -= OnSettingsRequested;
+        _session.ScriptFinished -= OnScriptFinished;
         Hide();
     }
 
@@ -613,6 +615,35 @@ internal sealed class ToolbarController : IDisposable
         Hide();
     }
 
+    // Script actions.
+
+    /// <summary>A script action finished (any thread): its after-run goes to the UI thread.</summary>
+    private void OnScriptFinished(ScriptRunFinished finished) => _dispatcher.TryEnqueue(() => ApplyAfterRun(finished));
+
+    /// <summary>
+    /// A script action's after-run (spec-4 §4.4), while its run is still the toolbar's (no Stop, close or new selection
+    /// since): Close toolbar hides it, Copy result copies the output, Paste result pastes it into the source and keeps
+    /// the toolbar open. Show result and Do nothing are already the session's state. UI thread.
+    /// </summary>
+    private void ApplyAfterRun(ScriptRunFinished finished)
+    {
+        if (!_window.IsShown || !_session.IsCurrentRun(finished.Generation)) return;
+        var output = finished.Output ?? "";
+        _log($"script: after run {finished.AfterRun}, {output.Length} chars");
+        switch (finished.AfterRun)
+        {
+            case AfterRunBehavior.CloseToolbar:
+                Hide();
+                break;
+            case AfterRunBehavior.CopyResult when output.Length > 0:
+                CopyInBackground(output, "script copy");
+                break;
+            case AfterRunBehavior.PasteResult when output.Length > 0:
+                Watch(PasteAsync(output, scriptResult: true), "script paste");
+                break;
+        }
+    }
+
     // Copy and Paste back.
 
     /// <summary>
@@ -630,12 +661,16 @@ internal sealed class ToolbarController : IDisposable
         _log($"{what}: {text.Length} chars, written {written}");
     }), what);
 
+    /// <summary>Paste back, called from the click on the UI thread.</summary>
+    private async void OnPasteBackRequested(string text) => await PasteAsync(text, scriptResult: false);
+
     /// <summary>
-    /// Paste back, called from the click on the UI thread (PasteBack may give the source the foreground only from
-    /// there). One at a time. Pasted → the toolbar hides; Blocked → the admin-app error; Refused → the result is copied
-    /// instead with a short reason, or, when the clipboard could not be saved, left alone with a note.
+    /// Pastes into the source, on the UI thread (PasteBack may give the source the foreground only from there). One at
+    /// a time. Pasted → the toolbar hides, or stays for a script's Paste result (macOS); Blocked → the admin-app error;
+    /// Refused → the result is copied instead with a short reason, or, when the clipboard could not be saved, left alone
+    /// with a note. A script's Paste result has no result panel for the note, so it shows as the error instead.
     /// </summary>
-    private async void OnPasteBackRequested(string text)
+    private async Task PasteAsync(string text, bool scriptResult)
     {
         if (_pasting || _current is not { Blocked: false } capture || text.Length == 0) return;
         _pasting = true;
@@ -659,22 +694,27 @@ internal sealed class ToolbarController : IDisposable
         switch (result.Status)
         {
             case PasteBackStatus.Pasted:
-                Hide();
+                if (!scriptResult) Hide();
                 break;
             case PasteBackStatus.Blocked:
                 _viewModel.Fail(AdminAppMessage);
                 break;
             default:
+                string note;
                 if (IsClipboardRefusal(result.Reason))
                 {
                     // Copying would replace a clipboard PopGuy could not save: leave it as it is.
-                    _viewModel.ShowNotice("Not pasted: PopGuy couldn't save your clipboard first. Use Copy to copy the result.");
+                    note = scriptResult
+                        ? "Not pasted: PopGuy couldn't save your clipboard first."
+                        : "Not pasted: PopGuy couldn't save your clipboard first. Use Copy to copy the result.";
                 }
                 else
                 {
                     CopyInBackground(text, "paste refused, copied instead");
-                    _viewModel.ShowNotice($"Copied instead — {RefusalReason(result.Reason)}");
+                    note = $"Copied instead — {RefusalReason(result.Reason)}";
                 }
+                if (scriptResult) _viewModel.Fail(note);
+                else _viewModel.ShowNotice(note);
                 break;
         }
     }

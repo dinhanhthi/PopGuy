@@ -6,6 +6,7 @@ using PopGuy.Core.Actions;
 using PopGuy.Core.History;
 using PopGuy.Core.Providers;
 using PopGuy.Core.Providers.Cli;
+using PopGuy.Core.Scripts;
 using PopGuy.Core.Secrets;
 using PopGuy.Core.Settings;
 using PopGuy.Core.Toolbar;
@@ -44,7 +45,9 @@ internal sealed class AppServices : IDisposable
         // run only, never the launch.
         Providers = new ProviderFactory(cli: new CliRunner(onStarted: process => ChildProcessJob.Shared.Assign(process)));
         var engine = new ActionEngine(Providers, ApiKey);
-        var session = new ToolbarSession(engine, History, () => Settings.Current);
+        // Script shells go in their own job, which what a script opens leaves (it outlives PopGuy, as on macOS).
+        var scripts = new ScriptActionEngine(onStarted: process => ChildProcessJob.Scripts.Assign(process));
+        var session = new ToolbarSession(engine, History, () => Settings.Current, scripts: scripts);
 
         _input = new GlobalInput(log.Write);
         try

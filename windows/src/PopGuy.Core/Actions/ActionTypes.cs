@@ -33,6 +33,22 @@ public enum CustomActionType
     [JsonStringEnumMemberName("shellScript")] ShellScript,
 }
 
+public static class CustomActionTypeExtensions
+{
+    /// <summary>CustomActionType.displayName: a script run's history label and the engine's messages.</summary>
+    public static string DisplayName(this CustomActionType type) => type switch
+    {
+        CustomActionType.Ai => "AI",
+        CustomActionType.Translation => "Translation",
+        CustomActionType.Speech => "Speech",
+        CustomActionType.Dictionary => "Dictionary",
+        CustomActionType.OpenUrl => "Open URL",
+        CustomActionType.RunShortcut => "Run Shortcut",
+        CustomActionType.AppleScript => "AppleScript",
+        _ => "Shell Script",
+    };
+}
+
 /// <summary>What a scriptable action does with its output.</summary>
 [JsonConverter(typeof(RawValueEnumConverter<AfterRunBehavior>))]
 public enum AfterRunBehavior

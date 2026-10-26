@@ -3,6 +3,7 @@ using PopGuy.Core;
 using PopGuy.Core.Actions;
 using PopGuy.Core.History;
 using PopGuy.Core.Providers;
+using PopGuy.Core.Scripts;
 using PopGuy.Core.Settings;
 using PopGuy.Core.Toolbar;
 
@@ -57,6 +58,39 @@ public sealed class ToolbarSessionTests : IDisposable
         var settings = new AppSettings { HistoryEnabled = historyEnabled };
         return new ToolbarSession(new ActionEngine(factory, _ => "pg-test-key"), _history, () => settings, new FrozenClock());
     }
+
+    private sealed class FakeScripts(string? output, Exception? error = null) : IScriptActionRunner
+    {
+        public (string Text, string FullText)? Call { get; private set; }
+
+        public async Task<ScriptActionResult> RunAsync(
+            CustomAction action, string text, string fullText, CancellationToken ct = default)
+        {
+            Call = (text, fullText);
+            await Task.Yield();
+            if (error is not null)
+                throw error;
+            return new ScriptActionResult(output);
+        }
+    }
+
+    private static readonly CustomAction Script = new()
+    {
+        Title = "Upper",
+        SystemPrompt = "",
+        Type = CustomActionType.ShellScript,
+        Shell = "powershell",
+        ScriptSource = "$env:POPGUY_TEXT.ToUpper()",
+    };
+
+    private ToolbarSession ScriptSession(FakeScripts scripts, AfterRunBehavior afterRun)
+    {
+        var settings = new AppSettings { HistoryEnabled = true, CustomActions = [Script with { AfterRun = afterRun }] };
+        return new ToolbarSession(
+            new ActionEngine(new ProviderFactory(), _ => null), _history, () => settings, new FrozenClock(), scripts);
+    }
+
+    private static readonly ToolbarRun ScriptRun = new(ActionIdentifier.Custom(Script.Id), "  teh fox \n");
 
     private static readonly ToolbarRun Improve = new(ActionIdentifier.Builtin(ActionKind.Improve), "teh fox");
     private static readonly ToolbarRun Shorten = new(ActionIdentifier.Builtin(ActionKind.Shorten), "the quick brown fox");
@@ -139,5 +173,55 @@ public sealed class ToolbarSessionTests : IDisposable
         session.EndEditing();
 
         Assert.Equal("a quick fox", session.CopyText());
+    }
+
+    // spec-4 §4.4: a script gets the trimmed and the full selection, records one history entry, and hands its output
+    // to the App per afterRun (Show result is the session's own result state).
+    [Fact]
+    public async Task ScriptShowResultShowsTheOutputAndRecordsIt()
+    {
+        var scripts = new FakeScripts("TEH FOX");
+        var session = ScriptSession(scripts, AfterRunBehavior.ShowResult);
+        ScriptRunFinished? finished = null;
+        session.ScriptFinished += f => finished = f;
+
+        await session.RunAsync(ScriptRun);
+
+        Assert.Equal(("teh fox", "  teh fox \n"), scripts.Call);
+        Assert.Equal(new ToolbarState.Result("TEH FOX"), session.State);
+        Assert.Equal(AfterRunBehavior.ShowResult, finished?.AfterRun);
+        var record = Assert.Single(_history.Records);
+        Assert.True(record.Success);
+        Assert.Equal(("Upper", "Shell Script", "teh fox", "TEH FOX"), (record.ActionName, record.ProviderLabel, record.Input, record.Output));
+    }
+
+    [Fact]
+    public async Task ScriptCloseToolbarGoesIdleAndHandsTheOutputToTheApp()
+    {
+        var session = ScriptSession(new FakeScripts("TEH FOX"), AfterRunBehavior.CloseToolbar);
+        ScriptRunFinished? finished = null;
+        session.ScriptFinished += f => finished = f;
+
+        await session.RunAsync(ScriptRun);
+
+        Assert.Equal(ToolbarState.Idle, session.State);
+        Assert.NotNull(finished);
+        Assert.Equal((AfterRunBehavior.CloseToolbar, "TEH FOX"), (finished.AfterRun, finished.Output));
+        Assert.True(session.IsCurrentRun(finished.Generation));
+    }
+
+    [Fact]
+    public async Task ScriptFailureShowsItsMessageAndHandsNothingToTheApp()
+    {
+        var session = ScriptSession(new FakeScripts(null, new ScriptActionError("Script exited with status 1: boom")), AfterRunBehavior.PasteResult);
+        var finished = false;
+        session.ScriptFinished += _ => finished = true;
+
+        await session.RunAsync(ScriptRun);
+
+        Assert.Equal(new ToolbarState.Error("Script exited with status 1: boom"), session.State);
+        Assert.False(finished);
+        var record = Assert.Single(_history.Records);
+        Assert.False(record.Success);
     }
 }
