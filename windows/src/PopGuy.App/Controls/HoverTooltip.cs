@@ -42,6 +42,12 @@ public static class HoverTooltip
     /// <summary>The element under the pointer: waiting for the delay, or showing its tooltip.</summary>
     private static FrameworkElement? _hovered;
 
+    /// <summary>
+    /// The element last pressed: no tooltip until the pointer really leaves it. A button disabled while its action runs
+    /// and enabled again gets a new pointer-entered with the pointer still on it (VM QA: the tooltip came back after a click).
+    /// </summary>
+    private static FrameworkElement? _pressed;
+
     public static string? GetText(DependencyObject element) => (string?)element.GetValue(TextProperty);
 
     /// <summary>Sets the tooltip of <paramref name="element"/>; null or empty removes it.</summary>
@@ -86,7 +92,7 @@ public static class HoverTooltip
 
     private static void OnPointerEntered(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is not FrameworkElement element) return;
+        if (sender is not FrameworkElement element || ReferenceEquals(_pressed, element)) return;
         Dismiss();
         _hovered = element;
         _timer ??= CreateTimer();
@@ -96,13 +102,24 @@ public static class HoverTooltip
     private static void OnPointerExited(object sender, PointerRoutedEventArgs e)
     {
         if (ReferenceEquals(_hovered, sender)) Dismiss();
+        if (ReferenceEquals(_pressed, sender) && sender is FrameworkElement element)
+        {
+            // An exit with the pointer still inside (the element was disabled) keeps the suppression.
+            var point = e.GetCurrentPoint(element).Position;
+            if (point.X < 0 || point.Y < 0 || point.X >= element.ActualWidth || point.Y >= element.ActualHeight) _pressed = null;
+        }
     }
 
-    private static void OnPointerPressed(object sender, PointerRoutedEventArgs e) => Dismiss();
+    private static void OnPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        Dismiss();
+        _pressed = sender as FrameworkElement;
+    }
 
     private static void OnUnloaded(object sender, RoutedEventArgs e)
     {
         if (ReferenceEquals(_hovered, sender)) Dismiss();
+        if (ReferenceEquals(_pressed, sender)) _pressed = null;
     }
 
     private static DispatcherQueueTimer CreateTimer()

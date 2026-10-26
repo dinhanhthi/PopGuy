@@ -1,4 +1,3 @@
-using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
@@ -57,7 +56,7 @@ internal sealed class MarkdownView(RichTextBlock block)
         Uri? linkUri = null;
         foreach (var inline in inlines)
         {
-            var run = Run(inline);
+            var run = Styled(inline);
             if (inline.Link is not { } uri)
             {
                 link = null;
@@ -74,13 +73,22 @@ internal sealed class MarkdownView(RichTextBlock block)
         }
     }
 
-    private Run Run(MarkdownInline inline)
+    private Inline Styled(MarkdownInline inline)
     {
         var run = new Run { Text = inline.Text };
-        if (inline.Style.HasFlag(MarkdownStyle.Bold)) run.FontWeight = FontWeights.Bold;
-        if (inline.Style.HasFlag(MarkdownStyle.Italic)) run.FontStyle = FontStyle.Italic;
         if (inline.Style.HasFlag(MarkdownStyle.Strikethrough)) run.TextDecorations = TextDecorations.Strikethrough;
         if (inline.Style.HasFlag(MarkdownStyle.Code)) run.FontFamily = _codeFont;
-        return run;
+        // Bold and Italic spans, never the run's own weight or style: a bold run ended the app on a Light/Dark switch
+        // (VM QA, ArgumentException "target" inside the XAML framework).
+        Inline styled = run;
+        if (inline.Style.HasFlag(MarkdownStyle.Italic)) styled = Wrap(new Italic(), styled);
+        if (inline.Style.HasFlag(MarkdownStyle.Bold)) styled = Wrap(new Bold(), styled);
+        return styled;
+    }
+
+    private static Span Wrap(Span span, Inline inline)
+    {
+        span.Inlines.Add(inline);
+        return span;
     }
 }
