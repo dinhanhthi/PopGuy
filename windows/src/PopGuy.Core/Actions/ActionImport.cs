@@ -77,17 +77,24 @@ public static class ActionImport
         var skipped = 0;
         foreach (var action in decoded)
         {
-            if (Sanitize(action!) is not { } safe)
-            {
+            if (Prepare(action!) is { } prepared)
+                imported.Add(prepared);
+            else
                 skipped++;
-                continue;
-            }
-            var macShell = safe.Type == CustomActionType.ShellScript && safe.Shell is null;
-            imported.Add(new ImportedAction(
-                safe with { IsFromPlugin = true, IsEnabled = safe.IsEnabled && !macShell },
-                macShell));
         }
         return new ActionImportResult(null, imported, skipped);
+    }
+
+    /// <summary>
+    /// One action of any import path (native JSON, PopClip): <see cref="Sanitize"/>, mark it <c>isFromPlugin</c>, and
+    /// disable a script not written for PowerShell. Null when <see cref="Sanitize"/> refuses the provider.
+    /// </summary>
+    public static ImportedAction? Prepare(CustomAction action)
+    {
+        if (Sanitize(action) is not { } safe)
+            return null;
+        var macShell = safe.Type == CustomActionType.ShellScript && safe.Shell is null;
+        return new ImportedAction(safe with { IsFromPlugin = true, IsEnabled = safe.IsEnabled && !macShell }, macShell);
     }
 
     /// <summary>
