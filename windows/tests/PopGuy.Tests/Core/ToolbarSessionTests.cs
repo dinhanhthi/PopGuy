@@ -10,7 +10,8 @@ namespace PopGuy.Tests.Core;
 
 // Key feature: the toolbar state machine (ToolbarViewModel.swift + ActionEngineHandler.swift): a run streams to a
 // result with throttled notifications, a provider failure shows its message verbatim, and each run writes one history
-// record with its success flag, only while history is on.
+// record with its success flag, only while history is on. Refine revises the shown result through the same action;
+// Regenerate re-runs the plain action; Copy takes the edited result.
 public sealed class ToolbarSessionTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "PopGuyTests-" + Guid.NewGuid().ToString("N"));
@@ -27,10 +28,14 @@ public sealed class ToolbarSessionTests : IDisposable
 
     private sealed class FakeProvider(IReadOnlyList<string> chunks, Exception? error = null) : IProvider
     {
+        /// <summary>The system prompt and input of every call, in order.</summary>
+        public List<(string? SystemPrompt, string Input)> Calls { get; } = [];
+
         public async IAsyncEnumerable<string> StreamAsync(
             string? systemPrompt, string input, string model, ProviderOptions options,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
+            Calls.Add((systemPrompt, input));
             await Task.Yield();
             if (error is not null)
                 throw error;
@@ -54,6 +59,7 @@ public sealed class ToolbarSessionTests : IDisposable
     }
 
     private static readonly ToolbarRun Improve = new(ActionIdentifier.Builtin(ActionKind.Improve), "teh fox");
+    private static readonly ToolbarRun Shorten = new(ActionIdentifier.Builtin(ActionKind.Shorten), "the quick brown fox");
 
     [Fact]
     public async Task RunStreamsToTheResultAndRecordsOneSuccess()
@@ -90,5 +96,48 @@ public sealed class ToolbarSessionTests : IDisposable
         await Session(new FakeProvider(["ok"]), historyEnabled: false).RunAsync(Improve);
 
         Assert.Empty(_history.Records);
+    }
+
+    [Fact]
+    public async Task RefineSendsThePreviousResultAndTheInstructionThroughTheSameAction()
+    {
+        var provider = new FakeProvider(["a fox"]);
+        var session = Session(provider);
+        await session.RunAsync(Shorten);
+
+        await session.RefineAsync("  more formal ");
+
+        Assert.Equal(2, provider.Calls.Count);
+        var (system, input) = provider.Calls[1];
+        Assert.StartsWith(provider.Calls[0].SystemPrompt!, system); // Shorten's prompt, then the refine directive
+        Assert.EndsWith(ActionEngine.RefineDirective + "\n\nInstruction: more formal", system);
+        Assert.Equal("Original text:\nthe quick brown fox\n\nPrevious result:\na fox", input);
+    }
+
+    [Fact]
+    public async Task RegenerateAfterARefineRerunsThePlainAction()
+    {
+        var provider = new FakeProvider(["a fox"]);
+        var session = Session(provider);
+        await session.RunAsync(Shorten);
+        await session.RefineAsync("more formal");
+
+        await session.RegenerateAsync();
+
+        Assert.Equal(3, provider.Calls.Count);
+        Assert.Equal(provider.Calls[0], provider.Calls[2]);
+    }
+
+    [Fact]
+    public async Task CopyTextReturnsTheEditedResult()
+    {
+        var session = Session(new FakeProvider(["a fox"]));
+        await session.RunAsync(Shorten);
+
+        session.BeginEditing();
+        session.SetEditText("a quick fox");
+        session.EndEditing();
+
+        Assert.Equal("a quick fox", session.CopyText());
     }
 }

@@ -2,17 +2,21 @@ using System.ComponentModel;
 using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using PopGuy.Core.Text;
 using PopGuy.Core.Toolbar;
 using PopGuy.Platform.SystemServices;
 using PopGuy.Platform.Windowing;
+using CoreVirtualKeyStates = Windows.UI.Core.CoreVirtualKeyStates;
 using DrawingPoint = System.Drawing.Point;
 using DrawingRectangle = System.Drawing.Rectangle;
 using DrawingSize = System.Drawing.Size;
+using VirtualKey = Windows.System.VirtualKey;
 
 namespace PopGuy.Toolbar;
 
@@ -20,9 +24,10 @@ namespace PopGuy.Toolbar;
 /// The floating toolbar (spec-1 §3.1): a borderless, topmost tool window that never takes the foreground from the
 /// source app (the app whose text is selected). Tier 1 of the plan, lifted from the Phase 3 spike: WS_EX_NOACTIVATE
 /// plus <c>AllowFocusOnInteraction="False"</c> buttons, a WM_MOUSEACTIVATE → MA_NOACTIVATE subclass on every HWND, and
-/// a foreground hand-back after each press. It shows <see cref="ViewModel"/>; the controller wires the view model's
-/// events and calls <see cref="ShowAt"/> and <see cref="Hide"/>. Points and rects are physical screen pixels. UI
-/// thread only.
+/// a foreground hand-back after each press. Text input (the prompt, refine and edit boxes) is the one exception: the
+/// toolbar is activated for it and gives the foreground back when it ends (see <see cref="EndTextInput"/>). It shows
+/// <see cref="ViewModel"/>; the controller wires the view model's events and calls <see cref="ShowAt"/> and
+/// <see cref="Hide"/>. Points and rects are physical screen pixels. UI thread only.
 /// </summary>
 public sealed partial class ToolbarWindow : Window
 {
@@ -52,6 +57,17 @@ public sealed partial class ToolbarWindow : Window
 
     /// <summary>The window to hand the foreground back to: the source, or the foreground window at the last press.</summary>
     private nint _handBackTo;
+
+    /// <summary>The text box the toolbar is activated for (text input); null when it is not.</summary>
+    private TextBox? _textInput;
+
+    /// <summary>The text box whose bounds are the activation region (the last one given text input, while shown).</summary>
+    private TextBox? _regionBox;
+
+    /// <summary>Which text boxes show, as last seen (the view model raises every state property on each refresh).</summary>
+    private bool _promptShown;
+    private bool _refineShown;
+    private bool _editorShown;
 
     /// <summary>The work area the toolbar is kept in: the selection's monitor at show, the window's after a drag.</summary>
     private DrawingRectangle _workArea = FallbackWorkArea;
@@ -105,6 +121,20 @@ public sealed partial class ToolbarWindow : Window
         KeepOpenButton.Click += OnKeepOpenClick;
         DiffModeButton.Click += OnDiffModeClick;
         TextModeButton.Click += OnTextModeClick;
+        EditButton.Click += OnEditClick;
+        DoneButton.Click += OnDoneClick;
+        RefineButton.Click += OnRefineClick;
+        PromptRunButton.Click += OnPromptRunClick;
+        PromptCancelButton.Click += OnPromptCancelClick;
+        RefineRunButton.Click += OnRefineRunClick;
+        RefineCancelButton.Click += OnRefineCancelClick;
+        PromptBox.TextChanged += OnPromptTextChanged;
+        RefineBox.TextChanged += OnRefineTextChanged;
+        EditBox.TextChanged += OnEditTextChanged;
+        // Before the text box's own handling: Enter would already be a new line in KeyDown.
+        PromptBox.PreviewKeyDown += OnInputPreviewKeyDown;
+        RefineBox.PreviewKeyDown += OnInputPreviewKeyDown;
+        foreach (var box in TextBoxes) box.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnTextBoxPressed), true);
         _diffView = new DiffView(DiffBlock, OnHunkClick);
         _markdownView = new MarkdownView(MarkdownBlock);
         SyncDiffMode();
@@ -118,6 +148,9 @@ public sealed partial class ToolbarWindow : Window
         Card.PointerMoved += OnPointerMoved;
         Card.PointerReleased += OnPointerReleased;
         Card.PointerCaptureLost += OnPointerCaptureLost;
+        // Esc reaches the toolbar only while it is activated (text input): the focus is in one of the text boxes.
+        Card.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnCardKeyDown), true);
+        Activated += OnActivated;
 
         Bar.SizeChanged += OnBarSizeChanged;
         Card.SizeChanged += OnCardSizeChanged;
@@ -204,6 +237,7 @@ public sealed partial class ToolbarWindow : Window
     {
         if (_closed || !IsShown) return;
         StopDrag();
+        EndTextInput(handBack: false);
         ToolbarWindowStyle.HandBackForeground(Hwnd, _handBackTo);
         AppWindow.Hide();
         IsShown = false;
@@ -213,6 +247,150 @@ public sealed partial class ToolbarWindow : Window
 
     /// <summary>The point is on the toolbar's window (the outside-click check).</summary>
     public bool Contains(DrawingPoint point) => ToolbarWindowStyle.WindowRect(Hwnd).Contains(point);
+
+    // Text input: the only time the toolbar is activated on purpose (spike 3.5: the activation region answers
+    // MA_ACTIVATE for a click in the box, and SetForegroundWindow right after the user's click or hotkey is the second
+    // lever). It ends (activation off) on Enter, Cancel, a press anywhere but the box, the box closing, deactivation
+    // (another window took the foreground) and hide.
+
+    private IEnumerable<TextBox> TextBoxes => [PromptBox, RefineBox, EditBox];
+
+    /// <summary>
+    /// Activates the toolbar for <paramref name="box"/> and focuses it. When Windows refuses the foreground, text input
+    /// ends at once (typing would go to the source); the box stays, and a click in it activates the toolbar.
+    /// </summary>
+    private void BeginTextInput(TextBox box)
+    {
+        if (_closed || !IsShown) return;
+        var foreground = ToolbarWindowStyle.RememberForeground(Hwnd);
+        if (foreground != 0) _handBackTo = foreground;
+        _textInput = box;
+        _regionBox = box;
+        UpdateActivationRegion();
+        ToolbarWindowStyle.AllowActivation(Hwnd, true);
+        if (!ToolbarWindowStyle.IsToolbarOrOwnedForeground(Hwnd)) ToolbarWindowStyle.SetForeground(Hwnd);
+        if (!ToolbarWindowStyle.IsToolbarOrOwnedForeground(Hwnd))
+        {
+            EndTextInput(handBack: false);
+            return;
+        }
+        // Once the window is active (a press or a just-shown box is still being handled now).
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!_closed && _textInput == box) box.Focus(FocusState.Programmatic);
+        });
+    }
+
+    /// <summary>
+    /// Ends text input: clicks stop activating the toolbar (WS_EX_NOACTIVATE back on) and, with
+    /// <paramref name="handBack"/>, the source gets the foreground back if the toolbar has it. Also when only the
+    /// subclass turned activation on (a click in the region whose press never reached the box). The controller calls it
+    /// before a paste.
+    /// </summary>
+    public void EndTextInput(bool handBack)
+    {
+        if (_closed || (_textInput is null && !ToolbarWindowStyle.IsActivationAllowed(Hwnd))) return;
+        _textInput = null;
+        ToolbarWindowStyle.AllowActivation(Hwnd, false);
+        if (handBack) ToolbarWindowStyle.HandBackForeground(Hwnd, _handBackTo);
+    }
+
+    /// <summary>A text box opened: text input starts in it. It closed: text input in it ends, and it is no longer the region.</summary>
+    private void OnTextBoxShown(TextBox box, bool shown)
+    {
+        if (shown)
+        {
+            BeginTextInput(box);
+            return;
+        }
+        if (_regionBox == box)
+        {
+            _regionBox = null;
+            UpdateActivationRegion();
+        }
+        if (_textInput == box) EndTextInput(handBack: true);
+    }
+
+    private bool IsBoxShown(TextBox box) =>
+        box == PromptBox ? ViewModel.IsPromptInputActive : box == RefineBox ? ViewModel.IsRefineInputActive : ViewModel.ShowsEditor;
+
+    /// <summary>The region box's bounds in client pixels become the activation region (empty when it is not shown).</summary>
+    private void UpdateActivationRegion()
+    {
+        if (_closed) return;
+        var region = DrawingRectangle.Empty;
+        var scale = _xamlRoot?.RasterizationScale ?? 0;
+        if (_regionBox is { } box && IsBoxShown(box) && box.ActualWidth > 0 && box.ActualHeight > 0
+            && scale > 0 && double.IsFinite(scale))
+        {
+            var bounds = box.TransformToVisual(RootCanvas)
+                .TransformBounds(new Windows.Foundation.Rect(0, 0, box.ActualWidth, box.ActualHeight));
+            region = DrawingRectangle.FromLTRB(
+                (int)Math.Floor(bounds.Left * scale), (int)Math.Floor(bounds.Top * scale),
+                (int)Math.Ceiling(bounds.Right * scale), (int)Math.Ceiling(bounds.Bottom * scale));
+        }
+        ToolbarWindowStyle.SetActivationRegion(Hwnd, region);
+    }
+
+    /// <summary>The press is on <paramref name="box"/> or inside it.</summary>
+    private static bool IsWithin(object? source, TextBox box)
+    {
+        for (var element = source as DependencyObject; element is not null; element = VisualTreeHelper.GetParent(element))
+        {
+            if (element == box) return true;
+        }
+        return false;
+    }
+
+    /// <summary>A click in a text box (one already open): text input in it (the click itself focuses it).</summary>
+    private void OnTextBoxPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_closed && sender is TextBox box && _textInput != box) BeginTextInput(box);
+    }
+
+    /// <summary>Enter runs the prompt or the refine; Shift+Enter falls through as a new line (the editor keeps Enter).</summary>
+    private void OnInputPreviewKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (_closed || e.Key != VirtualKey.Enter) return;
+        if (InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down)) return;
+        e.Handled = true;
+        if (ReferenceEquals(sender, PromptBox)) ViewModel.SubmitPrompt();
+        else ViewModel.SubmitRefine();
+    }
+
+    private void OnCardKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (_closed || e.Key != VirtualKey.Escape) return;
+        e.Handled = true;
+        ViewModel.RequestEscape();
+    }
+
+    /// <summary>Another window took the foreground (a click elsewhere): it keeps it, only activation goes off.</summary>
+    private void OnActivated(object sender, WindowActivatedEventArgs args)
+    {
+        if (!_closed && args.WindowActivationState == WindowActivationState.Deactivated) EndTextInput(handBack: false);
+    }
+
+    // The boxes' text: drafts and the edit buffer keep "\n" line breaks (a WinUI TextBox returns a bare "\r").
+
+    private void OnPromptTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_closed) return;
+        ViewModel.PromptDraft = LineEndings.ToLf(PromptBox.Text);
+        PromptRunButton.IsEnabled = ViewModel.PromptDraft.Trim().Length > 0;
+    }
+
+    private void OnRefineTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_closed) return;
+        ViewModel.RefineDraft = LineEndings.ToLf(RefineBox.Text);
+        RefineRunButton.IsEnabled = ViewModel.RefineDraft.Trim().Length > 0;
+    }
+
+    private void OnEditTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_closed && ViewModel.IsEditing) ViewModel.SetEditText(LineEndings.ToLf(EditBox.Text));
+    }
 
     // The action row: built from the view model's items (the row is dynamic, from the settings).
 
@@ -279,6 +457,30 @@ public sealed partial class ToolbarWindow : Window
             case nameof(ToolbarViewModel.ShowsMarkdownResult):
                 // Rebuilt only when the text changes (MarkdownView compares it).
                 if (ViewModel.ShowsMarkdownResult) _markdownView.Show(ViewModel.ResultText);
+                break;
+            case nameof(ToolbarViewModel.IsPromptInputActive):
+                if (ViewModel.IsPromptInputActive == _promptShown) break;
+                _promptShown = ViewModel.IsPromptInputActive;
+                // A closed input drops its draft.
+                if (!ViewModel.IsPromptInputActive) PromptBox.Text = "";
+                OnTextBoxShown(PromptBox, ViewModel.IsPromptInputActive);
+                break;
+            case nameof(ToolbarViewModel.IsRefineInputActive):
+                if (ViewModel.IsRefineInputActive == _refineShown) break;
+                _refineShown = ViewModel.IsRefineInputActive;
+                if (!ViewModel.IsRefineInputActive) RefineBox.Text = "";
+                OnTextBoxShown(RefineBox, ViewModel.IsRefineInputActive);
+                break;
+            case nameof(ToolbarViewModel.ShowsEditor):
+                if (ViewModel.ShowsEditor == _editorShown) break;
+                _editorShown = ViewModel.ShowsEditor;
+                // Seeded with the result as shown (the edit buffer), the caret at the end.
+                if (ViewModel.ShowsEditor)
+                {
+                    EditBox.Text = ViewModel.ResultText;
+                    EditBox.Select(EditBox.Text.Length, 0);
+                }
+                OnTextBoxShown(EditBox, ViewModel.ShowsEditor);
                 break;
         }
     }
@@ -370,6 +572,41 @@ public sealed partial class ToolbarWindow : Window
         SyncDiffMode();
     }
 
+    private void OnEditClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.BeginEditing();
+    }
+
+    private void OnDoneClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.EndEditing();
+    }
+
+    private void OnRefineClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.OpenRefineInput();
+    }
+
+    private void OnPromptRunClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.SubmitPrompt();
+    }
+
+    private void OnPromptCancelClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.RequestPromptCancel();
+    }
+
+    private void OnRefineRunClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.SubmitRefine();
+    }
+
+    private void OnRefineCancelClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.CancelRefineInput();
+    }
+
     private void OnHunkClick(int hunk)
     {
         if (!_closed) ViewModel.ToggleHunk(hunk);
@@ -384,15 +621,19 @@ public sealed partial class ToolbarWindow : Window
         // The window to hand back to: the foreground now, unless it is the toolbar (then the one from before).
         var foreground = ToolbarWindowStyle.RememberForeground(Hwnd);
         if (foreground != 0) _handBackTo = foreground;
+        // A press anywhere but the text box ends text input: the toolbar must not stay the foreground. Runs after the
+        // box's own press handler, so a press in another box has already moved text input there.
+        if (_textInput is not { } box || !IsWithin(e.OriginalSource, box)) EndTextInput(handBack: true);
     }
 
     private void OnAnyPointerReleased(object sender, PointerRoutedEventArgs e)
     {
         if (_closed) return;
-        // After the click handlers (a paste must run while PopGuy may still set the foreground).
+        // After the click handlers (a paste must run while PopGuy may still set the foreground). Not during text input
+        // (a click that opened a box): the toolbar keeps the foreground on purpose.
         DispatcherQueue.TryEnqueue(() =>
         {
-            if (!_closed && !_dragging) ToolbarWindowStyle.HandBackForeground(Hwnd, _handBackTo);
+            if (!_closed && !_dragging && _textInput is null) ToolbarWindowStyle.HandBackForeground(Hwnd, _handBackTo);
         });
     }
 
@@ -493,7 +734,9 @@ public sealed partial class ToolbarWindow : Window
     /// <summary>A move to a monitor of another DPI: the same DIPs are another number of pixels.</summary>
     private void OnXamlRootChanged(XamlRoot sender, XamlRootChangedEventArgs args)
     {
-        if (!_closed) FitToCard();
+        if (_closed) return;
+        FitToCard();
+        UpdateActivationRegion();
     }
 
     /// <summary>The body is as wide as the bar, and at least <see cref="MinBodyWidth"/>, so its text wraps (spec-1 §3.3).</summary>
@@ -504,7 +747,10 @@ public sealed partial class ToolbarWindow : Window
 
     private void OnCardSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (!_closed) FitToCard();
+        if (_closed) return;
+        FitToCard();
+        // The boxes move with the content above them.
+        UpdateActivationRegion();
     }
 
     private void FitToCard()
@@ -549,6 +795,19 @@ public sealed partial class ToolbarWindow : Window
         KeepOpenButton.Click -= OnKeepOpenClick;
         DiffModeButton.Click -= OnDiffModeClick;
         TextModeButton.Click -= OnTextModeClick;
+        EditButton.Click -= OnEditClick;
+        DoneButton.Click -= OnDoneClick;
+        RefineButton.Click -= OnRefineClick;
+        PromptRunButton.Click -= OnPromptRunClick;
+        PromptCancelButton.Click -= OnPromptCancelClick;
+        RefineRunButton.Click -= OnRefineRunClick;
+        RefineCancelButton.Click -= OnRefineCancelClick;
+        PromptBox.TextChanged -= OnPromptTextChanged;
+        RefineBox.TextChanged -= OnRefineTextChanged;
+        EditBox.TextChanged -= OnEditTextChanged;
+        PromptBox.PreviewKeyDown -= OnInputPreviewKeyDown;
+        RefineBox.PreviewKeyDown -= OnInputPreviewKeyDown;
+        Activated -= OnActivated;
         foreach (var child in ActionRow.Children)
         {
             if (child is Button button) button.Click -= OnActionClick;

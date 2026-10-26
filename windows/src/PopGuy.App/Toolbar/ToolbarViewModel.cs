@@ -18,8 +18,9 @@ public sealed partial record ToolbarActionItem(ActionIdentifier Id, string Label
 /// <see cref="ToolbarSession"/>). It shows the session's state, plus two app-level messages the session does not own:
 /// <see cref="Fail"/> (an error with no run to retry, e.g. the admin-app error) and <see cref="ShowNotice"/> (a note
 /// next to a result, e.g. "Copied instead"). The window's clicks become the <c>…Requested</c> / <see cref="ActionInvoked"/>
-/// events, which the controller handles; Regenerate and Retry re-run the session's last run directly. UI thread only,
-/// except the session's <c>Changed</c>, which may arrive on any thread and is marshalled here.
+/// events, which the controller handles; Regenerate, Retry, Refine and Edit go to the session directly. The prompt and
+/// refine drafts live here (the controller's Esc and outside-click rules read them). UI thread only, except the
+/// session's <c>Changed</c>, which may arrive on any thread and is marshalled here.
 /// </summary>
 public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 {
@@ -30,7 +31,10 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         nameof(ShowsSpinner), nameof(ShowsProgressText), nameof(ProgressText), nameof(ResultText), nameof(ErrorMessage),
         nameof(CanRetry), nameof(ShowsPasteBack), nameof(Notice), nameof(HasNotice), nameof(IsConfirmingClose),
         nameof(IsDiffResult), nameof(ShowDiff), nameof(ShowsDiffView), nameof(ShowsPlainResult), nameof(DiffSegments),
-        nameof(RejectedHunks), nameof(ShowsMarkdownResult),
+        nameof(RejectedHunks), nameof(ShowsMarkdownResult), nameof(IsPromptInputActive), nameof(IsRefineInputActive),
+        nameof(IsEditing), nameof(IsResultEditable), nameof(ShowsEditor), nameof(ShowsEditButton), nameof(ShowsDoneButton),
+        nameof(ShowsRegenerate), nameof(ShowsRefine), nameof(RefineEnabled), nameof(ShowsPromptDivider),
+        nameof(ShowsReadView),
     ];
 
     private readonly ToolbarSession _session;
@@ -47,6 +51,11 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     private bool _isEditable;
     private bool _preserveFormatting;
     private bool _detached;
+    private bool _promptInputActive;
+    private bool _refineInputActive;
+    private bool _editing;
+    private bool _resultEditable;
+    private bool _canRefine;
 
     public ToolbarViewModel(ToolbarSession session, DispatcherQueue dispatcher)
     {
@@ -69,8 +78,17 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// <summary>Paste back was clicked; the argument is the text to paste into the source.</summary>
     public event Action<string>? PasteBackRequested;
 
+    /// <summary>The prompt was submitted (Run or Enter); the argument is the trimmed, non-empty prompt.</summary>
+    public event Action<string>? PromptSubmitted;
+
+    /// <summary>The prompt input's Cancel: closes the toolbar at once (macOS: a deliberate Cancel skips the draft guard).</summary>
+    public event Action? PromptCancelRequested;
+
     /// <summary>Close was clicked: a dismiss request (the controller applies the close confirmation).</summary>
     public event Action? CloseRequested;
+
+    /// <summary>Esc in the activated toolbar: a dismiss request like an outside click (a non-empty draft keeps it open).</summary>
+    public event Action? EscapeRequested;
 
     /// <summary>"Close Anyway" in the close confirmation.</summary>
     public event Action? CloseAnywayRequested;
@@ -117,8 +135,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public bool IsError => _failMessage is not null || _state is ToolbarState.Error;
 
-    /// <summary>Anything below the action row (running, result or error).</summary>
-    public bool ShowsBody => IsRunning || IsResult || IsError;
+    /// <summary>Anything below the action row (the prompt input, running, result or error).</summary>
+    public bool ShowsBody => IsPromptInputActive || IsRunning || IsResult || IsError;
 
     /// <summary>Close is hidden while running: Stop is the explicit exit then (spec-1 §3.5).</summary>
     public bool ShowsClose => !IsRunning;
@@ -146,13 +164,13 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public bool ShowsDiffView => IsDiffResult && _showDiff;
 
-    public bool ShowsPlainResult => IsResult && !ShowsDiffView && !ShowsMarkdownResult;
+    public bool ShowsPlainResult => IsResult && !ShowsDiffView && !ShowsMarkdownResult && !IsEditing;
 
     /// <summary>
     /// The result rendered as Markdown ("Preserve &amp; render formatting", macOS MarkdownResultView). Never for an
     /// Improve or Proofread result: its Text mode stays plain, as on macOS. Copy and Paste back keep the raw Markdown.
     /// </summary>
-    public bool ShowsMarkdownResult => IsResult && !IsDiffResult && _preserveFormatting;
+    public bool ShowsMarkdownResult => IsResult && !IsDiffResult && _preserveFormatting && !IsEditing;
 
     /// <summary>The result's diff segments (computed once by the session when the run finished).</summary>
     public IReadOnlyList<DiffSegment> DiffSegments => _diff;
@@ -174,6 +192,49 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// <summary>"Close without using the result?" shows below the result (spec-1 §3.8; inline, the toolbar never activates).</summary>
     public bool IsConfirmingClose => _confirmingClose && IsResult;
 
+    /// <summary>The prompt input shows below the action row.</summary>
+    public bool IsPromptInputActive => _promptInputActive;
+
+    /// <summary>A divider between the prompt input and the running, result or error panel below it.</summary>
+    public bool ShowsPromptDivider => IsPromptInputActive && (IsRunning || IsResult || IsError);
+
+    /// <summary>The refine input shows below the result.</summary>
+    public bool IsRefineInputActive => IsResult && _refineInputActive;
+
+    /// <summary>The result is being edited.</summary>
+    public bool IsEditing => IsResult && _editing;
+
+    /// <summary>The result can be edited (every result but a diff, as on macOS).</summary>
+    public bool IsResultEditable => IsResult && _resultEditable;
+
+    /// <summary>The editor replaces the result text while editing.</summary>
+    public bool ShowsEditor => IsEditing;
+
+    /// <summary>The read view (text, diff or Markdown); collapsed while editing.</summary>
+    public bool ShowsReadView => !IsEditing;
+
+    public bool ShowsEditButton => IsResultEditable && !IsEditing;
+
+    public bool ShowsDoneButton => IsEditing;
+
+    /// <summary>Regenerate and Refine hide while editing, as on macOS.</summary>
+    public bool ShowsRegenerate => IsResult && !IsEditing;
+
+    public bool ShowsRefine => IsResult && _canRefine && !IsEditing;
+
+    /// <summary>Refine is disabled while its input is open.</summary>
+    public bool RefineEnabled => !IsRefineInputActive;
+
+    /// <summary>The prompt input's text, as typed.</summary>
+    public string PromptDraft { get; set; } = "";
+
+    /// <summary>The refine input's text, as typed.</summary>
+    public string RefineDraft { get; set; } = "";
+
+    /// <summary>A non-empty prompt or refine draft is open: an outside click or Esc keeps the toolbar (macOS).</summary>
+    public bool HasOpenDraft =>
+        (IsPromptInputActive && PromptDraft.Trim().Length > 0) || (IsRefineInputActive && RefineDraft.Trim().Length > 0);
+
     // Controller → view model.
 
     /// <summary>
@@ -183,6 +244,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     public void Present(AppSettings settings, bool isEditable)
     {
         _session.Stop();
+        PromptDraft = "";
+        RefineDraft = "";
         Actions = [.. ToolbarLayout.PrincipalOrdered(settings).Select(id => ItemFor(settings, id)).OfType<ToolbarActionItem>()];
         ShowsLogo = !settings.HideToolbarLogo;
         _preserveFormatting = settings.PreserveFormatting;
@@ -203,6 +266,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     public void Stop()
     {
         _session.Stop();
+        PromptDraft = "";
+        RefineDraft = "";
         ClearMessages();
         Refresh();
     }
@@ -254,7 +319,64 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public void RequestPasteBack() => PasteBackRequested?.Invoke(_session.CopyText());
 
+    /// <summary>The Prompt button or hotkey (macOS triggerPromptInput): opens the prompt input, or cancels it when open.</summary>
+    public void TogglePromptInput()
+    {
+        if (_session.IsPromptInputActive) CancelPromptInput();
+        else _session.OpenPromptInput();
+    }
+
+    /// <summary>Closes the prompt input and discards the draft.</summary>
+    public void CancelPromptInput()
+    {
+        PromptDraft = "";
+        _session.CancelPromptInput();
+    }
+
+    /// <summary>Run or Enter in the prompt input: a blank draft does nothing; else the controller runs it.</summary>
+    public void SubmitPrompt()
+    {
+        var prompt = PromptDraft.Trim();
+        if (prompt.Length == 0) return;
+        PromptDraft = "";
+        PromptSubmitted?.Invoke(prompt);
+    }
+
+    public void RequestPromptCancel() => PromptCancelRequested?.Invoke();
+
+    /// <summary>Refine (macOS openRefineInput): opens the refine input below the result, if the result can be refined.</summary>
+    public void OpenRefineInput() => _session.OpenRefineInput();
+
+    /// <summary>The refine input's Cancel: closes the input only, the result stays.</summary>
+    public void CancelRefineInput()
+    {
+        RefineDraft = "";
+        _session.CancelRefineInput();
+    }
+
+    /// <summary>Run or Enter in the refine input: a blank draft does nothing; else the result is revised.</summary>
+    public void SubmitRefine()
+    {
+        var instruction = RefineDraft.Trim();
+        if (instruction.Length == 0) return;
+        RefineDraft = "";
+        ClearMessages();
+        _ = _session.RefineAsync(instruction);
+        Refresh();
+    }
+
+    /// <summary>Edit: the editor replaces the result text, seeded with <see cref="ResultText"/>.</summary>
+    public void BeginEditing() => _session.BeginEditing();
+
+    /// <summary>Done: the edited text stays the result (Copy and Paste back use it).</summary>
+    public void EndEditing() => _session.EndEditing();
+
+    /// <summary>The editor's text changed (no refresh: the editor already shows it).</summary>
+    public void SetEditText(string text) => _session.SetEditText(text);
+
     public void RequestClose() => CloseRequested?.Invoke();
+
+    public void RequestEscape() => EscapeRequested?.Invoke();
 
     public void RequestCloseAnyway() => CloseAnywayRequested?.Invoke();
 
@@ -280,6 +402,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// <summary>Regenerate (on a result) and Retry (on a failed run): the same selection and action again.</summary>
     public void Regenerate()
     {
+        RefineDraft = "";
         ClearMessages();
         _ = _session.RegenerateAsync();
         Refresh();
@@ -298,6 +421,11 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         _state = _session.State;
         _diff = _session.DiffSegments;
         _rejected = _session.RejectedHunks;
+        _promptInputActive = _session.IsPromptInputActive;
+        _refineInputActive = _session.IsRefineInputActive;
+        _editing = _session.IsEditing;
+        _resultEditable = _session.IsResultEditable;
+        _canRefine = _session.CanRefine;
         foreach (var name in StateProperties) Raise(name);
     }
 
@@ -315,8 +443,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
                     ActionKind.Improve => Builtin(id, "Improve", "wand.and.stars"),
                     ActionKind.Shorten => Builtin(id, "Shorten", "text.badge.minus"),
                     ActionKind.Proofread => Builtin(id, "Proofread", "checkmark.bubble"),
-                    // No prompt input until Phase 9.3: the button would do nothing.
-                    ActionKind.Prompt => null,
+                    ActionKind.Prompt => Builtin(id, "Prompt", "bubble.and.pencil"),
                     ActionKind.Translate => Builtin(id, "Translate", "character.bubble"),
                     _ => null,
                 };

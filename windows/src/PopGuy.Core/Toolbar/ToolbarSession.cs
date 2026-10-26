@@ -65,6 +65,7 @@ public sealed record ToolbarRun(ActionIdentifier Action, string Text)
 /// App marshals to its UI thread): on every state transition, and while streaming at most once per
 /// <see cref="ProgressInterval"/>. A run that is stopped or replaced leaves no trace: no state change, no history
 /// (macOS generation guard, spec-2 §2.7). There is no automatic retry (spec-2 §2.8): Retry and Regenerate run again.
+/// It also holds the text inputs' state: the prompt input, the refine input and the editable result.
 /// </summary>
 public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Func<AppSettings> settings, TimeProvider? clock = null)
 {
@@ -80,7 +81,19 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
     private ToolbarState _state = ToolbarState.Idle;
     private int _generation;
     private CancellationTokenSource? _cts;
+
+    // The last run as the user started it (a refine keeps its action, so Regenerate re-runs the plain action, as on
+    // macOS) and the provider it resolved to (DeepL and Google Translate cannot follow a refine instruction).
     private ToolbarRun? _lastRun;
+    private ProviderKind? _lastKind;
+
+    // The text inputs (macOS isPromptInputActive, isRefineInputActive, isEditing). The drafts are the App's.
+    private bool _promptInputActive;
+    private bool _refineInputActive;
+    private bool _editing;
+
+    // The edit buffer of a non-diff result (macOS editedResult): seeded with every result, changed only while editing.
+    private string _edited = "";
 
     // The result's diff (Improve and Proofread only), computed once when the run finishes, and the hunks the user
     // rejected; both reset with every new result. Replaced, never mutated, so a read under the lock is a snapshot.
@@ -122,15 +135,111 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
     }
 
     /// <summary>
-    /// The text Copy and Paste back use: for a diff, the merged text (accepted hunks, the original text of rejected
-    /// ones); else the result; "" without a result.
+    /// The text Copy, Paste back and a refine use: for a diff, the merged text (accepted hunks, the original text of
+    /// rejected ones); else the edit buffer (the result, as the user edited it); "" without a result.
     /// </summary>
     public string CopyText()
     {
         lock (_gate)
+            return CopyTextLocked();
+    }
+
+    /// <summary>The prompt input is open (macOS: it shows below the action row, also before any run).</summary>
+    public bool IsPromptInputActive
+    {
+        get
         {
-            if (_state is not ToolbarState.Result result) return "";
-            return _diff.Count == 0 ? result.Text : DiffHunks.Merged(_diff, _rejected);
+            lock (_gate)
+                return _promptInputActive;
+        }
+    }
+
+    /// <summary>The refine input is open below the result.</summary>
+    public bool IsRefineInputActive
+    {
+        get
+        {
+            lock (_gate)
+                return _refineInputActive;
+        }
+    }
+
+    /// <summary>The result is being edited (<see cref="BeginEditing"/>).</summary>
+    public bool IsEditing
+    {
+        get
+        {
+            lock (_gate)
+                return _editing;
+        }
+    }
+
+    /// <summary>The result can be edited: every result but a diff (Improve and Proofread), as on macOS.</summary>
+    public bool IsResultEditable
+    {
+        get
+        {
+            lock (_gate)
+                return IsResultEditableLocked();
+        }
+    }
+
+    /// <summary>
+    /// The result can be revised with an instruction: it came from a run, through a provider that takes a model (DeepL
+    /// and Google Translate cannot follow an instruction).
+    /// </summary>
+    public bool CanRefine
+    {
+        get
+        {
+            lock (_gate)
+                return CanRefineLocked();
+        }
+    }
+
+    /// <summary>Opens the prompt input (the App checks the selection first).</summary>
+    public void OpenPromptInput() => SetFlag(ref _promptInputActive, true);
+
+    /// <summary>Closes the prompt input; the App discards its draft.</summary>
+    public void CancelPromptInput() => SetFlag(ref _promptInputActive, false);
+
+    /// <summary>Opens the refine input below the result; changes nothing when the result cannot be refined.</summary>
+    public void OpenRefineInput()
+    {
+        lock (_gate)
+        {
+            if (_refineInputActive || !CanRefineLocked()) return;
+            _refineInputActive = true;
+        }
+        Changed?.Invoke();
+    }
+
+    /// <summary>Closes the refine input (the result stays); the App discards its draft.</summary>
+    public void CancelRefineInput() => SetFlag(ref _refineInputActive, false);
+
+    /// <summary>Starts editing the result; changes nothing for a diff result or without a result.</summary>
+    public void BeginEditing()
+    {
+        lock (_gate)
+        {
+            if (_editing || !IsResultEditableLocked()) return;
+            _editing = true;
+        }
+        Changed?.Invoke();
+    }
+
+    /// <summary>Ends editing; the edit buffer stays (Copy and Paste back use it).</summary>
+    public void EndEditing() => SetFlag(ref _editing, false);
+
+    /// <summary>
+    /// The editor's text, while editing. Raises no <see cref="Changed"/>: the editor already shows it, and a refresh
+    /// per keystroke would re-layout the toolbar.
+    /// </summary>
+    public void SetEditText(string text)
+    {
+        lock (_gate)
+        {
+            if (_editing && IsResultEditableLocked()) _edited = text;
         }
     }
 
@@ -152,28 +261,31 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
     /// not await it. Actions that are not provider-backed (Speak, Look up, script types, a missing custom action, Prompt
     /// without text) change nothing.
     /// </summary>
-    public Task RunAsync(ToolbarRun run)
-    {
-        var s = settings();
-        if (Resolve(run, s) is not { } resolved)
-            return Task.CompletedTask;
+    public Task RunAsync(ToolbarRun run) => Start(run, followUp: null);
 
-        int generation;
-        CancellationToken ct;
+    /// <summary>
+    /// Refine: revises the result (as Copy would take it, <see cref="CopyText"/>) per <paramref name="instruction"/>,
+    /// through the same action on the same selection (<see cref="ActionRequest.FollowUp"/>). A blank instruction, or a
+    /// result that cannot be refined (<see cref="CanRefine"/>), changes nothing.
+    /// </summary>
+    public Task RefineAsync(string instruction)
+    {
+        var trimmed = instruction.Trim();
+        ToolbarRun? run;
+        string previous;
         lock (_gate)
         {
-            CancelLocked();
-            generation = _generation;
-            _cts = new CancellationTokenSource();
-            ct = _cts.Token;
-            _lastRun = run;
-            _state = new ToolbarState.Running("");
+            if (trimmed.Length == 0 || !CanRefineLocked()) return Task.CompletedTask;
+            run = _lastRun!;
+            previous = CopyTextLocked();
         }
-        Changed?.Invoke();
-        return Stream(run, resolved, s, generation, ct);
+        return Start(run, new FollowUp(previous, trimmed));
     }
 
-    /// <summary>Re-runs the last run on the same selection (Regenerate on a result, Retry on an error).</summary>
+    /// <summary>
+    /// Re-runs the last run on the same selection (Regenerate on a result, Retry on an error). After a refine, the plain
+    /// action runs again without the instruction, as on macOS.
+    /// </summary>
     public Task RegenerateAsync()
     {
         ToolbarRun? run;
@@ -191,10 +303,14 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
         lock (_gate)
         {
             CancelLocked();
-            if (_state is ToolbarState.IdleState)
+            if (_state is ToolbarState.IdleState && !_promptInputActive && !_refineInputActive && !_editing)
                 return;
             _state = ToolbarState.Idle;
             ClearDiffLocked();
+            _edited = "";
+            _promptInputActive = false;
+            _refineInputActive = false;
+            _editing = false;
         }
         Changed?.Invoke();
     }
@@ -210,12 +326,44 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
         {
             CancelLocked();
             _lastRun = null;
+            _lastKind = null;
             _state = new ToolbarState.Result(text);
             ClearDiffLocked();
+            _edited = text;
+            _editing = false;
+            _refineInputActive = false;
         }
         Changed?.Invoke();
     }
 #endif
+
+    // A new run (or a refine) replaces the one in flight; editing and the refine input end, and a Prompt run closes
+    // the prompt input (macOS startPrompt). Every other run leaves the prompt input as it is, as on macOS.
+    private Task Start(ToolbarRun run, FollowUp? followUp)
+    {
+        var s = settings();
+        if (Resolve(run, s) is not { } resolved)
+            return Task.CompletedTask;
+
+        int generation;
+        CancellationToken ct;
+        lock (_gate)
+        {
+            CancelLocked();
+            generation = _generation;
+            _cts = new CancellationTokenSource();
+            ct = _cts.Token;
+            _lastRun = run;
+            _lastKind = resolved.Kind;
+            _state = new ToolbarState.Running("");
+            _editing = false;
+            _refineInputActive = false;
+            if (run.Action == ActionIdentifier.Builtin(ActionKind.Prompt))
+                _promptInputActive = false;
+        }
+        Changed?.Invoke();
+        return Stream(run, resolved, s, followUp, generation, ct);
+    }
 
     private sealed record Resolved(EngineAction Action, string ActionName, ProviderKind Kind, string Model, string Language);
 
@@ -261,7 +409,8 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
         }
     }
 
-    private async Task Stream(ToolbarRun run, Resolved resolved, AppSettings s, int generation, CancellationToken ct)
+    private async Task Stream(
+        ToolbarRun run, Resolved resolved, AppSettings s, FollowUp? followUp, int generation, CancellationToken ct)
     {
         var startedAt = _clock.GetUtcNow();
         var request = new ActionRequest(resolved.Action, run.Text, resolved.Kind, resolved.Model)
@@ -272,6 +421,7 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
             Context = new PromptContext(
                 run.SourceAppName ?? "", run.SourceDomain ?? "",
                 PromptContext.DateString(startedAt, _clock.LocalTimeZone), resolved.Language),
+            FollowUp = followUp,
         };
 
         var buffer = new StringBuilder();
@@ -316,6 +466,7 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
             _state = final;
             _diff = diff;
             _rejected = new HashSet<int>();
+            _edited = final is ToolbarState.Result finished ? finished.Text : "";
             _cts?.Dispose();
             _cts = null;
         }
@@ -348,6 +499,29 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
             _state = state;
             return true;
         }
+    }
+
+    private string CopyTextLocked()
+    {
+        if (_state is not ToolbarState.Result) return "";
+        return _diff.Count == 0 ? _edited : DiffHunks.Merged(_diff, _rejected);
+    }
+
+    private bool IsResultEditableLocked() => _state is ToolbarState.Result && _diff.Count == 0;
+
+    private bool CanRefineLocked() =>
+        _state is ToolbarState.Result && _lastRun is not null
+        && _lastKind is not (null or ProviderKind.DeepL or ProviderKind.GoogleTranslate);
+
+    /// <summary>Sets a text-input flag; raises <see cref="Changed"/> only when it changed.</summary>
+    private void SetFlag(ref bool flag, bool value)
+    {
+        lock (_gate)
+        {
+            if (flag == value) return;
+            flag = value;
+        }
+        Changed?.Invoke();
     }
 
     private void ClearDiffLocked()

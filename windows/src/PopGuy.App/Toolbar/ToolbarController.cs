@@ -14,8 +14,8 @@ namespace PopGuy.Toolbar;
 /// Wires the triggers to the toolbar (macOS <c>ToolbarController.swift</c>, the explicit triggers of spec-1 §1.4-1.5):
 /// the Ctrl+C+C chord, the chord-replacement hotkey and the per-action hotkeys capture the selection, pass
 /// <see cref="PresentationGate"/> and show <see cref="ToolbarWindow"/> below the selection (or at the cursor); an action
-/// hotkey then runs its action. It also handles the toolbar's clicks (actions, Stop, Copy, Paste back, Close) and the
-/// dismissal rules of spec-1 §3.8.
+/// hotkey then runs its action (the Prompt hotkey opens the prompt input). It also handles the toolbar's clicks (actions,
+/// the prompt, Stop, Copy, Paste back, Close) and the dismissal rules of spec-1 §3.8.
 /// <para>
 /// Threading: the chord and hotkey events and both input loops run on the thread pool; everything that touches the
 /// window, the view model or the presentation state runs on the UI thread (<see cref="DispatcherQueue"/>). Captures
@@ -25,6 +25,8 @@ namespace PopGuy.Toolbar;
 internal sealed class ToolbarController : IDisposable
 {
     private const string AdminAppMessage = "PopGuy can't read or paste in apps running as administrator.";
+
+    private static readonly ActionIdentifier PromptId = ActionIdentifier.Builtin(ActionKind.Prompt);
 
     private readonly SettingsStore _settings;
     private readonly ToolbarSession _session;
@@ -82,6 +84,9 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.CopyRequested += OnCopyRequested;
         _viewModel.PasteBackRequested += OnPasteBackRequested;
         _viewModel.CloseRequested += RequestDismiss;
+        _viewModel.EscapeRequested += RequestDismissKeepingDraft;
+        _viewModel.PromptSubmitted += OnPromptSubmitted;
+        _viewModel.PromptCancelRequested += Hide;
         _viewModel.CloseAnywayRequested += Hide;
         _viewModel.DisableCloseConfirmationRequested += OnDisableCloseConfirmation;
         ApplySettings();
@@ -103,6 +108,9 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.CopyRequested -= OnCopyRequested;
         _viewModel.PasteBackRequested -= OnPasteBackRequested;
         _viewModel.CloseRequested -= RequestDismiss;
+        _viewModel.EscapeRequested -= RequestDismissKeepingDraft;
+        _viewModel.PromptSubmitted -= OnPromptSubmitted;
+        _viewModel.PromptCancelRequested -= Hide;
         _viewModel.CloseAnywayRequested -= Hide;
         _viewModel.DisableCloseConfirmationRequested -= OnDisableCloseConfirmation;
         Hide();
@@ -202,7 +210,8 @@ internal sealed class ToolbarController : IDisposable
 
     /// <summary>
     /// The chord replacement behaves like the chord (no-op while showing). An action hotkey (spec-1 §1.5), if the action
-    /// is enabled: while the toolbar shows a selection, runs on it (no re-capture); else captures, shows, then runs.
+    /// is enabled: while the toolbar shows a selection, runs on it (no re-capture); else captures, shows, then runs. The
+    /// Prompt hotkey opens the prompt input instead (focused), or closes it when open (macOS triggerPromptInput).
     /// </summary>
     private void OnHotkey(ActionIdentifier id, ForegroundApp source)
     {
@@ -213,10 +222,9 @@ internal sealed class ToolbarController : IDisposable
             if (!_window.IsShown) StartCapture(source, autoRun: null);
             return;
         }
-        if (id.Type is ActionIdentifierType.Speak or ActionIdentifierType.Dictionary
-            || id == ActionIdentifier.Builtin(ActionKind.Prompt))
+        if (id.Type is ActionIdentifierType.Speak or ActionIdentifierType.Dictionary)
         {
-            // Speak (Phase 17), Look up (Phase 18) and the prompt input (Phase 9.3) do not exist yet.
+            // Speak (Phase 17) and Look up (Phase 18) do not exist yet.
             _log($"hotkey: {id} is not available yet");
             return;
         }
@@ -320,8 +328,25 @@ internal sealed class ToolbarController : IDisposable
     }
 #endif
 
-    /// <summary>An action button or hotkey: runs the action on the current selection, if it is enabled.</summary>
+    /// <summary>
+    /// An action button or hotkey: runs the action on the current selection, if it is enabled. Prompt opens or closes
+    /// the prompt input instead; its Run comes back through <see cref="OnPromptSubmitted"/>.
+    /// </summary>
     private void RunAction(ActionIdentifier id)
+    {
+        if (id != PromptId)
+        {
+            StartRun(id, promptText: null);
+            return;
+        }
+        if (_current is { Blocked: false, Text.Length: > 0 } && ToolbarLayout.IsEnabled(_settings.Current, id))
+            _viewModel.TogglePromptInput();
+    }
+
+    /// <summary>The prompt input's Run: the typed prompt runs on the current selection.</summary>
+    private void OnPromptSubmitted(string prompt) => StartRun(PromptId, prompt);
+
+    private void StartRun(ActionIdentifier id, string? promptText)
     {
         if (_current is not { Blocked: false, Text.Length: > 0 } capture) return;
         var settings = _settings.Current;
@@ -334,6 +359,7 @@ internal sealed class ToolbarController : IDisposable
         _log($"run: {id.Type} {id.BuiltinKind}, {capture.Text.Length} chars");
         _viewModel.Run(new ToolbarRun(id, capture.Text)
         {
+            PromptText = promptText,
             SourceExeName = source.IsOwnProcess ? null : source.Exe,
             SourceAppName = source.DisplayName.Length > 0 ? source.DisplayName : null,
             SkipHistory = ignored,
@@ -362,7 +388,7 @@ internal sealed class ToolbarController : IDisposable
                 var point = new Point(mouse.X, mouse.Y);
                 _dispatcher.TryEnqueue(() =>
                 {
-                    if (_window.IsShown && !_window.Contains(point)) RequestDismiss();
+                    if (_window.IsShown && !_window.Contains(point)) RequestDismissKeepingDraft();
                 });
             }
         }
@@ -372,9 +398,19 @@ internal sealed class ToolbarController : IDisposable
     }
 
     /// <summary>
-    /// An outside click or Close: ignored while an action runs or a paste is in flight; on a result with
-    /// confirmCloseAfterResult on, the close confirmation (a second request leaves it up); otherwise hides. Esc does not
-    /// reach the toolbar yet: it never activates in this phase (the prompt input that activates it comes in Phase 9).
+    /// An outside click or Esc: like <see cref="RequestDismiss"/>, but a non-empty prompt or refine draft keeps the
+    /// toolbar open so an accidental click or Esc does not discard the text (macOS). Esc reaches the toolbar only while
+    /// it is activated (text input): a non-activating window gets no keys.
+    /// </summary>
+    private void RequestDismissKeepingDraft()
+    {
+        if (_viewModel.HasOpenDraft) return;
+        RequestDismiss();
+    }
+
+    /// <summary>
+    /// Close (and an outside click or Esc without a draft): ignored while an action runs or a paste is in flight; on a
+    /// result with confirmCloseAfterResult on, the close confirmation (a second request leaves it up); otherwise hides.
     /// </summary>
     private void RequestDismiss()
     {
@@ -427,6 +463,8 @@ internal sealed class ToolbarController : IDisposable
     {
         if (_pasting || _current is not { Blocked: false } capture || text.Length == 0) return;
         _pasting = true;
+        // Text input off first; PasteBack then gives the source the foreground back if the toolbar has it.
+        _window.EndTextInput(handBack: false);
         var presentation = _presentation;
         PasteBackResult result;
         try

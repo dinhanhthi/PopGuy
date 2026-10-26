@@ -2,9 +2,11 @@
 <!--
     The floating toolbar (macOS ToolbarView.swift; the look is Fluent). The card sizes to its content inside a Canvas,
     so its size is the window's (top edge fixed). Every button has AllowFocusOnInteraction="False": focus would activate
-    the window and take the foreground from the source app. The card's background is Transparent, never unset: an unset
-    background does not hit-test, and the padding is the drag handle. No tooltips anywhere (the buttons carry labels);
-    the selectable text blocks have no context or selection flyout (their command bars attach default tooltips).
+    the window and take the foreground from the source app. Only the text boxes (prompt, refine, edit) take focus: the
+    window activates for them on purpose (ToolbarWindow's text input). The card's background is Transparent, never
+    unset: an unset background does not hit-test, and the padding is the drag handle. No tooltips anywhere (the buttons
+    carry labels or an automation name); the selectable text blocks and the text boxes have no context or selection
+    flyout (their command bars attach default tooltips).
 -->
 <Window
     x:Class="PopGuy.Toolbar.ToolbarWindow"
@@ -56,6 +58,43 @@
                     Margin="8,0,8,0"
                     Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
+                <!-- Prompt input (macOS promptInputArea): Enter runs, Shift+Enter is a new line; Cancel closes the toolbar. -->
+                <StackPanel
+                    Padding="12,14,12,14"
+                    Spacing="6"
+                    Visibility="{x:Bind ViewModel.IsPromptInputActive, Mode=OneWay}">
+                    <TextBox
+                        x:Name="PromptBox"
+                        MaxHeight="100"
+                        AcceptsReturn="True"
+                        ContextFlyout="{x:Null}"
+                        PlaceholderText="Type a prompt for the selected text…"
+                        SelectionFlyout="{x:Null}"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="Use {{text}} for the selected text — added automatically if omitted. Also: {{app}}, {{date}}, {{language}}, {{domain}}."
+                        TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button
+                            x:Name="PromptRunButton"
+                            AllowFocusOnInteraction="False"
+                            Content="Run"
+                            IsEnabled="False"
+                            Style="{StaticResource AccentButtonStyle}" />
+                        <Button
+                            x:Name="PromptCancelButton"
+                            AllowFocusOnInteraction="False"
+                            Content="Cancel" />
+                    </StackPanel>
+                </StackPanel>
+                <Rectangle
+                    Height="1"
+                    Margin="8,0,8,0"
+                    Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    Visibility="{x:Bind ViewModel.ShowsPromptDivider, Mode=OneWay}" />
+
                 <!-- Running: the spinner, or the streamed text so far, then Stop. -->
                 <StackPanel
                     Padding="12,14,12,14"
@@ -90,7 +129,8 @@
 
                 <!--
                     Result: the Diff/Text toggle (Improve and Proofread), the selectable text, the inline diff or the
-                    rendered Markdown, then Copy, Paste back (editable sources only), Regenerate.
+                    rendered Markdown (or the editor while editing), the refine input, then Copy, Paste back (editable
+                    sources only), Edit/Done (non-diff results), Regenerate and Refine (icon only, as on macOS).
                 -->
                 <StackPanel
                     Padding="12,14,12,14"
@@ -110,7 +150,7 @@
                             AllowFocusOnInteraction="False"
                             Content="Text" />
                     </StackPanel>
-                    <ScrollViewer MaxHeight="280">
+                    <ScrollViewer MaxHeight="280" Visibility="{x:Bind ViewModel.ShowsReadView, Mode=OneWay}">
                         <StackPanel>
                             <TextBlock
                                 ContextFlyout="{x:Null}"
@@ -141,6 +181,39 @@
                                 Visibility="{x:Bind ViewModel.ShowsMarkdownResult, Mode=OneWay}" />
                         </StackPanel>
                     </ScrollViewer>
+                    <!-- The editor (macOS FullWidthTextEditor): it scrolls itself, so the caret stays in view. -->
+                    <TextBox
+                        x:Name="EditBox"
+                        MinHeight="140"
+                        MaxHeight="280"
+                        AcceptsReturn="True"
+                        ContextFlyout="{x:Null}"
+                        SelectionFlyout="{x:Null}"
+                        TextWrapping="Wrap"
+                        Visibility="{x:Bind ViewModel.ShowsEditor, Mode=OneWay}" />
+                    <!-- The refine input (macOS inlineInputArea): Enter runs, Shift+Enter is a new line; Cancel closes it. -->
+                    <StackPanel Spacing="6" Visibility="{x:Bind ViewModel.IsRefineInputActive, Mode=OneWay}">
+                        <TextBox
+                            x:Name="RefineBox"
+                            MaxHeight="100"
+                            AcceptsReturn="True"
+                            ContextFlyout="{x:Null}"
+                            PlaceholderText="How should it change? (e.g. shorter, more formal)"
+                            SelectionFlyout="{x:Null}"
+                            TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button
+                                x:Name="RefineRunButton"
+                                AllowFocusOnInteraction="False"
+                                Content="Run"
+                                IsEnabled="False"
+                                Style="{StaticResource AccentButtonStyle}" />
+                            <Button
+                                x:Name="RefineCancelButton"
+                                AllowFocusOnInteraction="False"
+                                Content="Cancel" />
+                        </StackPanel>
+                    </StackPanel>
                     <StackPanel
                         Margin="0,8,0,0"
                         Orientation="Horizontal"
@@ -168,14 +241,53 @@
                                 <TextBlock Text="Paste back" />
                             </StackPanel>
                         </Button>
-                        <Button x:Name="RegenerateButton" AllowFocusOnInteraction="False">
+                        <Button
+                            x:Name="EditButton"
+                            AllowFocusOnInteraction="False"
+                            Visibility="{x:Bind ViewModel.ShowsEditButton, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <FontIcon
                                     FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                     FontSize="14"
-                                    Glyph="&#xE72C;" />
-                                <TextBlock Text="Regenerate" />
+                                    Glyph="&#xE70F;" />
+                                <TextBlock Text="Edit" />
                             </StackPanel>
+                        </Button>
+                        <Button
+                            x:Name="DoneButton"
+                            AllowFocusOnInteraction="False"
+                            Visibility="{x:Bind ViewModel.ShowsDoneButton, Mode=OneWay}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    FontSize="14"
+                                    Glyph="&#xE73E;" />
+                                <TextBlock Text="Done" />
+                            </StackPanel>
+                        </Button>
+                        <!-- Icon only, as on macOS (the row has no room for labels); the name is for screen readers. -->
+                        <Button
+                            x:Name="RegenerateButton"
+                            VerticalAlignment="Stretch"
+                            AutomationProperties.Name="Regenerate"
+                            AllowFocusOnInteraction="False"
+                            Visibility="{x:Bind ViewModel.ShowsRegenerate, Mode=OneWay}">
+                            <FontIcon
+                                FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                FontSize="14"
+                                Glyph="&#xE72C;" />
+                        </Button>
+                        <Button
+                            x:Name="RefineButton"
+                            VerticalAlignment="Stretch"
+                            AutomationProperties.Name="Refine"
+                            AllowFocusOnInteraction="False"
+                            IsEnabled="{x:Bind ViewModel.RefineEnabled, Mode=OneWay}"
+                            Visibility="{x:Bind ViewModel.ShowsRefine, Mode=OneWay}">
+                            <FontIcon
+                                FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                FontSize="14"
+                                Glyph="&#xE8F2;" />
                         </Button>
                     </StackPanel>
                     <TextBlock
