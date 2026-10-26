@@ -94,14 +94,14 @@ public sealed class TriggerLogicTests
 
         Assert.Equal(1, counter.Press(new Point(100, 100), 1000, Time, size));
         Assert.Equal(2, counter.Press(new Point(102, 98), 1400, Time, size));
-        // The rectangle is centred on the previous press, not the first.
-        Assert.Equal(3, counter.Press(new Point(101, 99), 1800, Time, size));
+        // The rectangle is centred on the previous press, not the first: (103, 97) is 3 px from (100, 100).
+        Assert.Equal(3, counter.Press(new Point(103, 97), 1800, Time, size));
         // Too late, then too far: each starts a new series.
-        Assert.Equal(1, counter.Press(new Point(101, 99), 2301, Time, size));
-        Assert.Equal(1, counter.Press(new Point(104, 99), 2400, Time, size));
+        Assert.Equal(1, counter.Press(new Point(103, 97), 2301, Time, size));
+        Assert.Equal(1, counter.Press(new Point(106, 97), 2400, Time, size));
         // Another button's press ends the series.
         counter.Reset();
-        Assert.Equal(1, counter.Press(new Point(104, 101), 2500, Time, size));
+        Assert.Equal(1, counter.Press(new Point(106, 97), 2500, Time, size));
         // The tick count wraps after 49.7 days.
         Assert.Equal(1, counter.Press(new Point(10, 10), uint.MaxValue - 100, Time, size));
         Assert.Equal(2, counter.Press(new Point(10, 10), 200, Time, size));
