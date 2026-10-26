@@ -416,6 +416,7 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
         var request = new ActionRequest(resolved.Action, run.Text, resolved.Kind, resolved.Model)
         {
             BaseUrl = ProviderFactory.ResolveBaseUrl(resolved.Kind, s),
+            ExecutablePath = ProviderFactory.ResolveExecutablePath(resolved.Kind, s),
             PreserveFormatting = s.PreserveFormatting,
             GlobalPrompt = s.GlobalPrompt,
             Context = new PromptContext(

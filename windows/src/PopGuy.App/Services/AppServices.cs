@@ -5,6 +5,7 @@ using PopGuy.Core;
 using PopGuy.Core.Actions;
 using PopGuy.Core.History;
 using PopGuy.Core.Providers;
+using PopGuy.Core.Providers.Cli;
 using PopGuy.Core.Secrets;
 using PopGuy.Core.Settings;
 using PopGuy.Core.Toolbar;
@@ -38,7 +39,9 @@ internal sealed class AppServices : IDisposable
         Settings = new SettingsStore(paths);
         History = new HistoryStore(paths);
         Credentials = new CredentialStore();
-        var providers = new ProviderFactory();
+        // A lambda, not the method group: Shared is created on the first CLI run, so a refused job object fails that
+        // run only, never the launch.
+        var providers = new ProviderFactory(cli: new CliRunner(onStarted: process => ChildProcessJob.Shared.Assign(process)));
         var engine = new ActionEngine(providers, ApiKey);
         var session = new ToolbarSession(engine, History, () => Settings.Current);
 
