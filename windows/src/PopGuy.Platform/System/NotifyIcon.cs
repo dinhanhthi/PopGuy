@@ -34,8 +34,11 @@ public sealed record NotifyIconMenuItem(string? Text, Action? Click = null, bool
 /// </summary>
 public sealed class NotifyIcon : IDisposable
 {
-    /// <summary>The icon's callback message (NOTIFYICON_VERSION_4: the event in LOWORD(lParam), the anchor in wParam).</summary>
-    internal const uint CallbackMessage = PInvoke.WM_APP + 1;
+    /// <summary>
+    /// The icon's callback message (NOTIFYICON_VERSION_4: the event in LOWORD(lParam), the anchor in wParam). Clear of
+    /// MessageWindow's own WM_APP + 1 and + 2: sharing + 1 with its queued-action message swallowed every click (VM QA).
+    /// </summary>
+    internal const uint CallbackMessage = PInvoke.WM_APP + 16;
 
     /// <summary>NIN_KEYSELECT: Enter or Space on the focused icon.</summary>
     internal const uint KeySelect = PInvoke.NIN_SELECT | PInvoke.NINF_KEY;
