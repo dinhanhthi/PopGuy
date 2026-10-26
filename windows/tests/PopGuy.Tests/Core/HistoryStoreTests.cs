@@ -85,7 +85,7 @@ public sealed class HistoryStoreTests : IDisposable
     }
 
     [Fact]
-    public void QueryFiltersByActionAndSearchNewestFirst()
+    public async Task QueryFiltersByActionAndSearchNewestFirst()
     {
         var store = new HistoryStore(_paths);
         store.Record(Run("the quick brown fox"), storeFullText: true);
@@ -96,6 +96,8 @@ public sealed class HistoryStoreTests : IDisposable
         Assert.Equal(["Quiet Box", "the quick brown fox"], store.Query("Improve", "qbx").Select(r => r.Input));
         Assert.Equal(4, store.Query(null, "  ").Count);
         Assert.Equal(["quick fix"], store.Query("Translate", "").Select(r => r.Input));
+        // The background save must finish before Dispose deletes the folder (Windows keeps the open temp file).
+        await store.FlushAsync();
     }
 
     // Fuzzy subsequence (macOS HistoryView.fuzzyMatches): in order, case-insensitive, whitespace in the query ignored.
