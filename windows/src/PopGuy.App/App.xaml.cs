@@ -77,8 +77,10 @@ public partial class App : Application
         Exit();
     }
 
+    // The framework's message and the stack: an error raised inside the XAML framework names only a parameter.
     private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e) =>
-        _services?.Log.Write($"unhandled: {e.Exception.GetType().Name} {e.Exception.Message}");
+        _services?.Log.Write(
+            $"unhandled: {e.Exception.GetType().Name} 0x{e.Exception.HResult:X8} {e.Exception.Message} | {e.Message}\n{e.Exception.StackTrace}");
 
 #if DEBUG
     // Phase 2 gate: the VM reads this file to check the process architecture of the installed build.
