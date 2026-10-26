@@ -192,22 +192,29 @@ public sealed partial class TriggersPage : Page
     }
 
     /// <summary>
-    /// "Shortcut in use by another app" when Windows refused the replacement's registration (another app, or one of
-    /// PopGuy's own action hotkeys, has the keys); nothing while recording or when it is not registered at all.
+    /// A message when Windows refused the replacement's registration: the PopGuy action whose hotkey has the keys,
+    /// else "another app"; nothing while recording or when it is not registered at all.
     /// </summary>
     private void RefreshStatus()
     {
         if (_services is null) return;
         var current = _services.Settings.Current;
         HotkeyStatus? status = null;
+        string? owner = null;
         if (!Recorder.IsRecording && current.TriggerChordEnabled && current.ChordReplacementShortcut is { } shortcut)
         {
-            status = _services.HotkeyRegistrations
+            var registrations = _services.HotkeyRegistrations;
+            status = registrations
                 .FirstOrDefault(r => r.Id == HotkeyService.ChordReplacementId && r.Shortcut == shortcut)?.Status;
+            owner = registrations
+                .Where(r => r.Status == HotkeyStatus.Registered && r.Shortcut == shortcut
+                    && current.ShortcutBindings.Any(b => b.Id == r.Id))
+                .Select(r => ActionLabel(current, r.Id))
+                .FirstOrDefault();
         }
         var message = status switch
         {
-            HotkeyStatus.InUse => "Shortcut in use by another app",
+            HotkeyStatus.InUse => owner is null ? "Shortcut in use by another app" : $"Already used by {owner}",
             HotkeyStatus.Invalid => "Windows refused this shortcut",
             _ => null,
         };
