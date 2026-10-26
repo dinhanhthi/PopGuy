@@ -30,7 +30,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         nameof(ShowsSpinner), nameof(ShowsProgressText), nameof(ProgressText), nameof(ResultText), nameof(ErrorMessage),
         nameof(CanRetry), nameof(ShowsPasteBack), nameof(Notice), nameof(HasNotice), nameof(IsConfirmingClose),
         nameof(IsDiffResult), nameof(ShowDiff), nameof(ShowsDiffView), nameof(ShowsPlainResult), nameof(DiffSegments),
-        nameof(RejectedHunks),
+        nameof(RejectedHunks), nameof(ShowsMarkdownResult),
     ];
 
     private readonly ToolbarSession _session;
@@ -45,6 +45,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     private IReadOnlyList<ToolbarActionItem> _actions = [];
     private bool _showsLogo = true;
     private bool _isEditable;
+    private bool _preserveFormatting;
     private bool _detached;
 
     public ToolbarViewModel(ToolbarSession session, DispatcherQueue dispatcher)
@@ -145,7 +146,13 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public bool ShowsDiffView => IsDiffResult && _showDiff;
 
-    public bool ShowsPlainResult => IsResult && !ShowsDiffView;
+    public bool ShowsPlainResult => IsResult && !ShowsDiffView && !ShowsMarkdownResult;
+
+    /// <summary>
+    /// The result rendered as Markdown ("Preserve &amp; render formatting", macOS MarkdownResultView). Never for an
+    /// Improve or Proofread result: its Text mode stays plain, as on macOS. Copy and Paste back keep the raw Markdown.
+    /// </summary>
+    public bool ShowsMarkdownResult => IsResult && !IsDiffResult && _preserveFormatting;
 
     /// <summary>The result's diff segments (computed once by the session when the run finished).</summary>
     public IReadOnlyList<DiffSegment> DiffSegments => _diff;
@@ -170,14 +177,15 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     // Controller → view model.
 
     /// <summary>
-    /// A new presentation: stops any run, clears the messages and reads the inline row and the logo from
-    /// <paramref name="settings"/> (settings apply at the next presentation, spec-1 §3.7).
+    /// A new presentation: stops any run, clears the messages and reads the inline row, the logo and the Markdown
+    /// rendering from <paramref name="settings"/> (settings apply at the next presentation, spec-1 §3.7).
     /// </summary>
     public void Present(AppSettings settings, bool isEditable)
     {
         _session.Stop();
         Actions = [.. ToolbarLayout.PrincipalOrdered(settings).Select(id => ItemFor(settings, id)).OfType<ToolbarActionItem>()];
         ShowsLogo = !settings.HideToolbarLogo;
+        _preserveFormatting = settings.PreserveFormatting;
         IsEditable = isEditable;
         ClearMessages();
         Refresh();

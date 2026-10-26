@@ -45,6 +45,7 @@ public sealed partial class ToolbarWindow : Window
     private readonly DispatcherQueueTimer _dragTimer;
     private readonly DispatcherQueueTimer _copiedTimer;
     private readonly DiffView _diffView;
+    private readonly MarkdownView _markdownView;
     private bool _closed;
     private bool _dragging;
     private XamlRoot? _xamlRoot;
@@ -105,6 +106,7 @@ public sealed partial class ToolbarWindow : Window
         DiffModeButton.Click += OnDiffModeClick;
         TextModeButton.Click += OnTextModeClick;
         _diffView = new DiffView(DiffBlock, OnHunkClick);
+        _markdownView = new MarkdownView(MarkdownBlock);
         SyncDiffMode();
         ViewModel.PropertyChanged += OnViewModelChanged;
 
@@ -273,6 +275,10 @@ public sealed partial class ToolbarWindow : Window
             case nameof(ToolbarViewModel.ShowsDiffView):
                 // Rebuilt only when the diff or the rejected hunks change (DiffView compares the snapshots).
                 if (ViewModel.ShowsDiffView) _diffView.Show(ViewModel.DiffSegments, ViewModel.RejectedHunks);
+                break;
+            case nameof(ToolbarViewModel.ShowsMarkdownResult):
+                // Rebuilt only when the text changes (MarkdownView compares it).
+                if (ViewModel.ShowsMarkdownResult) _markdownView.Show(ViewModel.ResultText);
                 break;
         }
     }

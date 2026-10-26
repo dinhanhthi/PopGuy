@@ -89,8 +89,8 @@
                 </StackPanel>
 
                 <!--
-                    Result: the Diff/Text toggle (Improve and Proofread), the selectable text or the inline diff, then
-                    Copy, Paste back (editable sources only), Regenerate.
+                    Result: the Diff/Text toggle (Improve and Proofread), the selectable text, the inline diff or the
+                    rendered Markdown, then Copy, Paste back (editable sources only), Regenerate.
                 -->
                 <StackPanel
                     Padding="12,14,12,14"
@@ -130,6 +130,15 @@
                                 SelectionFlyout="{x:Null}"
                                 TextWrapping="Wrap"
                                 Visibility="{x:Bind ViewModel.ShowsDiffView, Mode=OneWay}" />
+                            <!-- The rendered Markdown ("Preserve & render formatting"), built in code (MarkdownView). -->
+                            <RichTextBlock
+                                x:Name="MarkdownBlock"
+                                ContextFlyout="{x:Null}"
+                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                IsTextSelectionEnabled="True"
+                                SelectionFlyout="{x:Null}"
+                                TextWrapping="Wrap"
+                                Visibility="{x:Bind ViewModel.ShowsMarkdownResult, Mode=OneWay}" />
                         </StackPanel>
                     </ScrollViewer>
                     <StackPanel
