@@ -36,6 +36,7 @@ internal sealed class AppServices : IDisposable
     private AppServices(AppLog log, AppPaths paths, DispatcherQueue dispatcher)
     {
         Log = log;
+        Paths = paths;
         Settings = new SettingsStore(paths);
         History = new HistoryStore(paths);
         Credentials = new CredentialStore();
@@ -68,6 +69,8 @@ internal sealed class AppServices : IDisposable
 
     public AppLog Log { get; }
 
+    public AppPaths Paths { get; }
+
     public SettingsStore Settings { get; }
 
     public HistoryStore History { get; }
@@ -76,6 +79,13 @@ internal sealed class AppServices : IDisposable
 
     /// <summary>The provider adapters, for the Settings Verify checks too (its CLI runner puts every CLI in the job object).</summary>
     public ProviderFactory Providers { get; }
+
+    /// <summary>The toolbar's Settings button (see <see cref="ToolbarController.SettingsRequested"/>). UI thread.</summary>
+    public event Action? SettingsRequested
+    {
+        add => _controller.SettingsRequested += value;
+        remove => _controller.SettingsRequested -= value;
+    }
 
     /// <summary>
     /// Builds every service and starts the triggers. UI thread (the toolbar window is created here). Throws when Windows

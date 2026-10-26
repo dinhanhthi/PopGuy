@@ -7,7 +7,7 @@ namespace PopGuy;
 
 /// <summary>
 /// The entry point (the csproj defines DISABLE_XAML_GENERATED_MAIN): what the generated Main does, plus single
-/// instance. A second launch hands its activation to the running instance (which brings its window to the front) and
+/// instance. A second launch hands its activation to the running instance (which brings Settings to the front) and
 /// exits, so there is only ever one set of hooks and hotkeys.
 /// <para>
 /// DEBUG harness runs (any argument starting with "--", e.g. <c>--spike</c>, <c>--probe-uia</c>, <c>--import-key</c>)
@@ -73,13 +73,13 @@ public static class Program
             // The running instance did not take it: exit anyway, a second resident PopGuy would double every hook.
         }
         // This process was launched by the user, so it may give the foreground away: the running instance activates its
-        // own main window (OnRelaunched). Never SetForegroundWindow on its MainWindowHandle, which can be the topmost
+        // Settings window (OnRelaunched). Never SetForegroundWindow on its MainWindowHandle, which can be the topmost
         // toolbar and would take the foreground from the source app.
         ToolbarWindowStyle.AllowForegroundFor(owner.ProcessId);
         return true;
     }
 
-    /// <summary>A later launch redirected here (on a background thread): show the main window.</summary>
+    /// <summary>A later launch redirected here (on a background thread): show Settings.</summary>
     private static void OnRedirectedActivation(object? sender, AppActivationArguments args) =>
         _app?.OnRelaunched();
 }

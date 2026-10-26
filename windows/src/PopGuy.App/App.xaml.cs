@@ -2,6 +2,7 @@ using System.Reflection;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using PopGuy.Services;
+using PopGuy.Settings;
 #if DEBUG
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -19,7 +20,7 @@ public partial class App : Application
     internal static string Version { get; } =
         typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
 
-    private Window? _window;
+    private SettingsWindow? _settingsWindow;
     private AppServices? _services;
     private TrayIcon? _tray;
     private DispatcherQueue? _dispatcher;
@@ -28,77 +29,107 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        // A tray app: closing Settings (the last window) must not end it; only Exit does (Quit PopGuy).
+        DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
     }
 
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
 #if DEBUG
         WriteLaunchProbe();
-        // DEBUG harnesses (--spike, --probe-uia, --import-key, --seed-settings): no main window, exit when done.
+        // DEBUG harnesses (--spike, --probe-uia, --import-key, --seed-settings): no tray icon, exit when done.
         if (PopGuy.Debug.Probes.TryStart(Exit)) return;
-        // --selftest-toolbar: Paste back goes to the app in front before the hello window takes the foreground.
+        // --selftest-toolbar: Paste back goes to the app that was in front at launch.
         var selfTestSource = PopGuy.Debug.Probes.SelfTestToolbarRequested
             ? PopGuy.Platform.SystemServices.ForegroundApp.Snapshot()
             : null;
 #endif
+        // PopGuy starts in the tray only: no window until Settings opens (the first-launch wizard comes in Phase 22).
         _dispatcher = DispatcherQueue.GetForCurrentThread();
-        // The hello window is the "PopGuy is running" window until the tray arrives (Phase 12): closing it quits.
-        _window = new MainWindow();
-        _window.Closed += OnMainWindowClosed;
-        _window.Activate();
-
         try
         {
             _services = AppServices.Start(_dispatcher);
             UnhandledException += OnUnhandledException;
+            _services.SettingsRequested += ShowSettings;
 #if DEBUG
             if (selfTestSource is not null) _services.ShowCannedToolbar(PopGuy.Debug.Probes.SelfTestText, selfTestSource);
 #endif
         }
         catch (Exception e)
         {
-            // Logged by AppServices; the window stays, without triggers.
+            // Logged by AppServices. Without the triggers, and with no tray icon or window to quit from, PopGuy exits
+            // rather than linger unseen (a later launch would only be redirected to it).
             System.Diagnostics.Debug.WriteLine($"PopGuy services did not start: {e.GetType().Name}");
+            _dispatcher.TryEnqueue(Exit);
             return;
         }
 
         try
         {
-            // Settings… shows the hello window until the Settings window arrives (12.2).
-            _tray = new TrayIcon(_services.Settings, _dispatcher, () => _window?.Activate(), Shutdown, _services.Log.Write);
+            _tray = new TrayIcon(_services.Settings, _dispatcher, ShowSettings, Shutdown, _services.Log.Write);
             _tray.SessionEnding += OnSessionEnding;
         }
         catch (System.ComponentModel.Win32Exception e)
         {
+            // Without the icon, Settings is the only way to see PopGuy and to quit it: it opens now, and closing it quits.
             _services.Log.Write($"tray: not created, error {e.NativeErrorCode}");
+            ShowSettings();
         }
     }
 
-    /// <summary>A later launch redirected here (any thread, see Program): the main window comes to the front.</summary>
+    /// <summary>A later launch redirected here (any thread, see Program): Settings comes to the front.</summary>
     internal void OnRelaunched()
     {
         // Window members are UI thread only; the dispatcher queue may be used from any thread.
-        _dispatcher?.TryEnqueue(() => _window?.Activate());
+        _dispatcher?.TryEnqueue(ShowSettings);
     }
 
-    private void OnMainWindowClosed(object sender, WindowEventArgs args) => Shutdown();
+    /// <summary>
+    /// The tray icon, its Settings… item, a later launch and the toolbar's Settings button: the one Settings window comes
+    /// to the front, made first when none is open. UI thread.
+    /// </summary>
+    private void ShowSettings()
+    {
+        if (_shutDown || _services is null) return;
+        if (_settingsWindow is null)
+        {
+            _settingsWindow = new SettingsWindow(_services);
+            _settingsWindow.Closed += OnSettingsClosed;
+        }
+        _settingsWindow.Show();
+    }
+
+    /// <summary>Settings closed: PopGuy runs on in the tray (it quits only from Quit PopGuy, or here without a tray icon).</summary>
+    private void OnSettingsClosed(object sender, WindowEventArgs args)
+    {
+        if (_settingsWindow is not null) _settingsWindow.Closed -= OnSettingsClosed;
+        _settingsWindow = null;
+        if (_tray is null) Shutdown();
+    }
 
     /// <summary>
-    /// Quit PopGuy (tray) or closing the hello window: removes the tray icon, stops the services (history flushed), then
-    /// exits. UI thread, never inside the tray icon's window procedure; once.
+    /// Quit PopGuy (tray), or closing Settings without a tray icon: closes Settings (its frame is saved), removes the
+    /// tray icon, stops the services (history flushed), then exits. UI thread, never inside the tray icon's window
+    /// procedure; once.
     /// </summary>
     private void Shutdown()
     {
         if (_shutDown) return;
         _shutDown = true;
-        if (_window is not null) _window.Closed -= OnMainWindowClosed;
+        if (_settingsWindow is not null)
+        {
+            _settingsWindow.Closed -= OnSettingsClosed;
+            _settingsWindow.Close();
+            _settingsWindow = null;
+        }
+        if (_services is not null) _services.SettingsRequested -= ShowSettings;
         UnhandledException -= OnUnhandledException;
         if (_tray is not null) _tray.SessionEnding -= OnSessionEnding;
         _tray?.Dispose();
         _tray = null;
         _services?.Dispose();
         _services = null;
-        // The hidden toolbar window would keep the process alive.
+        // Explicit shutdown mode: nothing else ends the process.
         Exit();
     }
 

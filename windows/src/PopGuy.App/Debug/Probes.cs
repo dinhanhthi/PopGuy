@@ -20,7 +20,7 @@ namespace PopGuy.Debug;
 
 /// <summary>
 /// DEBUG harnesses for the Phase 3 spike gate (plan task 3.4) and the Phase 8 VM QA (plan task 8.4), started from the
-/// command line instead of the main window, writing to %APPDATA%\PopGuy\Probes. Selected text is never written, only
+/// command line instead of the usual tray start, writing to %APPDATA%\PopGuy\Probes. Selected text is never written, only
 /// its length; API keys never at all.
 /// <list type="bullet">
 /// <item><c>--spike &lt;seconds&gt;</c>: a resident run (<see cref="SpikeSession"/>) for that long, then exit.</item>

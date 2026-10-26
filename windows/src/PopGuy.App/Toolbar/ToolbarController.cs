@@ -89,6 +89,9 @@ internal sealed class ToolbarController : IDisposable
         _toolbarHwnd = window.Hwnd;
     }
 
+    /// <summary>The toolbar's Settings button: the App opens the Settings window. UI thread.</summary>
+    public event Action? SettingsRequested;
+
     /// <summary>Applies the settings, subscribes and starts the input loops. UI thread, once.</summary>
     public void Start()
     {
@@ -572,8 +575,15 @@ internal sealed class ToolbarController : IDisposable
         }
     }
 
-    /// <summary>The Settings button: the Settings window arrives in Phase 12 (macOS opens it and closes the toolbar).</summary>
-    private void OnSettingsRequested() => _log("settings: the Settings window is not available yet");
+    /// <summary>
+    /// The Settings button (spec-1 §3): Settings opens, then the toolbar closes. In that order: Settings takes the
+    /// foreground first, so closing the toolbar does not hand it back to the source app.
+    /// </summary>
+    private void OnSettingsRequested()
+    {
+        SettingsRequested?.Invoke();
+        Hide();
+    }
 
     // Copy and Paste back.
 

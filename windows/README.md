@@ -72,7 +72,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Z:\Downloads\PopGuy-win\<run
 
 `vm-install.ps1` copies the app to `C:\PopGuyQA\builds\<run id>`, unblocks it and, with `-Launch`, starts it through `explorer.exe` (the VM tool kills child processes when its command returns). Arguments for the app need `-Wait`. Test fixtures live in `C:\PopGuyQA`. See the script's help for every parameter.
 
-DEBUG builds accept harness arguments instead of opening the main window; they write to `%APPDATA%\PopGuy\Probes` and never write selected text, only its length:
+DEBUG builds accept harness arguments instead of the usual tray start; they write to `%APPDATA%\PopGuy\Probes` and never write selected text, only its length:
 
 - `--spike <seconds>`: resident run of global input, clipboard cache, hotkey, chord and the test toolbar; logs `spike-<ts>.jsonl`.
 - `--probe-uia <delaySeconds>`: one UI Automation read of the focused selection into `probe-uia-<ts>.json`.
