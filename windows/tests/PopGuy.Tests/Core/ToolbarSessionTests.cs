@@ -129,6 +129,25 @@ public sealed class ToolbarSessionTests : IDisposable
         Assert.Equal("HTTP 401: invalid key", record.ErrorMessage);
     }
 
+    // macOS recordSpeak: one record at trigger time with the selected engine and accent, no output; none for an
+    // ignored source.
+    [Fact]
+    public void SpeakRecordsTheEngineAndAccent()
+    {
+        var session = Session(new FakeProvider([]));
+        var run = new ToolbarRun(ActionIdentifier.Speak, "Bonjour") { SourceExeName = "notepad.exe" };
+
+        session.RecordSpeak(run, SpeakEngineSelection.Cloud(TtsProviderKind.AzureTts), SpeakAccent.French);
+        session.RecordSpeak(run with { SkipHistory = true }, SpeakEngineSelection.System, SpeakAccent.UsEnglish);
+
+        var record = Assert.Single(_history.Records);
+        Assert.Equal(("Speak", "Azure Speech", "French"), (record.ActionName, record.ProviderLabel, record.Model));
+        Assert.Equal(("Bonjour", "", true), (record.Input, record.Output, record.Success));
+        Assert.Equal("notepad.exe", record.SourceAppName);
+        Assert.Null(record.ProviderKind);
+        Assert.Equal(ToolbarState.Idle, session.State);
+    }
+
     [Fact]
     public async Task HistoryOffWritesNothing()
     {

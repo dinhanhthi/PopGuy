@@ -4,6 +4,7 @@ using PopGuy.Core.Actions;
 using PopGuy.Core.Diff;
 using PopGuy.Core.Icons;
 using PopGuy.Core.Settings;
+using PopGuy.Core.Speak;
 using PopGuy.Core.Toolbar;
 
 namespace PopGuy.Toolbar;
@@ -23,7 +24,9 @@ public sealed partial record ToolbarActionItem(ActionIdentifier Id, string Label
 /// result font, the Translate target) is read from the settings on every presentation. The window's clicks become the
 /// <c>…Requested</c> / <see cref="ActionInvoked"/> events, which the controller handles; Regenerate, Retry, Refine and
 /// Edit go to the session directly. The prompt and refine drafts live here (the controller's Esc and outside-click rules
-/// read them). UI thread only, except the session's <c>Changed</c>, which may arrive on any thread and is marshalled here.
+/// read them). Speak is orthogonal to the session's state (macOS): <see cref="BindSpeak"/> mirrors the coordinator's
+/// phase, replay and spoken text, and copies the phase into <see cref="ToolbarSession.SpeakPhase"/>. UI thread only,
+/// except the session's and the coordinator's <c>Changed</c>, which may arrive on any thread and are marshalled here.
 /// </summary>
 public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 {
@@ -37,7 +40,15 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         nameof(RejectedHunks), nameof(ShowsMarkdownResult), nameof(IsPromptInputActive), nameof(IsRefineInputActive),
         nameof(IsEditing), nameof(IsResultEditable), nameof(ShowsEditor), nameof(ShowsEditButton), nameof(ShowsDoneButton),
         nameof(ShowsRegenerate), nameof(ShowsRefine), nameof(RefineEnabled), nameof(ShowsPromptDivider),
-        nameof(ShowsReadView), nameof(IsConfirmingIgnore), nameof(ShowsSystemGroup),
+        nameof(ShowsReadView), nameof(IsConfirmingIgnore), nameof(ShowsSystemGroup), nameof(ShowsSpeakDivider),
+    ];
+
+    /// <summary>The properties that follow the speak coordinator; raised together on every speak refresh.</summary>
+    private static readonly string[] SpeakProperties =
+    [
+        nameof(SpeakPhase), nameof(CanReplaySpeak), nameof(SpokenText), nameof(ShowsSpeakArea), nameof(IsSpeakLoading),
+        nameof(IsSpeakPlaying), nameof(ShowsSpokenText), nameof(ShowsListenAgain), nameof(ShowsSpeakFallback),
+        nameof(ShowsSpeakDivider), nameof(ShowsBody),
     ];
 
     /// <summary>The properties read from the settings; raised together on every presentation.</summary>
@@ -78,6 +89,11 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     private bool _editing;
     private bool _resultEditable;
     private bool _canRefine;
+    private SpeakCoordinator? _speak;
+    private SpeakPhase _speakPhase;
+    private bool _canReplaySpeak;
+    private string? _spokenText;
+    private bool _speakFellBack;
 
     public ToolbarViewModel(ToolbarSession session, DispatcherQueue dispatcher)
     {
@@ -123,6 +139,9 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     /// <summary>The Settings button (macOS: opens Settings and closes the toolbar).</summary>
     public event Action? SettingsRequested;
+
+    /// <summary>"Listen again" was clicked (macOS replaySpeak: the cached audio, no new request, no history).</summary>
+    public event Action? ReplayRequested;
 
     /// <summary>The inline row (<see cref="ToolbarLayout.PrincipalOrdered"/>), in order.</summary>
     public IReadOnlyList<ToolbarActionItem> Actions => _actions;
@@ -207,8 +226,10 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public bool IsError => _failMessage is not null || _state is ToolbarState.Error;
 
-    /// <summary>Anything below the action row (the prompt input, running, result, error or the ignore confirmation).</summary>
-    public bool ShowsBody => IsPromptInputActive || IsRunning || IsResult || IsError || IsConfirmingIgnore;
+    /// <summary>
+    /// Anything below the action row (the prompt input, running, result, error, Speak or the ignore confirmation).
+    /// </summary>
+    public bool ShowsBody => IsPromptInputActive || IsRunning || IsResult || IsError || ShowsSpeakArea || IsConfirmingIgnore;
 
     /// <summary>Close is hidden while running: Stop is the explicit exit then (spec-1 §3.5).</summary>
     public bool ShowsClose => !IsRunning;
@@ -299,6 +320,32 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     /// <summary>Refine is disabled while its input is open.</summary>
     public bool RefineEnabled => !IsRefineInputActive;
+
+    /// <summary>The Speak phase (macOS speakPhase): the Speak button is Speak when idle, else Stop.</summary>
+    public SpeakPhase SpeakPhase => _speakPhase;
+
+    /// <summary>"Listen again" is available (macOS canReplaySpeak); it keeps the Speak area, and feeds the gate.</summary>
+    public bool CanReplaySpeak => _canReplaySpeak;
+
+    /// <summary>The text last spoken (macOS lastSpokenText), shown once playback ends.</summary>
+    public string SpokenText => _spokenText ?? "";
+
+    /// <summary>The Speak area below the bar (macOS: speakPhase != idle || canReplaySpeak).</summary>
+    public bool ShowsSpeakArea => _speakPhase != SpeakPhase.Idle || _canReplaySpeak;
+
+    public bool IsSpeakLoading => _speakPhase == SpeakPhase.Loading;
+
+    public bool IsSpeakPlaying => _speakPhase == SpeakPhase.Playing;
+
+    public bool ShowsSpokenText => ShowsSpeakArea && _speakPhase == SpeakPhase.Idle && _spokenText is not null;
+
+    public bool ShowsListenAgain => ShowsSpokenText && _canReplaySpeak;
+
+    /// <summary>A cloud engine was selected but the system voice played.</summary>
+    public bool ShowsSpeakFallback => ShowsSpeakArea && _speakFellBack;
+
+    /// <summary>A divider between the panel above (prompt, running, result or error) and the Speak area.</summary>
+    public bool ShowsSpeakDivider => ShowsSpeakArea && (IsPromptInputActive || IsRunning || IsResult || IsError);
 
     /// <summary>The prompt input's text, as typed.</summary>
     public string PromptDraft { get; set; } = "";
@@ -392,11 +439,30 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         else _dispatcher.TryEnqueue(Refresh);
     }
 
+    /// <summary>
+    /// Follows <paramref name="speak"/> (macOS bindSpeakCoordinator). Once, before the toolbar shows; the Settings
+    /// preview never binds (its Speak button stays idle).
+    /// </summary>
+    public void BindSpeak(SpeakCoordinator speak)
+    {
+        _speak = speak;
+        speak.Changed += OnSpeakChanged;
+        RefreshSpeak();
+    }
+
+    /// <summary>The coordinator's state changed (any thread, media threads too): refreshed on the UI thread.</summary>
+    private void OnSpeakChanged()
+    {
+        if (_dispatcher.HasThreadAccess) RefreshSpeak();
+        else _dispatcher.TryEnqueue(RefreshSpeak);
+    }
+
     /// <summary>The window closed: stops following the session and stops any run (no refresh: the window is gone).</summary>
     public void Detach()
     {
         _detached = true;
         _session.Changed -= OnSessionChanged;
+        if (_speak is not null) _speak.Changed -= OnSpeakChanged;
         _session.Stop();
     }
 
@@ -492,6 +558,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public void RequestSettings() => SettingsRequested?.Invoke();
 
+    public void RequestReplay() => ReplayRequested?.Invoke();
+
     /// <summary>A pick in the Translate picker: the next Translate uses it (it does not run; macOS parity).</summary>
     public void SetTargetLanguage(TargetLanguage language)
     {
@@ -547,6 +615,18 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         foreach (var name in StateProperties) Raise(name);
     }
 
+    /// <summary>Reads the coordinator's state once (a queued refresh shows the latest) and mirrors the phase.</summary>
+    private void RefreshSpeak()
+    {
+        if (_detached || _speak is null) return;
+        _speakPhase = _speak.Phase;
+        _canReplaySpeak = _speak.CanReplay;
+        _spokenText = _speak.LastSpokenText;
+        _speakFellBack = _speak.DidFallBackToSystem;
+        _session.SpeakPhase = _speakPhase;
+        foreach (var name in SpeakProperties) Raise(name);
+    }
+
     private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
     // The row's labels and icons (macOS ToolbarView.actionControl).
@@ -568,8 +648,11 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
                     ActionKind.Translate => Builtin(id, "Translate", "character.bubble", showsLabel),
                     _ => null,
                 };
-            case ActionIdentifierType.Speak or ActionIdentifierType.Dictionary:
-                // Not on the row until Speak (Phase 17) and Look up (Phase 18) exist: a button would do nothing.
+            case ActionIdentifierType.Speak:
+                // The view shows Stop instead while Speak is loading or playing.
+                return Builtin(id, "Speak", "speaker.wave.2", showsLabel);
+            case ActionIdentifierType.Dictionary:
+                // Not on the row until Look up (Phase 18) exists: a button would do nothing.
                 return null;
             default:
                 var custom = settings.CustomActions.FirstOrDefault(a => a.Id == id.CustomId);

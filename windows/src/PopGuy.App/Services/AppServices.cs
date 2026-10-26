@@ -9,9 +9,12 @@ using PopGuy.Core.Providers.Cli;
 using PopGuy.Core.Scripts;
 using PopGuy.Core.Secrets;
 using PopGuy.Core.Settings;
+using PopGuy.Core.Speak;
+using PopGuy.Core.Speak.CloudTts;
 using PopGuy.Core.Toolbar;
 using PopGuy.Platform.Capture;
 using PopGuy.Platform.Input;
+using PopGuy.Platform.Speech;
 using PopGuy.Platform.SystemServices;
 using PopGuy.Toolbar;
 
@@ -19,8 +22,8 @@ namespace PopGuy.Services;
 
 /// <summary>
 /// The composition root: every long-lived service, built once on the UI thread at launch and disposed at exit. API
-/// keys come from Credential Manager (<see cref="CredentialStore"/>) by <see cref="SecretIds.Provider"/>; settings and
-/// history live under <see cref="AppPaths"/>.
+/// keys come from Credential Manager (<see cref="CredentialStore"/>) by <see cref="SecretIds.Provider"/> and
+/// <see cref="SecretIds.Tts"/>; settings and history live under <see cref="AppPaths"/>.
 /// </summary>
 internal sealed class AppServices : IDisposable
 {
@@ -32,6 +35,7 @@ internal sealed class AppServices : IDisposable
     private readonly SelectionPipeline _pipeline;
     private readonly ToolbarWindow _toolbar;
     private readonly ToolbarController _controller;
+    private readonly SpeakCoordinator _speak;
     private int _disposed;
 
     private AppServices(AppLog log, AppPaths paths, DispatcherQueue dispatcher)
@@ -48,6 +52,22 @@ internal sealed class AppServices : IDisposable
         // Script shells go in their own job, which what a script opens leaves (it outlives PopGuy, as on macOS).
         var scripts = new ScriptActionEngine(onStarted: process => ChildProcessJob.Scripts.Assign(process));
         var session = new ToolbarSession(engine, History, () => Settings.Current, scripts: scripts);
+        // One cloud adapter per kind, created once; the coordinator reads each key when a request needs it (off the UI
+        // thread: it routes on the thread pool), never caching it.
+        var ttsProviders = new Dictionary<TtsProviderKind, ITtsProvider>
+        {
+            [TtsProviderKind.OpenAiTts] = new OpenAITtsProvider(),
+            [TtsProviderKind.GoogleCloudTts] = new GoogleCloudTtsProvider(),
+            [TtsProviderKind.AzureTts] = new AzureTtsProvider(),
+        };
+        IAudioPlayback playback = new AudioPlayback();
+#if DEBUG
+        playback = new PopGuy.Debug.SpeakProbe(playback, () => Settings.Current.SpeakSettings.SelectedEngine);
+#endif
+        _speak = new SpeakCoordinator(new SystemTts(), playback, kind => ttsProviders.GetValueOrDefault(kind), TtsKey);
+#if DEBUG
+        ((PopGuy.Debug.SpeakProbe)playback).Watch(_speak);
+#endif
 
         _input = new GlobalInput(log.Write);
         try
@@ -57,7 +77,8 @@ internal sealed class AppServices : IDisposable
             _hotkeys = new HotkeyService(_input, log.Write);
             _pipeline = new SelectionPipeline(_input, log.Write);
             _toolbar = new ToolbarWindow(session);
-            _controller = new ToolbarController(Settings, session, _toolbar, _input, chord, _hotkeys, _pipeline, dispatcher, log.Write);
+            _controller = new ToolbarController(
+                Settings, session, _speak, _toolbar, _input, chord, _hotkeys, _pipeline, dispatcher, log.Write);
         }
         catch
         {
@@ -145,10 +166,27 @@ internal sealed class AppServices : IDisposable
         }
     }
 
-    /// <summary>Stops the triggers first, then the input they read, then the toolbar; flushes history last. UI thread.</summary>
+    /// <summary>The stored cloud speech key of <paramref name="kind"/>, or null (as <see cref="ApiKey"/>). Thread pool.</summary>
+    private string? TtsKey(TtsProviderKind kind)
+    {
+        try
+        {
+            return Credentials.Get(SecretIds.Tts(kind));
+        }
+        catch (Win32Exception e)
+        {
+            Log.Write($"credentials: read failed for {kind}, error {e.NativeErrorCode}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Stops speech, then the triggers, then the input they read, then the toolbar; flushes history last. UI thread.
+    /// </summary>
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        _speak.Stop();
         _controller.Dispose();
         _pipeline.Dispose();
         _hotkeys.Dispose();

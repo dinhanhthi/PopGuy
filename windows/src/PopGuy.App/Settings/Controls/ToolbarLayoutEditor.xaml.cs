@@ -308,7 +308,7 @@ public sealed partial class ToolbarLayoutEditor : UserControl
 
     /// <summary>
     /// <paramref name="s"/> with the dragged action at its target slot. The slot counts the shown actions; the zone may
-    /// hold actions the toolbar does not show (Speak, Look up), which <see cref="ToolbarLayoutEditMath.ZoneIndex"/> skips.
+    /// hold actions the toolbar does not show (Look up), which <see cref="ToolbarLayoutEditMath.ZoneIndex"/> skips.
     /// </summary>
     private static AppSettings Moved(AppSettings s, DragSession drag)
     {

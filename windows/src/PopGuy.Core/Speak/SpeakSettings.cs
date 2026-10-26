@@ -31,6 +31,25 @@ public static class SpeakRules
         _ => "en-US",
     };
 
+    /// <summary>The engine's name in Settings and history (macOS <c>SpeakEngineSelection.displayName</c>).</summary>
+    public static string DisplayName(this SpeakEngineSelection engine) => engine.CloudProvider switch
+    {
+        null => "System voice",
+        TtsProviderKind.OpenAiTts => "OpenAI",
+        TtsProviderKind.GoogleCloudTts => "Google Cloud TTS",
+        _ => "Azure Speech",
+    };
+
+    /// <summary>The accent's full name (macOS <c>SpeakAccent.displayName</c>).</summary>
+    public static string DisplayName(this SpeakAccent accent) => accent switch
+    {
+        SpeakAccent.UkEnglish => "UK English",
+        SpeakAccent.French => "French",
+        SpeakAccent.Spanish => "Spanish",
+        SpeakAccent.German => "German",
+        _ => "US English",
+    };
+
     /// <summary>
     /// The cloud speech speed for a system rate: linear, 0.6 at the minimum rate, 1.0 at the default, 1.5 at the
     /// maximum, rounded to 3 places (a narrow range that sounds natural on every provider).

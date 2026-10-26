@@ -1,5 +1,6 @@
 #if DEBUG
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -11,6 +12,8 @@ using PopGuy.Core.Actions;
 using PopGuy.Core.Json;
 using PopGuy.Core.Secrets;
 using PopGuy.Core.Settings;
+using PopGuy.Core.Speak;
+using PopGuy.Core.Toolbar;
 using PopGuy.Platform.Capture;
 using PopGuy.Platform.Input;
 using PopGuy.Platform.SystemServices;
@@ -33,6 +36,7 @@ namespace PopGuy.Debug;
 /// trigger with an assigned built-in action, then exit.</item>
 /// <item><c>--selftest-toolbar</c>: not an exiting harness; the app starts as usual and shows the toolbar with
 /// <see cref="SelfTestText"/> as a result (see <c>App.OnLaunched</c>).</item>
+/// <item>Every DEBUG run: <see cref="SpeakProbe"/> logs Speak to <c>speak-&lt;ts&gt;.jsonl</c>.</item>
 /// </list>
 /// Exit code 0, or 1 after an exception (written to <c>error-&lt;ts&gt;.txt</c>) or a refused import or seed. The import
 /// and the seed write their one status line to stdout and to <c>import-key.txt</c> / <c>seed-settings.txt</c>
@@ -884,6 +888,127 @@ internal sealed class SpikeSession
             {
                 _writer?.Dispose();
                 _writer = null;
+            }
+        }
+    }
+}
+/// <summary>
+/// The Speak trail for the VM QA (plan task 17.5), in <c>speak-&lt;ts&gt;.jsonl</c> (one file per run, made at the first
+/// event). It wraps the audio player: Open, Playing (audible, with the time it took), then Ended, Stopped (cancelled: a
+/// Stop, a new Speak or the start timeout; <c>started</c> tells which side of the start) or Failed; and it follows the
+/// coordinator: Loading (the selected engine, the text's length) and Idle (fallback, replay, the time since Loading).
+/// Never the text or a key. Any thread.
+/// </summary>
+internal sealed class SpeakProbe(IAudioPlayback inner, Func<SpeakEngineSelection> selectedEngine) : IAudioPlayback
+{
+    private readonly Lock _gate = new();
+    private readonly string _path = Path.Combine(Probes.Folder, $"speak-{Probes.Stamp()}.jsonl");
+    private StreamWriter? _writer;
+    private bool _failed;
+    private SpeakCoordinator? _coordinator;
+    private SpeakPhase _phase;
+    private long _loadingAt;
+
+    /// <summary>Follows the coordinator's phase (Loading and Idle; Playing comes from the player).</summary>
+    public void Watch(SpeakCoordinator coordinator)
+    {
+        _coordinator = coordinator;
+        coordinator.Changed += OnChanged;
+    }
+
+    public async Task PlayAsync(Stream audio, string contentType, Action started, CancellationToken ct)
+    {
+        var kind = contentType == AudioContentTypes.Wav ? "system" : "cloud";
+        var opened = Stopwatch.GetTimestamp();
+        long playingAt = 0;
+        Write(new() { ["event"] = "Open", ["audio"] = kind, ["bytes"] = audio.CanSeek ? audio.Length : -1 });
+        try
+        {
+            await inner.PlayAsync(audio, contentType, () =>
+            {
+                Interlocked.Exchange(ref playingAt, Stopwatch.GetTimestamp());
+                Write(new() { ["event"] = "Playing", ["audio"] = kind, ["startMs"] = Ms(opened) });
+                started();
+            }, ct);
+            Write(new() { ["event"] = "Ended", ["audio"] = kind, ["playedMs"] = Ms(Interlocked.Read(ref playingAt)) });
+        }
+        catch (OperationCanceledException)
+        {
+            var at = Interlocked.Read(ref playingAt);
+            Write(new() { ["event"] = "Stopped", ["audio"] = kind, ["started"] = at != 0, ["ms"] = Ms(at != 0 ? at : opened) });
+            throw;
+        }
+        catch (Exception e)
+        {
+            var at = Interlocked.Read(ref playingAt);
+            Write(new()
+            {
+                ["event"] = "Failed", ["audio"] = kind, ["started"] = at != 0, ["ms"] = Ms(at != 0 ? at : opened),
+                ["error"] = e.GetType().Name, ["hresult"] = $"0x{e.HResult:X8}",
+            });
+            throw;
+        }
+    }
+
+    private void OnChanged()
+    {
+        if (_coordinator is not { } coordinator) return;
+        var phase = coordinator.Phase;
+        SpeakPhase previous;
+        long loadingAt;
+        lock (_gate)
+        {
+            if (phase == _phase || phase == SpeakPhase.Playing)
+            {
+                if (phase == SpeakPhase.Playing) _phase = phase;
+                return;
+            }
+            previous = _phase;
+            _phase = phase;
+            if (phase == SpeakPhase.Loading) _loadingAt = Stopwatch.GetTimestamp();
+            loadingAt = _loadingAt;
+        }
+        if (phase == SpeakPhase.Loading)
+        {
+            var engine = selectedEngine();
+            Write(new()
+            {
+                ["event"] = "Loading",
+                ["engine"] = engine.CloudProvider is { } k ? "cloud:" + RawValueEnumConverter<TtsProviderKind>.ToRaw(k) : "system",
+                ["chars"] = coordinator.LastSpokenText?.Length ?? 0,
+            });
+            return;
+        }
+        Write(new()
+        {
+            ["event"] = "Idle", ["from"] = previous.ToString(), ["fellBack"] = coordinator.DidFallBackToSystem,
+            ["canReplay"] = coordinator.CanReplay, ["ms"] = Ms(loadingAt),
+        });
+    }
+
+    private static long Ms(long since) => (long)Stopwatch.GetElapsedTime(since).TotalMilliseconds;
+
+    private void Write(Dictionary<string, object?> record)
+    {
+        var line = new Dictionary<string, object?> { ["time"] = DateTimeOffset.Now.ToString("O", CultureInfo.InvariantCulture) };
+        foreach (var (key, value) in record) line[key] = value;
+        var json = JsonSerializer.Serialize(line);
+        lock (_gate)
+        {
+            if (_failed) return;
+            try
+            {
+                if (_writer is null)
+                {
+                    Directory.CreateDirectory(Probes.Folder);
+                    _writer = new StreamWriter(_path, append: true) { AutoFlush = true };
+                }
+                _writer.WriteLine(json);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                _failed = true;
+                System.Diagnostics.Debug.WriteLine($"PopGuy speak probe write failed: {e.Message}");
             }
         }
     }

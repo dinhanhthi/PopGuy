@@ -1,7 +1,9 @@
 using System.Drawing;
 using Microsoft.UI.Dispatching;
 using PopGuy.Core.Actions;
+using PopGuy.Core.Json;
 using PopGuy.Core.Settings;
+using PopGuy.Core.Speak;
 using PopGuy.Core.Toolbar;
 using PopGuy.Platform.Capture;
 using PopGuy.Platform.Input;
@@ -19,6 +21,8 @@ namespace PopGuy.Toolbar;
 /// selection, a double-click) are routed by spec-1 §1.3 and shown at the gesture; only a double-click with an assigned
 /// action runs one. It also handles the toolbar's clicks (actions, the prompt, Stop, Copy, Paste back, Close, Ignore
 /// this app, Settings), a script action's after-run delivery (spec-4 §4.4) and the dismissal rules of spec-1 §3.8.
+/// Speak (its button, its hotkey, an assigned double-click) toggles <see cref="SpeakCoordinator"/> on the selection,
+/// orthogonal to the action runs; closing the toolbar or a new selection drops its "Listen again" (macOS).
 /// <para>
 /// Threading: the chord and hotkey events and the three input loops run on the thread pool; everything that touches the
 /// window, the view model or the presentation state runs on the UI thread (<see cref="DispatcherQueue"/>). Captures
@@ -33,6 +37,7 @@ internal sealed class ToolbarController : IDisposable
 
     private readonly SettingsStore _settings;
     private readonly ToolbarSession _session;
+    private readonly SpeakCoordinator _speak;
     private readonly ToolbarWindow _window;
     private readonly ToolbarViewModel _viewModel;
     private readonly GlobalInput _input;
@@ -79,11 +84,12 @@ internal sealed class ToolbarController : IDisposable
         Point? Pointer = null, bool? GrewDownward = null);
 
     public ToolbarController(
-        SettingsStore settings, ToolbarSession session, ToolbarWindow window, GlobalInput input, ChordMonitor chord,
-        HotkeyService hotkeys, SelectionPipeline pipeline, DispatcherQueue dispatcher, Action<string> log)
+        SettingsStore settings, ToolbarSession session, SpeakCoordinator speak, ToolbarWindow window, GlobalInput input,
+        ChordMonitor chord, HotkeyService hotkeys, SelectionPipeline pipeline, DispatcherQueue dispatcher, Action<string> log)
     {
         _settings = settings;
         _session = session;
+        _speak = speak;
         _window = window;
         _viewModel = window.ViewModel;
         _input = input;
@@ -119,6 +125,8 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.DisableCloseConfirmationRequested += OnDisableCloseConfirmation;
         _viewModel.IgnoreAppRequested += OnIgnoreApp;
         _viewModel.SettingsRequested += OnSettingsRequested;
+        _viewModel.ReplayRequested += OnReplayRequested;
+        _viewModel.BindSpeak(_speak);
         _session.ScriptFinished += OnScriptFinished;
         ApplySettings();
 
@@ -147,6 +155,7 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.DisableCloseConfirmationRequested -= OnDisableCloseConfirmation;
         _viewModel.IgnoreAppRequested -= OnIgnoreApp;
         _viewModel.SettingsRequested -= OnSettingsRequested;
+        _viewModel.ReplayRequested -= OnReplayRequested;
         _session.ScriptFinished -= OnScriptFinished;
         Hide();
     }
@@ -178,8 +187,9 @@ internal sealed class ToolbarController : IDisposable
             var settings = _settings.Current;
             var suspended = _hotkeysSuspended;
             _chord.Apply(settings);
-            // The master switch: nothing arms while PopGuy is off (spec-1 §1.4).
+            // The master switch: nothing arms while PopGuy is off (spec-1 §1.4), and speech stops.
             if (!settings.PopGuyEnabled || suspended) _chord.Enabled = false;
+            if (!settings.PopGuyEnabled) _speak.Stop();
             // The pipeline also captures for the double-click trigger alone: the routing drops what it does not want.
             _pipeline.Enabled = settings.PopGuyEnabled && (settings.TriggerOnSelectEnabled || settings.TriggerDoubleClickEnabled);
             var hotkeys = suspended
@@ -272,7 +282,8 @@ internal sealed class ToolbarController : IDisposable
     /// <summary>
     /// The chord replacement behaves like the chord (no-op while showing). An action hotkey (spec-1 §1.5), if the action
     /// is enabled: while the toolbar shows a selection, runs on it (no re-capture); else captures, shows, then runs. The
-    /// Prompt hotkey opens the prompt input instead (focused), or closes it when open (macOS triggerPromptInput).
+    /// Prompt hotkey opens the prompt input instead (focused), or closes it when open (macOS triggerPromptInput). The
+    /// Speak hotkey speaks the same way, or stops speech when it is loading or playing (macOS triggerAction).
     /// </summary>
     private void OnHotkey(ActionIdentifier id, ForegroundApp source)
     {
@@ -283,9 +294,9 @@ internal sealed class ToolbarController : IDisposable
             if (!_window.IsShown) StartCapture(source, autoRun: null);
             return;
         }
-        if (id.Type is ActionIdentifierType.Speak or ActionIdentifierType.Dictionary)
+        if (id.Type is ActionIdentifierType.Dictionary)
         {
-            // Speak (Phase 17) and Look up (Phase 18) do not exist yet.
+            // Look up (Phase 18) does not exist yet.
             _log($"hotkey: {id} is not available yet");
             return;
         }
@@ -392,6 +403,7 @@ internal sealed class ToolbarController : IDisposable
             CurrentText: _current?.Text ?? "",
             ActionInProgress: _session.State is not ToolbarState.IdleState,
             SpeakActive: _session.SpeakPhase != SpeakPhase.Idle,
+            CanReplaySpeak: _viewModel.CanReplaySpeak,
             SourceExeName: capture.Source.Exe,
             IsOwnProcess: capture.Source.IsOwnProcess), settings).Verdict;
         if (verdict != PresentationVerdict.Show)
@@ -403,6 +415,8 @@ internal sealed class ToolbarController : IDisposable
         _current = capture;
         _presentation++;
         _pasting = false;
+        // A new selection: the previous one's speech stops and its "Listen again" goes (macOS update).
+        _speak.ClearReplay();
         _viewModel.Present(settings, capture.IsEditable, CanIgnore(capture.Source));
         // No pointer (the chord, the hotkeys, a keyboard selection): placed below the selection rect, or at the cursor
         // when there is none (spec-1 §3.2).
@@ -427,6 +441,7 @@ internal sealed class ToolbarController : IDisposable
         _current = new CapturedSelection(text, IsEditable: true, Rectangle.Empty, source);
         _presentation++;
         _pasting = false;
+        _speak.ClearReplay();
         _viewModel.Present(_settings.Current, isEditable: true, CanIgnore(source));
         // Before ShowAt: it sizes the window for the content it finds.
         _session.ShowCanned(text);
@@ -438,10 +453,15 @@ internal sealed class ToolbarController : IDisposable
 
     /// <summary>
     /// An action button or hotkey: runs the action on the current selection, if it is enabled. Prompt opens or closes
-    /// the prompt input instead; its Run comes back through <see cref="OnPromptSubmitted"/>.
+    /// the prompt input instead; its Run comes back through <see cref="OnPromptSubmitted"/>. Speak toggles speech.
     /// </summary>
     private void RunAction(ActionIdentifier id)
     {
+        if (id.Type == ActionIdentifierType.Speak)
+        {
+            ToggleSpeak();
+            return;
+        }
         if (id != PromptId)
         {
             StartRun(id, promptText: null);
@@ -460,10 +480,7 @@ internal sealed class ToolbarController : IDisposable
         var settings = _settings.Current;
         if (!ToolbarLayout.IsEnabled(settings, id)) return;
         var source = capture.Source;
-        // The gate already dropped ignored sources at show time; checked again in case the ignore list changed since.
-        var ignored = PresentationGate.Evaluate(
-            new PresentationInput(capture.Text, SourceExeName: source.Exe, IsOwnProcess: source.IsOwnProcess), settings).Verdict
-            is PresentationVerdict.IgnoredApp or PresentationVerdict.IgnoredDomain;
+        var ignored = IsIgnored(capture, settings);
         _log($"run: {id.Type} {id.BuiltinKind}, {capture.Text.Length} chars");
         // The Translate picker's target; its name is {{language}} for every action (macOS: targetLanguage.rawValue).
         var language = _viewModel.TargetLanguage;
@@ -478,9 +495,49 @@ internal sealed class ToolbarController : IDisposable
         });
     }
 
-    /// <summary>Hides the toolbar (which stops the session) and forgets the selection.</summary>
+    /// <summary>
+    /// Speak (macOS triggerSpeak): speaks the current selection with the Speak settings, or stops speech while it is
+    /// loading or playing (the toggle records nothing). A start is recorded in history at once (the selected engine).
+    /// The coordinator publishes Loading here, on the UI thread, and routes on the thread pool.
+    /// </summary>
+    private void ToggleSpeak()
+    {
+        if (_current is not { Blocked: false } capture || capture.Text.Trim().Length == 0) return;
+        var settings = _settings.Current;
+        if (!ToolbarLayout.IsEnabled(settings, ActionIdentifier.Speak)) return;
+        if (_speak.Phase != SpeakPhase.Idle)
+        {
+            _log("speak: stop");
+            _speak.Stop();
+            return;
+        }
+        var speak = settings.SpeakSettings;
+        var config = speak.SelectedEngine.CloudProvider is { } kind
+            ? settings.TtsProviderConfigs.GetValueOrDefault(RawValueEnumConverter<TtsProviderKind>.ToRaw(kind)) ?? new TtsProviderConfig()
+            : new TtsProviderConfig();
+        _log($"speak: {speak.SelectedEngine.DisplayName()}, {capture.Text.Length} chars");
+        Watch(_speak.SpeakAsync(capture.Text, speak.DefaultAccent, speak, config), "speak");
+        var source = capture.Source;
+        _session.RecordSpeak(new ToolbarRun(ActionIdentifier.Speak, capture.Text)
+        {
+            SourceExeName = source.IsOwnProcess ? null : source.Exe,
+            SourceAppName = source.DisplayName.Length > 0 ? source.DisplayName : null,
+            SkipHistory = IsIgnored(capture, settings),
+        }, speak.SelectedEngine, speak.DefaultAccent);
+    }
+
+    /// <summary>"Listen again": the cached audio, or the system voice again (no new cloud request, no history).</summary>
+    private void OnReplayRequested()
+    {
+        if (!_window.IsShown) return;
+        _log("speak: listen again");
+        Watch(_speak.ReplayAsync(), "listen again");
+    }
+
+    /// <summary>Hides the toolbar (which stops the session and drops "Listen again", stopping speech) and forgets the selection.</summary>
     private void Hide()
     {
+        _speak.ClearReplay();
         _window.Hide();
         _current = null;
         _shown = false;
@@ -737,6 +794,15 @@ internal sealed class ToolbarController : IDisposable
     };
 
     // Helpers.
+
+    /// <summary>
+    /// The source is an ignored app or domain, so a run writes no history. The gate already dropped ignored sources at
+    /// show time; checked again in case the ignore list changed since.
+    /// </summary>
+    private static bool IsIgnored(CapturedSelection capture, AppSettings settings) =>
+        PresentationGate.Evaluate(
+            new PresentationInput(capture.Text, SourceExeName: capture.Source.Exe, IsOwnProcess: capture.Source.IsOwnProcess),
+            settings).Verdict is PresentationVerdict.IgnoredApp or PresentationVerdict.IgnoredDomain;
 
     private static bool IsBlocked(ForegroundApp app) => app.IsElevated && !Environment.IsPrivilegedProcess;
 

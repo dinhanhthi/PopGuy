@@ -489,6 +489,88 @@
                 </Button>
             </StackPanel>
 
+            <!--
+                Speak (macOS speakArea), orthogonal to the action panels above: "Loading…", "Speaking…", then the
+                spoken text and Listen again once playback ends (kept after Stop), and a note when a cloud engine fell
+                back to the system voice.
+            -->
+            <Rectangle
+                Height="1"
+                Margin="8,0,8,0"
+                Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
+                Visibility="{x:Bind ViewModel.ShowsSpeakDivider, Mode=OneWay}" />
+            <StackPanel
+                Padding="12,14,12,14"
+                Spacing="8"
+                Visibility="{x:Bind ViewModel.ShowsSpeakArea, Mode=OneWay}">
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    Visibility="{x:Bind ViewModel.IsSpeakLoading, Mode=OneWay}">
+                    <ProgressRing
+                        Width="16"
+                        Height="16"
+                        IsActive="{x:Bind ViewModel.IsSpeakLoading, Mode=OneWay}" />
+                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Loading…" />
+                </StackPanel>
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    Visibility="{x:Bind ViewModel.IsSpeakPlaying, Mode=OneWay}">
+                    <FontIcon
+                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                        FontSize="14"
+                        Glyph="&#xE767;" />
+                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Speaking…" />
+                </StackPanel>
+                <ScrollViewer MaxHeight="280" Visibility="{x:Bind ViewModel.ShowsSpokenText, Mode=OneWay}">
+                    <TextBlock
+                        ContextFlyout="{x:Null}"
+                        FontSize="{x:Bind ViewModel.ResultFontSize, Mode=OneWay}"
+                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                        IsTextSelectionEnabled="True"
+                        LineHeight="{x:Bind ViewModel.ResultLineHeight, Mode=OneWay}"
+                        SelectionFlyout="{x:Null}"
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Text="{x:Bind ViewModel.SpokenText, Mode=OneWay}"
+                        TextWrapping="Wrap" />
+                </ScrollViewer>
+                <Button
+                    x:Name="ListenAgainButton"
+                    AutomationProperties.Name="Listen again"
+                    AllowFocusOnInteraction="False"
+                    Visibility="{x:Bind ViewModel.ShowsListenAgain, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            FontSize="14"
+                            Glyph="&#xE767;" />
+                        <TextBlock Text="Listen again" />
+                    </StackPanel>
+                </Button>
+                <Grid ColumnSpacing="6" Visibility="{x:Bind ViewModel.ShowsSpeakFallback, Mode=OneWay}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon
+                        Margin="0,2,0,0"
+                        VerticalAlignment="Top"
+                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                        FontSize="12"
+                        Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                        Glyph="&#xE7BA;" />
+                    <TextBlock
+                        Grid.Column="1"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="Cloud voice unavailable — using the System voice."
+                        TextWrapping="Wrap" />
+                </Grid>
+            </StackPanel>
+
             <!-- "Ignore this app?" (macOS: a confirmation dialog): inline, since the toolbar never activates. -->
             <StackPanel
                 Padding="12,14,12,14"

@@ -34,7 +34,9 @@ public sealed class SpeakTests
         public async Task<Stream> SynthesizeAsync(
             string text, string? voiceId, float rate, float pitch, CancellationToken ct)
         {
-            Calls.Add((text, voiceId));
+            // Requests route on the thread pool, so two may overlap.
+            lock (Calls)
+                Calls.Add((text, voiceId));
             var hold = Hold;
             if (hold is not null)
                 await hold.Task;
@@ -89,6 +91,28 @@ public sealed class SpeakTests
         }
 
         public void EndCurrent() => _end.TrySetResult();
+    }
+
+    /// <summary>No audio device: the player never starts, ends or fails, until cancelled.</summary>
+    private sealed class SilentPlayback : IAudioPlayback
+    {
+        public int Plays { get; private set; }
+
+        public bool Cancelled { get; private set; }
+
+        public async Task PlayAsync(Stream audio, string contentType, Action started, CancellationToken ct)
+        {
+            Plays++;
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                Cancelled = true;
+                throw;
+            }
+        }
     }
 
     private static (SpeakCoordinator Coordinator, FakeSystemTts System, FakePlayback Playback) Make(
@@ -222,6 +246,46 @@ public sealed class SpeakTests
         Assert.True(playback.Cancelled);
         await secondRun;
         Assert.Equal(SpeakPhase.Idle, speak.Phase);
+    }
+
+    // Without an audio device the player may never report anything: Speak must not stay in Loading. The play is
+    // stopped after the start timeout and the request ends, without a cloud fallback (it would hang the same way).
+    [Fact]
+    public async Task AudioThatNeverStartsEndsTheRequestWithoutFallback()
+    {
+        var cloud = new FakeCloud();
+        var system = new FakeSystemTts();
+        var playback = new SilentPlayback();
+        var speak = new SpeakCoordinator(system, playback, _ => cloud, _ => "pg-test-key", TimeSpan.FromMilliseconds(50));
+
+        await speak.SpeakAsync("Hello", SpeakAccent.UsEnglish, Cloud, new()).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        Assert.Equal(SpeakPhase.Idle, speak.Phase);
+        Assert.True(playback.Cancelled);
+        Assert.Equal(1, playback.Plays);
+        Assert.Empty(system.Calls);
+        Assert.False(speak.CanReplay);
+        Assert.False(speak.DidFallBackToSystem);
+    }
+
+    // The start timeout only covers the start: audio that is playing is never cut by it.
+    [Fact]
+    public async Task AudioThatStartedPlaysPastTheStartTimeout()
+    {
+        var system = new FakeSystemTts();
+        var playback = new FakePlayback();
+        var speak = new SpeakCoordinator(system, playback, _ => null, _ => null, TimeSpan.FromMilliseconds(30));
+
+        var run = speak.SpeakAsync("Hello", SpeakAccent.UsEnglish, new(), new());
+        await WaitUntil(() => speak.Phase == SpeakPhase.Playing);
+        await Task.Delay(150, TestContext.Current.CancellationToken);
+
+        Assert.Equal(SpeakPhase.Playing, speak.Phase);
+        Assert.False(playback.Cancelled);
+        playback.EndCurrent();
+        await run;
+        Assert.Equal(SpeakPhase.Idle, speak.Phase);
+        Assert.True(speak.CanReplay);
     }
 
     // Spec-4 §1.10: rate 0-1 (default 0.5) maps linearly to 0.6-1.0-1.5, clamped, rounded to 3 places.

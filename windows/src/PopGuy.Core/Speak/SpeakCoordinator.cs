@@ -13,10 +13,17 @@ namespace PopGuy.Core.Speak;
 /// One Speak request at a time: <see cref="SpeakAsync"/>, <see cref="ReplayAsync"/> and <see cref="Stop"/> each cancel
 /// the previous request, and a request that was superseded never plays or falls back. Speak is orthogonal to the
 /// toolbar's action state: the App mirrors <see cref="Phase"/> into <see cref="ToolbarSession.SpeakPhase"/> and
-/// <see cref="CanReplay"/> into <see cref="PresentationInput.CanReplaySpeak"/>.
+/// <see cref="CanReplay"/> into <see cref="PresentationInput.CanReplaySpeak"/>. A request publishes Loading on the
+/// caller's thread and routes on the thread pool, so the key read and the synthesis never block a UI thread.
 /// </summary>
 public sealed class SpeakCoordinator
 {
+    /// <summary>
+    /// How long audio may take to become audible once it is handed to the player. Without an audio device the player
+    /// may never start or fail; the request then ends (no fallback: the system voice would hang the same way).
+    /// </summary>
+    public static readonly TimeSpan DefaultPlaybackStartTimeout = TimeSpan.FromSeconds(5);
+
     /// <summary>What "Listen again" plays: cached cloud audio, or a new system rendering (never a new cloud request).</summary>
     private enum ReplaySource { None, System, CloudCache }
 
@@ -26,6 +33,7 @@ public sealed class SpeakCoordinator
     private readonly IAudioPlayback _playback;
     private readonly Func<TtsProviderKind, ITtsProvider?> _cloudProviders;
     private readonly Func<TtsProviderKind, string?> _cloudKeys;
+    private readonly TimeSpan _playbackStartTimeout;
     private readonly object _gate = new();
 
     private SpeakPhase _phase;
@@ -41,14 +49,17 @@ public sealed class SpeakCoordinator
 
     /// <param name="cloudProviders">The adapter for a kind; null when there is none (the system voice plays).</param>
     /// <param name="cloudKeys">The saved key for a kind (<c>SecretIds.Tts(kind)</c>); null or empty means none.</param>
+    /// <param name="playbackStartTimeout">Default <see cref="DefaultPlaybackStartTimeout"/>.</param>
     public SpeakCoordinator(
         ISystemTts system, IAudioPlayback playback,
-        Func<TtsProviderKind, ITtsProvider?> cloudProviders, Func<TtsProviderKind, string?> cloudKeys)
+        Func<TtsProviderKind, ITtsProvider?> cloudProviders, Func<TtsProviderKind, string?> cloudKeys,
+        TimeSpan? playbackStartTimeout = null)
     {
         _system = system;
         _playback = playback;
         _cloudProviders = cloudProviders;
         _cloudKeys = cloudKeys;
+        _playbackStartTimeout = playbackStartTimeout ?? DefaultPlaybackStartTimeout;
     }
 
     /// <summary>Raised after any published state changes, on the thread that changed it.</summary>
@@ -121,7 +132,7 @@ public sealed class SpeakCoordinator
         }
         previous?.Cancel();
         Changed?.Invoke();
-        return RouteAsync(request, trimmed, accent, settings, ttsConfig);
+        return Task.Run(() => RouteAsync(request, trimmed, accent, settings, ttsConfig));
     }
 
     /// <summary>
@@ -148,9 +159,9 @@ public sealed class SpeakCoordinator
         }
         previous?.Cancel();
         Changed?.Invoke();
-        return source == ReplaySource.CloudCache && cloudAudio is not null
+        return Task.Run(() => source == ReplaySource.CloudCache && cloudAudio is not null
             ? ReplayCloudAsync(request, cloudAudio, text, accent, settings)
-            : SpeakSystemAsync(request, text, accent, settings);
+            : SpeakSystemAsync(request, text, accent, settings));
     }
 
     /// <summary>Stops playback and cancels any request in flight; "Listen again" stays available.</summary>
@@ -275,25 +286,38 @@ public sealed class SpeakCoordinator
 
     /// <summary>
     /// Plays until the audio ends. False when it failed before it was audible and the request is still current (the
-    /// caller may fall back); true otherwise, with the phase back to Idle.
+    /// caller may fall back); true otherwise, with the phase back to Idle. Audio that is not audible within the start
+    /// timeout is stopped, and the request ends there.
     /// </summary>
     private async Task<bool> PlayAsync(
         Request request, Stream audio, string contentType, ReplaySource source, byte[]? cloudAudio)
     {
         var started = false;
+        var timedOut = false;
+        using var play = CancellationTokenSource.CreateLinkedTokenSource(request.Token);
+        using var guard = CancellationTokenSource.CreateLinkedTokenSource(request.Token);
         try
         {
-            await _playback.PlayAsync(audio, contentType, () =>
+            // The player calls started on a media thread.
+            var playing = _playback.PlayAsync(audio, contentType, () =>
             {
-                started = true;
+                Volatile.Write(ref started, true);
                 Started(request, source, cloudAudio);
-            }, request.Token);
+            }, play.Token);
+            var first = await Task.WhenAny(playing, Task.Delay(_playbackStartTimeout, guard.Token));
+            guard.Cancel();
+            if (first != playing && !Volatile.Read(ref started) && !request.Token.IsCancellationRequested)
+            {
+                timedOut = true;
+                play.Cancel();
+            }
+            await playing;
         }
         catch (Exception)
         {
-            // Stopped, superseded, or undecodable audio.
+            // Stopped, superseded, timed out, or undecodable audio.
         }
-        if (!started && IsCurrent(request))
+        if (!Volatile.Read(ref started) && !timedOut && IsCurrent(request))
             return false;
         Finish(request);
         return true;

@@ -5,6 +5,7 @@ using PopGuy.Core.History;
 using PopGuy.Core.Providers;
 using PopGuy.Core.Scripts;
 using PopGuy.Core.Settings;
+using PopGuy.Core.Speak;
 
 namespace PopGuy.Core.Toolbar;
 
@@ -125,7 +126,7 @@ public sealed class ToolbarSession(
         }
     }
 
-    /// <summary>Set by the speak coordinator (Phase 17); feeds <see cref="PresentationInput.SpeakActive"/>.</summary>
+    /// <summary>The speak coordinator's phase, mirrored by the App on its UI thread; feeds <see cref="PresentationInput.SpeakActive"/>.</summary>
     public SpeakPhase SpeakPhase { get; set; }
 
     /// <summary>The result's word diff against the selection (Improve and Proofread); empty for every other result.</summary>
@@ -306,6 +307,31 @@ public sealed class ToolbarSession(
         lock (_gate)
             run = _state is ToolbarState.Result or ToolbarState.Error ? _lastRun : null;
         return run is null ? Task.CompletedTask : RunAsync(run);
+    }
+
+    /// <summary>
+    /// Records a Speak in history when it starts (macOS <c>recordSpeak</c>), while history is on and the source is not
+    /// ignored: the engine selected (not a fallback that played) and the accent, with the selection as the input and no
+    /// output. Speak playback itself never touches the session's state.
+    /// </summary>
+    /// <param name="run">The selection and its source (<see cref="ToolbarRun.Action"/> is not read).</param>
+    public void RecordSpeak(ToolbarRun run, SpeakEngineSelection engine, SpeakAccent accent)
+    {
+        var s = settings();
+        if (!s.HistoryEnabled || run.SkipHistory)
+            return;
+        history.Record(new HistoryRecord
+        {
+            ActionName = "Speak",
+            ProviderLabel = engine.DisplayName(),
+            Model = accent.DisplayName(),
+            SourceBundleId = run.SourceExeName,
+            SourceAppName = run.SourceAppName ?? run.SourceExeName,
+            DurationMs = 0,
+            Success = true,
+            Input = run.Text,
+            Output = "",
+        }, s.HistoryStoreFullText);
     }
 
     /// <summary>
