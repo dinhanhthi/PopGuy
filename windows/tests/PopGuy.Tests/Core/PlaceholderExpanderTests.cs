@@ -42,4 +42,17 @@ public sealed class PlaceholderExpanderTests
         Assert.Equal(expected, environment["POPGUY_TEXT"]);
         Assert.Equal("  " + text, environment["POPGUY_FULL_TEXT"]); // untrimmed: no leading tilde
     }
+
+    // Security: a NUL ends a variable in the Windows environment block, so a selection holding one (UI Automation keeps
+    // it) could add variables of its own to PowerShell's environment (COR_PROFILER_PATH, PSModulePath, …).
+    [Fact]
+    public void ScriptEnvironmentDropsNulCharacters()
+    {
+        const string text = "abc\0COR_ENABLE_PROFILING=1\0x";
+
+        var environment = PlaceholderExpander.ScriptEnvironment(text, text, @"C:\Users\me");
+
+        Assert.All(environment.Values, value => Assert.DoesNotContain('\0', value));
+        Assert.Equal("abcCOR_ENABLE_PROFILING=1x", environment["POPGUY_TEXT"]);
+    }
 }

@@ -80,6 +80,20 @@ public sealed class ScriptActionEngineTests
         Assert.Equal(text, result.Text);
     }
 
+    // Security: a NUL in the selection must not end POPGUY_TEXT and start a variable of its own.
+    [Fact]
+    public async Task NulInTheSelectionAddsNoEnvironmentVariable()
+    {
+        if (!OperatingSystem.IsWindows()) Assert.Skip("PowerShell scripts run on Windows only.");
+        const string text = "a\0POPGUY_INJECTED=1";
+
+        var result = await new ScriptActionEngine().RunAsync(
+            Action(CustomActionType.ShellScript, "Write-Output \"[$env:POPGUY_INJECTED]\"", "powershell"), text, text,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("[]", result.Text);
+    }
+
     // The output cap: a script that prints without stopping fails instead of growing PopGuy's memory. Many lines hit
     // the engine's 1 MB cap; one line over CliRunner's 4 MB line limit gets the same message.
     [Theory]

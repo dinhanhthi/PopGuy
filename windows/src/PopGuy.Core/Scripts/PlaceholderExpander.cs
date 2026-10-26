@@ -27,12 +27,13 @@ public static class PlaceholderExpander
     /// <summary>
     /// A shell script's view of the selection: <c>POPGUY_TEXT</c> (the trimmed selection) and <c>POPGUY_FULL_TEXT</c>
     /// (the full one), each with a leading <c>~</c>, <c>~/</c> or <c>~\</c> expanded to <paramref name="home"/> (an
-    /// environment value gets no shell tilde expansion). <c>~user</c> stays as is.
+    /// environment value gets no shell tilde expansion). <c>~user</c> stays as is. NUL characters are dropped: one would
+    /// end the variable in the Windows environment block and let the selection add variables of its own.
     /// </summary>
     public static Dictionary<string, string> ScriptEnvironment(string text, string fullText, string home) => new()
     {
-        ["POPGUY_TEXT"] = ExpandingLeadingTilde(text, home),
-        ["POPGUY_FULL_TEXT"] = ExpandingLeadingTilde(fullText, home),
+        ["POPGUY_TEXT"] = ExpandingLeadingTilde(text.Replace("\0", "", StringComparison.Ordinal), home),
+        ["POPGUY_FULL_TEXT"] = ExpandingLeadingTilde(fullText.Replace("\0", "", StringComparison.Ordinal), home),
     };
 
     private static string PercentEncode(string text)
