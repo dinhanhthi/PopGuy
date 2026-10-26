@@ -79,4 +79,27 @@ public sealed class PresentationGateTests
     [InlineData("bank.com", "/", false)]
     public void HostMatchesNormalizesBothSides(string host, string entry, bool expected) =>
         Assert.Equal(expected, PresentationGate.HostMatches(host, entry));
+
+    // Contract: Settings → Ignore edits the list with the gate's rule. A picked path is stored as its lowercase file
+    // name, once whatever its case; Remove drops every entry the gate would match, so a removed app shows again.
+    [Fact]
+    public void IgnoredAppsAddStoresTheKeyOnce()
+    {
+        IReadOnlyList<string> list = [" KeePass.exe "];
+
+        Assert.Same(list, IgnoredApps.Add(list, @"C:\Program Files\KeePass\keepass.EXE"));
+        Assert.Equal([" KeePass.exe ", "notepad.exe"], IgnoredApps.Add(list, @"C:\Windows\System32\Notepad.exe"));
+        Assert.Same(list, IgnoredApps.Add(list, @"C:\foo\"));
+    }
+
+    [Fact]
+    public void IgnoredAppsRemoveDropsEveryMatchingEntry()
+    {
+        var settings = Settings with { IgnoredAppExeNames = ["keepass.exe", null!, @"D:\Apps\KeePass.EXE", "notepad.exe"] };
+        var removed = settings with { IgnoredAppExeNames = IgnoredApps.Remove(settings.IgnoredAppExeNames, "KeePass.exe") };
+
+        Assert.Equal([null!, "notepad.exe"], removed.IgnoredAppExeNames);
+        Assert.Equal(PresentationVerdict.Show, PresentationGate.Evaluate(Shown with { SourceExeName = "keepass.exe" }, removed).Verdict);
+        Assert.Equal(["keepass.exe", "notepad.exe"], IgnoredApps.Keys(settings.IgnoredAppExeNames));
+    }
 }

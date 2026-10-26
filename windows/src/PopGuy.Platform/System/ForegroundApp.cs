@@ -25,18 +25,23 @@ public sealed record ForegroundApp(nint Hwnd, uint ProcessId, string? Exe, strin
     private const int PathCapacity = 1024;
 
     /// <summary>The frame host of Store (UWP) app windows.</summary>
-    private const string FrameHostExe = "applicationframehost.exe";
+    internal const string FrameHostExe = "applicationframehost.exe";
 
     /// <summary>
     /// The foreground window's app right now. A Store (UWP) app's window belongs to the frame host
     /// (applicationframehost.exe): the app is the process of its hosted child window, when there is one (none while it
     /// is suspended or minimized). <see cref="Hwnd"/> stays the frame window. Any thread.
     /// </summary>
-    public static ForegroundApp Snapshot()
+    public static ForegroundApp Snapshot() => OfWindow(ToolbarWindowStyle.ForegroundWindow()).App;
+
+    /// <summary>
+    /// <paramref name="hwnd"/>'s app by the same rules as <see cref="Snapshot"/>, with the executable's full path (null
+    /// when it cannot be read). Any thread.
+    /// </summary>
+    internal static (ForegroundApp App, string? Path) OfWindow(nint hwnd)
     {
-        var hwnd = ToolbarWindowStyle.ForegroundWindow();
         var processId = ToolbarWindowStyle.ProcessIdOf(hwnd);
-        if (processId == 0) return new(hwnd, 0, null, "", IsElevated: false, IsOwnProcess: false);
+        if (processId == 0) return (new(hwnd, 0, null, "", IsElevated: false, IsOwnProcess: false), null);
 
         var (path, isElevated) = Inspect(processId);
         if (path is not null && Path.GetFileName(path).Equals(FrameHostExe, StringComparison.OrdinalIgnoreCase)
@@ -47,11 +52,12 @@ public sealed record ForegroundApp(nint Hwnd, uint ProcessId, string? Exe, strin
         }
 
         var exe = path is null ? null : Path.GetFileName(path).ToLowerInvariant();
-        return new(hwnd, processId, exe, DescriptionOf(path) ?? exe ?? "", isElevated, processId == (uint)Environment.ProcessId);
+        var app = new ForegroundApp(hwnd, processId, exe, DescriptionOf(path) ?? exe ?? "", isElevated, processId == (uint)Environment.ProcessId);
+        return (app, path);
     }
 
     /// <summary>The process's image path (null when unreadable) and whether it runs elevated.</summary>
-    private static (string? Path, bool IsElevated) Inspect(uint processId)
+    internal static (string? Path, bool IsElevated) Inspect(uint processId)
     {
         // The limited right is granted even on elevated processes, so the path and the token query still work there.
         var process = PInvoke.OpenProcess(PROCESS_ACCESS_RIGHTS.PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
@@ -113,7 +119,7 @@ public sealed record ForegroundApp(nint Hwnd, uint ProcessId, string? Exe, strin
     }
 
     /// <summary>The executable's FileDescription, or null when it has none or cannot be read.</summary>
-    private static string? DescriptionOf(string? path)
+    internal static string? DescriptionOf(string? path)
     {
         if (path is null) return null;
         try

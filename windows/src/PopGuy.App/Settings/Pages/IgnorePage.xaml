@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Settings → Ignore (macOS AppsView.swift): the Ignored Apps toggle and list, as Windows 11 Settings cards under the
+    macOS section header. The rows (one card per app) and the Add App… picker are built in code. Ignored Domains joins
+    in Phase 19. The header is the window's.
+-->
+<Page
+    x:Class="PopGuy.Settings.Pages.IgnorePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls">
+
+    <Page.Resources>
+        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
+            <Setter Property="Margin" Value="1,24,0,4" />
+        </Style>
+        <Style x:Key="CaptionStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="SecondaryIconStyle" TargetType="FontIcon">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style x:Key="CriticalIconStyle" TargetType="FontIcon">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer>
+        <StackPanel
+            MaxWidth="1000"
+            Margin="24,16,24,24"
+            Spacing="4">
+
+            <TextBlock
+                Margin="1,0,0,4"
+                Style="{StaticResource SectionHeaderStyle}"
+                Text="Ignored Apps" />
+
+            <controls:SettingsCard Header="Enable Ignored Apps">
+                <ToggleSwitch x:Name="EnabledToggle" AutomationProperties.Name="Enable Ignored Apps" />
+            </controls:SettingsCard>
+
+            <StackPanel x:Name="AppsPanel" Spacing="4">
+                <TextBlock
+                    x:Name="EmptyText"
+                    Margin="1,8,0,8"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="No ignored apps." />
+                <StackPanel x:Name="AppRows" Spacing="4" />
+                <Button x:Name="AddButton" Margin="0,4,0,0">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="14" Glyph="&#xE710;" />
+                        <TextBlock Text="Add App…" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <TextBlock
+                Margin="1,8,0,0"
+                Style="{StaticResource CaptionStyle}"
+                Text="The toolbar will not appear when you select text in these apps. Turning this off also removes the &quot;Ignore this app&quot; button from the toolbar." />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

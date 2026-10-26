@@ -52,8 +52,7 @@ public static class PresentationGate
 
         // Both ignore lists fail open on an unknown source (macOS parity): the caller must pass whatever it can read.
         // A blank or null entry (settings.json can hold null in a list) matches nothing.
-        if (ExeFileName(exe) is { } name && settings.IgnoredAppsEnabled &&
-            settings.IgnoredAppExeNames.Any(e => string.Equals(ExeFileName(e), name, StringComparison.OrdinalIgnoreCase)))
+        if (settings.IgnoredAppsEnabled && IgnoredApps.Contains(settings.IgnoredAppExeNames, exe))
             return Result(PresentationVerdict.IgnoredApp);
 
         if (host is not null && settings.IgnoredDomainsEnabled && settings.IgnoredDomains.Any(d => HostMatches(host, d)))
@@ -92,15 +91,5 @@ public static class PresentationGate
         if (s.StartsWith("www.", StringComparison.Ordinal))
             s = s[4..];
         return s.Contains('.') || s == "localhost" ? s : null;
-    }
-
-    /// <summary>
-    /// The file name of a trimmed exe name or full path, splitting on both separators on any OS; null when there is none.
-    /// </summary>
-    private static string? ExeFileName(string? exe)
-    {
-        var trimmed = exe?.Trim() ?? "";
-        var name = trimmed[(trimmed.LastIndexOfAny(['\\', '/']) + 1)..];
-        return name.Length > 0 ? name : null;
     }
 }

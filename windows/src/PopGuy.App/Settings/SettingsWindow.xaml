@@ -79,6 +79,11 @@
                                 <FontIcon Glyph="&#xE771;" />
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
+                        <NavigationViewItem Content="Ignore" Tag="Ignore">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xED1A;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
                     </NavigationView.MenuItems>
 
                     <Grid>

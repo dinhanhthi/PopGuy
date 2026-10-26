@@ -36,6 +36,7 @@ public sealed partial class SettingsWindow : Window
         ["Providers"] = (typeof(ProvidersPage), "\uE8D7"),
         ["Triggers"] = (typeof(TriggersPage), "\uE7C9"),
         ["Appearance"] = (typeof(AppearancePage), "\uE771"),
+        ["Ignore"] = (typeof(IgnorePage), "\uED1A"),
     };
 
     private readonly AppServices _services;
