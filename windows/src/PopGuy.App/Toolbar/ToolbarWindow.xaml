@@ -28,8 +28,13 @@
                 gap column widens to the bar's right edge, or sit inline after a divider each (inlineToolbarSystemButtons;
                 the column is then Auto). While a body shows, the bar is at least the body's minimum width (set in code).
             -->
+            <!--
+                MinHeight: a labeled button's height (32) plus the padding. The icon-only buttons stretch to the row,
+                so without a labeled one in it (every action in More actions) they would shrink to the logo (VM QA).
+            -->
             <Grid
                 x:Name="Bar"
+                MinHeight="44"
                 Padding="8,6,8,6"
                 HorizontalAlignment="Left">
                 <Grid.ColumnDefinitions>
