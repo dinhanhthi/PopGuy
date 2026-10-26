@@ -41,8 +41,8 @@ internal sealed class AppServices : IDisposable
         Credentials = new CredentialStore();
         // A lambda, not the method group: Shared is created on the first CLI run, so a refused job object fails that
         // run only, never the launch.
-        var providers = new ProviderFactory(cli: new CliRunner(onStarted: process => ChildProcessJob.Shared.Assign(process)));
-        var engine = new ActionEngine(providers, ApiKey);
+        Providers = new ProviderFactory(cli: new CliRunner(onStarted: process => ChildProcessJob.Shared.Assign(process)));
+        var engine = new ActionEngine(Providers, ApiKey);
         var session = new ToolbarSession(engine, History, () => Settings.Current);
 
         _input = new GlobalInput(log.Write);
@@ -73,6 +73,9 @@ internal sealed class AppServices : IDisposable
     public HistoryStore History { get; }
 
     public CredentialStore Credentials { get; }
+
+    /// <summary>The provider adapters, for the Settings Verify checks too (its CLI runner puts every CLI in the job object).</summary>
+    public ProviderFactory Providers { get; }
 
     /// <summary>
     /// Builds every service and starts the triggers. UI thread (the toolbar window is created here). Throws when Windows

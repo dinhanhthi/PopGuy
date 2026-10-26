@@ -1,6 +1,7 @@
 using System.Text.Json;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Json;
+using PopGuy.Core.Providers;
 
 namespace PopGuy.Core.Settings;
 
@@ -10,7 +11,8 @@ namespace PopGuy.Core.Settings;
 /// renamed <c>settings.corrupt-&lt;UTC timestamp&gt;.json</c> (never overwriting an earlier backup) and the defaults
 /// load. A file that cannot be read (locked, no access) or backed up is left in place and the defaults load without
 /// being saved; the next <see cref="Update"/> reads it again first, so a change never replaces it with the defaults.
-/// Load-time I/O errors never fail the constructor.
+/// Load-time I/O errors never fail the constructor. A deprecated model in the file is replaced on load and the result
+/// saved (<see cref="ModelDeprecations"/>).
 /// </summary>
 public sealed class SettingsStore
 {
@@ -21,9 +23,11 @@ public sealed class SettingsStore
     {
         _path = paths.SettingsFile;
         var loaded = Load(out _keepFile);
-        Current = ToolbarLayout.Reconciled(loaded);
-        // Persist the first-launch toolbar migration now; a reconciled order waits for the next change (macOS parity).
-        if (loaded.PrincipalActionIds is null && !_keepFile)
+        var migrated = ModelDeprecations.Migrated(loaded);
+        Current = ToolbarLayout.Reconciled(migrated);
+        // Persist the first-launch toolbar migration and a deprecated-model migration now (macOS parity); otherwise a
+        // reconciled order waits for the next change.
+        if ((loaded.PrincipalActionIds is null || !ReferenceEquals(migrated, loaded)) && !_keepFile)
         {
             try
             {
@@ -53,7 +57,7 @@ public sealed class SettingsStore
         var current = Current;
         if (_keepFile)
         {
-            current = ToolbarLayout.Reconciled(Load(out var keepFile));
+            current = ToolbarLayout.Reconciled(ModelDeprecations.Migrated(Load(out var keepFile)));
             if (keepFile)
                 throw new IOException("settings.json still cannot be read, so it was not overwritten.");
         }
@@ -66,12 +70,19 @@ public sealed class SettingsStore
 
     // MARK: - Custom actions (SettingsStore.swift addCustomAction / updateCustomAction / deleteCustomAction)
 
-    /// <summary>Appends the action and puts it last in the action order. Every add path (editor, import, Library) uses this.</summary>
-    public void AddCustomAction(CustomAction action) => Update(s => s with
+    /// <summary>
+    /// Appends the action, a deprecated model migrated first (covers plugin import), and puts it last in the action
+    /// order. Every add path (editor, import, Library) uses this.
+    /// </summary>
+    public void AddCustomAction(CustomAction action)
     {
-        CustomActions = [.. s.CustomActions, action],
-        ActionOrder = [.. s.ActionOrder, ActionIdentifier.Custom(action.Id)],
-    });
+        action = ModelDeprecations.Migrated(action);
+        Update(s => s with
+        {
+            CustomActions = [.. s.CustomActions, action],
+            ActionOrder = [.. s.ActionOrder, ActionIdentifier.Custom(action.Id)],
+        });
+    }
 
     /// <summary>Replaces the action with the same id; does nothing when there is none.</summary>
     public void UpdateCustomAction(CustomAction action)
