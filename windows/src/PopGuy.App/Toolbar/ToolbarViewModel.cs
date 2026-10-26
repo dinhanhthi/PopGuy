@@ -15,7 +15,11 @@ namespace PopGuy.Toolbar;
 /// (exactly one is set). <paramref name="ShowsLabel"/> (labeledActionIDs): the button shows the title next to the icon,
 /// else the icon only with the title as its tooltip.
 /// </summary>
-public sealed partial record ToolbarActionItem(ActionIdentifier Id, string Label, string? Glyph, string? Emoji, bool ShowsLabel);
+public sealed partial record ToolbarActionItem(ActionIdentifier Id, string Label, string? Glyph, string? Emoji, bool ShowsLabel)
+{
+    /// <summary>Speak or a Speech custom action: its button follows the Speak phase and stays enabled while an action runs.</summary>
+    public bool IsSpeech { get; init; }
+}
 
 /// <summary>
 /// The toolbar window's state (macOS <c>ToolbarViewModel.swift</c>, the UI half; the logic is Core's
@@ -58,7 +62,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     private static readonly string[] LayoutProperties =
     [
         nameof(Actions), nameof(OverflowActions), nameof(HasOverflow), nameof(ShowsMoreDivider), nameof(ShowsLogo),
-        nameof(ShowsIgnoreApp), nameof(CanIgnoreApp), nameof(ShowsIgnoreDivider), nameof(ShowsSettingsButton),
+        nameof(ShowsIgnoreSite), nameof(ShowsIgnoreSiteDivider), nameof(ShowsIgnoreApp), nameof(CanIgnoreApp),
+        nameof(ShowsIgnoreDivider), nameof(ShowsSettingsButton),
         nameof(ShowsSettingsDivider), nameof(ShowsSystemGap), nameof(ShowsSystemGroup), nameof(Zoom),
         nameof(ResultFontSize), nameof(ResultLineHeight), nameof(TargetLanguage),
     ];
@@ -75,6 +80,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     private IReadOnlyList<ToolbarActionItem> _actions = [];
     private IReadOnlyList<ToolbarActionItem> _overflow = [];
     private bool _showsLogo = true;
+    private bool _showsIgnoreSite;
     private bool _showsIgnoreApp;
     private bool _canIgnoreApp;
     private bool _showsSettingsButton;
@@ -143,6 +149,9 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// <summary>"Ignore App" in the ignore confirmation: the controller adds the source app to the ignored apps and closes.</summary>
     public event Action? IgnoreAppRequested;
 
+    /// <summary>"Ignore this site" (macOS: no confirmation): the controller adds the tab's host to the ignored domains and closes.</summary>
+    public event Action? IgnoreSiteRequested;
+
     /// <summary>The Settings button (macOS: opens Settings and closes the toolbar).</summary>
     public event Action? SettingsRequested;
 
@@ -166,6 +175,9 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public bool ShowsLogo => _showsLogo;
 
+    /// <summary>"Ignore this site": the selection is in a browser tab whose host was read (macOS sourceDomain != nil).</summary>
+    public bool ShowsIgnoreSite => _showsIgnoreSite;
+
     /// <summary>"Ignore this app" (ignoredAppsEnabled).</summary>
     public bool ShowsIgnoreApp => _showsIgnoreApp;
 
@@ -179,14 +191,17 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// The system buttons sit after a gap at the bar's right edge (macOS Spacer, only when one shows), or inline after a
     /// divider each (inlineToolbarSystemButtons). Close always ends the bar.
     /// </summary>
-    public bool ShowsSystemGap => (_showsIgnoreApp || _showsSettingsButton) && !_inlineSystemButtons;
+    public bool ShowsSystemGap => (_showsIgnoreSite || _showsIgnoreApp || _showsSettingsButton) && !_inlineSystemButtons;
 
-    public bool ShowsIgnoreDivider => _inlineSystemButtons && _showsIgnoreApp && HasActionControls;
+    public bool ShowsIgnoreSiteDivider => _inlineSystemButtons && _showsIgnoreSite && HasActionControls;
 
-    public bool ShowsSettingsDivider => _inlineSystemButtons && _showsSettingsButton && (HasActionControls || _showsIgnoreApp);
+    public bool ShowsIgnoreDivider => _inlineSystemButtons && _showsIgnoreApp && (HasActionControls || _showsIgnoreSite);
+
+    public bool ShowsSettingsDivider =>
+        _inlineSystemButtons && _showsSettingsButton && (HasActionControls || _showsIgnoreSite || _showsIgnoreApp);
 
     /// <summary>The system buttons or Close show (an empty group would add its margin to the bar).</summary>
-    public bool ShowsSystemGroup => _showsIgnoreApp || _showsSettingsButton || ShowsClose;
+    public bool ShowsSystemGroup => _showsIgnoreSite || _showsIgnoreApp || _showsSettingsButton || ShowsClose;
 
     /// <summary>The toolbar zoom (toolbarZoom): the whole card scales, and the window with it.</summary>
     public double Zoom => _zoom;
@@ -391,7 +406,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// <paramref name="settings"/> (settings apply at the next presentation, spec-1 §3.7, macOS ToolbarController).
     /// </summary>
     /// <param name="canIgnoreApp">The source app's exe name is known, so "Ignore this app" can add it.</param>
-    public void Present(AppSettings settings, bool isEditable, bool canIgnoreApp)
+    /// <param name="sourceHost">The browser tab's host, if read: "Ignore this site" shows (never in the Settings preview).</param>
+    public void Present(AppSettings settings, bool isEditable, bool canIgnoreApp, string? sourceHost = null)
     {
         _session.Stop();
         PromptDraft = "";
@@ -399,6 +415,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         _actions = Items(settings, ToolbarLayout.PrincipalOrdered(settings));
         _overflow = Items(settings, ToolbarLayout.OverflowOrdered(settings));
         _showsLogo = !settings.HideToolbarLogo;
+        _showsIgnoreSite = sourceHost is not null;
         _showsIgnoreApp = settings.IgnoredAppsEnabled;
         _canIgnoreApp = canIgnoreApp;
         _showsSettingsButton = settings.ShowToolbarSettingsButton;
@@ -583,6 +600,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         Refresh();
     }
 
+    public void RequestIgnoreSite() => IgnoreSiteRequested?.Invoke();
+
     public void RequestSettings() => SettingsRequested?.Invoke();
 
     public void RequestReplay() => ReplayRequested?.Invoke();
@@ -682,15 +701,17 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
                 };
             case ActionIdentifierType.Speak:
                 // The view shows Stop instead while Speak is loading or playing.
-                return Builtin(id, "Speak", "speaker.wave.2", showsLabel);
+                return Builtin(id, "Speak", "speaker.wave.2", showsLabel) with { IsSpeech = true };
             case ActionIdentifierType.Dictionary:
                 return Builtin(id, "Look up", "character.book.closed", showsLabel);
             default:
                 var custom = settings.CustomActions.FirstOrDefault(a => a.Id == id.CustomId);
                 if (custom is null) return null;
+                // A Speech action reads Stop like Speak while speech is loading or playing (macOS).
+                var isSpeech = custom.Type == CustomActionType.Speech;
                 return custom.Icon.Type == ActionIconType.Emoji
-                    ? new ToolbarActionItem(id, custom.Title, null, custom.Icon.Value, showsLabel)
-                    : new ToolbarActionItem(id, custom.Title, SymbolMap.Glyph(custom.Icon.Value), null, showsLabel);
+                    ? new ToolbarActionItem(id, custom.Title, null, custom.Icon.Value, showsLabel) { IsSpeech = isSpeech }
+                    : new ToolbarActionItem(id, custom.Title, SymbolMap.Glyph(custom.Icon.Value), null, showsLabel) { IsSpeech = isSpeech };
         }
     }
 

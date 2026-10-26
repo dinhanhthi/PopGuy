@@ -75,6 +75,12 @@ public sealed record ScriptRunFinished(AfterRunBehavior AfterRun, string? Output
 public sealed record DictionaryListenVoice(SpeakAccent Accent, SpeakSettings Settings, TtsProviderConfig TtsConfig);
 
 /// <summary>
+/// A Speak toggle's voice (the built-in Speak or a Speech custom action): its history name, the accent, the speech
+/// settings and the cloud engine's config.
+/// </summary>
+public sealed record SpeakVoice(string ActionName, SpeakAccent Accent, SpeakSettings Settings, TtsProviderConfig TtsConfig);
+
+/// <summary>
 /// Runs one provider action at a time and holds the toolbar state. <see cref="Changed"/> is raised on any thread (the
 /// App marshals to its UI thread): on every state transition, and while streaming at most once per
 /// <see cref="ProgressInterval"/>. A run that is stopped or replaced leaves no trace: no state change, no history
@@ -361,14 +367,15 @@ public sealed class ToolbarSession(
     /// output. Speak playback itself never touches the session's state.
     /// </summary>
     /// <param name="run">The selection and its source (<see cref="ToolbarRun.Action"/> is not read).</param>
-    public void RecordSpeak(ToolbarRun run, SpeakEngineSelection engine, SpeakAccent accent)
+    /// <param name="actionName">The history name: "Speak", or a Speech custom action's title (<see cref="SpeakVoice"/>).</param>
+    public void RecordSpeak(ToolbarRun run, SpeakEngineSelection engine, SpeakAccent accent, string actionName = "Speak")
     {
         var s = settings();
         if (!s.HistoryEnabled || run.SkipHistory)
             return;
         history.Record(new HistoryRecord
         {
-            ActionName = "Speak",
+            ActionName = actionName,
             ProviderLabel = engine.DisplayName(),
             Model = accent.DisplayName(),
             SourceBundleId = run.SourceExeName,
@@ -689,6 +696,30 @@ public sealed class ToolbarSession(
             ? s.TtsProviderConfigs.GetValueOrDefault(RawValueEnumConverter<TtsProviderKind>.ToRaw(kind)) ?? new TtsProviderConfig()
             : new TtsProviderConfig();
         return new(config.Accent, config.SpeakSettings, tts);
+    }
+
+    /// <summary>
+    /// The voice a Speak toggle by <paramref name="action"/> speaks with (macOS triggerSpeak, triggerCustomAction's
+    /// speech branch): the built-in Speak uses the Speak settings, their default accent and the selected cloud engine's
+    /// config from the settings; a Speech custom action its own speech settings, their default accent and its own cloud
+    /// config; history names both "Speak" (macOS recordSpeak). Null for every other action: it does not speak.
+    /// </summary>
+    public static SpeakVoice? SpeakVoiceFor(AppSettings s, ActionIdentifier action)
+    {
+        if (action.Type == ActionIdentifierType.Speak)
+        {
+            var speak = s.SpeakSettings;
+            var tts = speak.SelectedEngine.CloudProvider is { } kind
+                ? s.TtsProviderConfigs.GetValueOrDefault(RawValueEnumConverter<TtsProviderKind>.ToRaw(kind)) ?? new TtsProviderConfig()
+                : new TtsProviderConfig();
+            return new("Speak", speak.DefaultAccent, speak, tts);
+        }
+        if (action.Type != ActionIdentifierType.Custom)
+            return null;
+        var custom = s.CustomActions.FirstOrDefault(a => a.Id == action.CustomId && a.Type == CustomActionType.Speech);
+        if (custom is null)
+            return null;
+        return new("Speak", custom.SpeakSettings.DefaultAccent, custom.SpeakSettings, custom.TtsConfig);
     }
 
     private sealed record Resolved(EngineAction Action, string ActionName, ProviderKind Kind, string Model, string Language);

@@ -466,4 +466,47 @@ public sealed class ToolbarSessionTests : IDisposable
         Assert.Equal(new DictionaryListenVoice(SpeakAccent.UkEnglish, cloud, azure), global);
         Assert.Null(system.TtsConfig.DefaultVoice); // the system voice: no cloud config
     }
+
+    // macOS triggerCustomAction's speech branch: a Speech custom action speaks with its own speech settings, accent and
+    // cloud config (not the Speak settings') and records its title; the built-in Speak uses the global ones; any other
+    // action does not speak.
+    [Fact]
+    public void SpeakVoiceFollowsTheSpeechAction()
+    {
+        var ownSpeak = new SpeakSettings
+        {
+            SelectedEngine = SpeakEngineSelection.Cloud(TtsProviderKind.AzureTts),
+            DefaultAccent = SpeakAccent.French,
+        };
+        var speech = new CustomAction
+        {
+            Title = "Read aloud",
+            SystemPrompt = "",
+            Type = CustomActionType.Speech,
+            SpeakSettings = ownSpeak,
+            TtsConfig = new TtsProviderConfig { DefaultVoice = "own" },
+        };
+        var ai = new CustomAction { Title = "Summarize", SystemPrompt = "Summarize", Type = CustomActionType.Ai };
+        var globalSpeak = new SpeakSettings
+        {
+            SelectedEngine = SpeakEngineSelection.Cloud(TtsProviderKind.AzureTts),
+            DefaultAccent = SpeakAccent.UkEnglish,
+        };
+        var azure = new TtsProviderConfig { DefaultVoice = "global" };
+        var settings = new AppSettings
+        {
+            CustomActions = [speech, ai],
+            SpeakSettings = globalSpeak,
+            TtsProviderConfigs = new Dictionary<string, TtsProviderConfig> { ["azure_tts"] = azure },
+        };
+
+        Assert.Equal(
+            new SpeakVoice("Speak", SpeakAccent.French, ownSpeak, speech.TtsConfig),
+            ToolbarSession.SpeakVoiceFor(settings, ActionIdentifier.Custom(speech.Id)));
+        Assert.Equal(
+            new SpeakVoice("Speak", SpeakAccent.UkEnglish, globalSpeak, azure),
+            ToolbarSession.SpeakVoiceFor(settings, ActionIdentifier.Speak));
+        Assert.Null(ToolbarSession.SpeakVoiceFor(settings, ActionIdentifier.Custom(ai.Id)));
+        Assert.Null(ToolbarSession.SpeakVoiceFor(settings, ActionIdentifier.Builtin(ActionKind.Improve)));
+    }
 }

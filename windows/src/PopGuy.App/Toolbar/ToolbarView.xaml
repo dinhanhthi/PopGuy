@@ -98,6 +98,25 @@
                     Margin="2,0,2,0"
                     VerticalAlignment="Center"
                     Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    Visibility="{x:Bind ViewModel.ShowsIgnoreSiteDivider, Mode=OneWay}" />
+                <!-- "Ignore this site" (macOS nosign): only with a browser tab's host; no confirmation, as on macOS. -->
+                <Button
+                    x:Name="IgnoreSiteButton"
+                    VerticalAlignment="Stretch"
+                    AutomationProperties.Name="Ignore this site"
+                    AllowFocusOnInteraction="False"
+                    Visibility="{x:Bind ViewModel.ShowsIgnoreSite, Mode=OneWay}">
+                    <FontIcon
+                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                        FontSize="14"
+                        Glyph="&#xE733;" />
+                </Button>
+                <Rectangle
+                    Width="1"
+                    Height="16"
+                    Margin="2,0,2,0"
+                    VerticalAlignment="Center"
+                    Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
                     Visibility="{x:Bind ViewModel.ShowsIgnoreDivider, Mode=OneWay}" />
                 <Button
                     x:Name="IgnoreAppButton"

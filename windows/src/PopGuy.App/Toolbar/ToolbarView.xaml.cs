@@ -51,13 +51,13 @@ public sealed partial class ToolbarView : UserControl
     private readonly List<Button> _rowButtons = [];
 
     /// <summary>
-    /// The Speak button's parts, while Speak is on the row: it follows the Speak phase (Speak, then Stop with a spinner
-    /// while loading and the stop glyph while playing), and stays enabled while an action runs (macOS).
+    /// The parts of a speech button on the row (Speak or a Speech custom action): it follows the Speak phase (its title,
+    /// then Stop with a spinner while loading; Speak also shows the stop glyph while playing), and stays enabled while an
+    /// action runs (macOS).
     /// </summary>
-    private Button? _speakButton;
-    private FontIcon? _speakIcon;
-    private ProgressRing? _speakRing;
-    private TextBlock? _speakLabel;
+    private sealed record SpeakButtonParts(Button Button, FrameworkElement Icon, ProgressRing Ring, TextBlock? Label);
+
+    private readonly List<SpeakButtonParts> _speakButtons = [];
 
     /// <summary>The Translate picker's menu and code, while Translate is on the row.</summary>
     private MenuFlyout? _languageMenu;
@@ -99,6 +99,7 @@ public sealed partial class ToolbarView : UserControl
         RefineRunButton.Click += OnRefineRunClick;
         RefineCancelButton.Click += OnRefineCancelClick;
         SettingsButton.Click += OnSettingsClick;
+        IgnoreSiteButton.Click += OnIgnoreSiteClick;
         IgnoreAppButton.Click += OnIgnoreAppClick;
         IgnoreConfirmButton.Click += OnIgnoreConfirmClick;
         IgnoreCancelButton.Click += OnIgnoreCancelClick;
@@ -108,6 +109,7 @@ public sealed partial class ToolbarView : UserControl
         MoreMenu.Closed += OnMenuClosed;
         // The icon-only buttons' titles (the actions get theirs with the row); macOS toolbarTooltip.
         HoverTooltip.SetText(MoreButton, "More actions");
+        HoverTooltip.SetText(IgnoreSiteButton, "Ignore this site");
         HoverTooltip.SetText(IgnoreAppButton, "Ignore this app");
         HoverTooltip.SetText(SettingsButton, "Settings");
         HoverTooltip.SetText(CloseButton, "Close");
@@ -206,6 +208,7 @@ public sealed partial class ToolbarView : UserControl
         RefineRunButton.Click -= OnRefineRunClick;
         RefineCancelButton.Click -= OnRefineCancelClick;
         SettingsButton.Click -= OnSettingsClick;
+        IgnoreSiteButton.Click -= OnIgnoreSiteClick;
         IgnoreAppButton.Click -= OnIgnoreAppClick;
         IgnoreConfirmButton.Click -= OnIgnoreConfirmClick;
         IgnoreCancelButton.Click -= OnIgnoreCancelClick;
@@ -276,7 +279,7 @@ public sealed partial class ToolbarView : UserControl
     {
         foreach (var button in _rowButtons) button.Click -= OnActionClick;
         _rowButtons.Clear();
-        (_speakButton, _speakIcon, _speakRing, _speakLabel) = (null, null, null, null);
+        _speakButtons.Clear();
         if (_languageMenu is not null)
         {
             _languageMenu.Opening -= OnLanguageMenuOpening;
@@ -305,26 +308,26 @@ public sealed partial class ToolbarView : UserControl
     /// <summary>An action's button: the icon and the title (labeledActionIDs), else the icon with the title as its tooltip.</summary>
     private Button ActionButton(ToolbarActionItem item)
     {
-        var isSpeak = item.Id.Type == ActionIdentifierType.Speak;
-        FrameworkElement content = Icon(item);
-        if (isSpeak)
+        var icon = Icon(item);
+        FrameworkElement content = icon;
+        ProgressRing? ring = null;
+        TextBlock? label = null;
+        if (item.IsSpeech)
         {
             // The icon and a spinner in one cell: the spinner replaces the icon while loading.
-            _speakIcon = (FontIcon)content;
-            _speakRing = new ProgressRing { Width = 14, Height = 14, IsActive = false, Visibility = Visibility.Collapsed };
+            ring = new ProgressRing { Width = 14, Height = 14, IsActive = false, Visibility = Visibility.Collapsed };
             var cell = new Grid();
             cell.Children.Add(content);
-            cell.Children.Add(_speakRing);
+            cell.Children.Add(ring);
             content = cell;
         }
         if (item.ShowsLabel)
         {
             var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            var label = new TextBlock { Text = item.Label, VerticalAlignment = VerticalAlignment.Center };
+            label = new TextBlock { Text = item.Label, VerticalAlignment = VerticalAlignment.Center };
             panel.Children.Add(content);
             panel.Children.Add(label);
             content = panel;
-            if (isSpeak) _speakLabel = label;
         }
         var button = new Button
         {
@@ -332,33 +335,41 @@ public sealed partial class ToolbarView : UserControl
             Tag = item,
             AllowFocusOnInteraction = false,
             VerticalAlignment = VerticalAlignment.Stretch,
-            IsEnabled = isSpeak || ViewModel.ActionsEnabled,
+            IsEnabled = item.IsSpeech || ViewModel.ActionsEnabled,
         };
         AutomationProperties.SetName(button, item.Label);
         if (!item.ShowsLabel) HoverTooltip.SetText(button, item.Label);
         button.Click += OnActionClick;
         _rowButtons.Add(button);
-        if (isSpeak)
+        if (ring is not null)
         {
-            _speakButton = button;
-            SyncSpeakButton();
+            var parts = new SpeakButtonParts(button, icon, ring, label);
+            _speakButtons.Add(parts);
+            SyncSpeakButton(parts);
         }
         return button;
     }
 
-    /// <summary>The Speak button follows the phase (macOS): Speak when idle, else Stop (a spinner while loading).</summary>
-    private void SyncSpeakButton()
+    /// <summary>The speech buttons follow the phase (macOS): their title when idle, else Stop (a spinner while loading).</summary>
+    private void SyncSpeakButtons()
     {
-        if (_speakButton is not { Tag: ToolbarActionItem item } button || _speakIcon is null || _speakRing is null) return;
+        foreach (var parts in _speakButtons) SyncSpeakButton(parts);
+    }
+
+    private void SyncSpeakButton(SpeakButtonParts parts)
+    {
+        if (parts.Button.Tag is not ToolbarActionItem item) return;
         var phase = ViewModel.SpeakPhase;
         var title = phase == SpeakPhase.Idle ? item.Label : "Stop";
-        _speakIcon.Glyph = phase == SpeakPhase.Playing ? StopGlyph : item.Glyph ?? "";
-        _speakIcon.Visibility = phase == SpeakPhase.Loading ? Visibility.Collapsed : Visibility.Visible;
-        _speakRing.IsActive = phase == SpeakPhase.Loading;
-        _speakRing.Visibility = phase == SpeakPhase.Loading ? Visibility.Visible : Visibility.Collapsed;
-        if (_speakLabel is not null) _speakLabel.Text = title;
-        else HoverTooltip.SetText(button, title);
-        AutomationProperties.SetName(button, title);
+        // Only Speak shows the stop glyph while playing; a Speech action keeps its own icon (macOS).
+        if (parts.Icon is FontIcon glyph && item.Id.Type == ActionIdentifierType.Speak)
+            glyph.Glyph = phase == SpeakPhase.Playing ? StopGlyph : item.Glyph ?? "";
+        parts.Icon.Visibility = phase == SpeakPhase.Loading ? Visibility.Collapsed : Visibility.Visible;
+        parts.Ring.IsActive = phase == SpeakPhase.Loading;
+        parts.Ring.Visibility = phase == SpeakPhase.Loading ? Visibility.Visible : Visibility.Collapsed;
+        if (parts.Label is not null) parts.Label.Text = title;
+        else HoverTooltip.SetText(parts.Button, title);
+        AutomationProperties.SetName(parts.Button, title);
     }
 
     /// <summary>The Translate picker (macOS LanguagePicker): the target's code; picking a language does not run Translate.</summary>
@@ -410,17 +421,18 @@ public sealed partial class ToolbarView : UserControl
         ClearMenu(MoreMenu);
         foreach (var item in ViewModel.OverflowActions)
         {
-            // Speak is never disabled and reads Stop while loading or playing (macOS overflowMenuTitleAndSymbol).
-            var isSpeak = item.Id.Type == ActionIdentifierType.Speak;
-            var phase = isSpeak ? ViewModel.SpeakPhase : SpeakPhase.Idle;
+            // Speak and a Speech action are never disabled and read Stop while loading or playing; only Speak takes the
+            // stop glyph while playing (macOS overflowMenuTitleAndSymbol).
+            var phase = item.IsSpeech ? ViewModel.SpeakPhase : SpeakPhase.Idle;
+            var stopGlyph = phase == SpeakPhase.Playing && item.Id.Type == ActionIdentifierType.Speak;
             var entry = new MenuFlyoutItem
             {
                 Text = phase == SpeakPhase.Idle ? item.Label : "Stop",
                 Tag = item,
                 Icon = item.Emoji is { } emoji
                     ? new FontIcon { FontFamily = new FontFamily("Segoe UI Emoji"), Glyph = emoji }
-                    : new FontIcon { FontFamily = SymbolFont, Glyph = phase == SpeakPhase.Playing ? StopGlyph : item.Glyph ?? "" },
-                IsEnabled = isSpeak || ViewModel.ActionsEnabled,
+                    : new FontIcon { FontFamily = SymbolFont, Glyph = stopGlyph ? StopGlyph : item.Glyph ?? "" },
+                IsEnabled = item.IsSpeech || ViewModel.ActionsEnabled,
                 AllowFocusOnInteraction = false,
             };
             entry.Click += OnActionClick;
@@ -476,10 +488,11 @@ public sealed partial class ToolbarView : UserControl
                 RebuildActionRow();
                 break;
             case nameof(ToolbarViewModel.ActionsEnabled):
-                foreach (var button in _rowButtons) button.IsEnabled = button == _speakButton || ViewModel.ActionsEnabled;
+                foreach (var button in _rowButtons)
+                    button.IsEnabled = button.Tag is ToolbarActionItem { IsSpeech: true } || ViewModel.ActionsEnabled;
                 break;
             case nameof(ToolbarViewModel.SpeakPhase):
-                SyncSpeakButton();
+                SyncSpeakButtons();
                 Lookup.SetSpeakState(ViewModel.SpeakPhase, ViewModel.CanReplaySpeak);
                 break;
             case nameof(ToolbarViewModel.CanReplaySpeak):
@@ -572,6 +585,11 @@ public sealed partial class ToolbarView : UserControl
     private void OnSettingsClick(object sender, RoutedEventArgs e)
     {
         if (!_closed) ViewModel.RequestSettings();
+    }
+
+    private void OnIgnoreSiteClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.RequestIgnoreSite();
     }
 
     private void OnIgnoreAppClick(object sender, RoutedEventArgs e)

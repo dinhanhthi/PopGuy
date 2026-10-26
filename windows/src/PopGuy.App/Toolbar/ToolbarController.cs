@@ -2,7 +2,6 @@ using System.Drawing;
 using Microsoft.UI.Dispatching;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Dictionaries;
-using PopGuy.Core.Json;
 using PopGuy.Core.Settings;
 using PopGuy.Core.Speak;
 using PopGuy.Core.Toolbar;
@@ -22,9 +21,10 @@ namespace PopGuy.Toolbar;
 /// Prompt hotkey opens the prompt input). The passive selections of <see cref="SelectionPipeline"/> (a drag, a keyboard
 /// selection, a double-click) are routed by spec-1 §1.3 and shown at the gesture; only a double-click with an assigned
 /// action runs one. It also handles the toolbar's clicks (actions, the prompt, Stop, Copy, Paste back, Close, Ignore
-/// this app, Settings), a script action's after-run delivery (spec-4 §4.4) and the dismissal rules of spec-1 §3.8.
-/// Speak (its button, its hotkey, an assigned double-click) toggles <see cref="SpeakCoordinator"/> on the selection,
-/// orthogonal to the action runs; closing the toolbar or a new selection drops its "Listen again" (macOS). Look up and
+/// this site, Ignore this app, Settings), a script action's after-run delivery (spec-4 §4.4) and the dismissal rules of
+/// spec-1 §3.8. Speak and a Speech custom action (its button, its hotkey, an assigned double-click) toggle
+/// <see cref="SpeakCoordinator"/> on the selection, orthogonal to the action runs; closing the toolbar or a new selection
+/// drops its "Listen again" (macOS). Look up and
 /// Dictionary custom actions run through the session like the other actions; a lookup's Listen speaks its headword.
 /// While Ignored Domains is on, a selection in a browser reads the tab's host (<see cref="BrowserUrlReader"/>) before it
 /// is presented: the gate's ignored domains and <c>{{domain}}</c> use it (macOS reads it only then, too).
@@ -134,6 +134,7 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.CloseAnywayRequested += Hide;
         _viewModel.DisableCloseConfirmationRequested += OnDisableCloseConfirmation;
         _viewModel.IgnoreAppRequested += OnIgnoreApp;
+        _viewModel.IgnoreSiteRequested += OnIgnoreSite;
         _viewModel.SettingsRequested += OnSettingsRequested;
         _viewModel.ReplayRequested += OnReplayRequested;
         _viewModel.ListenRequested += OnListenRequested;
@@ -165,6 +166,7 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.CloseAnywayRequested -= Hide;
         _viewModel.DisableCloseConfirmationRequested -= OnDisableCloseConfirmation;
         _viewModel.IgnoreAppRequested -= OnIgnoreApp;
+        _viewModel.IgnoreSiteRequested -= OnIgnoreSite;
         _viewModel.SettingsRequested -= OnSettingsRequested;
         _viewModel.ReplayRequested -= OnReplayRequested;
         _viewModel.ListenRequested -= OnListenRequested;
@@ -296,7 +298,8 @@ internal sealed class ToolbarController : IDisposable
     /// The chord replacement behaves like the chord (no-op while showing). An action hotkey (spec-1 §1.5), if the action
     /// is enabled: while the toolbar shows a selection, runs on it (no re-capture); else captures, shows, then runs. The
     /// Prompt hotkey opens the prompt input instead (focused), or closes it when open (macOS triggerPromptInput). The
-    /// Speak hotkey speaks the same way, or stops speech when it is loading or playing (macOS triggerAction).
+    /// Speak and Speech action hotkeys speak the same way, or stop speech when it is loading or playing (macOS
+    /// triggerAction).
     /// </summary>
     private void OnHotkey(ActionIdentifier id, ForegroundApp source)
     {
@@ -448,7 +451,7 @@ internal sealed class ToolbarController : IDisposable
         _pasting = false;
         // A new selection: the previous one's speech stops and its "Listen again" goes (macOS update).
         _speak.ClearReplay();
-        _viewModel.Present(settings, capture.IsEditable, CanIgnore(capture.Source));
+        _viewModel.Present(settings, capture.IsEditable, CanIgnore(capture.Source), capture.Host);
         // No pointer (the chord, the hotkeys, a keyboard selection): placed below the selection rect, or at the cursor
         // when there is none (spec-1 §3.2).
         _window.ShowAt(capture.Pointer, capture.GrewDownward, capture.Selection, capture.Source);
@@ -484,13 +487,14 @@ internal sealed class ToolbarController : IDisposable
 
     /// <summary>
     /// An action button or hotkey: runs the action on the current selection, if it is enabled. Prompt opens or closes
-    /// the prompt input instead; its Run comes back through <see cref="OnPromptSubmitted"/>. Speak toggles speech.
+    /// the prompt input instead; its Run comes back through <see cref="OnPromptSubmitted"/>. Speak and a Speech custom
+    /// action toggle speech (the session has no Speech run).
     /// </summary>
     private void RunAction(ActionIdentifier id)
     {
-        if (id.Type == ActionIdentifierType.Speak)
+        if (ToolbarSession.SpeakVoiceFor(_settings.Current, id) is { } voice)
         {
-            ToggleSpeak();
+            ToggleSpeak(id, voice);
             return;
         }
         if (id != PromptId)
@@ -528,34 +532,33 @@ internal sealed class ToolbarController : IDisposable
     }
 
     /// <summary>
-    /// Speak (macOS triggerSpeak): speaks the current selection with the Speak settings, or stops speech while it is
-    /// loading or playing (the toggle records nothing). A start is recorded in history at once (the selected engine).
-    /// The coordinator publishes Loading here, on the UI thread, and routes on the thread pool.
+    /// Speak (macOS triggerSpeak) and a Speech custom action (macOS triggerCustomAction): speaks the current selection
+    /// with <paramref name="voice"/> (<see cref="ToolbarSession.SpeakVoiceFor"/>: the Speak settings, or the action's
+    /// own), or stops speech while it is loading or playing (the toggle records nothing). A start is recorded in history
+    /// at once (the selected engine). The coordinator publishes Loading here, on the UI thread, and routes on the thread
+    /// pool.
     /// </summary>
-    private void ToggleSpeak()
+    private void ToggleSpeak(ActionIdentifier id, SpeakVoice voice)
     {
         if (_current is not { Blocked: false } capture || capture.Text.Trim().Length == 0) return;
         var settings = _settings.Current;
-        if (!ToolbarLayout.IsEnabled(settings, ActionIdentifier.Speak)) return;
+        if (!ToolbarLayout.IsEnabled(settings, id)) return;
         if (_speak.Phase != SpeakPhase.Idle)
         {
             _log("speak: stop");
             _speak.Stop();
             return;
         }
-        var speak = settings.SpeakSettings;
-        var config = speak.SelectedEngine.CloudProvider is { } kind
-            ? settings.TtsProviderConfigs.GetValueOrDefault(RawValueEnumConverter<TtsProviderKind>.ToRaw(kind)) ?? new TtsProviderConfig()
-            : new TtsProviderConfig();
-        _log($"speak: {speak.SelectedEngine.DisplayName()}, {capture.Text.Length} chars");
-        Watch(_speak.SpeakAsync(capture.Text, speak.DefaultAccent, speak, config), "speak");
+        var engine = voice.Settings.SelectedEngine;
+        _log($"speak: {id.Type}, {engine.DisplayName()}, {capture.Text.Length} chars");
+        Watch(_speak.SpeakAsync(capture.Text, voice.Accent, voice.Settings, voice.TtsConfig), "speak");
         var source = capture.Source;
-        _session.RecordSpeak(new ToolbarRun(ActionIdentifier.Speak, capture.Text)
+        _session.RecordSpeak(new ToolbarRun(id, capture.Text)
         {
             SourceExeName = source.IsOwnProcess ? null : source.Exe,
             SourceAppName = source.DisplayName.Length > 0 ? source.DisplayName : null,
             SkipHistory = IsIgnored(capture, settings),
-        }, speak.SelectedEngine, speak.DefaultAccent);
+        }, engine, voice.Accent, voice.ActionName);
     }
 
     /// <summary>"Listen again": the cached audio, or the system voice again (no new cloud request, no history).</summary>
@@ -709,6 +712,30 @@ internal sealed class ToolbarController : IDisposable
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             _log($"settings: ignored app not saved, {e.GetType().Name}");
+        }
+    }
+
+    /// <summary>
+    /// "Ignore this site" (macOS onIgnoreDomain, no confirmation): closes first (click reacts first), then adds the
+    /// source tab's host to the ignored domains (once, in the gate's form). The button shows only with a host, which is
+    /// read only while Ignored Domains is on, so the switch is left as it is (macOS addIgnoredDomain). The host is not
+    /// logged.
+    /// </summary>
+    private void OnIgnoreSite()
+    {
+        var domain = PresentationGate.NormalizeDomain(_current?.Host);
+        Hide();
+        if (domain is null) return;
+        try
+        {
+            _settings.Update(s => s.IgnoredDomains.Any(d => PresentationGate.NormalizeDomain(d) == domain)
+                ? s
+                : s with { IgnoredDomains = [.. s.IgnoredDomains, domain] });
+            _log("settings: ignored domain added");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log($"settings: ignored domain not saved, {e.GetType().Name}");
         }
     }
 
