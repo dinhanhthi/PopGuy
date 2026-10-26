@@ -16,7 +16,10 @@ public static class SymbolMap
     public const string Sparkles = "\uE734";
 
     /// <summary>The glyph for <paramref name="sfSymbol"/>; <see cref="Sparkles"/> for an unknown name.</summary>
-    public static string Glyph(string sfSymbol) => Glyphs.TryGetValue(sfSymbol, out var glyph) ? glyph : Sparkles;
+    public static string Glyph(string sfSymbol) =>
+        Glyphs.TryGetValue(sfSymbol, out var glyph)
+        || (sfSymbol.EndsWith(".fill", StringComparison.Ordinal) && Glyphs.TryGetValue(sfSymbol[..^5], out glyph))
+            ? glyph : Sparkles;
 
     /// <summary>Whether <paramref name="sfSymbol"/> has its own entry (a known name may still map to <see cref="Sparkles"/>).</summary>
     public static bool IsKnown(string sfSymbol) => Glyphs.ContainsKey(sfSymbol);

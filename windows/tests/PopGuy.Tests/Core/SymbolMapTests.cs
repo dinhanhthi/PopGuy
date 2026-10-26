@@ -14,6 +14,10 @@ public sealed class SymbolMapTests
     [InlineData("sparkles", SymbolMap.Sparkles)]
     [InlineData("no.such.symbol", SymbolMap.Sparkles)]
     [InlineData("", SymbolMap.Sparkles)]
+    // A ".fill" variant without its own entry draws as its base symbol (search-wikipedia.json uses book.fill).
+    [InlineData("book.fill", "")]
+    [InlineData("no.such.fill", SymbolMap.Sparkles)]
+    [InlineData(".fill", SymbolMap.Sparkles)]
     public void GlyphFallsBackToSparkles(string sfSymbol, string glyph) => Assert.Equal(glyph, SymbolMap.Glyph(sfSymbol));
 
     [Theory]
