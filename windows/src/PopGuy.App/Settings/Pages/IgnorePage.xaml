@@ -28,39 +28,42 @@
     </Page.Resources>
 
     <ScrollViewer>
-        <StackPanel
-            MaxWidth="1000"
-            Margin="24,16,24,24"
-            Spacing="4">
+        <!-- A stretched Grid takes the viewport width: a MaxWidth child placed straight in the ScrollViewer is centered by its narrower desired width and overflows the right edge on wide windows. -->
+        <Grid>
+            <StackPanel
+                MaxWidth="1000"
+                Margin="24,16,24,24"
+                Spacing="4">
 
-            <TextBlock
-                Margin="1,0,0,4"
-                Style="{StaticResource SectionHeaderStyle}"
-                Text="Ignored Apps" />
-
-            <controls:SettingsCard Header="Enable Ignored Apps">
-                <ToggleSwitch x:Name="EnabledToggle" AutomationProperties.Name="Enable Ignored Apps" />
-            </controls:SettingsCard>
-
-            <StackPanel x:Name="AppsPanel" Spacing="4">
                 <TextBlock
-                    x:Name="EmptyText"
-                    Margin="1,8,0,8"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Text="No ignored apps." />
-                <StackPanel x:Name="AppRows" Spacing="4" />
-                <Button x:Name="AddButton" Margin="0,4,0,0">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon FontSize="14" Glyph="&#xE710;" />
-                        <TextBlock Text="Add App…" />
-                    </StackPanel>
-                </Button>
-            </StackPanel>
+                    Margin="1,0,0,4"
+                    Style="{StaticResource SectionHeaderStyle}"
+                    Text="Ignored Apps" />
 
-            <TextBlock
-                Margin="1,8,0,0"
-                Style="{StaticResource CaptionStyle}"
-                Text="The toolbar will not appear when you select text in these apps. Turning this off also removes the &quot;Ignore this app&quot; button from the toolbar." />
-        </StackPanel>
+                <controls:SettingsCard Header="Enable Ignored Apps">
+                    <ToggleSwitch x:Name="EnabledToggle" AutomationProperties.Name="Enable Ignored Apps" />
+                </controls:SettingsCard>
+
+                <StackPanel x:Name="AppsPanel" Spacing="4">
+                    <TextBlock
+                        x:Name="EmptyText"
+                        Margin="1,8,0,8"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="No ignored apps." />
+                    <StackPanel x:Name="AppRows" Spacing="4" />
+                    <Button x:Name="AddButton" Margin="0,4,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontSize="14" Glyph="&#xE710;" />
+                            <TextBlock Text="Add App…" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <TextBlock
+                    Margin="1,8,0,0"
+                    Style="{StaticResource CaptionStyle}"
+                    Text="The toolbar will not appear when you select text in these apps. Turning this off also removes the &quot;Ignore this app&quot; button from the toolbar." />
+            </StackPanel>
+        </Grid>
     </ScrollViewer>
 </Page>

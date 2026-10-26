@@ -121,153 +121,156 @@
 
         <Grid Grid.Row="2">
             <ScrollViewer x:Name="ListScroller" Visibility="Collapsed">
-                <ItemsRepeater
-                    x:Name="Repeater"
-                    MaxWidth="1000"
-                    Margin="24,0,24,24">
-                    <ItemsRepeater.Layout>
-                        <StackLayout Spacing="8" />
-                    </ItemsRepeater.Layout>
-                    <ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="local:HistoryRowItem">
-                            <Border
-                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="1"
-                                CornerRadius="{ThemeResource ControlCornerRadius}">
-                                <StackPanel>
-                                    <!-- The summary: a click anywhere but its button toggles the row. -->
-                                    <Grid
-                                        Padding="16,10,12,10"
-                                        Background="Transparent"
-                                        ColumnSpacing="12"
-                                        DoubleTapped="OnRowDoubleTapped"
-                                        Tapped="OnRowTapped">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <Grid VerticalAlignment="Center">
-                                            <FontIcon
-                                                Glyph="&#xEC61;"
-                                                Style="{StaticResource SuccessIconStyle}"
-                                                Visibility="{x:Bind SuccessVisibility}" />
-                                            <FontIcon
-                                                Glyph="&#xE7BA;"
-                                                Style="{StaticResource CriticalIconStyle}"
-                                                Visibility="{x:Bind FailureVisibility}" />
-                                        </Grid>
-                                        <StackPanel
-                                            Grid.Column="1"
-                                            VerticalAlignment="Center"
-                                            Spacing="2">
-                                            <Grid ColumnSpacing="6">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="{x:Bind ActionName}" />
+                <!-- A stretched Grid takes the viewport width: a MaxWidth child placed straight in the ScrollViewer is centered by its narrower desired width and overflows the right edge on wide windows. -->
+                <Grid>
+                    <ItemsRepeater
+                        x:Name="Repeater"
+                        MaxWidth="1000"
+                        Margin="24,0,24,24">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="8" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="local:HistoryRowItem">
+                                <Border
+                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="{ThemeResource ControlCornerRadius}">
+                                    <StackPanel>
+                                        <!-- The summary: a click anywhere but its button toggles the row. -->
+                                        <Grid
+                                            Padding="16,10,12,10"
+                                            Background="Transparent"
+                                            ColumnSpacing="12"
+                                            DoubleTapped="OnRowDoubleTapped"
+                                            Tapped="OnRowTapped">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid VerticalAlignment="Center">
+                                                <FontIcon
+                                                    Glyph="&#xEC61;"
+                                                    Style="{StaticResource SuccessIconStyle}"
+                                                    Visibility="{x:Bind SuccessVisibility}" />
+                                                <FontIcon
+                                                    Glyph="&#xE7BA;"
+                                                    Style="{StaticResource CriticalIconStyle}"
+                                                    Visibility="{x:Bind FailureVisibility}" />
+                                            </Grid>
+                                            <StackPanel
+                                                Grid.Column="1"
+                                                VerticalAlignment="Center"
+                                                Spacing="2">
+                                                <Grid ColumnSpacing="6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="{x:Bind ActionName}" />
+                                                    <TextBlock
+                                                        Grid.Column="1"
+                                                        VerticalAlignment="Center"
+                                                        Style="{StaticResource CaptionStyle}"
+                                                        Text="{x:Bind ProviderText}"
+                                                        TextTrimming="CharacterEllipsis"
+                                                        TextWrapping="NoWrap" />
+                                                </Grid>
                                                 <TextBlock
-                                                    Grid.Column="1"
-                                                    VerticalAlignment="Center"
                                                     Style="{StaticResource CaptionStyle}"
-                                                    Text="{x:Bind ProviderText}"
+                                                    Text="{x:Bind DetailLine, Mode=OneWay}"
                                                     TextTrimming="CharacterEllipsis"
                                                     TextWrapping="NoWrap" />
-                                            </Grid>
-                                            <TextBlock
-                                                Style="{StaticResource CaptionStyle}"
-                                                Text="{x:Bind DetailLine, Mode=OneWay}"
-                                                TextTrimming="CharacterEllipsis"
-                                                TextWrapping="NoWrap" />
-                                        </StackPanel>
-                                        <Button
-                                            Grid.Column="2"
-                                            VerticalAlignment="Center"
-                                            pgc:HoverTooltip.Text="Delete this record"
-                                            AutomationProperties.Name="Delete this record"
-                                            Click="OnDeleteClick"
-                                            Style="{StaticResource SubtleButtonStyle}">
-                                            <FontIcon Glyph="&#xE74D;" Style="{StaticResource SecondaryIconStyle}" />
-                                        </Button>
-                                        <FontIcon
-                                            Grid.Column="3"
-                                            VerticalAlignment="Center"
-                                            FontSize="12"
-                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                            Glyph="{x:Bind ChevronGlyph, Mode=OneWay}" />
-                                    </Grid>
-
-                                    <!-- The detail (macOS HistoryRow.detail). -->
-                                    <StackPanel
-                                        Padding="16,12,16,14"
-                                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                                        BorderThickness="0,1,0,0"
-                                        Spacing="12"
-                                        Visibility="{x:Bind DetailVisibility, Mode=OneWay}">
-                                        <StackPanel
-                                            Orientation="Horizontal"
-                                            Spacing="6"
-                                            Visibility="{x:Bind TruncatedVisibility}">
+                                            </StackPanel>
+                                            <Button
+                                                Grid.Column="2"
+                                                VerticalAlignment="Center"
+                                                pgc:HoverTooltip.Text="Delete this record"
+                                                AutomationProperties.Name="Delete this record"
+                                                Click="OnDeleteClick"
+                                                Style="{StaticResource SubtleButtonStyle}">
+                                                <FontIcon Glyph="&#xE74D;" Style="{StaticResource SecondaryIconStyle}" />
+                                            </Button>
                                             <FontIcon
+                                                Grid.Column="3"
+                                                VerticalAlignment="Center"
                                                 FontSize="12"
-                                                Glyph="&#xE8C6;"
-                                                Style="{StaticResource SecondaryIconStyle}" />
-                                            <TextBlock Style="{StaticResource CaptionStyle}" Text="Preview only — full text was not stored." />
-                                        </StackPanel>
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Glyph="{x:Bind ChevronGlyph, Mode=OneWay}" />
+                                        </Grid>
 
-                                        <StackPanel Spacing="4">
-                                            <Grid>
-                                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Input" />
-                                                <Button
-                                                    pgc:HoverTooltip.Text="Copy input"
-                                                    AutomationProperties.Name="Copy input"
-                                                    Click="OnCopyInputClick"
-                                                    Style="{StaticResource CopyButtonStyle}">
-                                                    <FontIcon Glyph="&#xE8C8;" Style="{StaticResource SecondaryIconStyle}" />
-                                                </Button>
-                                            </Grid>
-                                            <TextBlock Style="{StaticResource RecordTextStyle}" Text="{x:Bind InputText}" />
-                                        </StackPanel>
+                                        <!-- The detail (macOS HistoryRow.detail). -->
+                                        <StackPanel
+                                            Padding="16,12,16,14"
+                                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                            BorderThickness="0,1,0,0"
+                                            Spacing="12"
+                                            Visibility="{x:Bind DetailVisibility, Mode=OneWay}">
+                                            <StackPanel
+                                                Orientation="Horizontal"
+                                                Spacing="6"
+                                                Visibility="{x:Bind TruncatedVisibility}">
+                                                <FontIcon
+                                                    FontSize="12"
+                                                    Glyph="&#xE8C6;"
+                                                    Style="{StaticResource SecondaryIconStyle}" />
+                                                <TextBlock Style="{StaticResource CaptionStyle}" Text="Preview only — full text was not stored." />
+                                            </StackPanel>
 
-                                        <StackPanel Spacing="4" Visibility="{x:Bind SuccessVisibility}">
-                                            <Grid>
-                                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Output" />
-                                                <Button
-                                                    pgc:HoverTooltip.Text="Copy output"
-                                                    AutomationProperties.Name="Copy output"
-                                                    Click="OnCopyOutputClick"
-                                                    Style="{StaticResource CopyButtonStyle}">
-                                                    <FontIcon Glyph="&#xE8C8;" Style="{StaticResource SecondaryIconStyle}" />
-                                                </Button>
-                                            </Grid>
-                                            <TextBlock Style="{StaticResource RecordTextStyle}" Text="{x:Bind OutputText}" />
-                                        </StackPanel>
+                                            <StackPanel Spacing="4">
+                                                <Grid>
+                                                    <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Input" />
+                                                    <Button
+                                                        pgc:HoverTooltip.Text="Copy input"
+                                                        AutomationProperties.Name="Copy input"
+                                                        Click="OnCopyInputClick"
+                                                        Style="{StaticResource CopyButtonStyle}">
+                                                        <FontIcon Glyph="&#xE8C8;" Style="{StaticResource SecondaryIconStyle}" />
+                                                    </Button>
+                                                </Grid>
+                                                <TextBlock Style="{StaticResource RecordTextStyle}" Text="{x:Bind InputText}" />
+                                            </StackPanel>
 
-                                        <StackPanel Spacing="4" Visibility="{x:Bind FailureVisibility}">
-                                            <Grid>
-                                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Error" />
-                                                <Button
-                                                    pgc:HoverTooltip.Text="Copy error"
-                                                    AutomationProperties.Name="Copy error"
-                                                    Click="OnCopyErrorClick"
-                                                    Style="{StaticResource CopyButtonStyle}">
-                                                    <FontIcon Glyph="&#xE8C8;" Style="{StaticResource SecondaryIconStyle}" />
-                                                </Button>
-                                            </Grid>
-                                            <TextBlock
-                                                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                                                Style="{StaticResource RecordTextStyle}"
-                                                Text="{x:Bind ErrorDisplayText}" />
+                                            <StackPanel Spacing="4" Visibility="{x:Bind SuccessVisibility}">
+                                                <Grid>
+                                                    <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Output" />
+                                                    <Button
+                                                        pgc:HoverTooltip.Text="Copy output"
+                                                        AutomationProperties.Name="Copy output"
+                                                        Click="OnCopyOutputClick"
+                                                        Style="{StaticResource CopyButtonStyle}">
+                                                        <FontIcon Glyph="&#xE8C8;" Style="{StaticResource SecondaryIconStyle}" />
+                                                    </Button>
+                                                </Grid>
+                                                <TextBlock Style="{StaticResource RecordTextStyle}" Text="{x:Bind OutputText}" />
+                                            </StackPanel>
+
+                                            <StackPanel Spacing="4" Visibility="{x:Bind FailureVisibility}">
+                                                <Grid>
+                                                    <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Error" />
+                                                    <Button
+                                                        pgc:HoverTooltip.Text="Copy error"
+                                                        AutomationProperties.Name="Copy error"
+                                                        Click="OnCopyErrorClick"
+                                                        Style="{StaticResource CopyButtonStyle}">
+                                                        <FontIcon Glyph="&#xE8C8;" Style="{StaticResource SecondaryIconStyle}" />
+                                                    </Button>
+                                                </Grid>
+                                                <TextBlock
+                                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                    Style="{StaticResource RecordTextStyle}"
+                                                    Text="{x:Bind ErrorDisplayText}" />
+                                            </StackPanel>
                                         </StackPanel>
                                     </StackPanel>
-                                </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsRepeater.ItemTemplate>
-                </ItemsRepeater>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </Grid>
             </ScrollViewer>
 
             <StackPanel

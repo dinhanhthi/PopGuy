@@ -21,56 +21,59 @@
     </Page.Resources>
 
     <ScrollViewer>
-        <StackPanel
-            MaxWidth="1000"
-            Margin="24,16,24,24"
-            Spacing="4">
+        <!-- A stretched Grid takes the viewport width: a MaxWidth child placed straight in the ScrollViewer is centered by its narrower desired width and overflows the right edge on wide windows. -->
+        <Grid>
+            <StackPanel
+                MaxWidth="1000"
+                Margin="24,16,24,24"
+                Spacing="4">
 
-            <TextBlock
-                Margin="1,0,0,4"
-                Style="{StaticResource SectionHeaderStyle}"
-                Text="PopGuy" />
+                <TextBlock
+                    Margin="1,0,0,4"
+                    Style="{StaticResource SectionHeaderStyle}"
+                    Text="PopGuy" />
 
-            <controls:SettingsCard ContentAlignment="Left">
-                <StackPanel Orientation="Horizontal" Spacing="16">
-                    <!-- The app icon: the 256 px frame of PopGuy.ico (copied out as AppIcon.png, since the .ico is embedded in the exe only). -->
-                    <Image
-                        Width="64"
-                        Height="64"
-                        VerticalAlignment="Center"
-                        Source="ms-appx:///Assets/AppIcon.png" />
-                    <StackPanel VerticalAlignment="Center" Spacing="2">
-                        <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="PopGuy" />
-                        <TextBlock
-                            x:Name="VersionText"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <HyperlinkButton
-                            Padding="0"
-                            Content="github.com/dinhanhthi/PopGuy"
-                            NavigateUri="https://github.com/dinhanhthi/PopGuy" />
+                <controls:SettingsCard ContentAlignment="Left">
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <!-- The app icon: the 256 px frame of PopGuy.ico (copied out as AppIcon.png, since the .ico is embedded in the exe only). -->
+                        <Image
+                            Width="64"
+                            Height="64"
+                            VerticalAlignment="Center"
+                            Source="ms-appx:///Assets/AppIcon.png" />
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="PopGuy" />
+                            <TextBlock
+                                x:Name="VersionText"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <HyperlinkButton
+                                Padding="0"
+                                Content="github.com/dinhanhthi/PopGuy"
+                                NavigateUri="https://github.com/dinhanhthi/PopGuy" />
+                        </StackPanel>
                     </StackPanel>
-                </StackPanel>
-            </controls:SettingsCard>
+                </controls:SettingsCard>
 
-            <TextBlock
-                Margin="1,8,0,0"
-                Style="{StaticResource CaptionStyle}"
-                Text="Free and open source (AGPLv3)." />
+                <TextBlock
+                    Margin="1,8,0,0"
+                    Style="{StaticResource CaptionStyle}"
+                    Text="Free and open source (AGPLv3)." />
 
-            <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Info" />
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Info" />
 
-            <controls:SettingsCard Header="Author">
-                <HyperlinkButton Content="Anh-Thi DINH" NavigateUri="https://dinhanhthi.com" />
-            </controls:SettingsCard>
-            <controls:SettingsCard Header="Website">
-                <HyperlinkButton Content="pg.dinhanhthi.com" NavigateUri="https://pg.dinhanhthi.com" />
-            </controls:SettingsCard>
-            <controls:SettingsCard Header="Contact">
-                <HyperlinkButton Content="me@dinhanhthi.com" NavigateUri="mailto:me@dinhanhthi.com" />
-            </controls:SettingsCard>
-            <controls:SettingsCard Header="Discussions">
-                <HyperlinkButton Content="GitHub Discussions" NavigateUri="https://github.com/dinhanhthi/PopGuy/discussions" />
-            </controls:SettingsCard>
-        </StackPanel>
+                <controls:SettingsCard Header="Author">
+                    <HyperlinkButton Content="Anh-Thi DINH" NavigateUri="https://dinhanhthi.com" />
+                </controls:SettingsCard>
+                <controls:SettingsCard Header="Website">
+                    <HyperlinkButton Content="pg.dinhanhthi.com" NavigateUri="https://pg.dinhanhthi.com" />
+                </controls:SettingsCard>
+                <controls:SettingsCard Header="Contact">
+                    <HyperlinkButton Content="me@dinhanhthi.com" NavigateUri="mailto:me@dinhanhthi.com" />
+                </controls:SettingsCard>
+                <controls:SettingsCard Header="Discussions">
+                    <HyperlinkButton Content="GitHub Discussions" NavigateUri="https://github.com/dinhanhthi/PopGuy/discussions" />
+                </controls:SettingsCard>
+            </StackPanel>
+        </Grid>
     </ScrollViewer>
 </Page>

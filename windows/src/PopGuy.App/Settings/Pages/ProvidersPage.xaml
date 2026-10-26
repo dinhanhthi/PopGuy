@@ -57,10 +57,13 @@
         </SelectorBar>
 
         <ScrollViewer x:Name="CardsScroller" Grid.Row="1">
-            <Grid MaxWidth="1000" Margin="24,8,24,24">
-                <StackPanel x:Name="AiCards" Spacing="8" />
-                <StackPanel x:Name="TranslationCards" Spacing="8" Visibility="Collapsed" />
-                <StackPanel x:Name="SpeechCards" Spacing="8" Visibility="Collapsed" />
+            <!-- A stretched Grid takes the viewport width: a MaxWidth child placed straight in the ScrollViewer is centered by its narrower desired width and overflows the right edge on wide windows. -->
+            <Grid>
+                <Grid MaxWidth="1000" Margin="24,8,24,24">
+                    <StackPanel x:Name="AiCards" Spacing="8" />
+                    <StackPanel x:Name="TranslationCards" Spacing="8" Visibility="Collapsed" />
+                    <StackPanel x:Name="SpeechCards" Spacing="8" Visibility="Collapsed" />
+                </Grid>
             </Grid>
         </ScrollViewer>
     </Grid>
