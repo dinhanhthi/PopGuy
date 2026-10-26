@@ -18,6 +18,9 @@ public static class SymbolMap
     /// <summary>The glyph for <paramref name="sfSymbol"/>; <see cref="Sparkles"/> for an unknown name.</summary>
     public static string Glyph(string sfSymbol) => Glyphs.TryGetValue(sfSymbol, out var glyph) ? glyph : Sparkles;
 
+    /// <summary>Whether <paramref name="sfSymbol"/> has its own entry (a known name may still map to <see cref="Sparkles"/>).</summary>
+    public static bool IsKnown(string sfSymbol) => Glyphs.ContainsKey(sfSymbol);
+
     private static readonly Dictionary<string, string> Glyphs = new(StringComparer.Ordinal)
     {
         // The built-ins (Improve, Shorten, Proofread, Prompt, Translate, Speak, Look up) not in the curated list.

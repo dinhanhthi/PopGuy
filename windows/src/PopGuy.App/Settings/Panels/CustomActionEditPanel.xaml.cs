@@ -77,7 +77,6 @@ public sealed partial class CustomActionEditPanel : UserControl
         _panel = panel;
         _original = model.Current.CustomActions.FirstOrDefault(a => a.Id == action.Id);
         _draft = action;
-        SetIcon(HeaderIcon, action.Icon);
         TypeRow();
         IdentityRows();
         BodyPanel.Children.Add(_typeRows);
@@ -111,6 +110,7 @@ public sealed partial class CustomActionEditPanel : UserControl
 
     private void RefreshHeader()
     {
+        SetIcon(HeaderIcon, _draft.Icon);
         HeaderTitle.Text = _draft.Title.Length == 0 ? "New Action" : _draft.Title;
         SaveButton.IsEnabled = _draft.IsSaveable;
     }
@@ -157,13 +157,26 @@ public sealed partial class CustomActionEditPanel : UserControl
         description.TextChanged += (_, _) => Changed(a => a with { ActionDescription = description.Text });
         BodyPanel.Children.Add(new SettingsCard { Header = "Description", Content = description });
 
-        // The icon picker comes with the next task: the current icon shows here.
+        // Collapsed by default (macOS): the current icon and Add open the picker in a flyout below.
         var icon = new FontIcon { FontSize = 16, VerticalAlignment = VerticalAlignment.Center };
         SetIcon(icon, _draft.Icon);
-        var iconRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        iconRow.Children.Add(icon);
-        iconRow.Children.Add(new TextBlock { Text = _draft.Icon.Value, Style = PanelStyle("SecondaryTextStyle"), VerticalAlignment = VerticalAlignment.Center });
-        BodyPanel.Children.Add(new SettingsCard { Header = "Icon", Content = iconRow });
+        var label = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        label.Children.Add(icon);
+        label.Children.Add(new TextBlock { Text = "Add", VerticalAlignment = VerticalAlignment.Center });
+        var picker = new IconPicker();
+        picker.Initialize(_draft.Icon);
+        picker.SelectionChanged += picked =>
+        {
+            Changed(a => a with { Icon = picked });
+            SetIcon(icon, _draft.Icon);
+        };
+        var iconButton = new Button
+        {
+            Content = label,
+            Flyout = new Flyout { Content = picker, Placement = FlyoutPlacementMode.Bottom },
+        };
+        AutomationProperties.SetName(iconButton, "Icon");
+        BodyPanel.Children.Add(new SettingsCard { Header = "Icon", Content = iconButton });
     }
 
     // Rows by type (macOS aiFields, translationFields, speechFields, dictionaryFields, openURLFields, ...).
@@ -641,6 +654,7 @@ public sealed partial class CustomActionEditPanel : UserControl
         }
         else
         {
+            target.FontFamily = IconPicker.SymbolFont;
             target.Glyph = SymbolMap.Glyph(icon.Value);
         }
     }
