@@ -5,7 +5,8 @@
     cards are built in code (ActionsPage.xaml.cs, Controls/ActionCard). Add action and a custom card's Edit open the
     Add/Edit panel (Panels/CustomActionEditPanel); Import and the plugin menu end in the consent panel
     (Panels/PluginImportConsentDialog); the library button opens the Action Library (Panels/ActionLibraryPanel). Speak's
-    card holds the Speak settings (Controls/SpeakCard); Look up gets its card in Phase 19.2. The header is the window's.
+    card holds the Speak settings (Controls/SpeakCard), Look up's the dictionary settings and Babylon files
+    (Controls/DictionaryCard). The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.ActionsPage"

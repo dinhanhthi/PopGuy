@@ -20,7 +20,8 @@ namespace PopGuy.Settings.Controls;
 /// actions (its value is kept). The rows by kind: Improve and Shorten provider, model, tone, prompt; Proofread
 /// the same without tone; Prompt provider and model; Translate provider, model, target language, tone, additional
 /// prompt; a custom AI action provider, model, its required prompt; a custom translation action as Translate; Speak
-/// and a custom Speech action the <see cref="SpeakCard"/> rows (macOS SpeakCardView, CustomSpeechFields). Model,
+/// and a custom Speech action the <see cref="SpeakCard"/> rows (macOS SpeakCardView, CustomSpeechFields); Look up and
+/// a custom Dictionary action the <see cref="DictionaryCard"/> rows (macOS DictionaryCardView, DictionaryConfigFields). Model,
 /// tone and prompt hide for the providers that ignore them. Every kind ends with its keyboard shortcut. Each change
 /// saves at once through <see cref="ActionsViewModel"/> (text 500 ms after the last keystroke, or when the box loses
 /// focus). ActionsPage builds a card once per action and calls <see cref="Update"/> on every settings change, so an
@@ -41,6 +42,7 @@ public sealed partial class ActionCard : UserControl
     private const string DeleteLockedTooltip =
         "Can't delete the only active action. The toolbar needs at least one. Turn on another action first.";
     private const string SpeakSubtitle = "Read the selected text aloud using the system speech synthesiser.";
+    private const string LookupSubtitle = "Look up definitions, phonetics, and examples across every dictionary provider.";
 
     /// <summary>Each row's refresh from the settings, in row order.</summary>
     private readonly List<Action<AppSettings>> _updates = [];
@@ -48,6 +50,7 @@ public sealed partial class ActionCard : UserControl
     private readonly List<ModelField> _modelFields = [];
     private ActionsViewModel _model = null!;
     private SpeakCard? _speak;
+    private DictionaryCard? _dictionary;
 
     private TextBlock _noShortcut = null!;
     private Button _recordButton = null!;
@@ -113,11 +116,17 @@ public sealed partial class ActionCard : UserControl
             if (action.Type == CustomActionType.Ai) CustomAiRows();
             else if (action.Type == CustomActionType.Translation) CustomTranslationRows();
             else if (action.Type == CustomActionType.Speech) SpeakRows();
+            else if (action.Type == CustomActionType.Dictionary) DictionaryRows();
         }
         else if (id.Type == ActionIdentifierType.Speak)
         {
             SetHeader("Speak", ActionIcon.SfSymbol("speaker.wave.2"), SpeakSubtitle, builtin: true, fromPlugin: false);
             SpeakRows();
+        }
+        else if (id.Type == ActionIdentifierType.Dictionary)
+        {
+            SetHeader("Look up", ActionIcon.SfSymbol("character.book.closed"), LookupSubtitle, builtin: true, fromPlugin: false);
+            DictionaryRows();
         }
         ShortcutRow();
         Update(current);
@@ -157,6 +166,7 @@ public sealed partial class ActionCard : UserControl
         foreach (var field in _modelFields) field.Flush();
         foreach (var prompt in _prompts) prompt.Flush();
         _speak?.Flush();
+        _dictionary?.Flush();
     }
 
     /// <summary>The card goes: pending text is saved, a check and a recording stop.</summary>
@@ -165,6 +175,7 @@ public sealed partial class ActionCard : UserControl
         foreach (var field in _modelFields) field.Release();
         foreach (var prompt in _prompts) prompt.Flush();
         _speak?.Release();
+        _dictionary?.Release();
         Recorder.Cancel();
     }
 
@@ -307,6 +318,15 @@ public sealed partial class ActionCard : UserControl
         _speak.Initialize(_model, Id);
         foreach (var row in _speak.TakeRows()) AddRow(row);
         _updates.Add(_speak.Update);
+    }
+
+    /// <summary>The definition language and pronunciation rows (and Look up's Babylon files), taken from a <see cref="DictionaryCard"/>.</summary>
+    private void DictionaryRows()
+    {
+        _dictionary = new DictionaryCard();
+        _dictionary.Initialize(_model, Id);
+        foreach (var row in _dictionary.TakeRows()) AddRow(row);
+        _updates.Add(_dictionary.Update);
     }
 
     private CustomAction? CustomOf(AppSettings settings) => ActionsViewModel.Custom(settings, Id);

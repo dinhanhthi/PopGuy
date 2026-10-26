@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using PopGuy.Core.Actions;
+using PopGuy.Core.Dictionaries;
 using PopGuy.Core.Json;
 using PopGuy.Core.Library;
 using PopGuy.Core.Providers;
@@ -29,9 +30,10 @@ internal sealed record BuiltinInfo(string Title, string Symbol, string Subtitle)
 
 /// <summary>
 /// The state and checks behind Settings → Actions (macOS ActionsView.swift): which cards show for the search and type
-/// filter, the settings changes the cards make, the model Check, and the Speak card's voice lists, saved cloud speech
-/// keys and preview. Keys are read from the secret store (Credential Manager) for a check only, off the UI thread, and
-/// never kept or logged. UI thread only, except where noted.
+/// filter, the settings changes the cards make, the model Check, the Speak card's voice lists, saved cloud speech
+/// keys and preview, and the Look up card's Babylon files and their indexes (built off the UI thread). Keys are read
+/// from the secret store (Credential Manager) for a check only, off the UI thread, and never kept or logged. UI thread
+/// only, except where noted.
 /// </summary>
 internal sealed class ActionsViewModel
 {
@@ -166,9 +168,8 @@ internal sealed class ActionsViewModel
         (ActionTypeFilter.FromPlugin, "From Plugin"),
     ];
 
-    /// <summary>Every action with a card, in action order: Look up has none yet.</summary>
-    public static IReadOnlyList<ActionIdentifier> CardIds(AppSettings settings) =>
-        [.. settings.ActionOrder.Where(id => id.Type is not ActionIdentifierType.Dictionary)];
+    /// <summary>Every action with a card, in action order (all of them).</summary>
+    public static IReadOnlyList<ActionIdentifier> CardIds(AppSettings settings) => settings.ActionOrder;
 
     /// <summary>
     /// The cards that match <paramref name="filter"/> and <paramref name="query"/> (trimmed, case-insensitive, in the
@@ -368,6 +369,107 @@ internal sealed class ActionsViewModel
             return [];
         }
     }
+
+    // Look up card (macOS DictionaryCardView and DictionaryConfigFields; the Babylon card of macOS's Providers tab).
+
+    /// <summary>The dictionary settings <paramref name="id"/> looks up with: Look up's own, or a custom Dictionary action's.</summary>
+    public static DictionaryConfig DictionaryOf(AppSettings settings, ActionIdentifier id) =>
+        id.Type == ActionIdentifierType.Dictionary ? settings.DictionaryConfig : Custom(settings, id)?.DictionaryConfig ?? new DictionaryConfig();
+
+    public static AppSettings WithDictionary(AppSettings settings, ActionIdentifier id, Func<DictionaryConfig, DictionaryConfig> change) =>
+        id.Type == ActionIdentifierType.Dictionary
+            ? settings with { DictionaryConfig = change(settings.DictionaryConfig) }
+            : WithCustom(settings, id, a => a with { DictionaryConfig = change(a.DictionaryConfig) });
+
+    /// <summary>
+    /// Adds the picked .bgl files (macOS loadBGLDictionaries): each is indexed off the UI thread first, and only the
+    /// ones that index are added, enabled; a file already in the list is replaced (its old index deleted). Returns one
+    /// line per file that failed ("name: reason"), or null.
+    /// </summary>
+    public async Task<string?> AddBabylonAsync(IReadOnlyList<string> paths)
+    {
+        var loaded = new List<BabylonDictionary>();
+        var failed = new List<string>();
+        foreach (var path in paths)
+        {
+            var dictionary = new BabylonDictionary
+            {
+                Id = Guid.NewGuid(),
+                DisplayName = Path.GetFileNameWithoutExtension(path),
+                FilePath = path,
+                IsEnabled = true,
+                EntryCount = 0,
+            };
+            try
+            {
+                var count = await BabylonIndexCache.Shared.PrepareAsync(dictionary, CancellationToken.None);
+                loaded.Add(dictionary with { EntryCount = (int)Math.Min(count, int.MaxValue) });
+            }
+            catch (Exception e)
+            {
+                _ = BabylonIndexCache.Shared.RemoveAsync(dictionary.Id);
+                _log($"babylon: file not indexed, {e.GetType().Name}");
+                failed.Add($"{Path.GetFileName(path)}: {IndexError(e)}");
+            }
+        }
+
+        if (loaded.Count > 0)
+        {
+            var added = loaded.Select(d => d.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var replaced = _settings.Current.BabylonDictionaries.Where(d => added.Contains(d.FilePath)).Select(d => d.Id).ToList();
+            if (Save("babylonDictionaries", s => s with
+                {
+                    BabylonDictionaries = [.. s.BabylonDictionaries.Where(d => !added.Contains(d.FilePath)), .. loaded],
+                }))
+            {
+                foreach (var id in replaced) _ = BabylonIndexCache.Shared.RemoveAsync(id);
+            }
+        }
+        return failed.Count == 0 ? null : string.Join("\n", failed);
+    }
+
+    /// <summary>Removes a .bgl file from the list and deletes its index (off the UI thread).</summary>
+    public void RemoveBabylon(Guid id)
+    {
+        if (Save("babylonDictionaries", s => s with { BabylonDictionaries = [.. s.BabylonDictionaries.Where(d => d.Id != id)] }))
+            _ = BabylonIndexCache.Shared.RemoveAsync(id);
+    }
+
+    public static AppSettings WithBabylon(AppSettings settings, Guid id, Func<BabylonDictionary, BabylonDictionary> change) =>
+        settings with { BabylonDictionaries = [.. settings.BabylonDictionaries.Select(d => d.Id == id ? change(d) : d)] };
+
+    /// <summary>
+    /// The file's entry count, its index built first when missing or stale (the file changed), off the UI thread; or
+    /// the reason it cannot be indexed.
+    /// </summary>
+    public async Task<(long? Count, string? Error)> BabylonStatusAsync(BabylonDictionary dictionary)
+    {
+        try
+        {
+            return (await BabylonIndexCache.Shared.PrepareAsync(dictionary, CancellationToken.None), null);
+        }
+        catch (Exception e)
+        {
+            _log($"babylon: index status failed, {e.GetType().Name}");
+            return (null, IndexError(e));
+        }
+    }
+
+    /// <summary>A language code as typed (macOS normalizedLanguageCode): trimmed, '_' as '-', lower-cased, 20 characters at most.</summary>
+    public static string NormalizedLanguageCode(string raw)
+    {
+        var code = raw.Trim().Replace('_', '-').ToLowerInvariant();
+        return code.Length > 20 ? code[..20] : code;
+    }
+
+    /// <summary>Why a .bgl file cannot be indexed, for the card (never a path).</summary>
+    private static string IndexError(Exception e) => e switch
+    {
+        DictionaryLookupException lookup => lookup.Message,
+        UnauthorizedAccessException => "PopGuy is not allowed to read this file.",
+        IOException => "The file or its index could not be read or written.",
+        _ => "The dictionary could not be indexed.",
+    };
 
     // Model check (macOS ModelField.runCheck).
 

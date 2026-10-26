@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Net;
 using System.Text;
+using Microsoft.Data.Sqlite;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Dictionaries;
 using PopGuy.Core.Providers;
@@ -360,6 +361,47 @@ public sealed class DictionaryTests : IDisposable
 
         File.SetLastWriteTimeUtc(dictionary.FilePath, modified.AddMinutes(1));
         Assert.Equal("secnd", Assert.Single(await cache.LookupAsync(dictionary, "hello", Ct)).Definition);
+    }
+
+    // A damaged index whose meta row is still valid (here: no terms table) is rebuilt, not a failed lookup.
+    [Fact]
+    public async Task BabylonDamagedIndexIsRebuilt()
+    {
+        var dictionary = Babylon(WriteBgl(EntryBlock(1, "hello", "first")));
+        var directory = Path.Combine(_root, "BabylonIndexes");
+        var cache = new BabylonIndexCache(directory);
+        Assert.Single(await cache.LookupAsync(dictionary, "hello", Ct));
+
+        var index = Path.Combine(directory, $"{dictionary.Id.ToString().ToUpperInvariant()}.sqlite");
+        using (var connection = new SqliteConnection($"Data Source={index};Pooling=False"))
+        {
+            connection.Open();
+            using var drop = connection.CreateCommand();
+            drop.CommandText = "DROP TABLE terms";
+            drop.ExecuteNonQuery();
+        }
+
+        Assert.Equal("first", Assert.Single(await cache.LookupAsync(dictionary, "hello", Ct)).Definition);
+    }
+
+    // Settings builds the index when a file is added (the first lookup then reads it) and deletes it with the file.
+    [Fact]
+    public async Task BabylonIndexIsPreparedAndRemoved()
+    {
+        var dictionary = Babylon(WriteBgl([.. EntryBlock(1, "hello", "first"), .. EntryBlock(1, "world", "second")]));
+        var directory = Path.Combine(_root, "BabylonIndexes");
+        var cache = new BabylonIndexCache(directory);
+        var index = Path.Combine(directory, $"{dictionary.Id.ToString().ToUpperInvariant()}.sqlite");
+
+        Assert.Equal(2, await cache.PrepareAsync(dictionary, Ct));
+        Assert.True(File.Exists(index));
+        Assert.Equal(2, await cache.PrepareAsync(dictionary, Ct));
+
+        await cache.RemoveAsync(dictionary.Id);
+        Assert.False(File.Exists(index));
+        var missing = await Assert.ThrowsAsync<DictionaryLookupException>(
+            () => cache.PrepareAsync(dictionary with { FilePath = Path.Combine(_root, "missing.bgl") }, Ct));
+        Assert.Equal(DictionaryLookupErrorKind.Decoding, missing.Kind);
     }
 
     // A malformed or hostile file is a Decoding error, never a crash, a hang or an unbounded allocation.

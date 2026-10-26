@@ -13,6 +13,8 @@ namespace PopGuy.Core.Dictionaries;
 /// valid while its meta row matches the schema version, the dictionary id and the file's path, modification time and
 /// size; otherwise the file is parsed again and the index rebuilt in a temporary file moved into place, so a failure
 /// never leaves a half-built index. Unlike macOS, an index that cannot be written fails the lookup (no in-memory copy).
+/// Settings builds an index ahead of the lookups (<see cref="PrepareAsync"/>: when a file is added, when its card shows,
+/// and at launch) and deletes it with its file (<see cref="RemoveAsync"/>).
 /// </para>
 /// SQL is parameterized. Connections are not pooled, so no file handle outlives a lookup and the index can be replaced.
 /// </summary>
@@ -41,6 +43,39 @@ public sealed class BabylonIndexCache(string directory)
             lock (_gate)
                 return Lookup(dictionary, term);
         }, CancellationToken.None).WaitAsync(ct);
+
+    /// <summary>
+    /// Makes sure <paramref name="dictionary"/> has a valid index, building it when missing or stale, and returns its
+    /// entry count (macOS prepareIndex): Settings builds it when a file is added and shows the count, so the first
+    /// lookup does not build it inline. Throws as a lookup would (the file missing or malformed, the index unwritable).
+    /// Runs off the caller's thread, one at a time with the lookups; a cancelled caller stops waiting.
+    /// </summary>
+    public Task<long> PrepareAsync(BabylonDictionary dictionary, CancellationToken ct) =>
+        Task.Run(() =>
+        {
+            lock (_gate)
+                return Prepare(dictionary);
+        }, CancellationToken.None).WaitAsync(ct);
+
+    /// <summary>Deletes <paramref name="id"/>'s index and its side files (a removed dictionary). Never throws.</summary>
+    public Task RemoveAsync(Guid id) =>
+        Task.Run(() =>
+        {
+            lock (_gate)
+            {
+                foreach (var suffix in new[] { "sqlite", "sqlite-wal", "sqlite-shm", "sqlite.tmp" })
+                {
+                    try
+                    {
+                        File.Delete(IndexPath(id, suffix));
+                    }
+                    catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                    {
+                        // Left behind: never read again (a new dictionary gets a new id).
+                    }
+                }
+            }
+        });
 
     /// <summary>Trimmed, case and diacritics folded (the same for the index and the query): "Résumé" is "resume".</summary>
     internal static string NormalizedTerm(string term)
@@ -75,9 +110,22 @@ public sealed class BabylonIndexCache(string directory)
             ?? throw DictionaryLookupException.Decoding("Babylon index is unreadable after rebuilding it.");
     }
 
+    private long Prepare(BabylonDictionary dictionary)
+    {
+        var signature = Signature.Of(dictionary.FilePath);
+        if (TryCount(dictionary, signature) is { } count)
+            return count;
+        Build(dictionary, signature);
+        return TryCount(dictionary, signature)
+            ?? throw DictionaryLookupException.Decoding("Babylon index is unreadable after rebuilding it.");
+    }
+
     // MARK: - Read
 
-    /// <summary>The matches, or null when the index is missing, unreadable or stale.</summary>
+    /// <summary>
+    /// The matches, or null when the index is missing, unreadable, damaged or stale (a damaged index with a valid meta
+    /// row is rebuilt too).
+    /// </summary>
     private List<BabylonBglEntry>? TryRead(BabylonDictionary dictionary, Signature signature, string term)
     {
         var path = IndexPath(dictionary.Id, "sqlite");
@@ -87,39 +135,59 @@ public sealed class BabylonIndexCache(string directory)
         try
         {
             connection.Open();
-            if (!IsValid(connection, dictionary, signature))
+            if (ValidEntryCount(connection, dictionary, signature) is null)
                 return null;
+
+            using var query = connection.CreateCommand();
+            query.CommandText = """
+                SELECT e.headword, e.definition FROM terms t
+                JOIN entries e ON e.id = t.entry_id
+                WHERE t.term = $term ORDER BY e.id
+                """;
+            query.Parameters.AddWithValue("$term", term);
+            using var reader = query.ExecuteReader();
+            var entries = new List<BabylonBglEntry>();
+            while (reader.Read())
+                entries.Add(new BabylonBglEntry(reader.GetString(0), reader.GetString(1), []));
+            return entries;
         }
         catch (SqliteException)
         {
             return null;
         }
-
-        using var query = connection.CreateCommand();
-        query.CommandText = """
-            SELECT e.headword, e.definition FROM terms t
-            JOIN entries e ON e.id = t.entry_id
-            WHERE t.term = $term ORDER BY e.id
-            """;
-        query.Parameters.AddWithValue("$term", term);
-        using var reader = query.ExecuteReader();
-        var entries = new List<BabylonBglEntry>();
-        while (reader.Read())
-            entries.Add(new BabylonBglEntry(reader.GetString(0), reader.GetString(1), []));
-        return entries;
     }
 
-    private static bool IsValid(SqliteConnection connection, BabylonDictionary dictionary, Signature signature)
+    /// <summary>The index's entry count, or null when it is missing, unreadable or stale.</summary>
+    private long? TryCount(BabylonDictionary dictionary, Signature signature)
+    {
+        var path = IndexPath(dictionary.Id, "sqlite");
+        if (!File.Exists(path))
+            return null;
+        using var connection = Connection(path, SqliteOpenMode.ReadOnly);
+        try
+        {
+            connection.Open();
+            return ValidEntryCount(connection, dictionary, signature);
+        }
+        catch (SqliteException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The meta row's entry count when it matches the schema, the dictionary and the file; else null.</summary>
+    private static long? ValidEntryCount(SqliteConnection connection, BabylonDictionary dictionary, Signature signature)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT schema_version, dictionary_id, file_path, mtime, size FROM meta LIMIT 1";
+        command.CommandText = "SELECT schema_version, dictionary_id, file_path, mtime, size, entry_count FROM meta LIMIT 1";
         using var reader = command.ExecuteReader();
-        return reader.Read()
+        var valid = reader.Read()
             && reader.GetInt64(0) == SchemaVersion
             && reader.GetString(1) == IdString(dictionary.Id)
             && reader.GetString(2) == signature.FilePath
             && !reader.IsDBNull(3) && reader.GetDouble(3) == signature.ModifiedSeconds
             && !reader.IsDBNull(4) && reader.GetInt64(4) == signature.Size;
+        return valid ? reader.GetInt64(5) : null;
     }
 
     // MARK: - Build

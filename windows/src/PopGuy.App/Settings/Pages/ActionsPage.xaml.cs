@@ -26,8 +26,8 @@ namespace PopGuy.Settings.Pages;
 /// <summary>
 /// Settings → Actions (macOS ActionsView.swift, spec-3 §5.3): the toolbar layout editor
 /// (<see cref="ToolbarLayoutEditor"/>), the toolbar's Settings-button switch, the search box and type filter, then one
-/// <see cref="ActionCard"/> per action in the action order (built-ins, Speak with its <see cref="SpeakCard"/> rows, and
-/// custom actions; Look up comes in Phase 19.2). Add action and a custom card's Edit open
+/// <see cref="ActionCard"/> per action in the action order (built-ins, Speak with its <see cref="SpeakCard"/> rows, Look
+/// up with its <see cref="DictionaryCard"/> rows, and custom actions). Add action and a custom card's Edit open
 /// <see cref="CustomActionEditPanel"/> in the window's <see cref="SlideOverPanel"/>. The navigation parameter is the AppServices. A card is built once and updated on every
 /// settings change, so text being typed, a recording and the expansion survive; it is built again only when its custom
 /// action's type, title, icon, description or origin changed. Search and filter only hide cards. While a card's

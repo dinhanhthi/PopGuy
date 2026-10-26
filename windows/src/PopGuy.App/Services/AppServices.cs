@@ -153,6 +153,7 @@ internal sealed class AppServices : IDisposable
         {
             var services = new AppServices(log, paths, dispatcher);
             services._controller.Start();
+            services.PrepareBabylonIndexes();
             return services;
         }
         catch (Exception e)
@@ -167,6 +168,32 @@ internal sealed class AppServices : IDisposable
     /// <summary>DEBUG only (<c>--selftest-toolbar</c>): see <see cref="ToolbarController.ShowCanned"/>. UI thread.</summary>
     public void ShowCannedToolbar(string text, ForegroundApp source) => _controller.ShowCanned(text, source);
 #endif
+
+    /// <summary>
+    /// Builds each Babylon file's missing or stale index in the background (macOS: at launch), so the first Look up
+    /// after a .bgl file changed does not build it inline. A failure is left to the lookup (logged, never the path).
+    /// </summary>
+    private void PrepareBabylonIndexes()
+    {
+        var dictionaries = Settings.Current.BabylonDictionaries;
+        if (dictionaries.Count == 0) return;
+        _ = Task.Run(async () =>
+        {
+            foreach (var dictionary in dictionaries)
+            {
+                // Removed in Settings meanwhile: its index was deleted and must not come back.
+                if (!Settings.Current.BabylonDictionaries.Any(d => d.Id == dictionary.Id)) continue;
+                try
+                {
+                    await BabylonIndexCache.Shared.PrepareAsync(dictionary, CancellationToken.None);
+                }
+                catch (Exception e)
+                {
+                    Log.Write($"babylon: index not prepared at launch, {e.GetType().Name}");
+                }
+            }
+        });
+    }
 
     private SpeakCoordinator CreateSpeakPreview()
     {
