@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     One action's card on Settings → Actions (macOS ActionsView.swift ActionCard): a SettingsExpander, collapsed by
-    default as on macOS. The header holds the title with the Built-in or From plugin badge and the Activate, In More
-    actions and Show label switches; the icon, description and the rows of the action's kind (provider, model, tone,
+    default as on macOS. The header holds the title with the Built-in or From plugin badge, a custom action's Edit and
+    Delete, and the Activate, In More actions and Show label switches; the icon, description and the rows of the action's kind (provider, model, tone,
     language, prompt, shortcut) are set in code (ActionCard.xaml.cs), before the card is shown. The styles below give the code-built rows their theme colours.
 -->
 <UserControl
@@ -70,6 +70,31 @@
                 More actions).
             -->
             <StackPanel Orientation="Horizontal" Spacing="14">
+                <!-- A custom action's Edit and Delete (macOS ActionCard onEdit / onDelete). Delete is locked like Activate. -->
+                <StackPanel
+                    x:Name="CustomButtons"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="2"
+                    Visibility="Collapsed">
+                    <Button
+                        x:Name="EditButton"
+                        AutomationProperties.Name="Edit"
+                        Style="{StaticResource SubtleButtonStyle}">
+                        <FontIcon FontSize="14" Glyph="&#xE70F;" />
+                    </Button>
+                    <Grid x:Name="DeleteHost" Background="Transparent">
+                        <Button
+                            x:Name="DeleteButton"
+                            AutomationProperties.Name="Delete"
+                            Style="{StaticResource SubtleButtonStyle}">
+                            <FontIcon
+                                FontSize="14"
+                                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                Glyph="&#xE74D;" />
+                        </Button>
+                    </Grid>
+                </StackPanel>
                 <Grid x:Name="EnabledHost" Background="Transparent">
                     <ToggleSwitch
                         x:Name="EnabledToggle"

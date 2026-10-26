@@ -9,6 +9,7 @@ using PopGuy.Controls;
 using PopGuy.Platform.Windowing;
 using PopGuy.Services;
 using PopGuy.Settings.Pages;
+using PopGuy.Settings.Panels;
 using Windows.Graphics;
 using Windows.UI;
 using DrawingPoint = System.Drawing.Point;
@@ -20,7 +21,8 @@ namespace PopGuy.Settings;
 /// when it closes (the tray keeps PopGuy running). It opens at its saved frame (<see cref="FrameFile"/>), else 760×520
 /// centered on its display, never below 680×460 (DIPs, in physical pixels at the window's DPI). A sidebar pick switches
 /// the selection and the header at once; its page is made on a later dispatcher turn, so the click never waits for it.
-/// Pages get the <see cref="AppServices"/> as their navigation parameter. UI thread only.
+/// Pages get the <see cref="AppServices"/> as their navigation parameter; a page shows a panel over the window through
+/// its <see cref="SlideOverPanel"/>. UI thread only.
 /// </summary>
 public sealed partial class SettingsWindow : Window
 {
@@ -73,6 +75,12 @@ public sealed partial class SettingsWindow : Window
 
         _presenter = (OverlappedPresenter)AppWindow.Presenter;
         Place();
+
+        // Over the sidebar, the page and the footer, as on macOS.
+        var panels = new SlideOverPanel(
+            (Style)ContentRoot.Resources["SlideOverBackdropStyle"], (Style)ContentRoot.Resources["SlideOverSheetStyle"]);
+        Grid.SetRowSpan(panels, 2);
+        ContentRoot.Children.Add(panels);
 
         Nav.SelectionChanged += OnSelectionChanged;
         Nav.SelectedItem = Nav.MenuItems[0];

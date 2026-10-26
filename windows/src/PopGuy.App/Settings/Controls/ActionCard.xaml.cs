@@ -14,8 +14,9 @@ namespace PopGuy.Settings.Controls;
 
 /// <summary>
 /// One action's card on Settings → Actions (macOS ActionsView.swift: ActionCard and the card(for:) builders). The
-/// header: icon, title, Built-in or From plugin badge, description, and the switches Activate, locked (the reason on
-/// hover) while the action is the only enabled one, In More actions, and Show label, locked while the action is in More
+/// header: icon, title, Built-in or From plugin badge, description, a custom action's Edit and Delete (after a
+/// confirmation; locked like Activate), and the switches Activate, locked (the reason on hover) while the action is the
+/// only enabled one, In More actions, and Show label, locked while the action is in More
 /// actions (its value is kept). The rows by kind: Improve and Shorten provider, model, tone, prompt; Proofread
 /// the same without tone; Prompt provider and model; Translate provider, model, target language, tone, additional
 /// prompt; a custom AI action provider, model, its required prompt; a custom translation action as Translate. Model,
@@ -36,6 +37,8 @@ public sealed partial class ActionCard : UserControl
     private const string PromptCaption =
         "Use {{text}} for the selected text. Also available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on).";
     private const string TranslatePromptCaption = "Added on top of the default translation prompt.";
+    private const string DeleteLockedTooltip =
+        "Can't delete the only active action. The toolbar needs at least one. Turn on another action first.";
 
     /// <summary>Each row's refresh from the settings, in row order.</summary>
     private readonly List<Action<AppSettings>> _updates = [];
@@ -61,6 +64,9 @@ public sealed partial class ActionCard : UserControl
         ShowLabelToggle.Toggled += (_, _) =>
             Save("labeledActionIDs", s => ToolbarLayout.WithLabeled(s, Id, ShowLabelToggle.IsOn));
         HoverTooltip.SetText(InMoreHost, InMoreTooltip);
+        EditButton.Click += (_, _) => EditRequested?.Invoke(Id);
+        HoverTooltip.SetText(EditButton, "Edit");
+        DeleteButton.Click += async (_, _) => await ConfirmDeleteAsync();
     }
 
     internal ActionIdentifier Id { get; private set; } = ActionIdentifier.Speak;
@@ -73,6 +79,9 @@ public sealed partial class ActionCard : UserControl
 
     /// <summary>The recorder stopped, after the recorded (or cleared) shortcut was saved.</summary>
     internal event Action? RecordingEnded;
+
+    /// <summary>A custom action's Edit: the page opens the Add/Edit panel.</summary>
+    internal event Action<ActionIdentifier>? EditRequested;
 
     /// <summary>
     /// What the card is built from: a card whose signature changed is built again (a custom action's type, title, icon,
@@ -97,6 +106,7 @@ public sealed partial class ActionCard : UserControl
         else if (ActionsViewModel.Custom(current, id) is { } action)
         {
             SetHeader(ActionsViewModel.Title(current, id), action.Icon, action.ActionDescription, builtin: false, action.IsFromPlugin);
+            CustomButtons.Visibility = Visibility.Visible;
             if (action.Type == CustomActionType.Ai) CustomAiRows();
             else if (action.Type == CustomActionType.Translation) CustomTranslationRows();
         }
@@ -112,6 +122,9 @@ public sealed partial class ActionCard : UserControl
         var locked = ToolbarLayout.IsLastEnabledAction(current, Id);
         EnabledToggle.IsEnabled = !locked;
         HoverTooltip.SetText(EnabledHost, locked ? LockedTooltip : ActivateTooltip);
+        DeleteButton.IsEnabled = !locked;
+        DeleteButton.Opacity = locked ? 0.35 : 1;
+        HoverTooltip.SetText(DeleteHost, locked ? DeleteLockedTooltip : "Delete");
         var principal = ToolbarLayout.IsPrincipal(current, Id);
         InMoreToggle.IsOn = !principal;
         // Kept while in More actions, which always shows names: locked, not cleared (macOS).
@@ -154,6 +167,32 @@ public sealed partial class ActionCard : UserControl
         if (subtitle.Length > 0) Expander.Description = subtitle;
         BuiltinBadge.Visibility = Shown(builtin);
         PluginBadge.Visibility = Shown(!builtin && fromPlugin);
+    }
+
+    /// <summary>Delete after a confirmation (macOS: "Delete this action?"); the page drops the card on the settings change.</summary>
+    private async Task ConfirmDeleteAsync()
+    {
+        if (XamlRoot is null || Id.CustomId is not { } customId) return;
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Style = AppStyle("DefaultContentDialogStyle"),
+            Title = "Delete this action?",
+            Content = new TextBlock { Text = "This custom action will be permanently removed.", TextWrapping = TextWrapping.Wrap },
+            PrimaryButtonText = "Delete",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        try
+        {
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            // Another dialog is open.
+            return;
+        }
+        _model.DeleteCustomAction(customId);
     }
 
     // Rows by kind (macOS aiActionCard, translateCard, customActionCard).

@@ -58,6 +58,18 @@ public sealed record CustomAction
     public bool RunnableOnWindows => Type is not (CustomActionType.AppleScript or CustomActionType.RunShortcut);
 
     /// <summary>
+    /// Whether the editor may save it (macOS <c>isSaveable</c>, spec-3 §2.8): a non-blank title, plus a non-blank system
+    /// prompt for AI and a non-blank script source for the scriptable types.
+    /// </summary>
+    public bool IsSaveable =>
+        Title.Trim().Length > 0 && Type switch
+        {
+            CustomActionType.Ai => SystemPrompt.Trim().Length > 0,
+            CustomActionType.Translation or CustomActionType.Speech or CustomActionType.Dictionary => true,
+            _ => ScriptSource.Trim().Length > 0,
+        };
+
+    /// <summary>
     /// Whether the action shows on the toolbar for <paramref name="selection"/>. Only scriptable types with a
     /// non-empty <see cref="AppliesWhenRegex"/> filter: visible iff the regex matches the first
     /// <see cref="MaxRegexInputLength"/> characters. An invalid or timed-out pattern fails open (shown). Cosmetic

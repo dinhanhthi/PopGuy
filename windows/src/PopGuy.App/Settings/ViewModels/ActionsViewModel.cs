@@ -61,6 +61,38 @@ internal sealed class ActionsViewModel
         }
     }
 
+    /// <summary>
+    /// The editor's Save (macOS SettingsView onSave): an existing id is updated, a new action is added at the end of the
+    /// action order. A failed write is logged and false.
+    /// </summary>
+    public bool SaveCustomAction(CustomAction action)
+    {
+        try
+        {
+            if (_settings.Current.CustomActions.Any(a => a.Id == action.Id)) _settings.UpdateCustomAction(action);
+            else _settings.AddCustomAction(action);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log($"settings: custom action not saved, {e.GetType().Name}");
+            return false;
+        }
+    }
+
+    /// <summary>Removes the action with its shortcut and toolbar entries. A failed write is logged.</summary>
+    public void DeleteCustomAction(Guid id)
+    {
+        try
+        {
+            _settings.DeleteCustomAction(id);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log($"settings: custom action not deleted, {e.GetType().Name}");
+        }
+    }
+
     // Cards and filter.
 
     /// <summary>The type filter's menu (macOS displayName).</summary>

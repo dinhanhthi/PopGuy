@@ -8,6 +8,7 @@ using PopGuy.Core.Settings;
 using PopGuy.Platform.Input;
 using PopGuy.Services;
 using PopGuy.Settings.Controls;
+using PopGuy.Settings.Panels;
 using PopGuy.Settings.ViewModels;
 
 namespace PopGuy.Settings.Pages;
@@ -16,7 +17,8 @@ namespace PopGuy.Settings.Pages;
 /// Settings → Actions (macOS ActionsView.swift, spec-3 §5.3): the toolbar layout editor
 /// (<see cref="ToolbarLayoutEditor"/>), the toolbar's Settings-button switch, the search box and type filter, then one
 /// <see cref="ActionCard"/> per action in the action order (built-ins and custom actions; Speak and Look up come in
-/// Phase 19). The navigation parameter is the AppServices. A card is built once and updated on every
+/// Phase 19). Add action and a custom card's Edit open <see cref="CustomActionEditPanel"/> in the window's
+/// <see cref="SlideOverPanel"/>. The navigation parameter is the AppServices. A card is built once and updated on every
 /// settings change, so text being typed, a recording and the expansion survive; it is built again only when its custom
 /// action's type, title, icon, description or origin changed. Search and filter only hide cards. While a card's
 /// shortcut records, PopGuy's own hotkeys and chord are off (<see cref="AppServices.SetHotkeysSuspended"/>); after
@@ -41,6 +43,8 @@ public sealed partial class ActionsPage : Page
         SettingsButtonToggle.Toggled += (_, _) =>
             Save("showToolbarSettingsButton", s => s with { ShowToolbarSettingsButton = SettingsButtonToggle.IsOn });
         HoverTooltip.SetText(SettingsButtonToggle, SettingsButtonTooltip);
+        AddButton.Click += (_, _) => OpenEditor(new CustomAction { Title = "", SystemPrompt = "" });
+        HoverTooltip.SetText(AddButton, "Add action");
 
         foreach (var (_, name) in ActionsViewModel.Filters) TypeFilterBox.Items.Add(name);
         TypeFilterBox.SelectedIndex = 0;
@@ -136,6 +140,7 @@ public sealed partial class ActionsPage : Page
             card.Initialize(_model, id);
             card.RecordingStarted += OnRecordingStarted;
             card.RecordingEnded += OnRecordingEnded;
+            card.EditRequested += OnEditRequested;
             _cards[id] = (card, signature);
         }
         foreach (var gone in _cards.Keys.Except(ids).ToList())
@@ -157,6 +162,23 @@ public sealed partial class ActionsPage : Page
         var shown = ActionsViewModel.Filtered(_model.Current, _filter, SearchBox.Text).ToHashSet();
         foreach (var (id, (card, _)) in _cards)
             card.Visibility = shown.Contains(id) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // Add/Edit panel.
+
+    /// <summary>A custom card's Edit: the action as saved now.</summary>
+    private void OnEditRequested(ActionIdentifier id)
+    {
+        if (_model is not null && ActionsViewModel.Custom(_model.Current, id) is { } action) OpenEditor(action);
+    }
+
+    /// <summary>Shows the Add/Edit panel on <paramref name="action"/> at once, over the window (macOS editingAction).</summary>
+    private void OpenEditor(CustomAction action)
+    {
+        if (_model is null || SlideOverPanel.Of(this) is not { } panels) return;
+        var editor = new CustomActionEditPanel();
+        editor.Initialize(_model, action, panels);
+        panels.Present(editor, editor.InitialFocus);
     }
 
     // Shortcuts.

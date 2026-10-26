@@ -40,7 +40,18 @@
             HorizontalContentAlignment="Stretch"
             VerticalContentAlignment="Stretch"
             IsTabStop="False">
-            <Grid>
+            <!-- The slide-over panel (Panels/SlideOverPanel) is added last, in code, over both rows. -->
+            <Grid x:Name="ContentRoot">
+                <Grid.Resources>
+                    <Style x:Key="SlideOverBackdropStyle" TargetType="Border">
+                        <Setter Property="Background" Value="{ThemeResource SmokeFillColorDefaultBrush}" />
+                    </Style>
+                    <Style x:Key="SlideOverSheetStyle" TargetType="Border">
+                        <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
+                        <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorDefaultBrush}" />
+                        <Setter Property="BorderThickness" Value="1,0,0,0" />
+                    </Style>
+                </Grid.Resources>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
