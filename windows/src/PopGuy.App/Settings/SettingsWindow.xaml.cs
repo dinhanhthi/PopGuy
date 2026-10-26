@@ -32,6 +32,7 @@ public sealed partial class SettingsWindow : Window
     private static readonly Dictionary<string, (Type Page, string Glyph)> Pages = new()
     {
         ["General"] = (typeof(GeneralPage), "\uE713"),
+        ["Providers"] = (typeof(ProvidersPage), "\uE8D7"),
         ["Appearance"] = (typeof(AppearancePage), "\uE771"),
     };
 

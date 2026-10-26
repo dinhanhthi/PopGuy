@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Providers.Cli;
 
@@ -93,6 +94,54 @@ public static class ProviderKeyValidator
         request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiKey}");
         return request;
     }
+}
+
+/// <summary>
+/// Checks that a cloud TTS key authenticates before it is saved (macOS TTSProviderValidator.swift): each request lists
+/// models or voices, so no audio is synthesized. Same outcome as <see cref="ProviderKeyValidator"/>. The Settings page
+/// checks for an empty key and a missing Azure region before calling (their messages are its own).
+/// </summary>
+public static partial class TtsKeyValidator
+{
+    // Keep in sync with the TTS adapters (Phase 17).
+    private const string OpenAiModels = "https://api.openai.com/v1/models";
+    private const string GoogleVoices = "https://texttospeech.googleapis.com/v1/voices";
+
+    /// <summary>Verifies that <paramref name="apiKey"/> authenticates with <paramref name="kind"/>'s TTS API.</summary>
+    /// <param name="region">The Azure region (e.g. <c>eastus</c>); ignored for the other kinds.</param>
+    /// <param name="http">Tests inject a fake handler; the app uses <see cref="ProviderHttp.Shared"/>.</param>
+    public static async Task ValidateAsync(
+        TtsProviderKind kind, string apiKey, string? region, ProviderHttp? http = null, CancellationToken ct = default) =>
+        await (http ?? ProviderHttp.Shared).SendAsync(ValidationRequest(kind, apiKey, region), apiKey, ct);
+
+    /// <summary>
+    /// The request that verifies the key. An Azure region that is not a plain host label (letters, digits, hyphens) is
+    /// refused (MissingOption), so the key never goes to a host the region names.
+    /// </summary>
+    internal static HttpRequestMessage ValidationRequest(TtsProviderKind kind, string apiKey, string? region)
+    {
+        HttpRequestMessage request;
+        switch (kind)
+        {
+            case TtsProviderKind.GoogleCloudTts:
+                // The URL carries the key: it is never logged, and ProviderHttp redacts it from errors.
+                return new HttpRequestMessage(HttpMethod.Get, $"{GoogleVoices}?key={Uri.EscapeDataString(apiKey)}");
+            case TtsProviderKind.AzureTts:
+                if (region is null || !AzureRegion().IsMatch(region))
+                    throw ProviderError.MissingOption("Azure region");
+                request = new HttpRequestMessage(
+                    HttpMethod.Get, $"https://{region}.tts.speech.microsoft.com/cognitiveservices/voices/list");
+                request.Headers.TryAddWithoutValidation("Ocp-Apim-Subscription-Key", apiKey);
+                return request;
+            default:
+                request = new HttpRequestMessage(HttpMethod.Get, OpenAiModels);
+                request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiKey}");
+                return request;
+        }
+    }
+
+    [GeneratedRegex("^[A-Za-z0-9-]{1,63}$")]
+    private static partial Regex AzureRegion();
 }
 
 /// <summary>

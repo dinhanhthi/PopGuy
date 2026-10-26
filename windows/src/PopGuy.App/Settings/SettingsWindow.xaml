@@ -64,6 +64,11 @@
                                 <FontIcon Glyph="&#xE713;" />
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
+                        <NavigationViewItem Content="Providers" Tag="Providers">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE8D7;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
                         <NavigationViewItem Content="Appearance" Tag="Appearance">
                             <NavigationViewItem.Icon>
                                 <FontIcon Glyph="&#xE771;" />
