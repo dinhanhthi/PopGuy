@@ -2,25 +2,28 @@ using System.ComponentModel;
 using Microsoft.UI.Dispatching;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Diff;
+using PopGuy.Core.Icons;
 using PopGuy.Core.Settings;
 using PopGuy.Core.Toolbar;
 
 namespace PopGuy.Toolbar;
 
 /// <summary>
-/// One button of the inline action row: its visible label and its icon, either a Segoe Fluent Icons glyph or an emoji
-/// (exactly one is set).
+/// One action of the inline row or More actions: its title and its icon, either a Segoe Fluent Icons glyph or an emoji
+/// (exactly one is set). <paramref name="ShowsLabel"/> (labeledActionIDs): the button shows the title next to the icon,
+/// else the icon only with the title as its tooltip.
 /// </summary>
-public sealed partial record ToolbarActionItem(ActionIdentifier Id, string Label, string? Glyph, string? Emoji);
+public sealed partial record ToolbarActionItem(ActionIdentifier Id, string Label, string? Glyph, string? Emoji, bool ShowsLabel);
 
 /// <summary>
 /// The toolbar window's state (macOS <c>ToolbarViewModel.swift</c>, the UI half; the logic is Core's
 /// <see cref="ToolbarSession"/>). It shows the session's state, plus two app-level messages the session does not own:
 /// <see cref="Fail"/> (an error with no run to retry, e.g. the admin-app error) and <see cref="ShowNotice"/> (a note
-/// next to a result, e.g. "Copied instead"). The window's clicks become the <c>…Requested</c> / <see cref="ActionInvoked"/>
-/// events, which the controller handles; Regenerate, Retry, Refine and Edit go to the session directly. The prompt and
-/// refine drafts live here (the controller's Esc and outside-click rules read them). UI thread only, except the
-/// session's <c>Changed</c>, which may arrive on any thread and is marshalled here.
+/// next to a result, e.g. "Copied instead"). The layout (the inline row, More actions, the system buttons, zoom, the
+/// result font, the Translate target) is read from the settings on every presentation. The window's clicks become the
+/// <c>…Requested</c> / <see cref="ActionInvoked"/> events, which the controller handles; Regenerate, Retry, Refine and
+/// Edit go to the session directly. The prompt and refine drafts live here (the controller's Esc and outside-click rules
+/// read them). UI thread only, except the session's <c>Changed</c>, which may arrive on any thread and is marshalled here.
 /// </summary>
 public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 {
@@ -34,7 +37,16 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         nameof(RejectedHunks), nameof(ShowsMarkdownResult), nameof(IsPromptInputActive), nameof(IsRefineInputActive),
         nameof(IsEditing), nameof(IsResultEditable), nameof(ShowsEditor), nameof(ShowsEditButton), nameof(ShowsDoneButton),
         nameof(ShowsRegenerate), nameof(ShowsRefine), nameof(RefineEnabled), nameof(ShowsPromptDivider),
-        nameof(ShowsReadView),
+        nameof(ShowsReadView), nameof(IsConfirmingIgnore), nameof(ShowsSystemGroup),
+    ];
+
+    /// <summary>The properties read from the settings; raised together on every presentation.</summary>
+    private static readonly string[] LayoutProperties =
+    [
+        nameof(Actions), nameof(OverflowActions), nameof(HasOverflow), nameof(ShowsMoreDivider), nameof(ShowsLogo),
+        nameof(ShowsIgnoreApp), nameof(CanIgnoreApp), nameof(ShowsIgnoreDivider), nameof(ShowsSettingsButton),
+        nameof(ShowsSettingsDivider), nameof(ShowsSystemGap), nameof(ShowsSystemGroup), nameof(Zoom),
+        nameof(ResultFontSize), nameof(ResultLineHeight), nameof(TargetLanguage),
     ];
 
     private readonly ToolbarSession _session;
@@ -47,7 +59,17 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     private string _notice = "";
     private bool _confirmingClose;
     private IReadOnlyList<ToolbarActionItem> _actions = [];
+    private IReadOnlyList<ToolbarActionItem> _overflow = [];
     private bool _showsLogo = true;
+    private bool _showsIgnoreApp;
+    private bool _canIgnoreApp;
+    private bool _showsSettingsButton;
+    private bool _inlineSystemButtons;
+    private bool _confirmingIgnore;
+    private double _zoom = 1;
+    private ResultFontSize _resultFontSize = Core.Settings.ResultFontSize.Normal;
+    private bool _zoomIncludesFontSize = true;
+    private TargetLanguage _targetLanguage = TargetLanguages.English;
     private bool _isEditable;
     private bool _preserveFormatting;
     private bool _detached;
@@ -96,26 +118,76 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// <summary>"Turn This Setting Off" in the close confirmation: the controller turns confirmCloseAfterResult off and closes.</summary>
     public event Action? DisableCloseConfirmationRequested;
 
-    /// <summary>The inline row (<see cref="ToolbarLayout.PrincipalOrdered"/>), in order.</summary>
-    public IReadOnlyList<ToolbarActionItem> Actions
-    {
-        get => _actions;
-        private set
-        {
-            _actions = value;
-            Raise(nameof(Actions));
-        }
-    }
+    /// <summary>"Ignore App" in the ignore confirmation: the controller adds the source app to the ignored apps and closes.</summary>
+    public event Action? IgnoreAppRequested;
 
-    public bool ShowsLogo
+    /// <summary>The Settings button (macOS: opens Settings and closes the toolbar).</summary>
+    public event Action? SettingsRequested;
+
+    /// <summary>The inline row (<see cref="ToolbarLayout.PrincipalOrdered"/>), in order.</summary>
+    public IReadOnlyList<ToolbarActionItem> Actions => _actions;
+
+    /// <summary>More actions (<see cref="ToolbarLayout.OverflowOrdered"/>), in order.</summary>
+    public IReadOnlyList<ToolbarActionItem> OverflowActions => _overflow;
+
+    /// <summary>The More actions button shows when at least one action is in it.</summary>
+    public bool HasOverflow => _overflow.Count > 0;
+
+    /// <summary>A divider between the last inline action and More actions (macOS: none before the first control).</summary>
+    public bool ShowsMoreDivider => HasOverflow && _actions.Count > 0;
+
+    public bool ShowsLogo => _showsLogo;
+
+    /// <summary>"Ignore this app" (ignoredAppsEnabled).</summary>
+    public bool ShowsIgnoreApp => _showsIgnoreApp;
+
+    /// <summary>The source app is known (its exe name): "Ignore this app" can add it, else the button is disabled.</summary>
+    public bool CanIgnoreApp => _canIgnoreApp;
+
+    /// <summary>The Settings button (showToolbarSettingsButton).</summary>
+    public bool ShowsSettingsButton => _showsSettingsButton;
+
+    /// <summary>
+    /// The system buttons sit after a gap at the bar's right edge (macOS Spacer, only when one shows), or inline after a
+    /// divider each (inlineToolbarSystemButtons). Close always ends the bar.
+    /// </summary>
+    public bool ShowsSystemGap => (_showsIgnoreApp || _showsSettingsButton) && !_inlineSystemButtons;
+
+    public bool ShowsIgnoreDivider => _inlineSystemButtons && _showsIgnoreApp && HasActionControls;
+
+    public bool ShowsSettingsDivider => _inlineSystemButtons && _showsSettingsButton && (HasActionControls || _showsIgnoreApp);
+
+    /// <summary>The system buttons or Close show (an empty group would add its margin to the bar).</summary>
+    public bool ShowsSystemGroup => _showsIgnoreApp || _showsSettingsButton || ShowsClose;
+
+    /// <summary>The toolbar zoom (toolbarZoom): the whole card scales, and the window with it.</summary>
+    public double Zoom => _zoom;
+
+    /// <summary>
+    /// The result text's font size (resultFontSize: the Caption, Body and Body Large sizes). With zoomIncludesFontSize
+    /// off it stays at that size whatever the zoom: the card's scaling is undone.
+    /// </summary>
+    public double ResultFontSize => ResultFontScale * _resultFontSize switch
     {
-        get => _showsLogo;
-        private set
-        {
-            _showsLogo = value;
-            Raise(nameof(ShowsLogo));
-        }
-    }
+        Core.Settings.ResultFontSize.Small => 12,
+        Core.Settings.ResultFontSize.Big => 18,
+        _ => 14,
+    };
+
+    /// <summary>The line height that goes with <see cref="ResultFontSize"/> (the same type ramp entries).</summary>
+    public double ResultLineHeight => ResultFontScale * _resultFontSize switch
+    {
+        Core.Settings.ResultFontSize.Small => 16,
+        Core.Settings.ResultFontSize.Big => 24,
+        _ => 20,
+    };
+
+    /// <summary>The Translate picker's target, from the settings' default on each presentation (macOS: in-session only).</summary>
+    public TargetLanguage TargetLanguage => _targetLanguage;
+
+    private double ResultFontScale => _zoomIncludesFontSize ? 1 : 1 / _zoom;
+
+    private bool HasActionControls => _actions.Count > 0 || HasOverflow;
 
     /// <summary>The selection is in an editable field: Paste back is offered (spec-1 §2.5).</summary>
     public bool IsEditable
@@ -135,8 +207,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public bool IsError => _failMessage is not null || _state is ToolbarState.Error;
 
-    /// <summary>Anything below the action row (the prompt input, running, result or error).</summary>
-    public bool ShowsBody => IsPromptInputActive || IsRunning || IsResult || IsError;
+    /// <summary>Anything below the action row (the prompt input, running, result, error or the ignore confirmation).</summary>
+    public bool ShowsBody => IsPromptInputActive || IsRunning || IsResult || IsError || IsConfirmingIgnore;
 
     /// <summary>Close is hidden while running: Stop is the explicit exit then (spec-1 §3.5).</summary>
     public bool ShowsClose => !IsRunning;
@@ -192,6 +264,9 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// <summary>"Close without using the result?" shows below the result (spec-1 §3.8; inline, the toolbar never activates).</summary>
     public bool IsConfirmingClose => _confirmingClose && IsResult;
 
+    /// <summary>"Ignore this app?" shows below the bar (macOS: a confirmation dialog; inline, the toolbar never activates).</summary>
+    public bool IsConfirmingIgnore => _confirmingIgnore;
+
     /// <summary>The prompt input shows below the action row.</summary>
     public bool IsPromptInputActive => _promptInputActive;
 
@@ -238,16 +313,32 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     // Controller → view model.
 
     /// <summary>
-    /// A new presentation: stops any run, clears the messages and reads the inline row, the logo and the Markdown
-    /// rendering from <paramref name="settings"/> (settings apply at the next presentation, spec-1 §3.7).
+    /// A new presentation: stops any run, clears the messages and reads the layout and the Markdown rendering from
+    /// <paramref name="settings"/> (settings apply at the next presentation, spec-1 §3.7, macOS ToolbarController).
     /// </summary>
-    public void Present(AppSettings settings, bool isEditable)
+    /// <param name="canIgnoreApp">The source app's exe name is known, so "Ignore this app" can add it.</param>
+    public void Present(AppSettings settings, bool isEditable, bool canIgnoreApp)
     {
         _session.Stop();
         PromptDraft = "";
         RefineDraft = "";
-        Actions = [.. ToolbarLayout.PrincipalOrdered(settings).Select(id => ItemFor(settings, id)).OfType<ToolbarActionItem>()];
-        ShowsLogo = !settings.HideToolbarLogo;
+        _actions = Items(settings, ToolbarLayout.PrincipalOrdered(settings));
+        _overflow = Items(settings, ToolbarLayout.OverflowOrdered(settings));
+        _showsLogo = !settings.HideToolbarLogo;
+        _showsIgnoreApp = settings.IgnoredAppsEnabled;
+        _canIgnoreApp = canIgnoreApp;
+        _showsSettingsButton = settings.ShowToolbarSettingsButton;
+        _inlineSystemButtons = settings.InlineToolbarSystemButtons;
+        _zoom = settings.ToolbarZoom switch
+        {
+            ToolbarZoom.X1_2 => 1.2,
+            ToolbarZoom.X1_3 => 1.3,
+            _ => 1,
+        };
+        _resultFontSize = settings.ResultFontSize;
+        _zoomIncludesFontSize = settings.ZoomIncludesFontSize;
+        _targetLanguage = TargetLanguages.FromCode(settings.DefaultTargetLanguage);
+        foreach (var name in LayoutProperties) Raise(name);
         _preserveFormatting = settings.PreserveFormatting;
         IsEditable = isEditable;
         ClearMessages();
@@ -382,6 +473,32 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public void RequestDisableCloseConfirmation() => DisableCloseConfirmationRequested?.Invoke();
 
+    /// <summary>"Ignore this app": asks first (macOS confirmation dialog).</summary>
+    public void RequestIgnoreApp()
+    {
+        _confirmingIgnore = true;
+        Refresh();
+    }
+
+    /// <summary>"Ignore App" in the confirmation.</summary>
+    public void ConfirmIgnoreApp() => IgnoreAppRequested?.Invoke();
+
+    /// <summary>"Cancel" in the ignore confirmation: it goes, the toolbar stays.</summary>
+    public void CancelIgnoreApp()
+    {
+        _confirmingIgnore = false;
+        Refresh();
+    }
+
+    public void RequestSettings() => SettingsRequested?.Invoke();
+
+    /// <summary>A pick in the Translate picker: the next Translate uses it (it does not run; macOS parity).</summary>
+    public void SetTargetLanguage(TargetLanguage language)
+    {
+        _targetLanguage = language;
+        Raise(nameof(TargetLanguage));
+    }
+
     /// <summary>The Diff/Text toggle: shows the inline diff (<paramref name="show"/>) or the merged text.</summary>
     public void SetShowDiff(bool show)
     {
@@ -413,6 +530,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         _failMessage = null;
         _notice = "";
         _confirmingClose = false;
+        _confirmingIgnore = false;
     }
 
     private void Refresh()
@@ -433,18 +551,21 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     // The row's labels and icons (macOS ToolbarView.actionControl).
 
-    private static ToolbarActionItem? ItemFor(AppSettings settings, ActionIdentifier id)
+    private static IReadOnlyList<ToolbarActionItem> Items(AppSettings settings, IReadOnlyList<ActionIdentifier> ids) =>
+        [.. ids.Select(id => ItemFor(settings, id, settings.LabeledActionIds.Contains(id))).OfType<ToolbarActionItem>()];
+
+    private static ToolbarActionItem? ItemFor(AppSettings settings, ActionIdentifier id, bool showsLabel)
     {
         switch (id.Type)
         {
             case ActionIdentifierType.Builtin:
                 return id.BuiltinKind switch
                 {
-                    ActionKind.Improve => Builtin(id, "Improve", "wand.and.stars"),
-                    ActionKind.Shorten => Builtin(id, "Shorten", "text.badge.minus"),
-                    ActionKind.Proofread => Builtin(id, "Proofread", "checkmark.bubble"),
-                    ActionKind.Prompt => Builtin(id, "Prompt", "bubble.and.pencil"),
-                    ActionKind.Translate => Builtin(id, "Translate", "character.bubble"),
+                    ActionKind.Improve => Builtin(id, "Improve", "wand.and.stars", showsLabel),
+                    ActionKind.Shorten => Builtin(id, "Shorten", "text.badge.minus", showsLabel),
+                    ActionKind.Proofread => Builtin(id, "Proofread", "checkmark.bubble", showsLabel),
+                    ActionKind.Prompt => Builtin(id, "Prompt", "bubble.and.pencil", showsLabel),
+                    ActionKind.Translate => Builtin(id, "Translate", "character.bubble", showsLabel),
                     _ => null,
                 };
             case ActionIdentifierType.Speak or ActionIdentifierType.Dictionary:
@@ -454,28 +575,11 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
                 var custom = settings.CustomActions.FirstOrDefault(a => a.Id == id.CustomId);
                 if (custom is null) return null;
                 return custom.Icon.Type == ActionIconType.Emoji
-                    ? new ToolbarActionItem(id, custom.Title, null, custom.Icon.Value)
-                    : new ToolbarActionItem(id, custom.Title, Glyph(custom.Icon.Value), null);
+                    ? new ToolbarActionItem(id, custom.Title, null, custom.Icon.Value, showsLabel)
+                    : new ToolbarActionItem(id, custom.Title, SymbolMap.Glyph(custom.Icon.Value), null, showsLabel);
         }
     }
 
-    private static ToolbarActionItem Builtin(ActionIdentifier id, string label, string sfSymbol) => new(id, label, Glyph(sfSymbol), null);
-
-    /// <summary>
-    /// The Segoe Fluent Icons glyph for an SF Symbol name: the built-ins' symbols and a few common ones; anything else
-    /// gets the star (the default custom icon is "sparkles").
-    /// </summary>
-    internal static string Glyph(string sfSymbol) => sfSymbol switch
-    {
-        "wand.and.stars" => "\uE70F", // Edit
-        "text.badge.minus" => "\uE738", // Remove
-        "checkmark.bubble" or "checkmark" => "\uE73E", // CheckMark
-        "bubble.and.pencil" or "text.bubble" => "\uE8F2", // ChatBubbles
-        "character.bubble" or "globe" => "\uE774", // Globe
-        "character.book.closed" or "book" => "\uE82D", // Dictionary
-        "speaker.wave.2" => "\uE767", // Volume
-        "doc.on.doc" => "\uE8C8", // Copy
-        "pencil" => "\uE70F", // Edit
-        _ => "\uE734", // FavoriteStar (sparkles, star and unknown names)
-    };
+    private static ToolbarActionItem Builtin(ActionIdentifier id, string label, string sfSymbol, bool showsLabel) =>
+        new(id, label, SymbolMap.Glyph(sfSymbol), null, showsLabel);
 }

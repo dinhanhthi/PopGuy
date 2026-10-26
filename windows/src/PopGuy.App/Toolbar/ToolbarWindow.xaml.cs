@@ -5,9 +5,14 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Shapes;
+using PopGuy.Controls;
+using PopGuy.Core.Actions;
 using PopGuy.Core.Text;
 using PopGuy.Core.Toolbar;
 using PopGuy.Platform.SystemServices;
@@ -25,9 +30,10 @@ namespace PopGuy.Toolbar;
 /// source app (the app whose text is selected). Tier 1 of the plan, lifted from the Phase 3 spike: WS_EX_NOACTIVATE
 /// plus <c>AllowFocusOnInteraction="False"</c> buttons, a WM_MOUSEACTIVATE → MA_NOACTIVATE subclass on every HWND, and
 /// a foreground hand-back after each press. Text input (the prompt, refine and edit boxes) is the one exception: the
-/// toolbar is activated for it and gives the foreground back when it ends (see <see cref="EndTextInput"/>). It shows
-/// <see cref="ViewModel"/>; the controller wires the view model's events and calls <see cref="ShowAt"/> and
-/// <see cref="Hide"/>. Points and rects are physical screen pixels. UI thread only.
+/// toolbar is activated for it and gives the foreground back when it ends (see <see cref="EndTextInput"/>). The menus
+/// (More actions, the Translate picker) are popup windows that take the foreground while open; it goes back when they
+/// close. It shows <see cref="ViewModel"/>; the controller wires the view model's events and calls <see cref="ShowAt"/>
+/// and <see cref="Hide"/>. Points and rects are physical screen pixels. UI thread only.
 /// </summary>
 public sealed partial class ToolbarWindow : Window
 {
@@ -47,6 +53,8 @@ public sealed partial class ToolbarWindow : Window
     /// <summary>How often a drag reads the pointer (the window cannot capture it while it is not the foreground).</summary>
     private static readonly TimeSpan DragPollInterval = TimeSpan.FromMilliseconds(15);
 
+    private static readonly ActionIdentifier TranslateId = ActionIdentifier.Builtin(ActionKind.Translate);
+
     private readonly DispatcherQueueTimer _dragTimer;
     private readonly DispatcherQueueTimer _copiedTimer;
     private readonly DiffView _diffView;
@@ -54,6 +62,18 @@ public sealed partial class ToolbarWindow : Window
     private bool _closed;
     private bool _dragging;
     private XamlRoot? _xamlRoot;
+
+    /// <summary>The action row's buttons (the actions and the Translate picker): disabled while an action runs.</summary>
+    private readonly List<Button> _rowButtons = [];
+
+    /// <summary>The Translate picker's menu and code, while Translate is on the row.</summary>
+    private MenuFlyout? _languageMenu;
+    private TextBlock? _languageLabel;
+
+    /// <summary>A menu is open, and when the last one opened and closed (tick count, as the mouse hook's timestamps).</summary>
+    private bool _menuOpen;
+    private uint _menuOpenedAt;
+    private uint _menuClosedAt;
 
     /// <summary>The window to hand the foreground back to: the source, or the foreground window at the last press.</summary>
     private nint _handBackTo;
@@ -128,6 +148,20 @@ public sealed partial class ToolbarWindow : Window
         PromptCancelButton.Click += OnPromptCancelClick;
         RefineRunButton.Click += OnRefineRunClick;
         RefineCancelButton.Click += OnRefineCancelClick;
+        SettingsButton.Click += OnSettingsClick;
+        IgnoreAppButton.Click += OnIgnoreAppClick;
+        IgnoreConfirmButton.Click += OnIgnoreConfirmClick;
+        IgnoreCancelButton.Click += OnIgnoreCancelClick;
+        MoreMenu.Opening += OnMoreMenuOpening;
+        MoreMenu.Closed += OnMenuClosed;
+        // The icon-only buttons' titles (the actions get theirs with the row); macOS toolbarTooltip.
+        HoverTooltip.SetText(MoreButton, "More actions");
+        HoverTooltip.SetText(IgnoreAppButton, "Ignore this app");
+        HoverTooltip.SetText(SettingsButton, "Settings");
+        HoverTooltip.SetText(CloseButton, "Close");
+        HoverTooltip.SetText(RegenerateButton, "Regenerate");
+        HoverTooltip.SetText(RefineButton, "Refine");
+        HoverTooltip.SetText(DiffToggleRow, "Click a highlighted change to revert or restore it");
         PromptBox.TextChanged += OnPromptTextChanged;
         RefineBox.TextChanged += OnRefineTextChanged;
         EditBox.TextChanged += OnEditTextChanged;
@@ -206,7 +240,8 @@ public sealed partial class ToolbarWindow : Window
         if (Card.ActualWidth > 0 && Card.ActualHeight > 0) _cardSize = new(Card.ActualWidth, Card.ActualHeight);
         var scale = MonitorInfo.Scale(midpoint);
         var frame = ToolbarWindowStyle.FrameExtent(Hwnd);
-        var size = new DrawingSize(Pixels(_cardSize.Width, scale) + frame.Width, Pixels(_cardSize.Height, scale) + frame.Height);
+        var size = new DrawingSize(
+            Pixels(_cardSize.Width * ViewModel.Zoom, scale) + frame.Width, Pixels(_cardSize.Height * ViewModel.Zoom, scale) + frame.Height);
         var origin = PanelPositioning.PanelOrigin(size, selectionRect, _workArea, pointer, grewDownward);
         ToolbarWindowStyle.SetBounds(Hwnd, new DrawingRectangle(origin, size));
 
@@ -238,6 +273,9 @@ public sealed partial class ToolbarWindow : Window
         if (_closed || !IsShown) return;
         StopDrag();
         EndTextInput(handBack: false);
+        MoreMenu.Hide();
+        _languageMenu?.Hide();
+        HoverTooltip.Dismiss();
         ToolbarWindowStyle.HandBackForeground(Hwnd, _handBackTo);
         AppWindow.Hide();
         IsShown = false;
@@ -247,6 +285,14 @@ public sealed partial class ToolbarWindow : Window
 
     /// <summary>The point is on the toolbar's window (the outside-click check).</summary>
     public bool Contains(DrawingPoint point) => ToolbarWindowStyle.WindowRect(Hwnd).Contains(point);
+
+    /// <summary>
+    /// A menu was open at <paramref name="timestamp"/> (the mouse hook's tick count): the press was on the menu, or
+    /// closed it, and is not an outside click (macOS: a click outside an open menu only closes the menu). By time, since
+    /// the hook's press may be handled after the menu closed.
+    /// </summary>
+    public bool WasMenuOpenAt(uint timestamp) =>
+        (int)(timestamp - _menuOpenedAt) >= 0 && (_menuOpen || (int)(_menuClosedAt - timestamp) >= 0);
 
     // Text input: the only time the toolbar is activated on purpose (spike 3.5: the activation region answers
     // MA_ACTIVATE for a click in the box, and SetForegroundWindow right after the user's click or hotkey is the second
@@ -392,42 +438,174 @@ public sealed partial class ToolbarWindow : Window
         if (!_closed && ViewModel.IsEditing) ViewModel.SetEditText(LineEndings.ToLf(EditBox.Text));
     }
 
-    // The action row: built from the view model's items (the row is dynamic, from the settings).
+    // The action row: built from the view model's items (the row is dynamic, from the settings). A divider goes between
+    // two actions, and Translate carries its target-language picker (macOS actionBar).
 
     private void RebuildActionRow()
     {
-        foreach (var child in ActionRow.Children)
+        foreach (var button in _rowButtons) button.Click -= OnActionClick;
+        _rowButtons.Clear();
+        if (_languageMenu is not null)
         {
-            if (child is Button old) old.Click -= OnActionClick;
+            _languageMenu.Opening -= OnLanguageMenuOpening;
+            _languageMenu.Closed -= OnMenuClosed;
+            ClearMenu(_languageMenu);
+            _languageMenu = null;
+            _languageLabel = null;
         }
         ActionRow.Children.Clear();
-        var symbols = Application.Current.Resources.TryGetValue("SymbolThemeFontFamily", out var found) && found is FontFamily family
-            ? family
-            : new FontFamily("Segoe Fluent Icons");
         foreach (var item in ViewModel.Actions)
         {
-            FrameworkElement icon = item.Emoji is { } emoji
-                ? new TextBlock { Text = emoji, VerticalAlignment = VerticalAlignment.Center }
-                : new FontIcon
-                {
-                    FontFamily = symbols,
-                    FontSize = 14,
-                    Glyph = item.Glyph ?? "",
-                };
-            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            content.Children.Add(icon);
-            content.Children.Add(new TextBlock { Text = item.Label, VerticalAlignment = VerticalAlignment.Center });
-            var button = new Button
+            if (ActionRow.Children.Count > 0) ActionRow.Children.Add(Divider());
+            var button = ActionButton(item);
+            if (item.Id != TranslateId)
             {
-                Content = content,
-                Tag = item,
-                AllowFocusOnInteraction = false,
-                VerticalAlignment = VerticalAlignment.Center,
-                IsEnabled = ViewModel.ActionsEnabled,
-            };
-            button.Click += OnActionClick;
-            ActionRow.Children.Add(button);
+                ActionRow.Children.Add(button);
+                continue;
+            }
+            var group = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+            group.Children.Add(button);
+            group.Children.Add(LanguagePicker());
+            ActionRow.Children.Add(group);
         }
+    }
+
+    /// <summary>An action's button: the icon and the title (labeledActionIDs), else the icon with the title as its tooltip.</summary>
+    private Button ActionButton(ToolbarActionItem item)
+    {
+        FrameworkElement content = Icon(item);
+        if (item.ShowsLabel)
+        {
+            var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            panel.Children.Add(content);
+            panel.Children.Add(new TextBlock { Text = item.Label, VerticalAlignment = VerticalAlignment.Center });
+            content = panel;
+        }
+        var button = new Button
+        {
+            Content = content,
+            Tag = item,
+            AllowFocusOnInteraction = false,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            IsEnabled = ViewModel.ActionsEnabled,
+        };
+        AutomationProperties.SetName(button, item.Label);
+        if (!item.ShowsLabel) HoverTooltip.SetText(button, item.Label);
+        button.Click += OnActionClick;
+        _rowButtons.Add(button);
+        return button;
+    }
+
+    /// <summary>The Translate picker (macOS LanguagePicker): the target's code; picking a language does not run Translate.</summary>
+    private Button LanguagePicker()
+    {
+        _languageLabel = new TextBlock { Text = ViewModel.TargetLanguage.Code, VerticalAlignment = VerticalAlignment.Center };
+        _languageMenu = new MenuFlyout { Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft, ShouldConstrainToRootBounds = false };
+        _languageMenu.Opening += OnLanguageMenuOpening;
+        _languageMenu.Closed += OnMenuClosed;
+        var picker = new Button
+        {
+            Content = _languageLabel,
+            Flyout = _languageMenu,
+            AllowFocusOnInteraction = false,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            IsEnabled = ViewModel.ActionsEnabled,
+        };
+        AutomationProperties.SetName(picker, "Target language");
+        _rowButtons.Add(picker);
+        return picker;
+    }
+
+    private static FrameworkElement Icon(ToolbarActionItem item) => item.Emoji is { } emoji
+        ? new TextBlock { Text = emoji, VerticalAlignment = VerticalAlignment.Center }
+        : new FontIcon { FontFamily = SymbolFont, FontSize = 14, Glyph = item.Glyph ?? "" };
+
+    private static FontFamily SymbolFont =>
+        Application.Current.Resources.TryGetValue("SymbolThemeFontFamily", out var found) && found is FontFamily family
+            ? family
+            : new FontFamily("Segoe Fluent Icons");
+
+    private static Rectangle Divider() => new()
+    {
+        Width = 1,
+        Height = 16,
+        Margin = new Thickness(2, 0, 2, 0),
+        VerticalAlignment = VerticalAlignment.Center,
+        Fill = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
+    };
+
+    // The menus: built when they open, so they show the current actions and target. While one is open, presses are not
+    // outside clicks (WasMenuOpenAt) and the press hand-back waits; the foreground goes back when it closes.
+
+    private void OnMoreMenuOpening(object? sender, object e)
+    {
+        if (_closed) return;
+        OnMenuOpening();
+        ClearMenu(MoreMenu);
+        foreach (var item in ViewModel.OverflowActions)
+        {
+            var entry = new MenuFlyoutItem
+            {
+                Text = item.Label,
+                Tag = item,
+                Icon = item.Emoji is { } emoji
+                    ? new FontIcon { FontFamily = new FontFamily("Segoe UI Emoji"), Glyph = emoji }
+                    : new FontIcon { FontFamily = SymbolFont, Glyph = item.Glyph ?? "" },
+                IsEnabled = ViewModel.ActionsEnabled,
+                AllowFocusOnInteraction = false,
+            };
+            entry.Click += OnActionClick;
+            MoreMenu.Items.Add(entry);
+        }
+    }
+
+    private void OnLanguageMenuOpening(object? sender, object e)
+    {
+        if (_closed || _languageMenu is not { } menu) return;
+        OnMenuOpening();
+        ClearMenu(menu);
+        foreach (var language in TargetLanguages.All)
+        {
+            var entry = new ToggleMenuFlyoutItem
+            {
+                Text = language.Name,
+                Tag = language,
+                IsChecked = language == ViewModel.TargetLanguage,
+                AllowFocusOnInteraction = false,
+            };
+            entry.Click += OnLanguageClick;
+            menu.Items.Add(entry);
+        }
+    }
+
+    private void OnMenuOpening()
+    {
+        _menuOpen = true;
+        _menuOpenedAt = (uint)Environment.TickCount;
+        HoverTooltip.Dismiss();
+    }
+
+    private void OnMenuClosed(object? sender, object e)
+    {
+        _menuOpen = false;
+        _menuClosedAt = (uint)Environment.TickCount;
+        if (_closed) return;
+        // After the item's click (Prompt opens its box and keeps the foreground for typing).
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!_closed && !_menuOpen && !_dragging && _textInput is null) ToolbarWindowStyle.HandBackForeground(Hwnd, _handBackTo);
+        });
+    }
+
+    private void ClearMenu(MenuFlyout menu)
+    {
+        foreach (var entry in menu.Items)
+        {
+            if (entry is not MenuFlyoutItem item) continue;
+            item.Click -= OnActionClick;
+            item.Click -= OnLanguageClick;
+        }
+        menu.Items.Clear();
     }
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
@@ -439,10 +617,23 @@ public sealed partial class ToolbarWindow : Window
                 RebuildActionRow();
                 break;
             case nameof(ToolbarViewModel.ActionsEnabled):
-                foreach (var child in ActionRow.Children)
-                {
-                    if (child is Button button) button.IsEnabled = ViewModel.ActionsEnabled;
-                }
+                foreach (var button in _rowButtons) button.IsEnabled = ViewModel.ActionsEnabled;
+                break;
+            case nameof(ToolbarViewModel.TargetLanguage):
+                if (_languageLabel is not null) _languageLabel.Text = ViewModel.TargetLanguage.Code;
+                break;
+            case nameof(ToolbarViewModel.Zoom):
+                CardScale.ScaleX = ViewModel.Zoom;
+                CardScale.ScaleY = ViewModel.Zoom;
+                FitToCard();
+                break;
+            case nameof(ToolbarViewModel.ShowsSystemGap):
+                // The gap takes the bar's spare width only before the system buttons (inline ones stay with the actions).
+                GapColumn.Width = ViewModel.ShowsSystemGap ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+                break;
+            case nameof(ToolbarViewModel.ShowsBody):
+                // macOS: while a body shows, the bar is at least its minimum width, so the gap reaches the card's edge.
+                Bar.MinWidth = ViewModel.ShowsBody ? MinBodyWidth : 0;
                 break;
             case nameof(ToolbarViewModel.IsResult):
                 if (!ViewModel.IsResult) ResetCopyButton();
@@ -496,7 +687,32 @@ public sealed partial class ToolbarWindow : Window
 
     private void OnActionClick(object sender, RoutedEventArgs e)
     {
-        if (!_closed && sender is Button { Tag: ToolbarActionItem item }) ViewModel.Invoke(item.Id);
+        if (!_closed && sender is FrameworkElement { Tag: ToolbarActionItem item }) ViewModel.Invoke(item.Id);
+    }
+
+    private void OnLanguageClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed && sender is FrameworkElement { Tag: TargetLanguage language }) ViewModel.SetTargetLanguage(language);
+    }
+
+    private void OnSettingsClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.RequestSettings();
+    }
+
+    private void OnIgnoreAppClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.RequestIgnoreApp();
+    }
+
+    private void OnIgnoreConfirmClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.ConfirmIgnoreApp();
+    }
+
+    private void OnIgnoreCancelClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.CancelIgnoreApp();
     }
 
     private void OnCloseClick(object sender, RoutedEventArgs e)
@@ -630,10 +846,11 @@ public sealed partial class ToolbarWindow : Window
     {
         if (_closed) return;
         // After the click handlers (a paste must run while PopGuy may still set the foreground). Not during text input
-        // (a click that opened a box): the toolbar keeps the foreground on purpose.
+        // (a click that opened a box): the toolbar keeps the foreground on purpose; nor while a menu the click opened is
+        // up (it hands back when it closes).
         DispatcherQueue.TryEnqueue(() =>
         {
-            if (!_closed && !_dragging && _textInput is null) ToolbarWindowStyle.HandBackForeground(Hwnd, _handBackTo);
+            if (!_closed && !_dragging && !_menuOpen && _textInput is null) ToolbarWindowStyle.HandBackForeground(Hwnd, _handBackTo);
         });
     }
 
@@ -759,10 +976,11 @@ public sealed partial class ToolbarWindow : Window
         var scale = _xamlRoot.RasterizationScale;
         if (scale <= 0 || !double.IsFinite(scale)) return;
         _cardSize = new(Card.ActualWidth, Card.ActualHeight);
-        // The window is the card plus the frame Windows keeps around the client area.
+        // The window is the zoomed card (a render scale: the layout size is unscaled) plus the frame Windows keeps around
+        // the client area.
         var extent = ToolbarWindowStyle.FrameExtent(Hwnd);
-        var width = Pixels(_cardSize.Width, scale) + extent.Width;
-        var height = Pixels(_cardSize.Height, scale) + extent.Height;
+        var width = Pixels(_cardSize.Width * ViewModel.Zoom, scale) + extent.Width;
+        var height = Pixels(_cardSize.Height * ViewModel.Zoom, scale) + extent.Height;
         var frame = ToolbarWindowStyle.WindowRect(Hwnd);
         if (frame.IsEmpty || (frame.Width == width && frame.Height == height)) return;
 
@@ -802,15 +1020,26 @@ public sealed partial class ToolbarWindow : Window
         PromptCancelButton.Click -= OnPromptCancelClick;
         RefineRunButton.Click -= OnRefineRunClick;
         RefineCancelButton.Click -= OnRefineCancelClick;
+        SettingsButton.Click -= OnSettingsClick;
+        IgnoreAppButton.Click -= OnIgnoreAppClick;
+        IgnoreConfirmButton.Click -= OnIgnoreConfirmClick;
+        IgnoreCancelButton.Click -= OnIgnoreCancelClick;
+        MoreMenu.Opening -= OnMoreMenuOpening;
+        MoreMenu.Closed -= OnMenuClosed;
+        ClearMenu(MoreMenu);
+        HoverTooltip.Dismiss();
         PromptBox.TextChanged -= OnPromptTextChanged;
         RefineBox.TextChanged -= OnRefineTextChanged;
         EditBox.TextChanged -= OnEditTextChanged;
         PromptBox.PreviewKeyDown -= OnInputPreviewKeyDown;
         RefineBox.PreviewKeyDown -= OnInputPreviewKeyDown;
         Activated -= OnActivated;
-        foreach (var child in ActionRow.Children)
+        foreach (var button in _rowButtons) button.Click -= OnActionClick;
+        if (_languageMenu is not null)
         {
-            if (child is Button button) button.Click -= OnActionClick;
+            _languageMenu.Opening -= OnLanguageMenuOpening;
+            _languageMenu.Closed -= OnMenuClosed;
+            ClearMenu(_languageMenu);
         }
         ViewModel.PropertyChanged -= OnViewModelChanged;
         ViewModel.Detach();

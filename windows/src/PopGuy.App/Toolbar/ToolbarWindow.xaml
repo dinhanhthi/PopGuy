@@ -4,9 +4,10 @@
     so its size is the window's (top edge fixed). Every button has AllowFocusOnInteraction="False": focus would activate
     the window and take the foreground from the source app. Only the text boxes (prompt, refine, edit) take focus: the
     window activates for them on purpose (ToolbarWindow's text input). The card's background is Transparent, never
-    unset: an unset background does not hit-test, and the padding is the drag handle. No tooltips anywhere (the buttons
-    carry labels or an automation name); the selectable text blocks and the text boxes have no context or selection
-    flyout (their command bars attach default tooltips).
+    unset: an unset background does not hit-test, and the padding is the drag handle. Tooltips come only from HoverTooltip
+    (set in code on every icon-only button, whose automation name is its title), never the default ones; the selectable
+    text blocks and the text boxes have no context or selection flyout (their command bars attach default tooltips). The
+    zoom is a scale on the card: the window is sized to the scaled card.
 -->
 <Window
     x:Class="PopGuy.Toolbar.ToolbarWindow"
@@ -17,39 +18,125 @@
     <!-- No background: the acrylic backdrop shows through. -->
     <Canvas x:Name="RootCanvas">
         <StackPanel x:Name="Card" Background="Transparent">
+            <StackPanel.RenderTransform>
+                <ScaleTransform x:Name="CardScale" />
+            </StackPanel.RenderTransform>
 
-            <!-- Action bar: logo, the inline actions (built in code from the settings), Close. -->
-            <StackPanel
+            <!--
+                Action bar (macOS actionBar): the logo, the inline actions with a divider between each (built in code from
+                the settings), More actions, then the system buttons and Close. The system buttons follow a gap that the
+                gap column widens to the bar's right edge, or sit inline after a divider each (inlineToolbarSystemButtons;
+                the column is then Auto). While a body shows, the bar is at least the body's minimum width (set in code).
+            -->
+            <Grid
                 x:Name="Bar"
                 Padding="8,6,8,6"
-                HorizontalAlignment="Left"
-                Orientation="Horizontal"
-                Spacing="4">
-                <Image
-                    Width="26"
-                    Height="26"
-                    Margin="0,0,4,0"
-                    VerticalAlignment="Center"
-                    Source="ms-appx:///Assets/ToolbarLogo.png"
-                    Visibility="{x:Bind ViewModel.ShowsLogo, Mode=OneWay}" />
+                HorizontalAlignment="Left">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition x:Name="GapColumn" Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <Image
+                        Width="26"
+                        Height="26"
+                        Margin="0,0,4,0"
+                        VerticalAlignment="Center"
+                        Source="ms-appx:///Assets/ToolbarLogo.png"
+                        Visibility="{x:Bind ViewModel.ShowsLogo, Mode=OneWay}" />
+                    <StackPanel
+                        x:Name="ActionRow"
+                        Orientation="Horizontal"
+                        Spacing="4" />
+                    <Rectangle
+                        Width="1"
+                        Height="16"
+                        Margin="2,0,2,0"
+                        VerticalAlignment="Center"
+                        Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        Visibility="{x:Bind ViewModel.ShowsMoreDivider, Mode=OneWay}" />
+                    <!-- More actions (macOS burger menu): its items are built in code when it opens. -->
+                    <Button
+                        x:Name="MoreButton"
+                        VerticalAlignment="Stretch"
+                        AutomationProperties.Name="More actions"
+                        AllowFocusOnInteraction="False"
+                        Visibility="{x:Bind ViewModel.HasOverflow, Mode=OneWay}">
+                        <Button.Flyout>
+                            <MenuFlyout
+                                x:Name="MoreMenu"
+                                Placement="BottomEdgeAlignedLeft"
+                                ShouldConstrainToRootBounds="False" />
+                        </Button.Flyout>
+                        <FontIcon
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            FontSize="14"
+                            Glyph="&#xE700;" />
+                    </Button>
+                </StackPanel>
+                <!-- The gap before the system buttons (macOS Spacer, at least 16). -->
+                <Border
+                    Grid.Column="1"
+                    MinWidth="16"
+                    Visibility="{x:Bind ViewModel.ShowsSystemGap, Mode=OneWay}" />
+                <!-- System buttons and Close: icon only; the names are for screen readers, the tooltips are set in code. -->
                 <StackPanel
-                    x:Name="ActionRow"
-                    VerticalAlignment="Center"
+                    Grid.Column="2"
+                    Margin="4,0,0,0"
                     Orientation="Horizontal"
-                    Spacing="4" />
-                <!-- Icon only; the name is for screen readers (no tooltip). -->
-                <Button
-                    x:Name="CloseButton"
-                    VerticalAlignment="Stretch"
-                    AutomationProperties.Name="Close"
-                    AllowFocusOnInteraction="False"
-                    Visibility="{x:Bind ViewModel.ShowsClose, Mode=OneWay}">
-                    <FontIcon
-                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                        FontSize="14"
-                        Glyph="&#xE711;" />
-                </Button>
-            </StackPanel>
+                    Spacing="4"
+                    Visibility="{x:Bind ViewModel.ShowsSystemGroup, Mode=OneWay}">
+                    <Rectangle
+                        Width="1"
+                        Height="16"
+                        Margin="2,0,2,0"
+                        VerticalAlignment="Center"
+                        Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        Visibility="{x:Bind ViewModel.ShowsIgnoreDivider, Mode=OneWay}" />
+                    <Button
+                        x:Name="IgnoreAppButton"
+                        VerticalAlignment="Stretch"
+                        AutomationProperties.Name="Ignore this app"
+                        AllowFocusOnInteraction="False"
+                        IsEnabled="{x:Bind ViewModel.CanIgnoreApp, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.ShowsIgnoreApp, Mode=OneWay}">
+                        <FontIcon
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            FontSize="14"
+                            Glyph="&#xED1A;" />
+                    </Button>
+                    <Rectangle
+                        Width="1"
+                        Height="16"
+                        Margin="2,0,2,0"
+                        VerticalAlignment="Center"
+                        Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        Visibility="{x:Bind ViewModel.ShowsSettingsDivider, Mode=OneWay}" />
+                    <Button
+                        x:Name="SettingsButton"
+                        VerticalAlignment="Stretch"
+                        AutomationProperties.Name="Settings"
+                        AllowFocusOnInteraction="False"
+                        Visibility="{x:Bind ViewModel.ShowsSettingsButton, Mode=OneWay}">
+                        <FontIcon
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            FontSize="14"
+                            Glyph="&#xE713;" />
+                    </Button>
+                    <Button
+                        x:Name="CloseButton"
+                        VerticalAlignment="Stretch"
+                        AutomationProperties.Name="Close"
+                        AllowFocusOnInteraction="False"
+                        Visibility="{x:Bind ViewModel.ShowsClose, Mode=OneWay}">
+                        <FontIcon
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            FontSize="14"
+                            Glyph="&#xE711;" />
+                    </Button>
+                </StackPanel>
+            </Grid>
 
             <!-- Body: its width is set in code (the bar's width, at least 340), so the text wraps. -->
             <StackPanel x:Name="Body" Visibility="{x:Bind ViewModel.ShowsBody, Mode=OneWay}">
@@ -108,7 +195,9 @@
                         Visibility="{x:Bind ViewModel.ShowsSpinner, Mode=OneWay}" />
                     <ScrollViewer MaxHeight="280" Visibility="{x:Bind ViewModel.ShowsProgressText, Mode=OneWay}">
                         <TextBlock
+                            FontSize="{x:Bind ViewModel.ResultFontSize, Mode=OneWay}"
                             Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                            LineHeight="{x:Bind ViewModel.ResultLineHeight, Mode=OneWay}"
                             Style="{StaticResource BodyTextBlockStyle}"
                             Text="{x:Bind ViewModel.ProgressText, Mode=OneWay}"
                             TextWrapping="Wrap" />
@@ -136,8 +225,13 @@
                     Padding="12,14,12,14"
                     Spacing="8"
                     Visibility="{x:Bind ViewModel.IsResult, Mode=OneWay}">
-                    <!-- Above the result as on macOS (the button row has no room); checked states are set in code. -->
+                    <!--
+                        Above the result as on macOS (the button row has no room); checked states are set in code, and
+                        so is the row's hint tooltip.
+                    -->
                     <StackPanel
+                        x:Name="DiffToggleRow"
+                        HorizontalAlignment="Left"
                         Orientation="Horizontal"
                         Spacing="2"
                         Visibility="{x:Bind ViewModel.IsDiffResult, Mode=OneWay}">
@@ -154,8 +248,10 @@
                         <StackPanel>
                             <TextBlock
                                 ContextFlyout="{x:Null}"
+                                FontSize="{x:Bind ViewModel.ResultFontSize, Mode=OneWay}"
                                 Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                 IsTextSelectionEnabled="True"
+                                LineHeight="{x:Bind ViewModel.ResultLineHeight, Mode=OneWay}"
                                 SelectionFlyout="{x:Null}"
                                 Style="{StaticResource BodyTextBlockStyle}"
                                 Text="{x:Bind ViewModel.ResultText, Mode=OneWay}"
@@ -165,6 +261,7 @@
                             <RichTextBlock
                                 x:Name="DiffBlock"
                                 ContextFlyout="{x:Null}"
+                                FontSize="{x:Bind ViewModel.ResultFontSize, Mode=OneWay}"
                                 Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                 IsTextSelectionEnabled="True"
                                 SelectionFlyout="{x:Null}"
@@ -174,6 +271,7 @@
                             <RichTextBlock
                                 x:Name="MarkdownBlock"
                                 ContextFlyout="{x:Null}"
+                                FontSize="{x:Bind ViewModel.ResultFontSize, Mode=OneWay}"
                                 Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                 IsTextSelectionEnabled="True"
                                 SelectionFlyout="{x:Null}"
@@ -188,6 +286,7 @@
                         MaxHeight="280"
                         AcceptsReturn="True"
                         ContextFlyout="{x:Null}"
+                        FontSize="{x:Bind ViewModel.ResultFontSize, Mode=OneWay}"
                         SelectionFlyout="{x:Null}"
                         TextWrapping="Wrap"
                         Visibility="{x:Bind ViewModel.ShowsEditor, Mode=OneWay}" />
@@ -265,7 +364,7 @@
                                 <TextBlock Text="Done" />
                             </StackPanel>
                         </Button>
-                        <!-- Icon only, as on macOS (the row has no room for labels); the name is for screen readers. -->
+                        <!-- Icon only, as on macOS (the row has no room for labels); the tooltips are set in code. -->
                         <Button
                             x:Name="RegenerateButton"
                             VerticalAlignment="Stretch"
@@ -369,6 +468,32 @@
                             <TextBlock Text="Retry" />
                         </StackPanel>
                     </Button>
+                </StackPanel>
+
+                <!-- "Ignore this app?" (macOS: a confirmation dialog): inline, since the toolbar never activates. -->
+                <StackPanel
+                    Padding="12,14,12,14"
+                    Spacing="8"
+                    Visibility="{x:Bind ViewModel.IsConfirmingIgnore, Mode=OneWay}">
+                    <TextBlock
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                        Text="Ignore this app?"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="PopGuy will stop showing the toolbar in this app. You can re-enable it in Settings."
+                        TextWrapping="Wrap" />
+                    <Button
+                        x:Name="IgnoreConfirmButton"
+                        HorizontalAlignment="Stretch"
+                        AllowFocusOnInteraction="False"
+                        Content="Ignore App" />
+                    <Button
+                        x:Name="IgnoreCancelButton"
+                        HorizontalAlignment="Stretch"
+                        AllowFocusOnInteraction="False"
+                        Content="Cancel" />
                 </StackPanel>
             </StackPanel>
         </StackPanel>

@@ -15,7 +15,7 @@ namespace PopGuy.Toolbar;
 /// the Ctrl+C+C chord, the chord-replacement hotkey and the per-action hotkeys capture the selection, pass
 /// <see cref="PresentationGate"/> and show <see cref="ToolbarWindow"/> below the selection (or at the cursor); an action
 /// hotkey then runs its action (the Prompt hotkey opens the prompt input). It also handles the toolbar's clicks (actions,
-/// the prompt, Stop, Copy, Paste back, Close) and the dismissal rules of spec-1 §3.8.
+/// the prompt, Stop, Copy, Paste back, Close, Ignore this app, Settings) and the dismissal rules of spec-1 §3.8.
 /// <para>
 /// Threading: the chord and hotkey events and both input loops run on the thread pool; everything that touches the
 /// window, the view model or the presentation state runs on the UI thread (<see cref="DispatcherQueue"/>). Captures
@@ -89,6 +89,8 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.PromptCancelRequested += Hide;
         _viewModel.CloseAnywayRequested += Hide;
         _viewModel.DisableCloseConfirmationRequested += OnDisableCloseConfirmation;
+        _viewModel.IgnoreAppRequested += OnIgnoreApp;
+        _viewModel.SettingsRequested += OnSettingsRequested;
         ApplySettings();
 
         var token = _stop.Token;
@@ -113,6 +115,8 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.PromptCancelRequested -= Hide;
         _viewModel.CloseAnywayRequested -= Hide;
         _viewModel.DisableCloseConfirmationRequested -= OnDisableCloseConfirmation;
+        _viewModel.IgnoreAppRequested -= OnIgnoreApp;
+        _viewModel.SettingsRequested -= OnSettingsRequested;
         Hide();
     }
 
@@ -296,7 +300,7 @@ internal sealed class ToolbarController : IDisposable
         _current = capture;
         _presentation++;
         _pasting = false;
-        _viewModel.Present(settings, capture.IsEditable);
+        _viewModel.Present(settings, capture.IsEditable, CanIgnore(capture.Source));
         // No pointer: placed below the selection rect, or at the cursor when there is none (spec-1 §3.2).
         _window.ShowAt(pointer: null, grewDownward: null, capture.Selection, capture.Source);
         _shown = true;
@@ -319,7 +323,7 @@ internal sealed class ToolbarController : IDisposable
         _current = new CapturedSelection(text, IsEditable: true, Rectangle.Empty, source);
         _presentation++;
         _pasting = false;
-        _viewModel.Present(_settings.Current, isEditable: true);
+        _viewModel.Present(_settings.Current, isEditable: true, CanIgnore(source));
         // Before ShowAt: it sizes the window for the content it finds.
         _session.ShowCanned(text);
         _window.ShowAt(PopGuy.Platform.Windowing.ToolbarWindowStyle.CursorPosition(), grewDownward: null, Rectangle.Empty, source);
@@ -357,9 +361,13 @@ internal sealed class ToolbarController : IDisposable
             new PresentationInput(capture.Text, SourceExeName: source.Exe, IsOwnProcess: source.IsOwnProcess), settings).Verdict
             is PresentationVerdict.IgnoredApp or PresentationVerdict.IgnoredDomain;
         _log($"run: {id.Type} {id.BuiltinKind}, {capture.Text.Length} chars");
+        // The Translate picker's target; its name is {{language}} for every action (macOS: targetLanguage.rawValue).
+        var language = _viewModel.TargetLanguage;
         _viewModel.Run(new ToolbarRun(id, capture.Text)
         {
             PromptText = promptText,
+            TargetLanguage = language.Code,
+            LanguageName = language.Name,
             SourceExeName = source.IsOwnProcess ? null : source.Exe,
             SourceAppName = source.DisplayName.Length > 0 ? source.DisplayName : null,
             SkipHistory = ignored,
@@ -386,9 +394,12 @@ internal sealed class ToolbarController : IDisposable
                 if (!_shown || mouse.IsPopGuyMarker) continue;
                 if (mouse.Kind is not (MouseEventKind.LeftDown or MouseEventKind.RightDown or MouseEventKind.MiddleDown)) continue;
                 var point = new Point(mouse.X, mouse.Y);
+                var timestamp = mouse.Timestamp;
                 _dispatcher.TryEnqueue(() =>
                 {
-                    if (_window.IsShown && !_window.Contains(point)) RequestDismissKeepingDraft();
+                    // A press on an open menu (a popup window outside the toolbar's rect), or one that closed it, is not
+                    // an outside click.
+                    if (_window.IsShown && !_window.Contains(point) && !_window.WasMenuOpenAt(timestamp)) RequestDismissKeepingDraft();
                 });
             }
         }
@@ -436,6 +447,31 @@ internal sealed class ToolbarController : IDisposable
             _log($"settings: confirmCloseAfterResult not saved, {e.GetType().Name}");
         }
     }
+
+    /// <summary>
+    /// "Ignore App" in the ignore confirmation (macOS onIgnoreApp): closes first (click reacts first), then adds the
+    /// source's exe name to the ignored apps (once; the gate compares names case-insensitively).
+    /// </summary>
+    private void OnIgnoreApp()
+    {
+        var exe = _current?.Source is { } source && CanIgnore(source) ? source.Exe! : null;
+        Hide();
+        if (exe is null) return;
+        try
+        {
+            _settings.Update(s => s.IgnoredAppExeNames.Contains(exe, StringComparer.OrdinalIgnoreCase)
+                ? s
+                : s with { IgnoredAppExeNames = [.. s.IgnoredAppExeNames, exe] });
+            _log($"settings: ignored app added, {exe}");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log($"settings: ignored app not saved, {e.GetType().Name}");
+        }
+    }
+
+    /// <summary>The Settings button: the Settings window arrives in Phase 12 (macOS opens it and closes the toolbar).</summary>
+    private void OnSettingsRequested() => _log("settings: the Settings window is not available yet");
 
     // Copy and Paste back.
 
@@ -523,6 +559,9 @@ internal sealed class ToolbarController : IDisposable
     // Helpers.
 
     private static bool IsBlocked(ForegroundApp app) => app.IsElevated && !Environment.IsPrivilegedProcess;
+
+    /// <summary>"Ignore this app" needs the source's exe name (macOS: disabled without a bundle id), and never PopGuy itself.</summary>
+    private static bool CanIgnore(ForegroundApp app) => !app.IsOwnProcess && !string.IsNullOrEmpty(app.Exe);
 
     private static Rectangle FirstRect(IReadOnlyList<Rectangle> rects) =>
         rects.FirstOrDefault(r => r.Width > 0 && r.Height > 0);
