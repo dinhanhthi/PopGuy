@@ -33,15 +33,17 @@ public static class ProviderFeedback
     public const string LocalPathRequiredMessage = @"Use a local path — network (\\server\…) and \\?\ paths are not allowed.";
 
     /// <summary>
-    /// A short preview that reminds the user which key is saved without revealing it (macOS <c>maskedKeyPreview</c>):
-    /// longer than 22 characters → the first 12 + "…" + the last 10, else the first (up to) 4 + "…". Null for no key.
+    /// A short preview that reminds the user which key is saved without revealing it: at most a quarter of the key.
+    /// 28 characters or more → the first 3 (a provider prefix such as "sk-") + "…" + the last 4; 12 or more → "…" +
+    /// the last 3; shorter → "…". Null for no key. Stricter than macOS <c>maskedKeyPreview</c> (12 + 10 characters,
+    /// over half of a 36-character DeepL key).
     /// </summary>
     public static string? MaskedPreview(string? key)
     {
         if (string.IsNullOrEmpty(key)) return null;
-        const int head = 12, tail = 10;
-        if (key.Length > head + tail) return $"{key[..head]}…{key[^tail..]}";
-        return $"{key[..Math.Min(4, key.Length)]}…";
+        if (key.Length >= 28) return $"{key[..3]}…{key[^4..]}";
+        if (key.Length >= 12) return $"…{key[^3..]}";
+        return "…";
     }
 
     /// <summary>A saved-key Verify result (macOS <c>mapVerifyOutcome</c>): <paramref name="error"/> null is a success.</summary>

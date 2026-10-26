@@ -15,11 +15,11 @@ public sealed class ProviderFeedbackTests
     [Theory]
     [InlineData(null, null)]
     [InlineData("", null)]
-    [InlineData("ab", "ab…")]
-    [InlineData("abcdefgh", "abcd…")]
-    [InlineData("0123456789012345678901", "0123…")] // 22 characters: still the short form
-    [InlineData("sk-proj-sDvgXXXXXXXXXXXXXaoW2WRL8sA", "sk-proj-sDvg…aoW2WRL8sA")]
-    public void MaskedPreviewShowsHeadAndTailOnlyForLongKeys(string? key, string? expected) =>
+    [InlineData("ab", "…")]
+    [InlineData("abcdefgh", "…")]
+    [InlineData("0123456789012345678901", "…901")]
+    [InlineData("sk-proj-sDvgXXXXXXXXXXXXXaoW2WRL8sA", "sk-…L8sA")]
+    public void MaskedPreviewRevealsAtMostAQuarterOfTheKey(string? key, string? expected) =>
         Assert.Equal(expected, ProviderFeedback.MaskedPreview(key));
 
     // MARK: - Verify outcome
