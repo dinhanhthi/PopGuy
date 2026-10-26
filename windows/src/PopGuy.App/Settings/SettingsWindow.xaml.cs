@@ -132,6 +132,8 @@ public sealed partial class SettingsWindow : Window
         CompositionTarget.Rendering -= OnFirstPresentedRendering;
         _presentedTimer?.Stop();
         _backstopTimer?.Stop();
+        // Unloads the page now, so it drops its settings subscription (a closed window may never raise Unloaded).
+        ContentFrame.Content = null;
         Closed -= OnClosed;
     }
 
