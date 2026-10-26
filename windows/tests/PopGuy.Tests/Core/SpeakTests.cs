@@ -34,10 +34,11 @@ public sealed class SpeakTests
         public async Task<Stream> SynthesizeAsync(
             string text, string? voiceId, float rate, float pitch, CancellationToken ct)
         {
-            // Requests route on the thread pool, so two may overlap.
+            // Requests route on the thread pool, so two may overlap. Hold is read before the call is recorded, so a test
+            // that waits for the call knows which hold it took.
+            var hold = Hold;
             lock (Calls)
                 Calls.Add((text, voiceId));
-            var hold = Hold;
             if (hold is not null)
                 await hold.Task;
             return new MemoryStream(Encoding.UTF8.GetBytes("wav:" + text));
@@ -228,6 +229,7 @@ public sealed class SpeakTests
         var first = new TaskCompletionSource();
         system.Hold = first;
         var firstRun = speak.SpeakAsync("first", SpeakAccent.UsEnglish, new(), new());
+        await WaitUntil(() => { lock (system.Calls) return system.Calls.Count == 1; });
 
         system.Hold = null;
         var secondRun = speak.SpeakAsync("second", SpeakAccent.UsEnglish, new(), new());
