@@ -10,6 +10,9 @@ namespace PopGuy.Platform.Input;
 /// <summary>
 /// A hidden message-only window (parent HWND_MESSAGE): a target for Windows notifications sent to a window handle
 /// (clipboard updates; 3.3: hot keys, and the thread the low-level hooks run on). Handlers are added per message.
+/// With <c>topLevel</c>, a hidden top-level window instead (a popup that is never shown): only those get the messages
+/// Windows broadcasts or sends to every top-level window (WM_SETTINGCHANGE, WM_QUERYENDSESSION, WM_ENDSESSION,
+/// "TaskbarCreated"), and only such a window can be made the foreground window for a notification icon's menu.
 /// <para>
 /// Threading: the window belongs to the thread that creates it, and its handlers run there. Either create it on a
 /// thread that already pumps messages (the constructor), or with <see cref="StartOnNewThread"/>, which gives it a
@@ -50,12 +53,13 @@ internal sealed class MessageWindow : IDisposable
 
     /// <summary>Creates the window on the calling thread, which must pump messages. Throws <see cref="Win32Exception"/> if Windows refuses.</summary>
     /// <param name="log">Gets failures: handler exceptions, a failed destroy.</param>
-    internal MessageWindow(Action<string>? log = null)
-        : this(log, ownsThread: false)
+    /// <param name="topLevel">A hidden top-level window instead of a message-only one (see the class summary).</param>
+    internal MessageWindow(Action<string>? log = null, bool topLevel = false)
+        : this(log, ownsThread: false, topLevel)
     {
     }
 
-    private unsafe MessageWindow(Action<string>? log, bool ownsThread)
+    private unsafe MessageWindow(Action<string>? log, bool ownsThread, bool topLevel = false)
     {
         _log = log;
         _ownedThread = ownsThread ? Thread.CurrentThread : null;
@@ -73,8 +77,10 @@ internal sealed class MessageWindow : IDisposable
             // another window uses it.
             if (PInvoke.RegisterClassEx(windowClass) == 0) throw new Win32Exception();
 
+            // A tool window: never in the taskbar or Alt+Tab, even if something showed it.
             Handle = PInvoke.CreateWindowEx(
-                0, className, default(PCWSTR), 0, 0, 0, 0, 0, HWND.HWND_MESSAGE, HMENU.Null, _instance, null);
+                topLevel ? WINDOW_EX_STYLE.WS_EX_TOOLWINDOW : 0, className, default(PCWSTR), topLevel ? WINDOW_STYLE.WS_POPUP : 0,
+                0, 0, 0, 0, topLevel ? HWND.Null : HWND.HWND_MESSAGE, HMENU.Null, _instance, null);
             if (Handle.IsNull)
             {
                 var error = new Win32Exception();

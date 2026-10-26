@@ -21,7 +21,9 @@ public partial class App : Application
 
     private Window? _window;
     private AppServices? _services;
+    private TrayIcon? _tray;
     private DispatcherQueue? _dispatcher;
+    private bool _shutDown;
 
     public App()
     {
@@ -57,6 +59,18 @@ public partial class App : Application
         {
             // Logged by AppServices; the window stays, without triggers.
             System.Diagnostics.Debug.WriteLine($"PopGuy services did not start: {e.GetType().Name}");
+            return;
+        }
+
+        try
+        {
+            // Settings… shows the hello window until the Settings window arrives (12.2).
+            _tray = new TrayIcon(_services.Settings, _dispatcher, () => _window?.Activate(), Shutdown, _services.Log.Write);
+            _tray.SessionEnding += OnSessionEnding;
+        }
+        catch (System.ComponentModel.Win32Exception e)
+        {
+            _services.Log.Write($"tray: not created, error {e.NativeErrorCode}");
         }
     }
 
@@ -67,14 +81,32 @@ public partial class App : Application
         _dispatcher?.TryEnqueue(() => _window?.Activate());
     }
 
-    private void OnMainWindowClosed(object sender, WindowEventArgs args)
+    private void OnMainWindowClosed(object sender, WindowEventArgs args) => Shutdown();
+
+    /// <summary>
+    /// Quit PopGuy (tray) or closing the hello window: removes the tray icon, stops the services (history flushed), then
+    /// exits. UI thread, never inside the tray icon's window procedure; once.
+    /// </summary>
+    private void Shutdown()
     {
-        _window!.Closed -= OnMainWindowClosed;
+        if (_shutDown) return;
+        _shutDown = true;
+        if (_window is not null) _window.Closed -= OnMainWindowClosed;
         UnhandledException -= OnUnhandledException;
+        if (_tray is not null) _tray.SessionEnding -= OnSessionEnding;
+        _tray?.Dispose();
+        _tray = null;
         _services?.Dispose();
         _services = null;
         // The hidden toolbar window would keep the process alive.
         Exit();
+    }
+
+    /// <summary>Sign-out, shutdown or restart: the process may end once this returns, so the services stop now.</summary>
+    private void OnSessionEnding()
+    {
+        _services?.Dispose();
+        _services = null;
     }
 
     // The framework's message and the stack: an error raised inside the XAML framework names only a parameter.
