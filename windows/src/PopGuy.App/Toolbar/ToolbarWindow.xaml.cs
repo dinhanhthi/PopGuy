@@ -44,6 +44,7 @@ public sealed partial class ToolbarWindow : Window
 
     private readonly DispatcherQueueTimer _dragTimer;
     private readonly DispatcherQueueTimer _copiedTimer;
+    private readonly DiffView _diffView;
     private bool _closed;
     private bool _dragging;
     private XamlRoot? _xamlRoot;
@@ -101,6 +102,10 @@ public sealed partial class ToolbarWindow : Window
         CloseAnywayButton.Click += OnCloseAnywayClick;
         DisableConfirmButton.Click += OnDisableConfirmClick;
         KeepOpenButton.Click += OnKeepOpenClick;
+        DiffModeButton.Click += OnDiffModeClick;
+        TextModeButton.Click += OnTextModeClick;
+        _diffView = new DiffView(DiffBlock, OnHunkClick);
+        SyncDiffMode();
         ViewModel.PropertyChanged += OnViewModelChanged;
 
         // Every press and release, the buttons' (handled) too: the foreground hand-back.
@@ -262,7 +267,21 @@ public sealed partial class ToolbarWindow : Window
             case nameof(ToolbarViewModel.IsResult):
                 if (!ViewModel.IsResult) ResetCopyButton();
                 break;
+            case nameof(ToolbarViewModel.ShowDiff):
+                SyncDiffMode();
+                break;
+            case nameof(ToolbarViewModel.ShowsDiffView):
+                // Rebuilt only when the diff or the rejected hunks change (DiffView compares the snapshots).
+                if (ViewModel.ShowsDiffView) _diffView.Show(ViewModel.DiffSegments, ViewModel.RejectedHunks);
+                break;
         }
+    }
+
+    /// <summary>The Diff/Text toggle shows the view model's choice (a click toggles a ToggleButton by itself).</summary>
+    private void SyncDiffMode()
+    {
+        DiffModeButton.IsChecked = ViewModel.ShowDiff;
+        TextModeButton.IsChecked = !ViewModel.ShowDiff;
     }
 
     // Clicks.
@@ -329,6 +348,25 @@ public sealed partial class ToolbarWindow : Window
     private void OnKeepOpenClick(object sender, RoutedEventArgs e)
     {
         if (!_closed) ViewModel.KeepOpen();
+    }
+
+    private void OnDiffModeClick(object sender, RoutedEventArgs e)
+    {
+        if (_closed) return;
+        ViewModel.SetShowDiff(true);
+        SyncDiffMode();
+    }
+
+    private void OnTextModeClick(object sender, RoutedEventArgs e)
+    {
+        if (_closed) return;
+        ViewModel.SetShowDiff(false);
+        SyncDiffMode();
+    }
+
+    private void OnHunkClick(int hunk)
+    {
+        if (!_closed) ViewModel.ToggleHunk(hunk);
     }
 
     // The foreground hand-back: WS_EX_NOACTIVATE does not hold for every press, so after each one the source gets the
@@ -503,6 +541,8 @@ public sealed partial class ToolbarWindow : Window
         CloseAnywayButton.Click -= OnCloseAnywayClick;
         DisableConfirmButton.Click -= OnDisableConfirmClick;
         KeepOpenButton.Click -= OnKeepOpenClick;
+        DiffModeButton.Click -= OnDiffModeClick;
+        TextModeButton.Click -= OnTextModeClick;
         foreach (var child in ActionRow.Children)
         {
             if (child is Button button) button.Click -= OnActionClick;

@@ -1,5 +1,6 @@
 using System.Text;
 using PopGuy.Core.Actions;
+using PopGuy.Core.Diff;
 using PopGuy.Core.History;
 using PopGuy.Core.Providers;
 using PopGuy.Core.Settings;
@@ -81,6 +82,11 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
     private CancellationTokenSource? _cts;
     private ToolbarRun? _lastRun;
 
+    // The result's diff (Improve and Proofread only), computed once when the run finishes, and the hunks the user
+    // rejected; both reset with every new result. Replaced, never mutated, so a read under the lock is a snapshot.
+    private IReadOnlyList<DiffSegment> _diff = [];
+    private IReadOnlySet<int> _rejected = new HashSet<int>();
+
     public event Action? Changed;
 
     public ToolbarState State
@@ -95,8 +101,51 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
     /// <summary>Set by the speak coordinator (Phase 17); feeds <see cref="PresentationInput.SpeakActive"/>.</summary>
     public SpeakPhase SpeakPhase { get; set; }
 
-    /// <summary>The text Copy writes to the clipboard: the result, else "".</summary>
-    public string CopyText() => State is ToolbarState.Result result ? result.Text : "";
+    /// <summary>The result's word diff against the selection (Improve and Proofread); empty for every other result.</summary>
+    public IReadOnlyList<DiffSegment> DiffSegments
+    {
+        get
+        {
+            lock (_gate)
+                return _diff;
+        }
+    }
+
+    /// <summary>The diff hunks the user rejected (their original text is kept); empty means every hunk is accepted.</summary>
+    public IReadOnlySet<int> RejectedHunks
+    {
+        get
+        {
+            lock (_gate)
+                return _rejected;
+        }
+    }
+
+    /// <summary>
+    /// The text Copy and Paste back use: for a diff, the merged text (accepted hunks, the original text of rejected
+    /// ones); else the result; "" without a result.
+    /// </summary>
+    public string CopyText()
+    {
+        lock (_gate)
+        {
+            if (_state is not ToolbarState.Result result) return "";
+            return _diff.Count == 0 ? result.Text : DiffHunks.Merged(_diff, _rejected);
+        }
+    }
+
+    /// <summary>Accepts a rejected diff hunk or rejects an accepted one; an index that names no hunk changes nothing.</summary>
+    public void ToggleHunk(int index)
+    {
+        lock (_gate)
+        {
+            if (_state is not ToolbarState.Result || index < 0 || index >= DiffHunks.HunkRanges(_diff).Count) return;
+            var rejected = new HashSet<int>(_rejected);
+            if (!rejected.Remove(index)) rejected.Add(index);
+            _rejected = rejected;
+        }
+        Changed?.Invoke();
+    }
 
     /// <summary>
     /// Cancels any run in flight and streams <paramref name="run"/>. The task completes when the run ends; the App need
@@ -145,6 +194,7 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
             if (_state is ToolbarState.IdleState)
                 return;
             _state = ToolbarState.Idle;
+            ClearDiffLocked();
         }
         Changed?.Invoke();
     }
@@ -161,6 +211,7 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
             CancelLocked();
             _lastRun = null;
             _state = new ToolbarState.Result(text);
+            ClearDiffLocked();
         }
         Changed?.Invoke();
     }
@@ -226,6 +277,7 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
         var buffer = new StringBuilder();
         var lastRaised = startedAt;
         ToolbarState final;
+        IReadOnlyList<DiffSegment> diff = [];
         string? error = null;
         try
         {
@@ -241,7 +293,11 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
                     return;
                 Changed?.Invoke();
             }
-            final = new ToolbarState.Result(ActionEngine.StripWrappingQuotes(buffer.ToString(), run.Text));
+            var text = ActionEngine.StripWrappingQuotes(buffer.ToString(), run.Text);
+            final = new ToolbarState.Result(text);
+            // Improve and Proofread show what changed (their output mirrors the input); custom actions never do.
+            if (run.Action is { Type: ActionIdentifierType.Builtin, BuiltinKind: ActionKind.Improve or ActionKind.Proofread })
+                diff = DiffAlgorithm.Diff(run.Text, text);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -258,6 +314,8 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
             if (generation != _generation)
                 return;
             _state = final;
+            _diff = diff;
+            _rejected = new HashSet<int>();
             _cts?.Dispose();
             _cts = null;
         }
@@ -290,6 +348,12 @@ public sealed class ToolbarSession(ActionEngine engine, HistoryStore history, Fu
             _state = state;
             return true;
         }
+    }
+
+    private void ClearDiffLocked()
+    {
+        _diff = [];
+        _rejected = new HashSet<int>();
     }
 
     // Bump the generation first so the old run's late tokens and completion are discarded (spec-2 §2.7). The cancelled

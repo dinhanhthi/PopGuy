@@ -88,20 +88,49 @@
                     </Button>
                 </StackPanel>
 
-                <!-- Result: the selectable text, then Copy, Paste back (editable sources only), Regenerate. -->
+                <!--
+                    Result: the Diff/Text toggle (Improve and Proofread), the selectable text or the inline diff, then
+                    Copy, Paste back (editable sources only), Regenerate.
+                -->
                 <StackPanel
                     Padding="12,14,12,14"
                     Spacing="8"
                     Visibility="{x:Bind ViewModel.IsResult, Mode=OneWay}">
+                    <!-- Above the result as on macOS (the button row has no room); checked states are set in code. -->
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="2"
+                        Visibility="{x:Bind ViewModel.IsDiffResult, Mode=OneWay}">
+                        <ToggleButton
+                            x:Name="DiffModeButton"
+                            AllowFocusOnInteraction="False"
+                            Content="Diff" />
+                        <ToggleButton
+                            x:Name="TextModeButton"
+                            AllowFocusOnInteraction="False"
+                            Content="Text" />
+                    </StackPanel>
                     <ScrollViewer MaxHeight="280">
-                        <TextBlock
-                            ContextFlyout="{x:Null}"
-                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                            IsTextSelectionEnabled="True"
-                            SelectionFlyout="{x:Null}"
-                            Style="{StaticResource BodyTextBlockStyle}"
-                            Text="{x:Bind ViewModel.ResultText, Mode=OneWay}"
-                            TextWrapping="Wrap" />
+                        <StackPanel>
+                            <TextBlock
+                                ContextFlyout="{x:Null}"
+                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                IsTextSelectionEnabled="True"
+                                SelectionFlyout="{x:Null}"
+                                Style="{StaticResource BodyTextBlockStyle}"
+                                Text="{x:Bind ViewModel.ResultText, Mode=OneWay}"
+                                TextWrapping="Wrap"
+                                Visibility="{x:Bind ViewModel.ShowsPlainResult, Mode=OneWay}" />
+                            <!-- The inline diff, built in code (DiffView); a click on a change accepts or rejects it. -->
+                            <RichTextBlock
+                                x:Name="DiffBlock"
+                                ContextFlyout="{x:Null}"
+                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                IsTextSelectionEnabled="True"
+                                SelectionFlyout="{x:Null}"
+                                TextWrapping="Wrap"
+                                Visibility="{x:Bind ViewModel.ShowsDiffView, Mode=OneWay}" />
+                        </StackPanel>
                     </ScrollViewer>
                     <StackPanel
                         Margin="0,8,0,0"

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Microsoft.UI.Dispatching;
 using PopGuy.Core.Actions;
+using PopGuy.Core.Diff;
 using PopGuy.Core.Settings;
 using PopGuy.Core.Toolbar;
 
@@ -28,11 +29,16 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         nameof(IsRunning), nameof(IsResult), nameof(IsError), nameof(ShowsBody), nameof(ShowsClose), nameof(ActionsEnabled),
         nameof(ShowsSpinner), nameof(ShowsProgressText), nameof(ProgressText), nameof(ResultText), nameof(ErrorMessage),
         nameof(CanRetry), nameof(ShowsPasteBack), nameof(Notice), nameof(HasNotice), nameof(IsConfirmingClose),
+        nameof(IsDiffResult), nameof(ShowDiff), nameof(ShowsDiffView), nameof(ShowsPlainResult), nameof(DiffSegments),
+        nameof(RejectedHunks),
     ];
 
     private readonly ToolbarSession _session;
     private readonly DispatcherQueue _dispatcher;
     private ToolbarState _state = ToolbarState.Idle;
+    private IReadOnlyList<DiffSegment> _diff = [];
+    private IReadOnlySet<int> _rejected = new HashSet<int>();
+    private bool _showDiff = true;
     private string? _failMessage;
     private string _notice = "";
     private bool _confirmingClose;
@@ -125,7 +131,27 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public string ProgressText => _state is ToolbarState.Running running ? running.Progress : "";
 
-    public string ResultText => _state is ToolbarState.Result result ? result.Text : "";
+    /// <summary>The result as text: for a diff, the merged text (what Copy and Paste back use, macOS displayedResult).</summary>
+    public string ResultText => IsResult ? _session.CopyText() : "";
+
+    /// <summary>An Improve or Proofread result: it has a diff, and the Diff/Text toggle shows.</summary>
+    public bool IsDiffResult => IsResult && _diff.Count > 0;
+
+    /// <summary>
+    /// The Diff/Text toggle's choice (macOS showImproveDiff): the inline diff, or the merged text. Never reset by a
+    /// presentation, so the choice sticks for the app session; the diff is the default.
+    /// </summary>
+    public bool ShowDiff => _showDiff;
+
+    public bool ShowsDiffView => IsDiffResult && _showDiff;
+
+    public bool ShowsPlainResult => IsResult && !ShowsDiffView;
+
+    /// <summary>The result's diff segments (computed once by the session when the run finished).</summary>
+    public IReadOnlyList<DiffSegment> DiffSegments => _diff;
+
+    /// <summary>The diff hunks the user rejected.</summary>
+    public IReadOnlySet<int> RejectedHunks => _rejected;
 
     public string ErrorMessage => _failMessage ?? (_state is ToolbarState.Error error ? error.Message : "");
 
@@ -226,6 +252,16 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public void RequestDisableCloseConfirmation() => DisableCloseConfirmationRequested?.Invoke();
 
+    /// <summary>The Diff/Text toggle: shows the inline diff (<paramref name="show"/>) or the merged text.</summary>
+    public void SetShowDiff(bool show)
+    {
+        _showDiff = show;
+        Refresh();
+    }
+
+    /// <summary>A click on a diff hunk: accepts it if rejected, else rejects it (Copy then keeps its original text).</summary>
+    public void ToggleHunk(int index) => _session.ToggleHunk(index);
+
     /// <summary>"Keep Open": the confirmation goes, the toolbar and its result stay.</summary>
     public void KeepOpen()
     {
@@ -252,6 +288,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     {
         if (_detached) return; // a refresh queued before the window closed
         _state = _session.State;
+        _diff = _session.DiffSegments;
+        _rejected = _session.RejectedHunks;
         foreach (var name in StateProperties) Raise(name);
     }
 
