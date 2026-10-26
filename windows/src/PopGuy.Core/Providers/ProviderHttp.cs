@@ -105,6 +105,25 @@ public sealed class ProviderHttp
         }
     }
 
+    /// <summary>Sends a plain request and returns its whole body as bytes (cloud TTS audio).</summary>
+    public async Task<byte[]> SendBytesAsync(HttpRequestMessage request, string? apiKey, CancellationToken ct = default)
+    {
+        using var ownedRequest = request;
+        using var deadline = new Deadline(ct);
+        using var response = await SendCheckedAsync(request, apiKey, deadline);
+        try
+        {
+            await using var body = await OpenBodyAsync(response, deadline);
+            using var buffer = new MemoryStream();
+            await body.CopyToAsync(buffer, deadline.Token);
+            return buffer.ToArray();
+        }
+        catch (Exception ex) when (Translate(ex, ct, apiKey) is { } error)
+        {
+            throw error;
+        }
+    }
+
     /// <summary>Replaces the exact key (raw or percent-encoded) and common credential shapes with a placeholder.</summary>
     public static string Redact(string text, string? apiKey)
     {

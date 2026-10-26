@@ -39,3 +39,17 @@ public static class TtsVoices
             ? voice
             : config.DefaultVoice ?? provider.DefaultVoice(languageCode);
 }
+
+/// <summary>Helpers shared by the cloud TTS adapters.</summary>
+internal static class CloudTtsAudio
+{
+    /// <summary>Raw MP3 bodies (OpenAI, Azure): an empty one is a decoding failure.</summary>
+    public static byte[] NonEmpty(byte[] audio) =>
+        audio.Length > 0 ? audio : throw ProviderError.DecodingFailed("empty audio");
+
+    /// <summary>
+    /// A pitch multiplier (clamped to 0.5-2.0, 1.0 = normal) as semitones, 12·log2(m), rounded to 1 place; never -0.
+    /// </summary>
+    public static double Semitones(double multiplier) =>
+        Math.Round(12.0 * Math.Log2(Math.Clamp(multiplier, 0.5, 2.0)), 1, MidpointRounding.AwayFromZero) + 0.0;
+}
