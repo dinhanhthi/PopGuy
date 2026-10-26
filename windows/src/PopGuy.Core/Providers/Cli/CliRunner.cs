@@ -18,6 +18,11 @@ namespace PopGuy.Core.Providers.Cli;
 /// the action's system prompt in argv, as on macOS. A run is bounded by a timeout, and a stopped CLI loses its whole
 /// process tree.
 /// </para>
+/// <para>
+/// Containment. Each adapter's argv turns off what its CLI could do beyond answering (tools, MCP servers, user
+/// config, saved sessions); a constant file an adapter needs (Gemini's deny-all policy) is written only into the run's
+/// fresh working directory, before the start. What a CLI can still do is in docs/NOTES.md.
+/// </para>
 /// Prompts, outputs and environment values are never logged.
 /// </summary>
 public sealed class CliRunner
@@ -59,15 +64,16 @@ public sealed class CliRunner
     }
 
     /// <summary>
-    /// Starts <paramref name="name"/> (or <paramref name="executablePath"/> when set) with <paramref name="arguments"/>,
-    /// writes <paramref name="input"/> to its stdin and yields its non-empty stdout lines (split on LF). Throws
+    /// Starts <paramref name="name"/> (or <paramref name="executablePath"/> when set) with <paramref name="arguments"/>
+    /// in a fresh working directory holding <paramref name="workFiles"/> (file name to constant content, never user
+    /// data), writes <paramref name="input"/> to its stdin and yields its non-empty stdout lines (split on LF). Throws
     /// <see cref="ProviderError"/>: Transport when the CLI is missing, cannot start or times out, Http with the exit
     /// code and the stderr cause on a non-zero exit. Cancelling or disposing the enumerator stops the CLI in the
     /// background (stdin closed, then its process tree killed after 3 s).
     /// </summary>
     public async IAsyncEnumerable<string> StreamLinesAsync(
         string name, string? executablePath, IReadOnlyList<string> arguments, string input,
-        [EnumeratorCancellation] CancellationToken ct = default)
+        IReadOnlyDictionary<string, string>? workFiles = null, [EnumeratorCancellation] CancellationToken ct = default)
     {
         // The run goes on in the background, feeding a channel, so disposing the enumerator only asks for a stop and
         // returns at once.
@@ -78,7 +84,7 @@ public sealed class CliRunner
         {
             try
             {
-                await RunAsync(name, executablePath, arguments, input, control, line => channel.Writer.TryWrite(line));
+                await RunAsync(name, executablePath, arguments, input, workFiles, control, line => channel.Writer.TryWrite(line));
                 channel.Writer.TryComplete();
             }
             catch (Exception error)
@@ -139,8 +145,8 @@ public sealed class CliRunner
                            && !line.StartsWith("at ", StringComparison.Ordinal)));
 
     private async Task RunAsync(
-        string name, string? executablePath, IReadOnlyList<string> arguments, string input, ProcessControl control,
-        Action<string> yield)
+        string name, string? executablePath, IReadOnlyList<string> arguments, string input,
+        IReadOnlyDictionary<string, string>? workFiles, ProcessControl control, Action<string> yield)
     {
         var executable = _shell.Executable(name, executablePath)
                          ?? throw (string.IsNullOrWhiteSpace(executablePath)
@@ -149,6 +155,7 @@ public sealed class CliRunner
         var workDirectory = ShellEnvironment.CreateWorkDirectory();
         try
         {
+            WriteWorkFiles(workDirectory, workFiles);
             var info = ShellEnvironment.StartInfo(
                 executable, arguments, ShellEnvironment.BaseEnvironment(_shell.Path, _shell.Variable), workDirectory);
             using var process = new Process { StartInfo = info };
@@ -187,6 +194,13 @@ public sealed class CliRunner
         {
             ShellEnvironment.DeleteWorkDirectory(workDirectory);
         }
+    }
+
+    /// <summary>Writes each of <paramref name="files"/> (file name to content) into <paramref name="workDirectory"/>.</summary>
+    internal static void WriteWorkFiles(string workDirectory, IReadOnlyDictionary<string, string>? files)
+    {
+        foreach (var (fileName, content) in files ?? new Dictionary<string, string>())
+            File.WriteAllText(Path.Combine(workDirectory, fileName), content);
     }
 
     private async Task RunStartedAsync(string name, Process process, string input, ProcessControl control, Action<string> yield)

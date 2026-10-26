@@ -6,9 +6,14 @@ namespace PopGuy.Core.Providers.Cli;
 /// The Codex CLI under the user's OpenAI subscription (its own login file, no API key; a port of
 /// CodexCLIProvider.swift).
 /// <list type="bullet">
-/// <item><c>codex exec --json --sandbox read-only --skip-git-repo-check --ephemeral -c model_reasoning_effort=low</c>,
-/// then <c>-m</c> when set, then <c>-</c>: Codex reads the prompt from stdin. Low reasoning effort avoids the slow
-/// default loop; the git check is skipped because the working directory is an empty temp folder.</item>
+/// <item><c>codex exec --json --sandbox read-only --skip-git-repo-check --ephemeral -c model_reasoning_effort=low
+/// --ignore-user-config --ignore-rules -c approval_policy="never" -c web_search="disabled" --disable plugins
+/// --disable apps --disable shell_tool --disable unified_exec</c>, then <c>-m</c> when set, then <c>-</c>: Codex reads
+/// the prompt from stdin. Low reasoning effort avoids the slow default loop; the git check is skipped because the
+/// working directory is an empty temp folder. The rest is containment (Windows only; macOS passes none of it): no user
+/// config.toml (its MCP servers, hooks, notify, plugins, default model), no execpolicy allow rules, escalations
+/// rejected, no web search, no shell; the read-only sandbox also keeps the network off. Its other built-in tools can
+/// still read files on this PC.</item>
 /// <item>Codex has no system role: the system prompt and the selected text, framed as data, are one prompt.</item>
 /// <item>Yields the text of each <c>item.completed</c> line whose item is an <c>agent_message</c> (one whole message,
 /// no token deltas). A <c>turn.failed</c> line throws <see cref="ProviderError.Api"/> (Windows only; macOS relies on
@@ -23,7 +28,7 @@ public sealed class CodexCliProvider(CliRunner runner) : IProvider
     public IAsyncEnumerable<string> StreamAsync(
         string? systemPrompt, string input, string model, ProviderOptions options, CancellationToken ct = default) =>
         ParseAsync(
-            runner.StreamLinesAsync(Name, options.ExecutablePath, Arguments(model), CliRunner.DataPrompt(systemPrompt, input), ct),
+            runner.StreamLinesAsync(Name, options.ExecutablePath, Arguments(model), CliRunner.DataPrompt(systemPrompt, input), ct: ct),
             ct);
 
     /// <summary>The argv after the executable.</summary>
@@ -37,6 +42,14 @@ public sealed class CodexCliProvider(CliRunner runner) : IProvider
             "--skip-git-repo-check",
             "--ephemeral",
             "-c", "model_reasoning_effort=low",
+            "--ignore-user-config",
+            "--ignore-rules",
+            "-c", "approval_policy=\"never\"",
+            "-c", "web_search=\"disabled\"",
+            "--disable", "plugins",
+            "--disable", "apps",
+            "--disable", "shell_tool",
+            "--disable", "unified_exec",
         ];
         if (CliRunner.SafeModel(model) is { } safe)
             arguments.AddRange(["-m", safe]);

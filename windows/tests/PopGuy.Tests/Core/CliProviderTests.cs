@@ -6,7 +6,8 @@ namespace PopGuy.Tests.Core;
 
 // Security: how a subscription CLI is started. An npm .cmd shim runs as node.exe + its JS entry, never through cmd.exe
 // (BatBadBut); the child environment is the allowlist only, so no API key reaches the CLI. Then the three CLI adapters:
-// their argv (ported from the Swift adapters), unsafe models, and the JSONL each CLI prints (lines from the Swift tests'
+// their argv (the Swift adapters' lists plus the containment flags, which turn off tools, MCP, user config and saved
+// sessions), Gemini's deny-all policy file, unsafe models, and the JSONL each CLI prints (lines from the Swift tests'
 // captured fixtures). No CLI is run.
 public sealed class CliProviderTests : IDisposable
 {
@@ -129,26 +130,48 @@ public sealed class CliProviderTests : IDisposable
             Cli.Claude,
             [
                 "-p", "--output-format", "stream-json", "--include-partial-messages", "--verbose", "--tools", "",
-                "--strict-mcp-config", "--model", "m1", "--append-system-prompt", "sys",
+                "--strict-mcp-config", "--disallowedTools", "mcp__*", "--disable-slash-commands", "--permission-mode",
+                "dontAsk", "--no-session-persistence", "--model", "m1", "--append-system-prompt", "sys",
             ]
         },
         {
             Cli.Codex,
             [
                 "exec", "--json", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral", "-c",
-                "model_reasoning_effort=low", "-m", "m1", "-",
+                "model_reasoning_effort=low", "--ignore-user-config", "--ignore-rules", "-c", "approval_policy=\"never\"",
+                "-c", "web_search=\"disabled\"", "--disable", "plugins", "--disable", "apps", "--disable", "shell_tool",
+                "--disable", "unified_exec", "-m", "m1", "-",
             ]
         },
-        { Cli.Gemini, ["-p", "", "--approval-mode", "plan", "--output-format", "stream-json", "--model", "m1"] },
+        {
+            Cli.Gemini,
+            [
+                "-p", "", "--approval-mode", "plan", "--output-format", "stream-json", "--skip-trust", "-e", "none",
+                "--policy", "popguy-deny-tools.toml", "--allowed-mcp-server-names", "popguy-none", "--model", "m1",
+            ]
+        },
     };
 
     [Theory]
     [MemberData(nameof(ArgvTable))]
-    public void ArgvMatchesTheSwiftListWithThePromptOnStdin(Cli cli, string[] expected)
+    public void ArgvIsTheSwiftListPlusContainmentWithThePromptOnStdin(Cli cli, string[] expected)
     {
         Assert.Equal(expected, Arguments(cli, "m1"));
         var model = Array.IndexOf(expected, "m1");
         Assert.Equal(expected.Where((_, index) => index != model && index != model - 1), Arguments(cli, ""));
+    }
+
+    [Fact]
+    public void GeminiRunWritesTheDenyAllPolicyItsArgvNamesIntoTheWorkDirectory()
+    {
+        CliRunner.WriteWorkFiles(_folder, GeminiCliProvider.WorkFiles);
+
+        var arguments = GeminiCliProvider.Arguments("").ToList();
+        var policy = arguments[arguments.IndexOf("--policy") + 1];
+        Assert.Equal(
+            "[[rule]]\ntoolName = \"*\"\ndecision = \"deny\"\npriority = 999\ndenyMessage = \"Tools are disabled. Reply with text only.\"\n",
+            File.ReadAllText(Path.Combine(_folder, policy)));
+        Assert.Equal([policy], Directory.GetFiles(_folder).Select(Path.GetFileName));
     }
 
     [Fact]

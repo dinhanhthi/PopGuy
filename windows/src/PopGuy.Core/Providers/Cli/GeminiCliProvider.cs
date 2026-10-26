@@ -6,8 +6,12 @@ namespace PopGuy.Core.Providers.Cli;
 /// The Gemini CLI under the user's Google subscription (its own login file, no API key; a port of
 /// GeminiCLIProvider.swift).
 /// <list type="bullet">
-/// <item><c>gemini -p "" --approval-mode plan --output-format stream-json</c>, then <c>--model</c> when set.
-/// <c>--approval-mode plan</c> keeps tools read-only. macOS passes the prompt as the <c>-p</c> value; here it goes to
+/// <item><c>gemini -p "" --approval-mode plan --output-format stream-json --skip-trust -e none --policy
+/// popguy-deny-tools.toml --allowed-mcp-server-names popguy-none</c>, then <c>--model</c> when set.
+/// <c>--approval-mode plan</c> keeps tools read-only. Containment (Windows only; macOS passes none of it):
+/// <see cref="Policy"/>, written into the run's working directory, denies every tool (MCP tools included; only a
+/// system admin policy ranks above it), <c>-e none</c> loads no extension and no MCP server is on the allow list.
+/// macOS passes the prompt as the <c>-p</c> value; here it goes to
 /// stdin, which the CLI puts before the (empty) <c>-p</c> value. The CLI waits only 500 ms for piped input, and
 /// <see cref="CliRunner"/> writes it right after the start.</item>
 /// <item>The system prompt and the selected text, framed as data, are one prompt.</item>
@@ -25,8 +29,23 @@ public sealed class GeminiCliProvider(CliRunner runner) : IProvider
     public IAsyncEnumerable<string> StreamAsync(
         string? systemPrompt, string input, string model, ProviderOptions options, CancellationToken ct = default) =>
         ParseAsync(
-            runner.StreamLinesAsync(Name, options.ExecutablePath, Arguments(model), CliRunner.DataPrompt(systemPrompt, input), ct),
+            runner.StreamLinesAsync(
+                Name, options.ExecutablePath, Arguments(model), CliRunner.DataPrompt(systemPrompt, input), WorkFiles, ct),
             ct);
+
+    /// <summary>The policy file's name, relative to the CLI's working directory (the run's fresh temp folder).</summary>
+    internal const string PolicyFile = "popguy-deny-tools.toml";
+
+    /// <summary>User-tier policy denying every tool, MCP tools included; only a system admin policy ranks above it.</summary>
+    internal const string Policy =
+        "[[rule]]\n"
+        + "toolName = \"*\"\n"
+        + "decision = \"deny\"\n"
+        + "priority = 999\n"
+        + "denyMessage = \"Tools are disabled. Reply with text only.\"\n";
+
+    /// <summary>The files the run writes into the CLI's working directory before it starts.</summary>
+    internal static IReadOnlyDictionary<string, string> WorkFiles { get; } = new Dictionary<string, string> { [PolicyFile] = Policy };
 
     /// <summary>The argv after the executable.</summary>
     internal static IReadOnlyList<string> Arguments(string model)
@@ -36,6 +55,10 @@ public sealed class GeminiCliProvider(CliRunner runner) : IProvider
             "-p", "",
             "--approval-mode", "plan",
             "--output-format", "stream-json",
+            "--skip-trust",
+            "-e", "none",
+            "--policy", PolicyFile,
+            "--allowed-mcp-server-names", "popguy-none",
         ];
         if (CliRunner.SafeModel(model) is { } safe)
             arguments.AddRange(["--model", safe]);

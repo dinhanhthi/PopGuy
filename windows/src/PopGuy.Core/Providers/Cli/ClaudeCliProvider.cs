@@ -6,10 +6,13 @@ namespace PopGuy.Core.Providers.Cli;
 /// The Claude CLI under the user's Anthropic subscription (its own login, no API key; a port of
 /// ClaudeCLIProvider.swift).
 /// <list type="bullet">
-/// <item><c>claude -p --output-format stream-json --include-partial-messages --verbose --tools "" --strict-mcp-config</c>,
-/// then <c>--model</c> when set and <c>--append-system-prompt</c> with the system prompt. <c>--tools ""</c> denies
-/// every built-in tool and <c>--strict-mcp-config</c> every user MCP server, whatever the user pre-approved
-/// (<c>--allowedTools ""</c> does not deny Bash).</item>
+/// <item><c>claude -p --output-format stream-json --include-partial-messages --verbose --tools "" --strict-mcp-config
+/// --disallowedTools mcp__* --disable-slash-commands --permission-mode dontAsk --no-session-persistence</c>, then
+/// <c>--model</c> when set and <c>--append-system-prompt</c> with the system prompt. <c>--tools ""</c> denies every
+/// built-in tool and <c>--strict-mcp-config</c> every user MCP server, whatever the user pre-approved
+/// (<c>--allowedTools ""</c> does not deny Bash); <c>--disallowedTools mcp__*</c> also denies any MCP tool,
+/// <c>dontAsk</c> refuses whatever would need a permission, and <c>--no-session-persistence</c> keeps the selected
+/// text out of the CLI's saved sessions (Windows only; macOS passes none of these four).</item>
 /// <item>The selected text, framed as data, goes to stdin (macOS passes it as the positional prompt).</item>
 /// <item>Yields <c>delta.text</c> of <c>stream_event</c> lines whose event is a <c>content_block_delta</c> with a
 /// <c>text_delta</c>; the aggregate <c>assistant</c> line is skipped (it would double the answer). A <c>result</c> line
@@ -24,7 +27,7 @@ public sealed class ClaudeCliProvider(CliRunner runner) : IProvider
     public IAsyncEnumerable<string> StreamAsync(
         string? systemPrompt, string input, string model, ProviderOptions options, CancellationToken ct = default) =>
         ParseAsync(
-            runner.StreamLinesAsync(Name, options.ExecutablePath, Arguments(systemPrompt, model), CliRunner.DataPrompt(null, input), ct),
+            runner.StreamLinesAsync(Name, options.ExecutablePath, Arguments(systemPrompt, model), CliRunner.DataPrompt(null, input), ct: ct),
             ct);
 
     /// <summary>
@@ -41,6 +44,10 @@ public sealed class ClaudeCliProvider(CliRunner runner) : IProvider
             "--verbose",
             "--tools", "",
             "--strict-mcp-config",
+            "--disallowedTools", "mcp__*",
+            "--disable-slash-commands",
+            "--permission-mode", "dontAsk",
+            "--no-session-persistence",
         ];
         if (CliRunner.SafeModel(model) is { } safe)
             arguments.AddRange(["--model", safe]);
