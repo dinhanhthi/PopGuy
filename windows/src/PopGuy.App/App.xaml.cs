@@ -138,6 +138,9 @@ public partial class App : Application
     {
         _services?.Dispose();
         _services = null;
+        // A sign-out ends the process before this runs; an installer closing the app (Restart Manager) does not, and
+        // PopGuy must then exit instead of staying in the tray with no services.
+        _dispatcher?.TryEnqueue(Shutdown);
     }
 
     // The framework's message and the stack: an error raised inside the XAML framework names only a parameter.

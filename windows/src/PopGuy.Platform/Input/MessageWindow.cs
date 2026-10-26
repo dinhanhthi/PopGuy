@@ -90,8 +90,8 @@ internal sealed class MessageWindow : IDisposable
         }
         // Messages sent while CreateWindowEx runs (WM_NCCREATE, WM_CREATE) find no entry and go to DefWindowProc.
         lock (Windows) Windows[Handle] = this;
-        AddHandler(WmInvoke, OnInvoke);
-        AddHandler(WmQuitThread, OnQuitThread);
+        AddHandlerCore(WmInvoke, OnInvoke);
+        AddHandlerCore(WmQuitThread, OnQuitThread);
     }
 
     internal HWND Handle { get; }
@@ -122,9 +122,17 @@ internal sealed class MessageWindow : IDisposable
 
     /// <summary>
     /// Adds <paramref name="handler"/> for <paramref name="message"/>, after any handler already added for it.
-    /// Thread of the window only.
+    /// Thread of the window only. The window's own messages (WM_APP + 1 and + 2) are refused: their handlers always
+    /// answer, so a handler added after them never runs (the tray's clicks were lost that way, VM QA).
     /// </summary>
     internal void AddHandler(uint message, Handler handler)
+    {
+        if (message is WmInvoke or WmQuitThread)
+            throw new ArgumentOutOfRangeException(nameof(message), message, "Reserved for the message window itself.");
+        AddHandlerCore(message, handler);
+    }
+
+    private void AddHandlerCore(uint message, Handler handler)
     {
         CheckThread();
         if (!_handlers.TryGetValue(message, out var list)) _handlers[message] = list = [];
