@@ -37,6 +37,9 @@ internal sealed class AppServices : IDisposable
     private readonly ToolbarWindow _toolbar;
     private readonly ToolbarController _controller;
     private readonly SpeakCoordinator _speak;
+    private readonly SystemTts _systemTts = new();
+    private readonly Dictionary<TtsProviderKind, ITtsProvider> _ttsProviders;
+    private SpeakCoordinator? _speakPreview;
     private int _disposed;
 
     private AppServices(AppLog log, AppPaths paths, DispatcherQueue dispatcher)
@@ -57,7 +60,7 @@ internal sealed class AppServices : IDisposable
         var session = new ToolbarSession(engine, History, () => Settings.Current, scripts: scripts, dictionary: dictionary);
         // One cloud adapter per kind, created once; the coordinator reads each key when a request needs it (off the UI
         // thread: it routes on the thread pool), never caching it.
-        var ttsProviders = new Dictionary<TtsProviderKind, ITtsProvider>
+        _ttsProviders = new Dictionary<TtsProviderKind, ITtsProvider>
         {
             [TtsProviderKind.OpenAiTts] = new OpenAITtsProvider(),
             [TtsProviderKind.GoogleCloudTts] = new GoogleCloudTtsProvider(),
@@ -67,7 +70,7 @@ internal sealed class AppServices : IDisposable
 #if DEBUG
         playback = new PopGuy.Debug.SpeakProbe(playback, () => Settings.Current.SpeakSettings.SelectedEngine);
 #endif
-        _speak = new SpeakCoordinator(new SystemTts(), playback, kind => ttsProviders.GetValueOrDefault(kind), TtsKey);
+        _speak = new SpeakCoordinator(_systemTts, playback, kind => _ttsProviders.GetValueOrDefault(kind), TtsKey);
 #if DEBUG
         ((PopGuy.Debug.SpeakProbe)playback).Watch(_speak);
 #endif
@@ -121,6 +124,16 @@ internal sealed class AppServices : IDisposable
         remove => _controller.HotkeysApplied -= value;
     }
 
+    /// <summary>
+    /// Settings' voice previews (macOS: the Speak card's own coordinator), apart from the toolbar's Speak so a preview
+    /// never shows on the toolbar: the same system voice, cloud adapters and keys, its own player. Created on first use.
+    /// UI thread.
+    /// </summary>
+    public SpeakCoordinator SpeakPreview => _speakPreview ??= CreateSpeakPreview();
+
+    /// <summary>The installed system voices. Any thread (Settings reads them off the UI thread).</summary>
+    public IReadOnlyList<SystemVoice> SystemVoices() => _systemTts.Voices();
+
     /// <summary>Every hotkey of the last apply with its status (empty while suspended). Any thread.</summary>
     public IReadOnlyList<HotkeyRegistration> HotkeyRegistrations => _hotkeys.Registrations;
 
@@ -154,6 +167,19 @@ internal sealed class AppServices : IDisposable
     /// <summary>DEBUG only (<c>--selftest-toolbar</c>): see <see cref="ToolbarController.ShowCanned"/>. UI thread.</summary>
     public void ShowCannedToolbar(string text, ForegroundApp source) => _controller.ShowCanned(text, source);
 #endif
+
+    private SpeakCoordinator CreateSpeakPreview()
+    {
+        IAudioPlayback playback = new AudioPlayback();
+#if DEBUG
+        playback = new PopGuy.Debug.SpeakProbe(playback, () => Settings.Current.SpeakSettings.SelectedEngine);
+#endif
+        var preview = new SpeakCoordinator(_systemTts, playback, kind => _ttsProviders.GetValueOrDefault(kind), TtsKey);
+#if DEBUG
+        ((PopGuy.Debug.SpeakProbe)playback).Watch(preview);
+#endif
+        return preview;
+    }
 
     /// <summary>The stored key of <paramref name="kind"/>, or null (none saved, or Credential Manager refused: logged, never the key).</summary>
     private string? ApiKey(ProviderKind kind)
@@ -190,6 +216,7 @@ internal sealed class AppServices : IDisposable
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _speak.Stop();
+        _speakPreview?.Stop();
         _controller.Dispose();
         _pipeline.Dispose();
         _hotkeys.Dispose();

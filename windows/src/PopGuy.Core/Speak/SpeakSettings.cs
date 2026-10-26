@@ -52,6 +52,15 @@ public static class SpeakRules
         _ => "US English",
     };
 
+    /// <summary>The Speak card's preview sentence in the accent's language (macOS <c>SpeakAccent.previewSample</c>).</summary>
+    public static string PreviewSample(this SpeakAccent accent) => accent switch
+    {
+        SpeakAccent.French => "Bonjour, ceci est un aperçu de la voix sélectionnée.",
+        SpeakAccent.Spanish => "Hola, esta es una vista previa de la voz seleccionada.",
+        SpeakAccent.German => "Hallo, dies ist eine Vorschau der ausgewählten Stimme.",
+        _ => "Hello, this is a preview of the selected voice.",
+    };
+
     /// <summary>The Free Dictionary recording for the accent ("us", "uk"); null when it has none (no word audio).</summary>
     public static string? DictionaryVariant(this SpeakAccent accent) => accent switch
     {

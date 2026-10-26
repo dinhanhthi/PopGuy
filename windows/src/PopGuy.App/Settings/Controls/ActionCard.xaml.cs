@@ -19,7 +19,8 @@ namespace PopGuy.Settings.Controls;
 /// only enabled one, In More actions, and Show label, locked while the action is in More
 /// actions (its value is kept). The rows by kind: Improve and Shorten provider, model, tone, prompt; Proofread
 /// the same without tone; Prompt provider and model; Translate provider, model, target language, tone, additional
-/// prompt; a custom AI action provider, model, its required prompt; a custom translation action as Translate. Model,
+/// prompt; a custom AI action provider, model, its required prompt; a custom translation action as Translate; Speak
+/// and a custom Speech action the <see cref="SpeakCard"/> rows (macOS SpeakCardView, CustomSpeechFields). Model,
 /// tone and prompt hide for the providers that ignore them. Every kind ends with its keyboard shortcut. Each change
 /// saves at once through <see cref="ActionsViewModel"/> (text 500 ms after the last keystroke, or when the box loses
 /// focus). ActionsPage builds a card once per action and calls <see cref="Update"/> on every settings change, so an
@@ -39,12 +40,14 @@ public sealed partial class ActionCard : UserControl
     private const string TranslatePromptCaption = "Added on top of the default translation prompt.";
     private const string DeleteLockedTooltip =
         "Can't delete the only active action. The toolbar needs at least one. Turn on another action first.";
+    private const string SpeakSubtitle = "Read the selected text aloud using the system speech synthesiser.";
 
     /// <summary>Each row's refresh from the settings, in row order.</summary>
     private readonly List<Action<AppSettings>> _updates = [];
     private readonly List<PromptField> _prompts = [];
     private readonly List<ModelField> _modelFields = [];
     private ActionsViewModel _model = null!;
+    private SpeakCard? _speak;
 
     private TextBlock _noShortcut = null!;
     private Button _recordButton = null!;
@@ -109,6 +112,12 @@ public sealed partial class ActionCard : UserControl
             CustomButtons.Visibility = Visibility.Visible;
             if (action.Type == CustomActionType.Ai) CustomAiRows();
             else if (action.Type == CustomActionType.Translation) CustomTranslationRows();
+            else if (action.Type == CustomActionType.Speech) SpeakRows();
+        }
+        else if (id.Type == ActionIdentifierType.Speak)
+        {
+            SetHeader("Speak", ActionIcon.SfSymbol("speaker.wave.2"), SpeakSubtitle, builtin: true, fromPlugin: false);
+            SpeakRows();
         }
         ShortcutRow();
         Update(current);
@@ -147,6 +156,7 @@ public sealed partial class ActionCard : UserControl
     {
         foreach (var field in _modelFields) field.Flush();
         foreach (var prompt in _prompts) prompt.Flush();
+        _speak?.Flush();
     }
 
     /// <summary>The card goes: pending text is saved, a check and a recording stop.</summary>
@@ -154,6 +164,7 @@ public sealed partial class ActionCard : UserControl
     {
         foreach (var field in _modelFields) field.Release();
         foreach (var prompt in _prompts) prompt.Flush();
+        _speak?.Release();
         Recorder.Cancel();
     }
 
@@ -287,6 +298,15 @@ public sealed partial class ActionCard : UserControl
             s => CustomProvider(s).UsesModel(),
             s => CustomOf(s)?.SystemPrompt ?? "",
             (s, text) => ActionsViewModel.WithCustom(s, Id, a => a with { SystemPrompt = text }));
+    }
+
+    /// <summary>The engine, voices, accent, speed, pitch and Preview rows, taken from a <see cref="SpeakCard"/>.</summary>
+    private void SpeakRows()
+    {
+        _speak = new SpeakCard();
+        _speak.Initialize(_model, Id);
+        foreach (var row in _speak.TakeRows()) AddRow(row);
+        _updates.Add(_speak.Update);
     }
 
     private CustomAction? CustomOf(AppSettings settings) => ActionsViewModel.Custom(settings, Id);

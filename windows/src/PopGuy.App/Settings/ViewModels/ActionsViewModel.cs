@@ -1,9 +1,11 @@
 using System.ComponentModel;
 using PopGuy.Core.Actions;
+using PopGuy.Core.Json;
 using PopGuy.Core.Library;
 using PopGuy.Core.Providers;
 using PopGuy.Core.Secrets;
 using PopGuy.Core.Settings;
+using PopGuy.Core.Speak;
 
 namespace PopGuy.Settings.ViewModels;
 
@@ -27,8 +29,9 @@ internal sealed record BuiltinInfo(string Title, string Symbol, string Subtitle)
 
 /// <summary>
 /// The state and checks behind Settings → Actions (macOS ActionsView.swift): which cards show for the search and type
-/// filter, the settings changes the cards make, and the model Check. Keys are read from the secret store (Credential
-/// Manager) for a check only, off the UI thread, and never kept or logged. UI thread only, except where noted.
+/// filter, the settings changes the cards make, the model Check, and the Speak card's voice lists, saved cloud speech
+/// keys and preview. Keys are read from the secret store (Credential Manager) for a check only, off the UI thread, and
+/// never kept or logged. UI thread only, except where noted.
 /// </summary>
 internal sealed class ActionsViewModel
 {
@@ -36,13 +39,23 @@ internal sealed class ActionsViewModel
     private readonly ISecretStore _secrets;
     private readonly ProviderFactory _providers;
     private readonly Action<string> _log;
+    private readonly Func<IReadOnlyList<SystemVoice>>? _systemVoices;
+    private readonly Func<SpeakCoordinator>? _speakPreview;
+    private Task<IReadOnlyList<SystemVoice>>? _voicesLoad;
+    private SpeakCoordinator? _preview;
 
-    public ActionsViewModel(SettingsStore settings, ISecretStore secrets, ProviderFactory providers, Action<string> log)
+    /// <param name="systemVoices">The installed system voices (any thread); none when null.</param>
+    /// <param name="speakPreview">The Speak card's preview coordinator; no preview when null.</param>
+    public ActionsViewModel(
+        SettingsStore settings, ISecretStore secrets, ProviderFactory providers, Action<string> log,
+        Func<IReadOnlyList<SystemVoice>>? systemVoices = null, Func<SpeakCoordinator>? speakPreview = null)
     {
         _settings = settings;
         _secrets = secrets;
         _providers = providers;
         _log = log;
+        _systemVoices = systemVoices;
+        _speakPreview = speakPreview;
     }
 
     public AppSettings Current => _settings.Current;
@@ -153,9 +166,9 @@ internal sealed class ActionsViewModel
         (ActionTypeFilter.FromPlugin, "From Plugin"),
     ];
 
-    /// <summary>Every action with a card, in action order: Speak and Look up have none yet.</summary>
+    /// <summary>Every action with a card, in action order: Look up has none yet.</summary>
     public static IReadOnlyList<ActionIdentifier> CardIds(AppSettings settings) =>
-        [.. settings.ActionOrder.Where(id => id.Type is ActionIdentifierType.Builtin or ActionIdentifierType.Custom)];
+        [.. settings.ActionOrder.Where(id => id.Type is not ActionIdentifierType.Dictionary)];
 
     /// <summary>
     /// The cards that match <paramref name="filter"/> and <paramref name="query"/> (trimmed, case-insensitive, in the
@@ -255,6 +268,107 @@ internal sealed class ActionsViewModel
     public static IReadOnlyList<ProviderKind> PickerProviders(IReadOnlyList<ProviderKind> allowed, ProviderKind current) =>
         [.. allowed.Where(k => k != ProviderKind.MlxLocal || k == current)];
 
+    // Speak card (macOS SpeakCardView for Speak, CustomSpeechFields for a custom Speech action).
+
+    /// <summary>The Speak card's preview player, apart from the toolbar's Speak; null without one.</summary>
+    public SpeakCoordinator? SpeakPreview => _preview ??= _speakPreview?.Invoke();
+
+    /// <summary>The Speak card row that started the last preview (one plays at a time across the cards), or null.</summary>
+    public string? ActivePreviewRow { get; private set; }
+
+    /// <summary>
+    /// Speaks <paramref name="text"/> as <paramref name="row"/>'s preview, replacing any other (macOS: the coordinator
+    /// stops first). The request routes off the UI thread; a failure is logged (never the text).
+    /// </summary>
+    public void Preview(string row, string text, SpeakAccent accent, SpeakSettings settings, TtsProviderConfig config)
+    {
+        if (SpeakPreview is not { } preview) return;
+        ActivePreviewRow = row;
+        preview.SpeakAsync(text, accent, settings, config).ContinueWith(
+            t => _log($"speak: preview failed, {t.Exception!.GetBaseException().GetType().Name}"),
+            CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+    }
+
+    /// <summary>Stops the preview; with <paramref name="rowPrefix"/>, only when one of those rows started it.</summary>
+    public void StopPreview(string? rowPrefix = null)
+    {
+        if (_preview is null) return;
+        if (rowPrefix is not null && ActivePreviewRow?.StartsWith(rowPrefix, StringComparison.Ordinal) != true) return;
+        _preview.Stop();
+    }
+
+    /// <summary>
+    /// The installed system voices, read once off the UI thread (Windows lists its OneCore voices); empty when there is
+    /// none or Windows refused (logged).
+    /// </summary>
+    public Task<IReadOnlyList<SystemVoice>> SystemVoicesAsync() => _voicesLoad ??= Task.Run(ReadSystemVoices);
+
+    /// <summary>The system voices of <paramref name="accent"/>'s language (exact BCP-47 match, never by prefix), by name.</summary>
+    public static IReadOnlyList<SystemVoice> VoicesFor(IReadOnlyList<SystemVoice> voices, SpeakAccent accent) =>
+        [.. voices.Where(v => string.Equals(v.Language, accent.Bcp47(), StringComparison.OrdinalIgnoreCase))
+            .OrderBy(v => v.DisplayName, StringComparer.CurrentCultureIgnoreCase)];
+
+    /// <summary>The cloud speech providers with a key in Credential Manager, read off the UI thread (never the key).</summary>
+    public Task<IReadOnlySet<TtsProviderKind>> SavedTtsKeysAsync() => Task.Run<IReadOnlySet<TtsProviderKind>>(() =>
+        Enum.GetValues<TtsProviderKind>().Where(kind => ReadSecret(SecretIds.Tts(kind), kind.ToString()) is { Length: > 0 }).ToHashSet());
+
+    /// <summary>
+    /// The engine picker's entries: the System voice, then each cloud provider with a saved key, plus the saved engine
+    /// even without one (its fallback note says why it plays the System voice).
+    /// </summary>
+    public static IReadOnlyList<SpeakEngineSelection> EngineChoices(IReadOnlySet<TtsProviderKind> keyed, SpeakEngineSelection current) =>
+    [
+        SpeakEngineSelection.System,
+        .. Enum.GetValues<TtsProviderKind>()
+            .Where(kind => keyed.Contains(kind) || current.CloudProvider == kind)
+            .Select(SpeakEngineSelection.Cloud),
+    ];
+
+    /// <summary>The speech settings <paramref name="id"/> speaks with: Speak's own, or a custom Speech action's.</summary>
+    public static SpeakSettings SpeakOf(AppSettings settings, ActionIdentifier id) =>
+        id.Type == ActionIdentifierType.Speak ? settings.SpeakSettings : Custom(settings, id)?.SpeakSettings ?? new SpeakSettings();
+
+    public static AppSettings WithSpeak(AppSettings settings, ActionIdentifier id, Func<SpeakSettings, SpeakSettings> change) =>
+        id.Type == ActionIdentifierType.Speak
+            ? settings with { SpeakSettings = change(settings.SpeakSettings) }
+            : WithCustom(settings, id, a => a with { SpeakSettings = change(a.SpeakSettings) });
+
+    /// <summary>
+    /// The cloud config <paramref name="id"/> speaks with on <paramref name="kind"/>: Speak uses the provider's
+    /// settings-wide one (keyed by its raw value), a custom Speech action its own single one (macOS ttsConfig).
+    /// </summary>
+    public static TtsProviderConfig TtsConfigOf(AppSettings settings, ActionIdentifier id, TtsProviderKind kind) =>
+        id.Type == ActionIdentifierType.Speak
+            ? settings.TtsProviderConfigs.GetValueOrDefault(RawValueEnumConverter<TtsProviderKind>.ToRaw(kind)) ?? new TtsProviderConfig()
+            : Custom(settings, id)?.TtsConfig ?? new TtsProviderConfig();
+
+    public static AppSettings WithTtsConfig(
+        AppSettings settings, ActionIdentifier id, TtsProviderKind kind, Func<TtsProviderConfig, TtsProviderConfig> change)
+    {
+        if (id.Type != ActionIdentifierType.Speak) return WithCustom(settings, id, a => a with { TtsConfig = change(a.TtsConfig) });
+        var raw = RawValueEnumConverter<TtsProviderKind>.ToRaw(kind);
+        var configs = new Dictionary<string, TtsProviderConfig>(settings.TtsProviderConfigs)
+        {
+            [raw] = change(settings.TtsProviderConfigs.GetValueOrDefault(raw) ?? new TtsProviderConfig()),
+        };
+        return settings with { TtsProviderConfigs = configs };
+    }
+
+    private IReadOnlyList<SystemVoice> ReadSystemVoices()
+    {
+        if (_systemVoices is null) return [];
+        try
+        {
+            return _systemVoices();
+        }
+        catch (Exception e)
+        {
+            // A WinRT failure of the speech service: the card shows no voices.
+            _log($"speak: system voices not read, {e.GetType().Name} 0x{e.HResult:X8}");
+            return [];
+        }
+    }
+
     // Model check (macOS ModelField.runCheck).
 
     /// <summary>
@@ -307,15 +421,17 @@ internal sealed class ActionsViewModel
             : null;
 
     /// <summary>Any thread. Null when none is saved or Credential Manager refused (logged, never the key).</summary>
-    private string? ReadKey(ProviderKind kind)
+    private string? ReadKey(ProviderKind kind) => ReadSecret(SecretIds.Provider(kind), kind.ToString());
+
+    private string? ReadSecret(string id, string name)
     {
         try
         {
-            return _secrets.Get(SecretIds.Provider(kind));
+            return _secrets.Get(id);
         }
         catch (Win32Exception e)
         {
-            _log($"credentials: read failed for {kind}, error {e.NativeErrorCode}");
+            _log($"credentials: read failed for {name}, error {e.NativeErrorCode}");
             return null;
         }
     }

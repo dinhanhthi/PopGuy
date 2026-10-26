@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using PopGuy.Core.Json;
+using PopGuy.Core.Providers;
 
 namespace PopGuy.Core.Actions;
 
@@ -102,7 +103,8 @@ public static class ActionImport
     /// provider its type does not allow; otherwise a copy with a fresh id, every string clamped (by grapheme cluster,
     /// as Swift counts), <c>isFromPlugin</c> false, <c>libraryPresetID</c> cleared (an imported file must not claim a
     /// Library identity; a Library install sets it after this) and <c>shell</c> kept only when it is "powershell".
-    /// The macOS cloud-TTS gate is not ported: production always allows cloud engines, so it is a no-op.
+    /// The cloud TTS config is kept only on Speech and Dictionary actions, with an Azure region only when it is a plain
+    /// host label (Windows-only). The macOS cloud-TTS gate is not ported: production always allows cloud engines, so it is a no-op.
     /// </summary>
     public static CustomAction? Sanitize(CustomAction action)
     {
@@ -118,6 +120,10 @@ public static class ActionImport
         // A field the type never uses is dropped, so the consent panel shows everything that is saved (Windows-only:
         // macOS keeps them).
         var usesPrompt = action.Type is CustomActionType.Ai or CustomActionType.Translation;
+        // Only Speech and Dictionary actions speak with their own cloud config. The Azure region names the host the key
+        // goes to: one that is not a plain host label is dropped (the adapter refuses it again before any request).
+        var usesTts = action.Type is CustomActionType.Speech or CustomActionType.Dictionary;
+        var region = ClampOptional(tts.Region, 50) is { } r && TtsKeyValidator.IsAzureRegion(r) ? r : null;
 
         var icon = action.Icon.Type == ActionIconType.SfSymbol
             ? ActionIcon.SfSymbol(Clamp(action.Icon.Value, 100))
@@ -133,13 +139,15 @@ public static class ActionImport
             Model = Clamp(action.Model, 200),
             TargetLanguage = Clamp(action.TargetLanguage, 20),
             SpeakSettings = SanitizeSpeakSettings(action.SpeakSettings),
-            TtsConfig = new TtsProviderConfig
-            {
-                VoiceOverrides = voiceOverrides,
-                DefaultVoice = ClampOptional(tts.DefaultVoice, 100),
-                Model = ClampOptional(tts.Model, 200),
-                Region = ClampOptional(tts.Region, 50),
-            },
+            TtsConfig = usesTts
+                ? new TtsProviderConfig
+                {
+                    VoiceOverrides = voiceOverrides,
+                    DefaultVoice = ClampOptional(tts.DefaultVoice, 100),
+                    Model = ClampOptional(tts.Model, 200),
+                    Region = region,
+                }
+                : new TtsProviderConfig(),
             DictionaryConfig = action.DictionaryConfig with
             {
                 DefinitionLanguage = Clamp(action.DictionaryConfig.DefinitionLanguage, 20),

@@ -123,4 +123,29 @@ public class ActionImportTests
         Assert.Equal(keepsScript ? "^x" : "", safe.AppliesWhenRegex);
         Assert.Equal(keepsPrompt ? "Rewrite {{text}}." : "", safe.SystemPrompt);
     }
+
+    // The Azure region names the host the user's key goes to (Phase 15 follow-up a): only Speech and Dictionary actions
+    // keep a cloud TTS config, and a region that is not a plain host label is dropped.
+    [Theory]
+    [InlineData(CustomActionType.Speech, "westeurope", true, "westeurope")]
+    [InlineData(CustomActionType.Dictionary, "eastus", true, "eastus")]
+    [InlineData(CustomActionType.Speech, "evil.example.com/x", true, null)]
+    [InlineData(CustomActionType.Speech, "East US", true, null)]
+    [InlineData(CustomActionType.Ai, "eastus", false, null)]
+    [InlineData(CustomActionType.OpenUrl, "eastus", false, null)]
+    public void TtsConfigIsKeptOnlyForSpeakingTypesWithAValidRegion(CustomActionType type, string region, bool keepsConfig, string? expected)
+    {
+        var tts = new TtsProviderConfig
+        {
+            Region = region, Model = "gpt-4o-mini-tts", DefaultVoice = "nova",
+            VoiceOverrides = new Dictionary<string, string> { ["en-US"] = "en-US-JennyNeural" },
+        };
+
+        var safe = ActionImport.Sanitize(Action(type) with { TtsConfig = tts })!;
+
+        Assert.Equal(expected, safe.TtsConfig.Region);
+        Assert.Equal(keepsConfig ? "gpt-4o-mini-tts" : null, safe.TtsConfig.Model);
+        Assert.Equal(keepsConfig ? "nova" : null, safe.TtsConfig.DefaultVoice);
+        Assert.Equal(keepsConfig ? 1 : 0, safe.TtsConfig.VoiceOverrides.Count);
+    }
 }
