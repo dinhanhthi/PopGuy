@@ -132,6 +132,12 @@ public static class ToolbarWindowStyle
     public static bool IsToolbarOrOwned(nint window, nint toolbar) =>
         window != 0 && (window == toolbar || PInvoke.GetAncestor((HWND)window, GET_ANCESTOR_FLAGS.GA_ROOTOWNER) == (HWND)toolbar);
 
+    /// <summary>
+    /// The window under <paramref name="point"/> is the toolbar, one of its child windows or a window it owns (an open
+    /// menu). Any thread.
+    /// </summary>
+    public static bool IsToolbarOrOwnedAt(Point point, nint toolbar) => IsToolbarOrOwned(PInvoke.WindowFromPoint(point), toolbar);
+
     /// <summary>The foreground window is the toolbar or one of the windows it owns: a press made it the foreground.</summary>
     public static bool IsToolbarOrOwnedForeground(nint toolbar) => IsToolbarOrOwned(ForegroundWindow(), toolbar);
 

@@ -5,13 +5,14 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Security;
 using Windows.Win32.System.Threading;
+using Windows.Win32.UI.WindowsAndMessaging;
 
 // Not PopGuy.Platform.System: that namespace would hide System for every System.-qualified name under PopGuy.Platform.
 namespace PopGuy.Platform.SystemServices;
 
 /// <summary>The foreground window's app, taken when a trigger fires (the capture's and the paste's source).</summary>
 /// <param name="Hwnd">The foreground window; 0 when there is none.</param>
-/// <param name="ProcessId">Its process; 0 when unknown.</param>
+/// <param name="ProcessId">Its process (a Store app's own, not its frame host's, when found); 0 when unknown.</param>
 /// <param name="Exe">The executable's file name in lowercase ("notepad.exe"), or null when it cannot be read.</param>
 /// <param name="DisplayName">The executable's FileDescription ("Notepad"), else <paramref name="Exe"/>, else "".</param>
 /// <param name="IsElevated">
@@ -23,36 +24,62 @@ public sealed record ForegroundApp(nint Hwnd, uint ProcessId, string? Exe, strin
 {
     private const int PathCapacity = 1024;
 
-    /// <summary>The foreground window's app right now. Any thread.</summary>
+    /// <summary>The frame host of Store (UWP) app windows.</summary>
+    private const string FrameHostExe = "applicationframehost.exe";
+
+    /// <summary>
+    /// The foreground window's app right now. A Store (UWP) app's window belongs to the frame host
+    /// (applicationframehost.exe): the app is the process of its hosted child window, when there is one (none while it
+    /// is suspended or minimized). <see cref="Hwnd"/> stays the frame window. Any thread.
+    /// </summary>
     public static ForegroundApp Snapshot()
     {
         var hwnd = ToolbarWindowStyle.ForegroundWindow();
         var processId = ToolbarWindowStyle.ProcessIdOf(hwnd);
         if (processId == 0) return new(hwnd, 0, null, "", IsElevated: false, IsOwnProcess: false);
 
-        string? path = null;
-        bool isElevated;
-        // The limited right is granted even on elevated processes, so the path and the token query still work there.
-        var process = PInvoke.OpenProcess(PROCESS_ACCESS_RIGHTS.PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
-        if (process.IsNull)
+        var (path, isElevated) = Inspect(processId);
+        if (path is not null && Path.GetFileName(path).Equals(FrameHostExe, StringComparison.OrdinalIgnoreCase)
+            && HostedProcessId(hwnd, processId) is var hosted and not 0)
         {
-            isElevated = Marshal.GetLastPInvokeError() == (int)WIN32_ERROR.ERROR_ACCESS_DENIED;
-        }
-        else
-        {
-            try
-            {
-                path = ImagePathOf(process);
-                isElevated = IsElevatedProcess(process);
-            }
-            finally
-            {
-                PInvoke.CloseHandle(process);
-            }
+            processId = hosted;
+            (path, isElevated) = Inspect(processId);
         }
 
         var exe = path is null ? null : Path.GetFileName(path).ToLowerInvariant();
         return new(hwnd, processId, exe, DescriptionOf(path) ?? exe ?? "", isElevated, processId == (uint)Environment.ProcessId);
+    }
+
+    /// <summary>The process's image path (null when unreadable) and whether it runs elevated.</summary>
+    private static (string? Path, bool IsElevated) Inspect(uint processId)
+    {
+        // The limited right is granted even on elevated processes, so the path and the token query still work there.
+        var process = PInvoke.OpenProcess(PROCESS_ACCESS_RIGHTS.PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
+        if (process.IsNull) return (null, Marshal.GetLastPInvokeError() == (int)WIN32_ERROR.ERROR_ACCESS_DENIED);
+        try
+        {
+            return (ImagePathOf(process), IsElevatedProcess(process));
+        }
+        finally
+        {
+            PInvoke.CloseHandle(process);
+        }
+    }
+
+    /// <summary>The process of the frame window's first child window owned by another process (the hosted app); 0 when none.</summary>
+    private static uint HostedProcessId(nint frame, uint frameProcessId)
+    {
+        uint hosted = 0;
+        WNDENUMPROC find = (child, _) =>
+        {
+            var processId = ToolbarWindowStyle.ProcessIdOf(child);
+            if (processId == 0 || processId == frameProcessId) return true;
+            hosted = processId;
+            return false;
+        };
+        PInvoke.EnumChildWindows((HWND)frame, find, default);
+        GC.KeepAlive(find);
+        return hosted;
     }
 
     private static unsafe string? ImagePathOf(HANDLE process)

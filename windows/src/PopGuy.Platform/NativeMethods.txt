@@ -48,6 +48,7 @@ SetForegroundWindow
 AllowSetForegroundWindow
 GetWindowThreadProcessId
 GetCursorPos
+WindowFromPoint
 MonitorFromPoint
 GetMonitorInfoW
 GetDpiForWindow

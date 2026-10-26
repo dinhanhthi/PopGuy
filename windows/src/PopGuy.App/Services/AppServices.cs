@@ -27,6 +27,7 @@ internal sealed class AppServices : IDisposable
     private readonly GlobalInput _input;
     private readonly ClipboardHistoryCache _clipboardCache;
     private readonly HotkeyService _hotkeys;
+    private readonly SelectionPipeline _pipeline;
     private readonly ToolbarWindow _toolbar;
     private readonly ToolbarController _controller;
     private int _disposed;
@@ -47,12 +48,14 @@ internal sealed class AppServices : IDisposable
             _clipboardCache = new ClipboardHistoryCache(log.Write);
             var chord = new ChordMonitor(_input, _clipboardCache, log.Write);
             _hotkeys = new HotkeyService(_input, log.Write);
+            _pipeline = new SelectionPipeline(_input, log.Write);
             _toolbar = new ToolbarWindow(session);
-            _controller = new ToolbarController(Settings, session, _toolbar, _input, chord, _hotkeys, dispatcher, log.Write);
+            _controller = new ToolbarController(Settings, session, _toolbar, _input, chord, _hotkeys, _pipeline, dispatcher, log.Write);
         }
         catch
         {
             _toolbar?.Close();
+            _pipeline?.Dispose();
             _hotkeys?.Dispose();
             _clipboardCache?.Dispose();
             _input.Dispose();
@@ -115,6 +118,7 @@ internal sealed class AppServices : IDisposable
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _controller.Dispose();
+        _pipeline.Dispose();
         _hotkeys.Dispose();
         _clipboardCache.Dispose();
         _input.Dispose();

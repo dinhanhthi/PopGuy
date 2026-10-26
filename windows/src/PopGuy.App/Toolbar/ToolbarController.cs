@@ -7,17 +7,20 @@ using PopGuy.Platform.Capture;
 using PopGuy.Platform.Input;
 using PopGuy.Platform.Output;
 using PopGuy.Platform.SystemServices;
+using PopGuy.Platform.Windowing;
 
 namespace PopGuy.Toolbar;
 
 /// <summary>
-/// Wires the triggers to the toolbar (macOS <c>ToolbarController.swift</c>, the explicit triggers of spec-1 §1.4-1.5):
-/// the Ctrl+C+C chord, the chord-replacement hotkey and the per-action hotkeys capture the selection, pass
-/// <see cref="PresentationGate"/> and show <see cref="ToolbarWindow"/> below the selection (or at the cursor); an action
-/// hotkey then runs its action (the Prompt hotkey opens the prompt input). It also handles the toolbar's clicks (actions,
-/// the prompt, Stop, Copy, Paste back, Close, Ignore this app, Settings) and the dismissal rules of spec-1 §3.8.
+/// Wires the triggers to the toolbar (macOS <c>ToolbarController.swift</c>, spec-1 §1.3-1.5): the Ctrl+C+C chord, the
+/// chord-replacement hotkey and the per-action hotkeys capture the selection, pass <see cref="PresentationGate"/> and
+/// show <see cref="ToolbarWindow"/> below the selection (or at the cursor); an action hotkey then runs its action (the
+/// Prompt hotkey opens the prompt input). The passive selections of <see cref="SelectionPipeline"/> (a drag, a keyboard
+/// selection, a double-click) are routed by spec-1 §1.3 and shown at the gesture; only a double-click with an assigned
+/// action runs one. It also handles the toolbar's clicks (actions, the prompt, Stop, Copy, Paste back, Close, Ignore
+/// this app, Settings) and the dismissal rules of spec-1 §3.8.
 /// <para>
-/// Threading: the chord and hotkey events and both input loops run on the thread pool; everything that touches the
+/// Threading: the chord and hotkey events and the three input loops run on the thread pool; everything that touches the
 /// window, the view model or the presentation state runs on the UI thread (<see cref="DispatcherQueue"/>). Captures
 /// and clipboard writes run off it. Selected text, results and clipboard contents are never logged, only lengths.
 /// </para>
@@ -35,15 +38,22 @@ internal sealed class ToolbarController : IDisposable
     private readonly GlobalInput _input;
     private readonly ChordMonitor _chord;
     private readonly HotkeyService _hotkeys;
+    private readonly SelectionPipeline _pipeline;
     private readonly DispatcherQueue _dispatcher;
     private readonly Action<string> _log;
     private readonly CancellationTokenSource _stop = new();
+
+    /// <summary>The toolbar's window handle, for the pool threads.</summary>
+    private readonly nint _toolbarHwnd;
 
     /// <summary>One capture at a time (the chord and the hotkeys can fire together). Interlocked.</summary>
     private int _capturing;
 
     /// <summary>The toolbar is on screen, for the pool threads (the window's own flag is UI thread only).</summary>
     private volatile bool _shown;
+
+    /// <summary>The last left press was on the toolbar: its release is not a selection either. Mouse loop only.</summary>
+    private bool _pressOnToolbar;
 
     // UI thread only.
     private CapturedSelection? _current;
@@ -56,11 +66,15 @@ internal sealed class ToolbarController : IDisposable
     /// <param name="Selection">UI Automation's first selection rect, or empty (the toolbar then goes to the cursor).</param>
     /// <param name="Source">The foreground app when the trigger fired.</param>
     /// <param name="Blocked">The source runs as administrator: the toolbar shows the admin-app error instead.</param>
-    private sealed record CapturedSelection(string Text, bool IsEditable, Rectangle Selection, ForegroundApp Source, bool Blocked = false);
+    /// <param name="Pointer">A passive selection's release point (a drag or a double-click), else null.</param>
+    /// <param name="GrewDownward">A passive drag's direction, else null.</param>
+    private sealed record CapturedSelection(
+        string Text, bool IsEditable, Rectangle Selection, ForegroundApp Source, bool Blocked = false,
+        Point? Pointer = null, bool? GrewDownward = null);
 
     public ToolbarController(
         SettingsStore settings, ToolbarSession session, ToolbarWindow window, GlobalInput input, ChordMonitor chord,
-        HotkeyService hotkeys, DispatcherQueue dispatcher, Action<string> log)
+        HotkeyService hotkeys, SelectionPipeline pipeline, DispatcherQueue dispatcher, Action<string> log)
     {
         _settings = settings;
         _session = session;
@@ -69,8 +83,10 @@ internal sealed class ToolbarController : IDisposable
         _input = input;
         _chord = chord;
         _hotkeys = hotkeys;
+        _pipeline = pipeline;
         _dispatcher = dispatcher;
         _log = log;
+        _toolbarHwnd = window.Hwnd;
     }
 
     /// <summary>Applies the settings, subscribes and starts the input loops. UI thread, once.</summary>
@@ -96,6 +112,7 @@ internal sealed class ToolbarController : IDisposable
         var token = _stop.Token;
         Watch(Task.Run(() => ReadKeysAsync(token)), "keys");
         Watch(Task.Run(() => ReadMouseAsync(token)), "mouse");
+        Watch(Task.Run(() => ReadSelectionsAsync(token)), "selections");
     }
 
     /// <summary>Unsubscribes, stops the loops and hides the toolbar. UI thread.</summary>
@@ -125,9 +142,9 @@ internal sealed class ToolbarController : IDisposable
     private void OnSettingsChanged(object? sender, EventArgs e) => ApplySettings();
 
     /// <summary>
-    /// The chord and the hotkeys follow the settings (bindings, custom actions, the chord flag and replacement, OCR).
-    /// Off the calling thread: registering waits on the input thread. Each run reads the latest settings, so runs that
-    /// overlap still end on the newest.
+    /// The chord and the hotkeys follow the settings (bindings, custom actions, the chord flag and replacement, OCR), and
+    /// the selection pipeline the passive triggers. Off the calling thread: registering waits on the input thread. Each
+    /// run reads the latest settings, so runs that overlap still end on the newest.
     /// </summary>
     private void ApplySettings() => Watch(Task.Run(() =>
     {
@@ -135,8 +152,11 @@ internal sealed class ToolbarController : IDisposable
         _chord.Apply(settings);
         // The master switch: nothing arms while PopGuy is off (spec-1 §1.4).
         if (!settings.PopGuyEnabled) _chord.Enabled = false;
+        // The pipeline also captures for the double-click trigger alone: the routing drops what it does not want.
+        _pipeline.Enabled = settings.PopGuyEnabled && (settings.TriggerOnSelectEnabled || settings.TriggerDoubleClickEnabled);
         var refused = _hotkeys.Apply(settings).Count(r => r.Status != HotkeyStatus.Registered);
-        _log($"settings applied: chord {(_chord.Enabled ? "on" : "off")}, {_hotkeys.Registrations.Count} hotkeys, {refused} refused");
+        _log($"settings applied: chord {(_chord.Enabled ? "on" : "off")}, selection {(_pipeline.Enabled ? "on" : "off")}, "
+            + $"{_hotkeys.Registrations.Count} hotkeys, {refused} refused");
     }), "apply settings");
 
     // Triggers (pool threads until the hand-off to the UI thread).
@@ -145,8 +165,12 @@ internal sealed class ToolbarController : IDisposable
     {
         try
         {
-            // The one reader of the key channel (Phase 10 adds the selection gestures here).
-            await foreach (var key in _input.Keys.ReadAllAsync(token).ConfigureAwait(false)) _chord.Handle(key);
+            // The one reader of the key channel. Keys typed into the toolbar's own text boxes select nothing in the source.
+            await foreach (var key in _input.Keys.ReadAllAsync(token).ConfigureAwait(false))
+            {
+                _chord.Handle(key);
+                if (!(_shown && ToolbarWindowStyle.IsToolbarOrOwnedForeground(_toolbarHwnd))) _pipeline.Handle(key);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -272,11 +296,57 @@ internal sealed class ToolbarController : IDisposable
         }), "capture");
     }
 
+    /// <summary>The one reader of the pipeline's selections: each is routed on the UI thread.</summary>
+    private async Task ReadSelectionsAsync(CancellationToken token)
+    {
+        try
+        {
+            await foreach (var selection in _pipeline.Events.ReadAllAsync(token).ConfigureAwait(false))
+                _dispatcher.TryEnqueue(() => RouteSelection(selection));
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// A passive selection (spec-1 §1.3, macOS order): nothing while PopGuy is off or the selection is in PopGuy itself
+    /// (as for the chord and the hotkeys). A double-click with its trigger on shows the toolbar, then runs the assigned
+    /// action if there is one (macOS doubleClickActionFeatureEnabled is on; the selection is reused, no re-capture), and
+    /// skips the text-select gate. Anything else needs the text-select trigger and, with "Only in editable text" on, an
+    /// editable selection. Placed at the gesture: the release point and drag direction, or the selection rect (a
+    /// keyboard selection); the copy fallback has no rect, so its toolbar goes to the release point. UI thread.
+    /// </summary>
+    private void RouteSelection(SelectionPipelineEvent selection)
+    {
+        var settings = _settings.Current;
+        if (!settings.PopGuyEnabled || selection.Source.IsOwnProcess) return;
+        var result = selection.Capture;
+        var anchor = selection.Anchor;
+        var capture = new CapturedSelection(result.Text, result.IsEditable, FirstRect(result.SelectionRects), selection.Source,
+            Pointer: anchor.MouseReleasePoint, GrewDownward: anchor.GrewDownward);
+        if (anchor.IsDoubleClick && settings.TriggerDoubleClickEnabled)
+        {
+            var assigned = settings.DoubleClickAssignedAction;
+            _log($"selection: double-click, {result.Text.Length} chars, {(assigned is null ? "show" : $"run {assigned.Type} {assigned.BuiltinKind}")}");
+            Present(capture, assigned);
+            return;
+        }
+        if (!settings.TriggerOnSelectEnabled) return;
+        if (!SelectionGesture.ShouldShowOnTextSelect(result.IsEditable, settings.TriggerOnSelectEditableOnly))
+        {
+            _log("selection: dropped, not editable");
+            return;
+        }
+        Present(capture, autoRun: null);
+    }
+
     // Presentation (UI thread).
 
     /// <summary>
     /// Shows the toolbar for <paramref name="capture"/> if <see cref="PresentationGate"/> lets it (an ignored app, no
-    /// enabled action, or a re-entrant same-text event drops it), then runs <paramref name="autoRun"/>.
+    /// enabled action, or a re-entrant same-text event drops it), then runs <paramref name="autoRun"/>. A dropped
+    /// selection runs nothing: a trailing double-click on a result keeps it (macOS still dispatches then).
     /// </summary>
     private void Present(CapturedSelection capture, ActionIdentifier? autoRun)
     {
@@ -301,8 +371,9 @@ internal sealed class ToolbarController : IDisposable
         _presentation++;
         _pasting = false;
         _viewModel.Present(settings, capture.IsEditable, CanIgnore(capture.Source));
-        // No pointer: placed below the selection rect, or at the cursor when there is none (spec-1 §3.2).
-        _window.ShowAt(pointer: null, grewDownward: null, capture.Selection, capture.Source);
+        // No pointer (the chord, the hotkeys, a keyboard selection): placed below the selection rect, or at the cursor
+        // when there is none (spec-1 §3.2).
+        _window.ShowAt(capture.Pointer, capture.GrewDownward, capture.Selection, capture.Source);
         _shown = true;
         if (capture.Blocked)
         {
@@ -391,7 +462,9 @@ internal sealed class ToolbarController : IDisposable
         {
             await foreach (var mouse in _input.Mouse.ReadAllAsync(token).ConfigureAwait(false))
             {
-                if (!_shown || mouse.IsPopGuyMarker) continue;
+                if (mouse.IsPopGuyMarker) continue;
+                FeedPipeline(mouse);
+                if (!_shown) continue;
                 if (mouse.Kind is not (MouseEventKind.LeftDown or MouseEventKind.RightDown or MouseEventKind.MiddleDown)) continue;
                 var point = new Point(mouse.X, mouse.Y);
                 var timestamp = mouse.Timestamp;
@@ -407,6 +480,35 @@ internal sealed class ToolbarController : IDisposable
         {
         }
     }
+
+    /// <summary>
+    /// Passes a mouse event to the selection pipeline, except a left press or release on the toolbar or its menus, and
+    /// the release of a press there (a drag of the toolbar, a selection in its result): a click on a toolbar button would
+    /// otherwise cancel a capture in flight or re-present the toolbar. Mouse loop only.
+    /// </summary>
+    private void FeedPipeline(MouseEvent mouse)
+    {
+        var point = new Point(mouse.X, mouse.Y);
+        if (mouse.Kind == MouseEventKind.LeftDown)
+        {
+            _pressOnToolbar = IsOnToolbar(point);
+            if (_pressOnToolbar) return;
+        }
+        else if (mouse.Kind == MouseEventKind.LeftUp)
+        {
+            var onToolbar = _pressOnToolbar || IsOnToolbar(point);
+            _pressOnToolbar = false;
+            if (onToolbar) return;
+        }
+        _pipeline.Handle(mouse);
+    }
+
+    /// <summary>
+    /// The point is on the shown toolbar or a window it owns (an open menu). Checked only while it shows: a hidden
+    /// window keeps its last rect. Any thread.
+    /// </summary>
+    private bool IsOnToolbar(Point point) =>
+        _shown && (ToolbarWindowStyle.WindowRect(_toolbarHwnd).Contains(point) || ToolbarWindowStyle.IsToolbarOrOwnedAt(point, _toolbarHwnd));
 
     /// <summary>
     /// An outside click or Esc: like <see cref="RequestDismiss"/>, but a non-empty prompt or refine draft keeps the

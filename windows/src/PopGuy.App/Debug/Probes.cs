@@ -28,8 +28,9 @@ namespace PopGuy.Debug;
 /// <c>probe-uia-&lt;ts&gt;.json</c>, then exit.</item>
 /// <item><c>--import-key &lt;provider|tts:raw&gt; &lt;path&gt;</c>: saves the key in a UTF-8 text file to Credential
 /// Manager (<see cref="SecretIds"/>), replacing an older one, then exit.</item>
-/// <item><c>--seed-settings &lt;provider&gt; &lt;model&gt; [baseUrl]</c>: maps the built-in actions to that provider and
-/// model, then exit.</item>
+/// <item><c>--seed-settings &lt;provider&gt; &lt;model&gt; [baseUrl] [--on-select] [--double-click &lt;action&gt;]</c>: maps
+/// the built-in actions to that provider and model, optionally turns on Show on Text Selection and the double-click
+/// trigger with an assigned built-in action, then exit.</item>
 /// <item><c>--selftest-toolbar</c>: not an exiting harness; the app starts as usual and shows the toolbar with
 /// <see cref="SelfTestText"/> as a result (see <c>App.OnLaunched</c>).</item>
 /// </list>
@@ -197,15 +198,27 @@ internal static class Probes
     /// <summary>
     /// <c>--seed-settings</c>: Improve, Shorten, Proofread, Translate and Prompt get the provider and model (their tone and
     /// custom prompt stay); the base URL, when given, becomes the Custom or Ollama one (ignored for other providers).
+    /// <c>--on-select</c> turns on Show on Text Selection; <c>--double-click &lt;action&gt;</c> (a built-in's raw id, e.g.
+    /// <c>improve</c>) turns on Show on Double-Click and assigns that action. Neither turns anything off.
     /// </summary>
     private static int SeedSettings(string[] args, int index)
     {
         const string Name = "seed-settings";
+        const string Usage = "usage: --seed-settings <provider> <model> [baseUrl] [--on-select] [--double-click <action>]";
         var raw = ArgAt(args, index + 1);
         var baseUrl = ArgAt(args, index + 3);
-        if (raw is null || ArgAt(args, index + 2) is not { Length: > 0 } model)
-            return Report(Name, "usage: --seed-settings <provider> <model> [baseUrl]", 1);
+        if (raw is null || ArgAt(args, index + 2) is not { Length: > 0 } model) return Report(Name, Usage, 1);
         if (!RawValueEnumConverter<ProviderKind>.TryParse(raw, out var kind)) return Report(Name, "unknownProvider", 1);
+        var onSelect = Array.IndexOf(args, "--on-select") >= 0;
+        var doubleClickIndex = Array.IndexOf(args, "--double-click");
+        var action = doubleClickIndex >= 0 ? ArgAt(args, doubleClickIndex + 1) : null;
+        ActionIdentifier? doubleClick = null;
+        if (doubleClickIndex >= 0)
+        {
+            if (action is null) return Report(Name, Usage, 1);
+            if (!RawValueEnumConverter<ActionKind>.TryParse(action, out var actionKind)) return Report(Name, "unknownAction", 1);
+            doubleClick = ActionIdentifier.Builtin(actionKind);
+        }
 
         ActionConfig Seeded(ActionConfig config) => config with { ProviderKind = kind, Model = model };
         try
@@ -220,6 +233,8 @@ internal static class Probes
                     TranslateConfig = Seeded(s.TranslateConfig),
                     PromptConfig = Seeded(s.PromptConfig),
                 };
+                if (onSelect) seeded = seeded with { TriggerOnSelectEnabled = true };
+                if (doubleClick is not null) seeded = seeded with { TriggerDoubleClickEnabled = true, DoubleClickAssignedAction = doubleClick };
                 return (baseUrl, kind) switch
                 {
                     ({ } url, ProviderKind.Custom) => seeded with { CustomBaseUrl = url },
@@ -232,7 +247,8 @@ internal static class Probes
         {
             return Report(Name, $"settingsWriteFailed {e.GetType().Name}", 1);
         }
-        return Report(Name, $"seeded {raw} {model}", 0);
+        var triggers = (onSelect ? ", onSelect" : "") + (doubleClick is null ? "" : $", doubleClick {action}");
+        return Report(Name, $"seeded {raw} {model}{triggers}", 0);
     }
 
     /// <summary>The argument at <paramref name="index"/>, or null when there is none (or it is the next "--" option).</summary>
