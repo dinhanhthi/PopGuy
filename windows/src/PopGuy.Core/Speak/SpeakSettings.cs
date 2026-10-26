@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using PopGuy.Core.Actions;
 
 namespace PopGuy.Core.Speak;
@@ -49,6 +51,26 @@ public static class SpeakRules
         SpeakAccent.German => "German",
         _ => "US English",
     };
+
+    /// <summary>The Free Dictionary recording for the accent ("us", "uk"); null when it has none (no word audio).</summary>
+    public static string? DictionaryVariant(this SpeakAccent accent) => accent switch
+    {
+        SpeakAccent.UsEnglish => "us",
+        SpeakAccent.UkEnglish => "uk",
+        _ => null,
+    };
+
+    /// <summary>
+    /// Whether the dictionary Listen path may ask for a word's recording: non-empty, at most 45 characters, and only
+    /// letters (with their combining marks, as Swift's letter set), "-" and "'" (so no whitespace).
+    /// </summary>
+    public static bool IsSingleWord(string text) =>
+        text.Length > 0
+        && new StringInfo(text).LengthInTextElements <= 45
+        && text.EnumerateRunes().All(rune => rune.Value is '-' or '\'' || Rune.GetUnicodeCategory(rune) is
+            UnicodeCategory.UppercaseLetter or UnicodeCategory.LowercaseLetter or UnicodeCategory.TitlecaseLetter
+            or UnicodeCategory.ModifierLetter or UnicodeCategory.OtherLetter or UnicodeCategory.NonSpacingMark
+            or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark);
 
     /// <summary>
     /// The cloud speech speed for a system rate: linear, 0.6 at the minimum rate, 1.0 at the default, 1.5 at the

@@ -1,16 +1,19 @@
+using System.Net;
 using System.Text;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Providers;
 using PopGuy.Core.Speak;
 using PopGuy.Core.Speak.CloudTts;
 using PopGuy.Core.Toolbar;
+using PopGuy.Tests.Support;
 
 namespace PopGuy.Tests.Core;
 
 // Key feature: the Speak coordinator (macOS SpeakCoordinator.swift, spec-4 §1.5-1.10): phases idle → loading → playing
 // → idle, cloud failure falls back to the system voice, a new Speak or Stop cancels the previous request, "Listen again"
 // replays cached cloud audio without a new request (and a fallback replays through the system voice, never re-billing),
-// the cloud speed mapping, and a macOS voice id resolving to the Windows voice for its language.
+// the cloud speed mapping, a macOS voice id resolving to the Windows voice for its language, and the dictionary Listen
+// path (§1.6 B): the entry's https audio first, else the selected engine.
 public sealed class SpeakTests
 {
     private static readonly IReadOnlyList<SystemVoice> Voices =
@@ -117,11 +120,11 @@ public sealed class SpeakTests
     }
 
     private static (SpeakCoordinator Coordinator, FakeSystemTts System, FakePlayback Playback) Make(
-        FakeCloud? cloud = null, string? key = "pg-test-key")
+        FakeCloud? cloud = null, string? key = "pg-test-key", DictionaryAudioEngine? dictionary = null)
     {
         var system = new FakeSystemTts();
         var playback = new FakePlayback();
-        var coordinator = new SpeakCoordinator(system, playback, _ => cloud, _ => key);
+        var coordinator = new SpeakCoordinator(system, playback, _ => cloud, _ => key, dictionary: dictionary);
         return (coordinator, system, playback);
     }
 
@@ -320,6 +323,58 @@ public sealed class SpeakTests
     {
         var settings = new SpeakSettings { DefaultVoiceId = savedVoice };
         Assert.Equal(expected, SpeakRules.ResolveSystemVoice(Voices, settings, accent));
+    }
+
+    private const string MinhqndAudio = "https://dict.minhqnd.com/api/v1/tts?word=xin%20ch%C3%A0o&lang=vi";
+
+    [Fact]
+    public async Task DictionaryListenPlaysTheEntryAudioAndReplaysIt()
+    {
+        var handler = new FakeHttpHandler(HttpStatusCode.OK, "mp3:xin chào");
+        var (speak, system, playback) = Make(dictionary: new DictionaryAudioEngine(new ProviderHttp(handler)));
+
+        var run = speak.SpeakDictionaryAsync(" xin chào ", MinhqndAudio, SpeakAccent.UsEnglish, new(), new());
+        Assert.Equal(SpeakPhase.Loading, speak.Phase);
+        await WaitUntil(() => speak.Phase == SpeakPhase.Playing);
+
+        Assert.Equal(("mp3:xin chào", AudioContentTypes.Mp3), Assert.Single(playback.Played));
+        Assert.Equal(MinhqndAudio, Assert.Single(handler.Requests).Uri!.AbsoluteUri);
+        Assert.Empty(system.Calls);
+        Assert.Equal("xin chào", speak.LastSpokenText);
+        Assert.True(speak.CanReplay);
+        playback.EndCurrent();
+        await run;
+
+        // Listen again plays the same URL.
+        var replay = speak.ReplayAsync();
+        await WaitUntil(() => speak.Phase == SpeakPhase.Playing);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal(2, playback.Played.Count);
+        Assert.Empty(system.Calls);
+        playback.EndCurrent();
+        await replay;
+    }
+
+    // No entry audio, a URL that is not https (never fetched), or a failed download: the selected engine speaks. A phrase
+    // never asks for word audio.
+    [Theory]
+    [InlineData(null, HttpStatusCode.OK, 0)]
+    [InlineData("http://dict.minhqnd.com/a.mp3", HttpStatusCode.OK, 0)]
+    [InlineData("javascript:alert(1)", HttpStatusCode.OK, 0)]
+    [InlineData(MinhqndAudio, HttpStatusCode.NotFound, 1)]
+    public async Task DictionaryListenFallsBackToTheSelectedEngine(string? url, HttpStatusCode status, int requests)
+    {
+        var handler = new FakeHttpHandler(status, "mp3");
+        var (speak, system, playback) = Make(dictionary: new DictionaryAudioEngine(new ProviderHttp(handler)));
+
+        var run = speak.SpeakDictionaryAsync("xin chào", url, SpeakAccent.UsEnglish, new(), new());
+        await WaitUntil(() => speak.Phase == SpeakPhase.Playing);
+
+        Assert.Equal(("xin chào", "win-zira"), Assert.Single(system.Calls));
+        Assert.Equal(("wav:xin chào", AudioContentTypes.Wav), Assert.Single(playback.Played));
+        Assert.Equal(requests, handler.Requests.Count);
+        playback.EndCurrent();
+        await run;
     }
 
     private static async Task WaitUntil(Func<bool> condition)

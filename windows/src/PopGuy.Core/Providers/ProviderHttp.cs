@@ -105,8 +105,12 @@ public sealed class ProviderHttp
         }
     }
 
-    /// <summary>Sends a plain request and returns its whole body as bytes (cloud TTS audio).</summary>
-    public async Task<byte[]> SendBytesAsync(HttpRequestMessage request, string? apiKey, CancellationToken ct = default)
+    /// <summary>
+    /// Sends a plain request and returns its whole body as bytes (cloud TTS and dictionary audio). A body over
+    /// <paramref name="maxBytes"/> throws <see cref="ProviderErrorKind.UnexpectedResponse"/> once the cap is passed.
+    /// </summary>
+    public async Task<byte[]> SendBytesAsync(
+        HttpRequestMessage request, string? apiKey, CancellationToken ct = default, int maxBytes = int.MaxValue)
     {
         using var ownedRequest = request;
         using var deadline = new Deadline(ct);
@@ -115,7 +119,14 @@ public sealed class ProviderHttp
         {
             await using var body = await OpenBodyAsync(response, deadline);
             using var buffer = new MemoryStream();
-            await body.CopyToAsync(buffer, deadline.Token);
+            var chunk = new byte[81920];
+            int read;
+            while ((read = await body.ReadAsync(chunk, deadline.Token)) > 0)
+            {
+                if (buffer.Length + read > maxBytes)
+                    throw ProviderError.UnexpectedResponse("The response is too large.");
+                buffer.Write(chunk, 0, read);
+            }
             return buffer.ToArray();
         }
         catch (Exception ex) when (Translate(ex, ct, apiKey) is { } error)
