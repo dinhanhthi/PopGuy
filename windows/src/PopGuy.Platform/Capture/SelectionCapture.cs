@@ -127,7 +127,7 @@ public static class SelectionCapture
         var uia = UiaSelectionReader.ReadFocused();
         if (uia.Status == UiaCaptureStatus.Captured)
         {
-            return new(SelectionCaptureStatus.Captured, LineEndings.ToLf(uia.Text), uia.IsEditable, SelectionCaptureMethod.Uia, "uia",
+            return new(SelectionCaptureStatus.Captured, uia.Text, uia.IsEditable, SelectionCaptureMethod.Uia, "uia",
                 uia.SelectionRects, uia.Status, uia.IsTruncated);
         }
         if (mode == CaptureMode.Passive)

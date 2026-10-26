@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
+using PopGuy.Core.Text;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.System.Com;
@@ -276,7 +277,8 @@ public static class UiaSelectionReader
                 }
             }
 
-            var text = string.Join("\n", texts);
+            // Some editors (Notepad) return line breaks as a bare "\r".
+            var text = LineEndings.ToLf(string.Join("\n", texts));
             var isEditable = IsEditable(element, rangeReadOnly ?? false);
             return string.IsNullOrWhiteSpace(text)
                 ? new UiaSelection(UiaCaptureStatus.Empty, "", isEditable, rects, hint)

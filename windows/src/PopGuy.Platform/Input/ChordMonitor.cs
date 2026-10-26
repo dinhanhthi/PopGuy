@@ -1,4 +1,5 @@
 using PopGuy.Core.Settings;
+using PopGuy.Core.Text;
 using PopGuy.Core.Toolbar;
 using PopGuy.Platform.Capture;
 using PopGuy.Platform.SystemServices;
@@ -189,7 +190,7 @@ public sealed class ChordMonitor
 
     private void Raise(uint timestamp, ForegroundApp app, (string? Text, uint Settled) copy)
     {
-        var text = copy.Text;
+        var text = copy.Text is { } copied ? LineEndings.ToLf(copied) : null;
         var truncated = text is not null && text.Length > UiaSelectionReader.MaxTextLength;
         if (truncated) text = text![..UiaSelectionReader.MaxTextLength];
         var fire = new ChordFire(timestamp, app, text, truncated);
