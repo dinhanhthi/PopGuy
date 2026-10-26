@@ -154,6 +154,11 @@ public sealed class ScriptActionEngine : IScriptActionRunner
         {
             throw new ScriptActionError(TimedOutMessage);
         }
+        catch (ProviderError error) when (error.Kind == ProviderErrorKind.UnexpectedResponse)
+        {
+            // CliRunner's only UnexpectedResponse: a stdout line over its 4 MB limit, so too much output.
+            throw new ScriptActionError(OutputTooLargeMessage);
+        }
         catch (ProviderError error)
         {
             throw ProcessFailed(error);

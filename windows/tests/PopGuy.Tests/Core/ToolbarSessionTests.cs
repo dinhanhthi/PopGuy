@@ -59,7 +59,10 @@ public sealed class ToolbarSessionTests : IDisposable
         return new ToolbarSession(new ActionEngine(factory, _ => "pg-test-key"), _history, () => settings, new FrozenClock());
     }
 
-    private sealed class FakeScripts(string? output, Exception? error = null) : IScriptActionRunner
+    /// <param name="hold">Holds the run until it completes; with <paramref name="honoursCancellation"/> a cancelled
+    /// run throws instead of finishing.</param>
+    private sealed class FakeScripts(
+        string? output, Exception? error = null, Task? hold = null, bool honoursCancellation = false) : IScriptActionRunner
     {
         public (string Text, string FullText)? Call { get; private set; }
 
@@ -67,6 +70,8 @@ public sealed class ToolbarSessionTests : IDisposable
             CustomAction action, string text, string fullText, CancellationToken ct = default)
         {
             Call = (text, fullText);
+            if (hold is not null)
+                await (honoursCancellation ? hold.WaitAsync(ct) : hold);
             await Task.Yield();
             if (error is not null)
                 throw error;
@@ -223,5 +228,29 @@ public sealed class ToolbarSessionTests : IDisposable
         Assert.False(finished);
         var record = Assert.Single(_history.Records);
         Assert.False(record.Success);
+    }
+
+    // A stopped script writes nothing when it ends: no state, no history, and no ScriptFinished (the App would copy or
+    // paste its output), whether it ends cancelled or finishes anyway.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task StoppedScriptChangesNothingWhenItEnds(bool honoursCancellation)
+    {
+        var hold = new TaskCompletionSource();
+        var session = ScriptSession(
+            new FakeScripts("TEH FOX", hold: hold.Task, honoursCancellation: honoursCancellation), AfterRunBehavior.PasteResult);
+        var finished = false;
+        session.ScriptFinished += _ => finished = true;
+
+        var run = session.RunAsync(ScriptRun);
+        Assert.Equal(new ToolbarState.Running(""), session.State);
+        session.Stop();
+        hold.SetResult();
+        await run;
+
+        Assert.Equal(ToolbarState.Idle, session.State);
+        Assert.False(finished);
+        Assert.Empty(_history.Records);
     }
 }

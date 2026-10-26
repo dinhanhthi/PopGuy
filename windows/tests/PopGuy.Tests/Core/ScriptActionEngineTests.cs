@@ -79,4 +79,21 @@ public sealed class ScriptActionEngineTests
 
         Assert.Equal(text, result.Text);
     }
+
+    // The output cap: a script that prints without stopping fails instead of growing PopGuy's memory. Many lines hit
+    // the engine's 1 MB cap; one line over CliRunner's 4 MB line limit gets the same message.
+    [Theory]
+    [InlineData("$line = 'x' * 1024; 1..1100 | ForEach-Object { $line }")]
+    [InlineData("'x' * 5MB")]
+    public async Task PowerShellOutputOver1MBFailsTheRun(string script)
+    {
+        if (!OperatingSystem.IsWindows()) Assert.Skip("PowerShell scripts run on Windows only.");
+
+        var error = await Assert.ThrowsAsync<ScriptActionError>(
+            () => new ScriptActionEngine().RunAsync(
+                Action(CustomActionType.ShellScript, script, "powershell"), "text", "text",
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal("The script printed more than 1 MB of output and was stopped.", error.Message);
+    }
 }
