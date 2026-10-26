@@ -98,7 +98,7 @@ public sealed partial class SpeakCard : UserControl
             _modelTimer.Start();
         };
         ModelText.LostFocus += (_, _) => CommitModelText();
-        ModelText.KeyDown += (_, e) =>
+        ModelText.PreviewKeyDown += (_, e) =>
         {
             if (e.Key != VirtualKey.Enter) return;
             e.Handled = true;

@@ -508,7 +508,7 @@ public sealed partial class DictionaryCard : UserControl
                     _timer.Start();
                 };
                 Box.LostFocus += (_, _) => Commit();
-                Box.KeyDown += (_, e) =>
+                Box.PreviewKeyDown += (_, e) =>
                 {
                     if (e.Key != VirtualKey.Enter) return;
                     e.Handled = true;

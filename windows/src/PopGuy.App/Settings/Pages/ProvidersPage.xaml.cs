@@ -577,7 +577,7 @@ public sealed partial class ProvidersPage : Page
             Root.Children.Add(buttons);
 
             _box.PasswordChanged += (_, _) => Render();
-            _box.KeyDown += async (_, e) =>
+            _box.PreviewKeyDown += async (_, e) =>
             {
                 if (e.Key != VirtualKey.Enter) return;
                 e.Handled = true;

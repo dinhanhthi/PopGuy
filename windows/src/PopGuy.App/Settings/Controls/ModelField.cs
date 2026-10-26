@@ -88,7 +88,7 @@ public sealed partial class ModelField : UserControl
 
         _box.TextChanged += (_, _) => OnTextChanged();
         _box.LostFocus += (_, _) => Flush();
-        _box.KeyDown += (_, e) =>
+        _box.PreviewKeyDown += (_, e) =>
         {
             if (e.Key != VirtualKey.Enter) return;
             e.Handled = true;

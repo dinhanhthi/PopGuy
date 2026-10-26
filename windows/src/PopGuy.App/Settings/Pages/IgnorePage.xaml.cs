@@ -71,7 +71,7 @@ public sealed partial class IgnorePage : Page
         DomainsToggle.Toggled += (_, _) =>
             Save("ignoredDomainsEnabled", s => s with { IgnoredDomainsEnabled = DomainsToggle.IsOn });
         AddDomainButton.Click += (_, _) => AddDomain();
-        DomainBox.KeyDown += (_, e) =>
+        DomainBox.PreviewKeyDown += (_, e) =>
         {
             if (e.Key != VirtualKey.Enter) return;
             e.Handled = true;
