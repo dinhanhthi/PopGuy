@@ -262,12 +262,25 @@ public static class PopClipReader
         return InlineFileScripts(PopClipConfig.FromTree(tree), bundle);
     }
 
-    /// <summary>Shell and AppleScript files replace the inline source; <c>javascriptFile</c> is not inlined (macOS parity).</summary>
+    /// <summary>
+    /// Shell and AppleScript files replace the inline source; <c>javascriptFile</c> is not inlined (macOS parity). A
+    /// path is read once however many actions name it, and the files read are capped as a whole at
+    /// <see cref="MaxArchiveUncompressedBytes"/>, so a short config cannot multiply a script in memory.
+    /// </summary>
     private static PopClipConfig InlineFileScripts(PopClipConfig config, Bundle bundle)
     {
-        string ReadScript(string path, string label) =>
-            DecodeUtf8(bundle.ReadContained(path, label))
-            ?? throw PopClipReadException.Malformed($"{label} '{path}' is not valid UTF-8.");
+        var read = new Dictionary<string, string>(StringComparer.Ordinal);
+        long total = 0;
+        string ReadScript(string path, string label)
+        {
+            if (read.TryGetValue(path, out var cached)) return cached;
+            var bytes = bundle.ReadContained(path, label);
+            total += bytes.Length;
+            if (total > MaxArchiveUncompressedBytes) throw PopClipReadException.TooLarge("The extension's script files");
+            var text = DecodeUtf8(bytes) ?? throw PopClipReadException.Malformed($"{label} '{path}' is not valid UTF-8.");
+            read[path] = text;
+            return text;
+        }
 
         var actions = config.Actions.Select(action =>
         {

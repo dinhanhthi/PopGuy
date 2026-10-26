@@ -217,4 +217,51 @@ public class PluginImportTests
             root.Delete(recursive: true);
         }
     }
+
+    // Many actions naming one script file must not multiply it in memory (commit security review).
+    [Fact]
+    public void ScriptFileNamedByManyActionsIsReadOnce()
+    {
+        var root = Directory.CreateTempSubdirectory("popclip-");
+        try
+        {
+            var bundle = root.CreateSubdirectory("Many.popclipext");
+            File.WriteAllText(Path.Combine(bundle.FullName, "s.sh"), new string('x', PopClipReader.MaxFileBytes - 1));
+            var actions = string.Join(",", Enumerable.Repeat("""{"title":"A","shell script file":"s.sh"}""", 400));
+            File.WriteAllText(Path.Combine(bundle.FullName, "Config.json"), $$"""{"name":"Many","actions":[{{actions}}]}""");
+
+            var config = PopClipReader.ReadFolder(bundle.FullName);
+
+            Assert.Equal(400, config.Actions.Count);
+            Assert.All(config.Actions, a => Assert.Same(config.Actions[0].ShellScript, a.ShellScript));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    // Distinct script files are capped as a whole, like a zip's total uncompressed size.
+    [Fact]
+    public void ScriptFilesOverTheBundleBudgetAreRejected()
+    {
+        var root = Directory.CreateTempSubdirectory("popclip-");
+        try
+        {
+            var bundle = root.CreateSubdirectory("Big.popclipext");
+            var count = (int)(PopClipReader.MaxArchiveUncompressedBytes / (PopClipReader.MaxFileBytes - 1)) + 2;
+            var body = new string('x', PopClipReader.MaxFileBytes - 1);
+            for (var i = 0; i < count; i++) File.WriteAllText(Path.Combine(bundle.FullName, $"s{i}.sh"), body);
+            var actions = string.Join(",", Enumerable.Range(0, count).Select(i => $$"""{"title":"A","shell script file":"s{{i}}.sh"}"""));
+            File.WriteAllText(Path.Combine(bundle.FullName, "Config.json"), $$"""{"name":"Big","actions":[{{actions}}]}""");
+
+            var error = Assert.Throws<PopClipReadException>(() => PopClipReader.ReadFolder(bundle.FullName));
+
+            Assert.Equal(PopClipReadErrorKind.TooLarge, error.Kind);
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
 }
