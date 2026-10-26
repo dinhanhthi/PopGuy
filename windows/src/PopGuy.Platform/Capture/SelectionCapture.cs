@@ -1,4 +1,5 @@
 using System.Drawing;
+using PopGuy.Core.Text;
 using PopGuy.Core.Toolbar;
 using PopGuy.Platform.Input;
 using PopGuy.Platform.SystemServices;
@@ -126,7 +127,7 @@ public static class SelectionCapture
         var uia = UiaSelectionReader.ReadFocused();
         if (uia.Status == UiaCaptureStatus.Captured)
         {
-            return new(SelectionCaptureStatus.Captured, uia.Text, uia.IsEditable, SelectionCaptureMethod.Uia, "uia",
+            return new(SelectionCaptureStatus.Captured, LineEndings.ToLf(uia.Text), uia.IsEditable, SelectionCaptureMethod.Uia, "uia",
                 uia.SelectionRects, uia.Status, uia.IsTruncated);
         }
         if (mode == CaptureMode.Passive)
@@ -200,6 +201,7 @@ public static class SelectionCapture
                 var reason = sent == InputSendResult.NotInserted ? "notInserted" : landed ? "copyEmpty" : "copyNotLanded";
                 return NotCaptured(uia, reason) with { ClipboardRestore = restore };
             }
+            text = LineEndings.ToLf(text);
             var truncated = text.Length > UiaSelectionReader.MaxTextLength;
             if (truncated) text = text[..UiaSelectionReader.MaxTextLength];
             return new(SelectionCaptureStatus.Captured, text, mode == CaptureMode.Passive, SelectionCaptureMethod.SyntheticCopy,

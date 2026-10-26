@@ -35,18 +35,17 @@
                     VerticalAlignment="Center"
                     Orientation="Horizontal"
                     Spacing="4" />
+                <!-- Icon only; the name is for screen readers (no tooltip). -->
                 <Button
                     x:Name="CloseButton"
-                    VerticalAlignment="Center"
+                    VerticalAlignment="Stretch"
+                    AutomationProperties.Name="Close"
                     AllowFocusOnInteraction="False"
                     Visibility="{x:Bind ViewModel.ShowsClose, Mode=OneWay}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon
-                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                            FontSize="14"
-                            Glyph="&#xE711;" />
-                        <TextBlock Text="Close" />
-                    </StackPanel>
+                    <FontIcon
+                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                        FontSize="14"
+                        Glyph="&#xE711;" />
                 </Button>
             </StackPanel>
 

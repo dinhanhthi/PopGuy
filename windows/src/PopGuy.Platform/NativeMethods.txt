@@ -66,6 +66,7 @@ DefSubclassProc
 GetAsyncKeyState
 EnumChildWindows
 GetWindowRect
+GetClientRect
 GetModuleHandleW
 PostMessageW
 PostQuitMessage

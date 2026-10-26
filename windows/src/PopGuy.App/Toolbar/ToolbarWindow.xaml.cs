@@ -165,7 +165,8 @@ public sealed partial class ToolbarWindow : Window
         Card.UpdateLayout();
         if (Card.ActualWidth > 0 && Card.ActualHeight > 0) _cardSize = new(Card.ActualWidth, Card.ActualHeight);
         var scale = MonitorInfo.Scale(midpoint);
-        var size = new DrawingSize(Pixels(_cardSize.Width, scale), Pixels(_cardSize.Height, scale));
+        var frame = ToolbarWindowStyle.FrameExtent(Hwnd);
+        var size = new DrawingSize(Pixels(_cardSize.Width, scale) + frame.Width, Pixels(_cardSize.Height, scale) + frame.Height);
         var origin = PanelPositioning.PanelOrigin(size, selectionRect, _workArea, pointer, grewDownward);
         ToolbarWindowStyle.SetBounds(Hwnd, new DrawingRectangle(origin, size));
 
@@ -468,8 +469,10 @@ public sealed partial class ToolbarWindow : Window
         var scale = _xamlRoot.RasterizationScale;
         if (scale <= 0 || !double.IsFinite(scale)) return;
         _cardSize = new(Card.ActualWidth, Card.ActualHeight);
-        var width = Pixels(_cardSize.Width, scale);
-        var height = Pixels(_cardSize.Height, scale);
+        // The window is the card plus the frame Windows keeps around the client area.
+        var extent = ToolbarWindowStyle.FrameExtent(Hwnd);
+        var width = Pixels(_cardSize.Width, scale) + extent.Width;
+        var height = Pixels(_cardSize.Height, scale) + extent.Height;
         var frame = ToolbarWindowStyle.WindowRect(Hwnd);
         if (frame.IsEmpty || (frame.Width == width && frame.Height == height)) return;
 

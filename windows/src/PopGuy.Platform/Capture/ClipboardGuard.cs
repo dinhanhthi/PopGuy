@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
+using PopGuy.Core.Text;
 using PopGuy.Platform.Input;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -363,7 +364,7 @@ public static class ClipboardGuard
     }
 
     /// <summary>
-    /// Puts <paramref name="text"/> on the clipboard as CF_UNICODETEXT. With <paramref name="excludeFromHistory"/>, also
+    /// Puts <paramref name="text"/> on the clipboard as CF_UNICODETEXT, its line breaks as "\r\n". With <paramref name="excludeFromHistory"/>, also
     /// sets ExcludeClipboardContentFromMonitorProcessing, CanIncludeInClipboardHistory and CanUploadToCloudClipboard
     /// (each a DWORD 0), so clipboard history (Win+V), cloud sync and clipboard monitors skip it. False if the clipboard
     /// could not be opened or a format was refused; then it is never left half-written (text without its markers):
@@ -382,7 +383,7 @@ public static class ClipboardGuard
         {
             ok = PInvoke.EmptyClipboard();
             // Two zero bytes more: the terminating null character.
-            ok = ok && SetBytes((uint)CLIPBOARD_FORMAT.CF_UNICODETEXT, MemoryMarshal.AsBytes(text.AsSpan()), extraZeroBytes: sizeof(char));
+            ok = ok && SetBytes((uint)CLIPBOARD_FORMAT.CF_UNICODETEXT, MemoryMarshal.AsBytes(LineEndings.ToCrLf(text).AsSpan()), extraZeroBytes: sizeof(char));
             if (ok && excludeFromHistory)
             {
                 // A real allocation even where the data does not matter: a null handle would mean a delayed render.

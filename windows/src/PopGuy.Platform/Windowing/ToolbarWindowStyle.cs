@@ -100,6 +100,18 @@ public static class ToolbarWindowStyle
             ? Rectangle.FromLTRB(rect.left, rect.top, rect.right, rect.bottom)
             : Rectangle.Empty;
 
+    /// <summary>
+    /// How much larger the window is than its client area. A WinUI window without border and title bar keeps a thin
+    /// frame (3 px a side at 96 DPI, VM QA), so a window sized to its content cuts that much off the right and bottom.
+    /// Empty when it cannot be read.
+    /// </summary>
+    public static Size FrameExtent(nint hwnd)
+    {
+        if (!PInvoke.GetWindowRect((HWND)hwnd, out var window) || !PInvoke.GetClientRect((HWND)hwnd, out var client))
+            return Size.Empty;
+        return new(Math.Max(0, window.right - window.left - client.right), Math.Max(0, window.bottom - window.top - client.bottom));
+    }
+
     /// <summary>False once the window is destroyed.</summary>
     public static bool IsAlive(nint hwnd) => hwnd != 0 && PInvoke.IsWindow((HWND)hwnd);
 
