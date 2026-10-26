@@ -58,7 +58,8 @@ public static class SelectionGesture
         var isDrag = Math.Sqrt(dx * dx + dy * dy) >= DragThresholdDip * scale;
         // A triple-click (a line) is mouse-driven too: macOS reaches it through the selection-changed notification,
         // which Windows lacks, so without a release point it was a bare click and a VS Code line never showed (VM QA).
-        var mouseDriven = recentMouseUp && (isDrag || clickCount >= 2);
+        // Not the 4th click on: in a Monaco editor an empty selection copies the current line.
+        var mouseDriven = recentMouseUp && (isDrag || clickCount is 2 or 3);
         // AppKit is y-up, so macOS tests up.y <= down.y; Windows is y-down, so the same "downward on screen" is
         // up.Y >= down.Y. Equality stays downward on both, so a horizontal drag puts the panel below.
         bool? grewDownward = mouseDriven && isDrag ? up.Y >= down.Y : null;

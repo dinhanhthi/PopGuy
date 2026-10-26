@@ -78,6 +78,36 @@ public sealed class TriggerLogicTests
     }
 
     [Fact]
+    public void FourthClickOfASeriesIsABareClick()
+    {
+        // In a Monaco editor an empty selection copies the current line: a quick click series must not copy it.
+        Assert.Null(Anchor(new Point(501, 400), clickCount: 4).MouseReleasePoint);
+    }
+
+    // The low-level hook reports no click count: this counter alone decides double- and triple-clicks.
+    [Fact]
+    public void ClickCounterFollowsTheSystemDoubleClickTimeAndRectangle()
+    {
+        const uint Time = 500;
+        var size = new Size(4, 4);
+        var counter = new ClickCounter();
+
+        Assert.Equal(1, counter.Press(new Point(100, 100), 1000, Time, size));
+        Assert.Equal(2, counter.Press(new Point(102, 98), 1400, Time, size));
+        // The rectangle is centred on the previous press, not the first.
+        Assert.Equal(3, counter.Press(new Point(101, 99), 1800, Time, size));
+        // Too late, then too far: each starts a new series.
+        Assert.Equal(1, counter.Press(new Point(101, 99), 2301, Time, size));
+        Assert.Equal(1, counter.Press(new Point(104, 99), 2400, Time, size));
+        // Another button's press ends the series.
+        counter.Reset();
+        Assert.Equal(1, counter.Press(new Point(104, 101), 2500, Time, size));
+        // The tick count wraps after 49.7 days.
+        Assert.Equal(1, counter.Press(new Point(10, 10), uint.MaxValue - 100, Time, size));
+        Assert.Equal(2, counter.Press(new Point(10, 10), 200, Time, size));
+    }
+
+    [Fact]
     public void BareClickNeverFallsBackToCtrlC()
     {
         // 4 px of travel stays under the 3 DIP threshold at 150 % scale (4.5 px).
