@@ -126,10 +126,20 @@ public sealed partial class PluginImportConsentDialog : UserControl
         var body = new StackPanel { Spacing = 8 };
         body.Children.Add(CardHeader(action, title));
         if (entry.WindowsNote is { } note) body.Children.Add(CautionLine(note));
-        if (action.ScriptSource.Length > 0)
+        // Chosen by type (the import keeps only the fields a type uses), so nothing saved stays hidden.
+        if (action.IsScriptable)
+        {
             body.Children.Add(Code(ExecutableLabel(action.Type), action.ScriptSource, 180, wrap: false));
-        else if (action.Type == CustomActionType.Ai)
-            body.Children.Add(Code("System prompt", action.SystemPrompt.Length == 0 ? "(empty)" : action.SystemPrompt, 120, wrap: true));
+        }
+        else if (action.Type is CustomActionType.Ai or CustomActionType.Translation)
+        {
+            body.Children.Add(Metadata("Provider", $"{action.ProviderKind.DisplayName()} · {action.Model}", monospace: false));
+            if (action.Type == CustomActionType.Ai || action.SystemPrompt.Length > 0)
+            {
+                var label = action.Type == CustomActionType.Ai ? "System prompt" : "Additional prompt";
+                body.Children.Add(Code(label, action.SystemPrompt.Length == 0 ? "(empty)" : action.SystemPrompt, 120, wrap: true));
+            }
+        }
         if (action.IsScriptable)
         {
             body.Children.Add(Metadata("After run", CustomActionEditPanel.AfterRunName(action.AfterRun), monospace: false));

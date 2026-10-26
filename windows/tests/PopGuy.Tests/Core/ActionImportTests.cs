@@ -103,4 +103,24 @@ public class ActionImportTests
         Assert.Equal(100, new StringInfo(imported.Title).LengthInTextElements);
         Assert.EndsWith(family, imported.Title, StringComparison.Ordinal);
     }
+
+    // Fields a type never uses are dropped, so the consent panel shows everything an import saves (commit security
+    // review): a hidden script on an AI action could surface after a type change.
+    [Theory]
+    [InlineData(CustomActionType.Ai, false, true)]
+    [InlineData(CustomActionType.Translation, false, true)]
+    [InlineData(CustomActionType.Speech, false, false)]
+    [InlineData(CustomActionType.Dictionary, false, false)]
+    [InlineData(CustomActionType.OpenUrl, true, false)]
+    [InlineData(CustomActionType.ShellScript, true, false)]
+    [InlineData(CustomActionType.AppleScript, true, false)]
+    [InlineData(CustomActionType.RunShortcut, true, false)]
+    public void FieldsTheTypeDoesNotUseAreCleared(CustomActionType type, bool keepsScript, bool keepsPrompt)
+    {
+        var safe = ActionImport.Sanitize(Action(type) with { AppliesWhenRegex = "^x" })!;
+
+        Assert.Equal(keepsScript ? "echo hi" : "", safe.ScriptSource);
+        Assert.Equal(keepsScript ? "^x" : "", safe.AppliesWhenRegex);
+        Assert.Equal(keepsPrompt ? "Rewrite {{text}}." : "", safe.SystemPrompt);
+    }
 }

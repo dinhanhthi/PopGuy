@@ -115,6 +115,10 @@ public static class ActionImport
         foreach (var (key, value) in tts.VoiceOverrides.Take(20))
             voiceOverrides[Clamp(key, 20)] = Clamp(value, 100);
 
+        // A field the type never uses is dropped, so the consent panel shows everything that is saved (Windows-only:
+        // macOS keeps them).
+        var usesPrompt = action.Type is CustomActionType.Ai or CustomActionType.Translation;
+
         var icon = action.Icon.Type == ActionIconType.SfSymbol
             ? ActionIcon.SfSymbol(Clamp(action.Icon.Value, 100))
             : ActionIcon.Emoji(Clamp(action.Icon.Value, 8));
@@ -125,7 +129,7 @@ public static class ActionImport
             Title = Clamp(action.Title, 100),
             ActionDescription = Clamp(action.ActionDescription, 500),
             Icon = icon,
-            SystemPrompt = Clamp(action.SystemPrompt, 10000),
+            SystemPrompt = usesPrompt ? Clamp(action.SystemPrompt, 10000) : "",
             Model = Clamp(action.Model, 200),
             TargetLanguage = Clamp(action.TargetLanguage, 20),
             SpeakSettings = SanitizeSpeakSettings(action.SpeakSettings),
@@ -141,8 +145,8 @@ public static class ActionImport
                 DefinitionLanguage = Clamp(action.DictionaryConfig.DefinitionLanguage, 20),
                 SpeakSettings = SanitizeSpeakSettings(action.DictionaryConfig.SpeakSettings),
             },
-            ScriptSource = Clamp(action.ScriptSource, 20000),
-            AppliesWhenRegex = Clamp(action.AppliesWhenRegex, 500),
+            ScriptSource = action.IsScriptable ? Clamp(action.ScriptSource, 20000) : "",
+            AppliesWhenRegex = action.IsScriptable ? Clamp(action.AppliesWhenRegex, 500) : "",
             IsFromPlugin = false,
             LibraryPresetId = null,
             Shell = string.Equals(action.Shell, "powershell", StringComparison.Ordinal) ? action.Shell : null,
