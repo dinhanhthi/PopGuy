@@ -39,8 +39,8 @@
 
   <!-- Unpackaged: assets the app loads from disk (ms-appx:/// or a file path) must be copied next to PopGuy.exe. -->
   <ItemGroup>
-    <Content Remove="Assets\ToolbarLogo.png;Assets\TrayIcon-light.ico;Assets\TrayIcon-dark.ico" />
-    <Content Include="Assets\ToolbarLogo.png;Assets\TrayIcon-light.ico;Assets\TrayIcon-dark.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Remove="Assets\AppIcon.png;Assets\ToolbarLogo.png;Assets\TrayIcon-light.ico;Assets\TrayIcon-dark.ico" />
+    <Content Include="Assets\AppIcon.png;Assets\ToolbarLogo.png;Assets\TrayIcon-light.ico;Assets\TrayIcon-dark.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- The Phase 3 spike toolbar is a DEBUG harness (like Debug/Probes.cs): left out of every other build. -->

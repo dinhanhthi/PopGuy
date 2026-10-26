@@ -38,6 +38,7 @@ public sealed partial class SettingsWindow : Window
         ["Triggers"] = (typeof(TriggersPage), "\uE7C9"),
         ["Appearance"] = (typeof(AppearancePage), "\uE771"),
         ["Ignore"] = (typeof(IgnorePage), "\uED1A"),
+        ["About"] = (typeof(AboutPage), "\uE946"),
     };
 
     private readonly AppServices _services;

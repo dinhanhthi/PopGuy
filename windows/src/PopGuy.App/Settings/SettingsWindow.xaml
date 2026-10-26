@@ -89,6 +89,11 @@
                                 <FontIcon Glyph="&#xED1A;" />
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
+                        <NavigationViewItem Content="About" Tag="About">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE946;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
                     </NavigationView.MenuItems>
 
                     <Grid>
