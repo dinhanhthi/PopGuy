@@ -147,6 +147,7 @@ internal sealed class ProvidersViewModel
         {
             region = AzureRegion(_settings.Current);
             if (region.Length == 0) return ProviderFeedback.MissingRegionMessage;
+            if (!TtsKeyValidator.IsAzureRegion(region)) return ProviderFeedback.InvalidRegionMessage;
         }
         try
         {

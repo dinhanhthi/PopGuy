@@ -137,9 +137,11 @@ public sealed class ProviderFeedbackTests
     [InlineData("evil.example.com/")]
     [InlineData("east us")]
     [InlineData("eastus@evil.example.com")]
+    [InlineData("eastus\n")]
     public void AzureKeyCheckRefusesARegionThatIsNotAHostLabel(string? region)
     {
         var error = Assert.Throws<ProviderError>(() => TtsKeyValidator.ValidationRequest(TtsProviderKind.AzureTts, Key, region));
         Assert.Equal(ProviderErrorKind.MissingOption, error.Kind);
+        if (region is not null) Assert.False(TtsKeyValidator.IsAzureRegion(region));
     }
 }

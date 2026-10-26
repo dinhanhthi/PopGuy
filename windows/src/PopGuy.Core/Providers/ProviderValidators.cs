@@ -99,7 +99,8 @@ public static class ProviderKeyValidator
 /// <summary>
 /// Checks that a cloud TTS key authenticates before it is saved (macOS TTSProviderValidator.swift): each request lists
 /// models or voices, so no audio is synthesized. Same outcome as <see cref="ProviderKeyValidator"/>. The Settings page
-/// checks for an empty key and a missing Azure region before calling (their messages are its own).
+/// checks for an empty key and a missing or malformed Azure region (<see cref="IsAzureRegion"/>) before calling (their
+/// messages are its own).
 /// </summary>
 public static partial class TtsKeyValidator
 {
@@ -127,7 +128,7 @@ public static partial class TtsKeyValidator
                 // The URL carries the key: it is never logged, and ProviderHttp redacts it from errors.
                 return new HttpRequestMessage(HttpMethod.Get, $"{GoogleVoices}?key={Uri.EscapeDataString(apiKey)}");
             case TtsProviderKind.AzureTts:
-                if (region is null || !AzureRegion().IsMatch(region))
+                if (region is null || !IsAzureRegion(region))
                     throw ProviderError.MissingOption("Azure region");
                 request = new HttpRequestMessage(
                     HttpMethod.Get, $"https://{region}.tts.speech.microsoft.com/cognitiveservices/voices/list");
@@ -140,7 +141,10 @@ public static partial class TtsKeyValidator
         }
     }
 
-    [GeneratedRegex("^[A-Za-z0-9-]{1,63}$")]
+    /// <summary>Whether <paramref name="region"/> is a plain host label (e.g. <c>eastus</c>), not a display name like "East US".</summary>
+    public static bool IsAzureRegion(string region) => AzureRegion().IsMatch(region);
+
+    [GeneratedRegex(@"^[A-Za-z0-9-]{1,63}\z")]
     private static partial Regex AzureRegion();
 }
 

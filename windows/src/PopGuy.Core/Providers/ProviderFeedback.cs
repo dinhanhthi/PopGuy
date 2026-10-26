@@ -26,6 +26,7 @@ public enum VerifyOutcome
 public static class ProviderFeedback
 {
     public const string MissingRegionMessage = "Azure region is required — set it above the API key field.";
+    public const string InvalidRegionMessage = "Use the Azure region's short name, like eastus — not its display name.";
     public const string MissingKeyMessage = "Enter an API key.";
     public const string NetworkMessage = "Could not connect to the server. Check your network connection and try again.";
     public const string InvalidKeyMessage = "Invalid API key. Please check and try again.";
