@@ -44,6 +44,13 @@ internal sealed partial class ActiveAcrylicBackdrop : SystemBackdrop
         _configuration = null;
     }
 
+    // WinUI calls this when the default configuration changes (a Light/Dark switch, an activation change). The base
+    // version applies that configuration to the target, which this backdrop never hands to WinUI: it threw
+    // E_INVALIDARG ("target") on a theme switch and ended the app (VM QA). The own configuration already follows the theme.
+    protected override void OnDefaultSystemBackdropConfigurationChanged(ICompositionSupportsSystemBackdrop target, XamlRoot xamlRoot)
+    {
+    }
+
     private void OnActualThemeChanged(FrameworkElement sender, object args)
     {
         if (_configuration is not null) _configuration.Theme = ThemeOf(sender);
