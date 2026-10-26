@@ -115,4 +115,19 @@ public sealed record ShortcutBinding(
         new(ActionIdentifier.Builtin(ActionKind.Translate), new('T', DefaultModifiers)),
         new(ActionIdentifier.Speak, new('K', DefaultModifiers)),
     ];
+
+    /// <summary>
+    /// <paramref name="bindings"/> with <paramref name="id"/>'s hotkey set to <paramref name="shortcut"/> (macOS
+    /// setShortcut: the same keys are taken from any other action; the binding keeps its place or is appended), or
+    /// removed when <paramref name="shortcut"/> is null (removeShortcut).
+    /// </summary>
+    public static IReadOnlyList<ShortcutBinding> Set(IReadOnlyList<ShortcutBinding> bindings, ActionIdentifier id, Shortcut? shortcut)
+    {
+        if (shortcut is null) return [.. bindings.Where(b => b.Id != id)];
+        var kept = bindings.Where(b => b.Id == id || b.Shortcut != shortcut).ToList();
+        var index = kept.FindIndex(b => b.Id == id);
+        if (index < 0) kept.Add(new(id, shortcut));
+        else kept[index] = new(id, shortcut);
+        return kept;
+    }
 }

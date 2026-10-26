@@ -25,6 +25,32 @@ public static class ToolbarLayout
         _ => s.CustomActions.FirstOrDefault(a => a.Id == id.CustomId)?.IsEnabled ?? false,
     };
 
+    /// <summary><paramref name="s"/> with <paramref name="id"/> turned on or off; an unknown custom action is left as it is.</summary>
+    public static AppSettings WithEnabled(AppSettings s, ActionIdentifier id, bool enabled) => id.Type switch
+    {
+        ActionIdentifierType.Builtin => id.BuiltinKind switch
+        {
+            ActionKind.Improve => s with { ImproveEnabled = enabled },
+            ActionKind.Shorten => s with { ShortenEnabled = enabled },
+            ActionKind.Proofread => s with { ProofreadEnabled = enabled },
+            ActionKind.Prompt => s with { PromptEnabled = enabled },
+            ActionKind.Translate => s with { TranslateEnabled = enabled },
+            _ => s,
+        },
+        ActionIdentifierType.Speak => s with { SpeakEnabled = enabled },
+        ActionIdentifierType.Dictionary => s with { DictionaryConfig = s.DictionaryConfig with { IsEnabled = enabled } },
+        _ => s with
+        {
+            CustomActions = [.. s.CustomActions.Select(a => a.Id == id.CustomId ? a with { IsEnabled = enabled } : a)],
+        },
+    };
+
+    /// <summary>
+    /// True when <paramref name="id"/> is the only enabled action: the toolbar needs at least one, so Settings locks its
+    /// switch (macOS isLastEnabledAction).
+    /// </summary>
+    public static bool IsLastEnabledAction(AppSettings s, ActionIdentifier id) => EnabledOrdered(s) is [var only] && only == id;
+
     /// <summary>The enabled actions, in action order.</summary>
     public static IReadOnlyList<ActionIdentifier> EnabledOrdered(AppSettings s) => [.. s.ActionOrder.Where(id => IsEnabled(s, id))];
 

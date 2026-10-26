@@ -34,6 +34,7 @@ public sealed partial class SettingsWindow : Window
     {
         ["General"] = (typeof(GeneralPage), "\uE713"),
         ["Providers"] = (typeof(ProvidersPage), "\uE8D7"),
+        ["Actions"] = (typeof(ActionsPage), "\uE945"),
         ["History"] = (typeof(HistoryPage), "\uE81C"),
         ["Triggers"] = (typeof(TriggersPage), "\uE7C9"),
         ["Appearance"] = (typeof(AppearancePage), "\uE771"),

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    One action's card on Settings → Actions (macOS ActionsView.swift ActionCard): a SettingsExpander, collapsed by
+    default as on macOS. The header holds the title with the Built-in or From plugin badge and the Activate switch; the
+    icon, description and the rows of the action's kind (provider, model, tone, language, prompt, shortcut) are set in
+    code (ActionCard.xaml.cs), before the card is shown. The styles below give the code-built rows their theme colours.
+-->
+<UserControl
+    x:Class="PopGuy.Settings.Controls.ActionCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    IsTabStop="False">
+
+    <UserControl.Resources>
+        <Style x:Key="CaptionStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="ErrorTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+            <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="SecondaryTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style x:Key="SuccessIconStyle" TargetType="FontIcon">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{ThemeResource SystemFillColorSuccessBrush}" />
+        </Style>
+        <Style x:Key="CriticalIconStyle" TargetType="FontIcon">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+        </Style>
+        <Style x:Key="CautionIconStyle" TargetType="FontIcon">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCautionBrush}" />
+        </Style>
+        <Style x:Key="SecondaryIconStyle" TargetType="FontIcon">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <!-- The Built-in and From plugin badges (macOS: a small secondary capsule). -->
+        <Style x:Key="BadgeStyle" TargetType="Border">
+            <Setter Property="Padding" Value="6,1,6,2" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="{ThemeResource ControlFillColorSecondaryBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+    </UserControl.Resources>
+
+    <controls:SettingsExpander x:Name="Expander">
+        <controls:SettingsExpander.Header>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock x:Name="TitleText" VerticalAlignment="Center" />
+                <Border x:Name="BuiltinBadge" Style="{StaticResource BadgeStyle}" Visibility="Collapsed">
+                    <TextBlock Style="{StaticResource CaptionStyle}" Text="Built-in" />
+                </Border>
+                <Border x:Name="PluginBadge" Style="{StaticResource BadgeStyle}" Visibility="Collapsed">
+                    <TextBlock Style="{StaticResource CaptionStyle}" Text="From plugin" />
+                </Border>
+            </StackPanel>
+        </controls:SettingsExpander.Header>
+        <controls:SettingsExpander.Content>
+            <!-- Activate. The transparent wrapper takes the pointer, so the tooltip still shows while the switch is locked. -->
+            <Grid x:Name="EnabledHost" Background="Transparent">
+                <ToggleSwitch x:Name="EnabledToggle" AutomationProperties.Name="Activate" />
+            </Grid>
+        </controls:SettingsExpander.Content>
+    </controls:SettingsExpander>
+</UserControl>

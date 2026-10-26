@@ -74,7 +74,10 @@ public enum ProviderKind
     [JsonStringEnumMemberName("mlx_local")] MlxLocal,
 }
 
-/// <summary>A provider's name in messages and Settings, and whether its runs name a model (macOS ProviderTypes.swift).</summary>
+/// <summary>
+/// A provider's name in messages and Settings, whether its runs name a model, its Settings hints, and which actions may
+/// use it (macOS ProviderTypes.swift, ActionConfig.swift, CustomAction.swift).
+/// </summary>
 public static class ProviderKindExtensions
 {
     // ProviderKind.displayName.
@@ -98,6 +101,65 @@ public static class ProviderKindExtensions
 
     // ProviderKind.usesModel: the translation services have no model.
     public static bool UsesModel(this ProviderKind kind) => kind is not (ProviderKind.DeepL or ProviderKind.GoogleTranslate);
+
+    /// <summary>
+    /// ProviderKind.curatedModels: the model suggestions in Settings (any id can still be typed). Empty for the
+    /// user-defined runtimes and the translation services; the local model's catalog comes with its adapter.
+    /// </summary>
+    public static IReadOnlyList<string> CuratedModels(this ProviderKind kind) => kind switch
+    {
+        ProviderKind.OpenAi or ProviderKind.CodexCli => ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"],
+        ProviderKind.Anthropic => ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
+        ProviderKind.Gemini => ["gemini-4-argon", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
+        ProviderKind.Glm => ["glm-5.3", "glm-5.3-flashx", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-4.7"],
+        ProviderKind.OpenRouter => ["openai/gpt-6.1-sol", "anthropic/claude-opus-5.5", "google/gemini-4-argon", "z-ai/glm-5.3"],
+        ProviderKind.ClaudeCli => ["opus", "sonnet", "haiku", "fable"],
+        ProviderKind.GeminiCli => ["gemini-3.1-pro-preview", "gemini-3.8-flash", "gemini-3.5-flash-lite"],
+        _ => [],
+    };
+
+    // ProviderKind.modelHint: the Model field's (i) text.
+    public static string ModelHint(this ProviderKind kind) => kind switch
+    {
+        ProviderKind.OpenAi => "Enter an OpenAI model id, e.g. \"gpt-6.1-sol\" or \"gpt-6-luna\". Find available models in your OpenAI account.",
+        ProviderKind.Anthropic => "Enter an Anthropic model id, e.g. \"claude-sonnet-5-5\" or \"claude-opus-5-5\". See Anthropic's model list for valid identifiers.",
+        ProviderKind.Ollama => "Enter the name of a model installed in Ollama / LM Studio, e.g. \"llama3.1\" or \"qwen2.5\". Run `ollama list` to see installed models.",
+        ProviderKind.DeepL => "DeepL handles translation automatically and does not use a model identifier — this field can be left empty.",
+        ProviderKind.GoogleTranslate => "Google Translate handles translation automatically and does not use a model identifier — this field can be left empty.",
+        ProviderKind.Gemini => "Enter a Gemini model id, e.g. \"gemini-4-argon\" or \"gemini-3.8-flash\". See Google AI for Developers for the current model list.",
+        ProviderKind.Glm => "Enter a GLM model id, e.g. \"glm-5.3\" or \"glm-5.3-flash\". See the z.ai / BigModel documentation for available models.",
+        ProviderKind.OpenRouter => "Enter an OpenRouter model id in provider/model format, e.g. \"openai/gpt-6.1-sol\" or \"google/gemini-4-argon\". Browse models at openrouter.ai.",
+        ProviderKind.Custom => "Enter the model identifier expected by your custom OpenAI-compatible endpoint (e.g. the model name your local server advertises).",
+        ProviderKind.ClaudeCli => "Optional. A model alias (opus/sonnet/haiku/fable) or full id; empty uses the CLI default.",
+        ProviderKind.CodexCli => "Optional. A model id (e.g. gpt-6.1-sol); empty uses the CLI default.",
+        ProviderKind.GeminiCli => "Optional. A model id (e.g. gemini-3.8-flash); empty uses the CLI default.",
+        _ => "Local models are not available on Windows yet.",
+    };
+
+    /// <summary>ProviderKind.latencyWarning: shown under the provider picker for the subscription CLIs; null otherwise.</summary>
+    public static string? LatencyWarning(this ProviderKind kind) =>
+        kind is ProviderKind.ClaudeCli or ProviderKind.CodexCli or ProviderKind.GeminiCli
+            ? "This provider runs a local CLI using your subscription — slower than the API providers (a few seconds, up to ~15s)."
+            : null;
+
+    /// <summary>
+    /// The providers a built-in action may use (macOS ActionKind.allowedProviders): every one for Translate, every one
+    /// but the translation services for the others. In declaration order (the picker order).
+    /// </summary>
+    public static IReadOnlyList<ProviderKind> AllowedProviders(ActionKind kind) => kind == ActionKind.Translate
+        ? Enum.GetValues<ProviderKind>()
+        : [.. Enum.GetValues<ProviderKind>().Where(UsesModel)];
+
+    /// <summary>
+    /// The providers a custom action may use (macOS CustomAction.allowedProviders(for:)): AI as Improve, translation as
+    /// Translate; none for the types without a provider.
+    /// </summary>
+    public static IReadOnlyList<ProviderKind> AllowedProviders(CustomActionType type) => type switch
+    {
+        CustomActionType.Ai => AllowedProviders(ActionKind.Improve),
+        CustomActionType.Translation => AllowedProviders(ActionKind.Translate),
+        _ => [],
+    };
 }
 
 [JsonConverter(typeof(RawValueEnumConverter<ActionIconType>))]
