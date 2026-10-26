@@ -74,6 +74,32 @@ public enum ProviderKind
     [JsonStringEnumMemberName("mlx_local")] MlxLocal,
 }
 
+/// <summary>A provider's name in messages and Settings, and whether its runs name a model (macOS ProviderTypes.swift).</summary>
+public static class ProviderKindExtensions
+{
+    // ProviderKind.displayName.
+    public static string DisplayName(this ProviderKind kind) => kind switch
+    {
+        ProviderKind.OpenAi => "OpenAI",
+        ProviderKind.Anthropic => "Anthropic (Claude)",
+        ProviderKind.Ollama => "Ollama / LM Studio",
+        ProviderKind.DeepL => "DeepL",
+        ProviderKind.GoogleTranslate => "Google Translate",
+        ProviderKind.Gemini => "Google Gemini",
+        ProviderKind.Glm => "GLM / z.ai",
+        ProviderKind.OpenRouter => "OpenRouter",
+        ProviderKind.Custom => "Custom (OpenAI-compatible)",
+        ProviderKind.ClaudeCli => "Claude CLI (subscription)",
+        ProviderKind.CodexCli => "Codex CLI (subscription)",
+        ProviderKind.GeminiCli => "Gemini CLI (subscription)",
+        ProviderKind.MlxLocal => "Local (MLX)",
+        _ => kind.ToString(),
+    };
+
+    // ProviderKind.usesModel: the translation services have no model.
+    public static bool UsesModel(this ProviderKind kind) => kind is not (ProviderKind.DeepL or ProviderKind.GoogleTranslate);
+}
+
 [JsonConverter(typeof(RawValueEnumConverter<ActionIconType>))]
 public enum ActionIconType
 {

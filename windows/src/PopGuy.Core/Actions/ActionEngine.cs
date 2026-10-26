@@ -209,8 +209,8 @@ public sealed class ActionEngine(ProviderFactory factory, Func<ProviderKind, str
         if (kind is ProviderKind.Glm or ProviderKind.OpenRouter or ProviderKind.Custom && url is null)
         {
             throw ProviderError.Transport(trimmed.Length == 0
-                ? $"No endpoint configured for {DisplayName(kind)}. Set the base URL in Settings."
-                : $"Invalid endpoint URL for {DisplayName(kind)}: \"{ProviderHttp.StripUserInfo(trimmed)}\". Check the base URL in Settings.");
+                ? $"No endpoint configured for {kind.DisplayName()}. Set the base URL in Settings."
+                : $"Invalid endpoint URL for {kind.DisplayName()}: \"{ProviderHttp.StripUserInfo(trimmed)}\". Check the base URL in Settings.");
         }
         return url;
     }
@@ -222,7 +222,7 @@ public sealed class ActionEngine(ProviderFactory factory, Func<ProviderKind, str
         if (!factory.IsRegistered(kind))
         {
             throw ProviderError.Transport(
-                $"{DisplayName(kind)} is not available in PopGuy for Windows yet. Choose another provider in Settings.");
+                $"{kind.DisplayName()} is not available in PopGuy for Windows yet. Choose another provider in Settings.");
         }
         return factory.Create(kind, apiKey(kind) ?? "");
     }
@@ -301,24 +301,5 @@ public sealed class ActionEngine(ProviderFactory factory, Func<ProviderKind, str
         TranslateTone.Formal or TranslateTone.Professional => "prefer_more",
         TranslateTone.Casual or TranslateTone.Friendly => "prefer_less",
         _ => null,
-    };
-
-    // ProviderKind.displayName (ProviderTypes.swift).
-    internal static string DisplayName(ProviderKind kind) => kind switch
-    {
-        ProviderKind.OpenAi => "OpenAI",
-        ProviderKind.Anthropic => "Anthropic (Claude)",
-        ProviderKind.Ollama => "Ollama / LM Studio",
-        ProviderKind.DeepL => "DeepL",
-        ProviderKind.GoogleTranslate => "Google Translate",
-        ProviderKind.Gemini => "Google Gemini",
-        ProviderKind.Glm => "GLM / z.ai",
-        ProviderKind.OpenRouter => "OpenRouter",
-        ProviderKind.Custom => "Custom (OpenAI-compatible)",
-        ProviderKind.ClaudeCli => "Claude CLI (subscription)",
-        ProviderKind.CodexCli => "Codex CLI (subscription)",
-        ProviderKind.GeminiCli => "Gemini CLI (subscription)",
-        ProviderKind.MlxLocal => "Local (MLX)",
-        _ => kind.ToString(),
     };
 }

@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Settings → History (macOS HistoryView.swift, spec-3 §5.6): the History card (count, Clear All, the two toggles), the
+    filter bar as a fixed row (macOS pins it when the card scrolls away), then the records in a virtualized
+    ItemsRepeater, one card per record that expands to its Input and Output or Error. Rows bind to HistoryRowItem;
+    their buttons call the page's handlers. The header is the window's.
+-->
+<Page
+    x:Class="PopGuy.Settings.Pages.HistoryPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:PopGuy.Settings.Pages"
+    xmlns:pgc="using:PopGuy.Controls">
+
+    <Page.Resources>
+        <Style x:Key="CaptionStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="SectionTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="RecordTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}">
+            <Setter Property="IsTextSelectionEnabled" Value="True" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="SecondaryIconStyle" TargetType="FontIcon">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style x:Key="SuccessIconStyle" TargetType="FontIcon">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="Foreground" Value="{ThemeResource SystemFillColorSuccessBrush}" />
+        </Style>
+        <Style x:Key="CriticalIconStyle" TargetType="FontIcon">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+        </Style>
+        <Style x:Key="EmptyIconStyle" TargetType="FontIcon">
+            <Setter Property="FontSize" Value="32" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style x:Key="CopyButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
+            <Setter Property="Padding" Value="6,4,6,4" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+    </Page.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- The History card (macOS SettingsCard "History" with its accessory). -->
+        <Border
+            Grid.Row="0"
+            MaxWidth="1000"
+            Margin="24,16,24,0"
+            Padding="16,12,16,12"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="{ThemeResource ControlCornerRadius}">
+            <StackPanel Spacing="6">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                        Text="History" />
+                    <TextBlock
+                        x:Name="CountText"
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource CaptionStyle}" />
+                    <Button
+                        x:Name="ClearAllButton"
+                        Grid.Column="2"
+                        Content="Clear All"
+                        IsEnabled="False" />
+                </Grid>
+                <StackPanel Orientation="Horizontal" Spacing="20">
+                    <CheckBox x:Name="EnabledBox" Content="Enable history" />
+                    <CheckBox x:Name="FullTextBox" Content="Store full input &amp; output text" />
+                </StackPanel>
+                <TextBlock Style="{StaticResource CaptionStyle}" Text="When off, only the beginning and end of each text are kept as a preview." />
+            </StackPanel>
+        </Border>
+
+        <!-- The filter bar: fuzzy search and the action menu. Shown once there are records. -->
+        <Grid
+            x:Name="FilterBar"
+            Grid.Row="1"
+            MaxWidth="1000"
+            Margin="24,12,24,8"
+            ColumnSpacing="8"
+            Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox
+                x:Name="SearchBox"
+                AutomationProperties.Name="Search input &amp; output"
+                PlaceholderText="Search input &amp; output" />
+            <ComboBox
+                x:Name="ActionBox"
+                Grid.Column="1"
+                MinWidth="160"
+                AutomationProperties.Name="Action" />
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <ScrollViewer x:Name="ListScroller" Visibility="Collapsed">
+                <ItemsRepeater
+                    x:Name="Repeater"
+                    MaxWidth="1000"
+                    Margin="24,0,24,24">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Spacing="8" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="local:HistoryRowItem">
+                            <Border
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="{ThemeResource ControlCornerRadius}">
+                                <StackPanel>
+                                    <!-- The summary: a click anywhere but its button toggles the row. -->
+                                    <Grid
+                                        Padding="16,10,12,10"
+                                        Background="Transparent"
+                                        ColumnSpacing="12"
+                                        DoubleTapped="OnRowDoubleTapped"
+                                        Tapped="OnRowTapped">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid VerticalAlignment="Center">
+                                            <FontIcon
+                                                Glyph="&#xEC61;"
+                                                Style="{StaticResource SuccessIconStyle}"
+                                                Visibility="{x:Bind SuccessVisibility}" />
+                                            <FontIcon
+                                                Glyph="&#xE7BA;"
+                                                Style="{StaticResource CriticalIconStyle}"
+                                                Visibility="{x:Bind FailureVisibility}" />
+                                        </Grid>
+                                        <StackPanel
+                                            Grid.Column="1"
+                                            VerticalAlignment="Center"
+                                            Spacing="2">
+                                            <Grid ColumnSpacing="6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="{x:Bind ActionName}" />
+                                                <TextBlock
+                                                    Grid.Column="1"
+                                                    VerticalAlignment="Center"
+                                                    Style="{StaticResource CaptionStyle}"
+                                                    Text="{x:Bind ProviderText}"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    TextWrapping="NoWrap" />
+                                            </Grid>
+                                            <TextBlock
+                                                Style="{StaticResource CaptionStyle}"
+                                                Text="{x:Bind DetailLine, Mode=OneWay}"
+                                                TextTrimming="CharacterEllipsis"
+                                                TextWrapping="NoWrap" />
+                                        </StackPanel>
+                                        <Button
+                                            Grid.Column="2"
+                                            VerticalAlignment="Center"
+                                            pgc:HoverTooltip.Text="Delete this record"
+                                            AutomationProperties.Name="Delete this record"
+                                            Click="OnDeleteClick"
+                                            Style="{StaticResource SubtleButtonStyle}">
+                                            <FontIcon Glyph="&#xE74D;" Style="{StaticResource SecondaryIconStyle}" />
+                                        </Button>
+                                        <FontIcon
+                                            Grid.Column="3"
+                                            VerticalAlignment="Center"
+                                            FontSize="12"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Glyph="{x:Bind ChevronGlyph, Mode=OneWay}" />
+                                    </Grid>
+
+                                    <!-- The detail (macOS HistoryRow.detail). -->
+                                    <StackPanel
+                                        Padding="16,12,16,14"
+                                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                        BorderThickness="0,1,0,0"
+                                        Spacing="12"
+                                        Visibility="{x:Bind DetailVisibility, Mode=OneWay}">
+                                        <StackPanel
+                                            Orientation="Horizontal"
+                                            Spacing="6"
+                                            Visibility="{x:Bind TruncatedVisibility}">
+                                            <FontIcon
+                                                FontSize="12"
+                                                Glyph="&#xE8C6;"
+                                                Style="{StaticResource SecondaryIconStyle}" />
+                                            <TextBlock Style="{StaticResource CaptionStyle}" Text="Preview only — full text was not stored." />
+                                        </StackPanel>
+
+                                        <StackPanel Spacing="4">
+                                            <Grid>
+                                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Input" />
+                                                <Button
+                                                    pgc:HoverTooltip.Text="Copy input"
+                                                    AutomationProperties.Name="Copy input"
+                                                    Click="OnCopyInputClick"
+                                                    Style="{StaticResource CopyButtonStyle}">
+                                                    <FontIcon Glyph="&#xE8C8;" Style="{StaticResource SecondaryIconStyle}" />
+                                                </Button>
+                                            </Grid>
+                                            <TextBlock Style="{StaticResource RecordTextStyle}" Text="{x:Bind InputText}" />
+                                        </StackPanel>
+
+                                        <StackPanel Spacing="4" Visibility="{x:Bind SuccessVisibility}">
+                                            <Grid>
+                                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Output" />
+                                                <Button
+                                                    pgc:HoverTooltip.Text="Copy output"
+                                                    AutomationProperties.Name="Copy output"
+                                                    Click="OnCopyOutputClick"
+                                                    Style="{StaticResource CopyButtonStyle}">
+                                                    <FontIcon Glyph="&#xE8C8;" Style="{StaticResource SecondaryIconStyle}" />
+                                                </Button>
+                                            </Grid>
+                                            <TextBlock Style="{StaticResource RecordTextStyle}" Text="{x:Bind OutputText}" />
+                                        </StackPanel>
+
+                                        <StackPanel Spacing="4" Visibility="{x:Bind FailureVisibility}">
+                                            <Grid>
+                                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Error" />
+                                                <Button
+                                                    pgc:HoverTooltip.Text="Copy error"
+                                                    AutomationProperties.Name="Copy error"
+                                                    Click="OnCopyErrorClick"
+                                                    Style="{StaticResource CopyButtonStyle}">
+                                                    <FontIcon Glyph="&#xE8C8;" Style="{StaticResource SecondaryIconStyle}" />
+                                                </Button>
+                                            </Grid>
+                                            <TextBlock
+                                                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                Style="{StaticResource RecordTextStyle}"
+                                                Text="{x:Bind ErrorDisplayText}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
+
+            <StackPanel
+                x:Name="EmptyState"
+                Margin="0,40,0,0"
+                HorizontalAlignment="Center"
+                Spacing="6"
+                Visibility="Collapsed">
+                <FontIcon Glyph="&#xE81C;" Style="{StaticResource EmptyIconStyle}" />
+                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="No history yet" />
+            </StackPanel>
+
+            <StackPanel
+                x:Name="NoMatchesState"
+                Margin="0,40,0,0"
+                HorizontalAlignment="Center"
+                Spacing="6"
+                Visibility="Collapsed">
+                <FontIcon Glyph="&#xE721;" Style="{StaticResource EmptyIconStyle}" />
+                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="No matching records" />
+            </StackPanel>
+
+            <!-- The first load: nothing until the records come; the spinner only after 150 ms. -->
+            <ProgressRing
+                x:Name="Spinner"
+                Margin="0,40,0,0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                IsActive="False" />
+        </Grid>
+    </Grid>
+</Page>

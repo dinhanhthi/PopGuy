@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using PopGuy.Core.Actions;
@@ -64,9 +65,10 @@ public sealed record HistoryRecord
 
 /// <summary>
 /// The capped log of action runs in history.json (macOS <c>HistoryStore.swift</c>): newest first, at most
-/// <see cref="MaxEntries"/>. Writes are atomic and run in the background, one after another; records added while a write
+/// <see cref="MaxEntries"/>. Writes are atomic and run in the background, one after another; changes made while a write
 /// is queued share it (only the latest list is written). <see cref="FlushAsync"/> waits for them. A missing or corrupt file loads as empty, and write errors are swallowed (history is not critical
-/// state). Callers check the historyEnabled setting before recording.
+/// state). Callers check the historyEnabled setting before recording. <see cref="Changed"/> fires after every change,
+/// on the thread that made it.
 /// </summary>
 public sealed class HistoryStore
 {
@@ -86,6 +88,9 @@ public sealed class HistoryStore
         _path = paths.HistoryFile;
         _records = Load();
     }
+
+    /// <summary>A record was added or deleted, or the history was cleared. Raised outside the store's lock.</summary>
+    public event EventHandler? Changed;
 
     /// <summary>A snapshot of the records, newest first.</summary>
     public IReadOnlyList<HistoryRecord> Records
@@ -117,12 +122,47 @@ public sealed class HistoryStore
             _records.Insert(0, stored);
             if (_records.Count > MaxEntries)
                 _records.RemoveRange(MaxEntries, _records.Count - MaxEntries);
-            // A queued write that has not started yet is always the last one, and it snapshots when it starts.
-            if (_writeQueued)
-                return;
-            _writeQueued = true;
-            _writes = _writes.ContinueWith(_ => WriteLatest(), TaskScheduler.Default);
+            QueueWriteLocked();
         }
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// The records of <paramref name="actionName"/> (all actions when null) whose input or output fuzzily matches
+    /// <paramref name="query"/> (<see cref="HistorySearch.Matches"/>; a blank query matches all), newest first.
+    /// </summary>
+    public IReadOnlyList<HistoryRecord> Query(string? actionName, string query)
+    {
+        var searching = !string.IsNullOrWhiteSpace(query);
+        return [.. Records.Where(record =>
+            (actionName is null || record.ActionName == actionName)
+            && (!searching || HistorySearch.Matches(query, record.Input) || HistorySearch.Matches(query, record.Output)))];
+    }
+
+    /// <summary>Removes the record with <paramref name="id"/> and saves; false when there is none.</summary>
+    public bool Delete(Guid id)
+    {
+        lock (_gate)
+        {
+            if (_records.RemoveAll(record => record.Id == id) == 0)
+                return false;
+            QueueWriteLocked();
+        }
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    /// <summary>Removes every record and saves (an empty array).</summary>
+    public void ClearAll()
+    {
+        lock (_gate)
+        {
+            if (_records.Count == 0)
+                return;
+            _records.Clear();
+            QueueWriteLocked();
+        }
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Completes when every save started so far has finished.</summary>
@@ -169,6 +209,16 @@ public sealed class HistoryStore
         }
     }
 
+    /// <summary>Saves the list in the background, once for every change made until that save starts. Under the lock.</summary>
+    private void QueueWriteLocked()
+    {
+        // A queued write that has not started yet is always the last one, and it snapshots when it starts.
+        if (_writeQueued)
+            return;
+        _writeQueued = true;
+        _writes = _writes.ContinueWith(_ => WriteLatest(), TaskScheduler.Default);
+    }
+
     private void WriteLatest()
     {
         HistoryRecord[] records;
@@ -184,5 +234,29 @@ public sealed class HistoryStore
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
+    }
+}
+
+/// <summary>The History page's search (macOS <c>HistoryView.fuzzyMatches</c>, spec-3 §5.6).</summary>
+public static class HistorySearch
+{
+    /// <summary>
+    /// Fuzzy subsequence match (fzf/Sublime style): every non-whitespace character of <paramref name="query"/> appears in
+    /// <paramref name="text"/>, in order, ignoring case. A query of only whitespace matches everything.
+    /// </summary>
+    public static bool Matches(string query, string text)
+    {
+        var haystack = text.ToLowerInvariant();
+        var from = 0;
+        foreach (var rune in query.ToLowerInvariant().EnumerateRunes())
+        {
+            if (Rune.IsWhiteSpace(rune))
+                continue;
+            var found = haystack.IndexOf(rune.ToString(), from, StringComparison.Ordinal);
+            if (found < 0)
+                return false;
+            from = found + rune.Utf16SequenceLength;
+        }
+        return true;
     }
 }
