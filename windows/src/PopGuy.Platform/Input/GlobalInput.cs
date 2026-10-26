@@ -1,6 +1,8 @@
 using System.ComponentModel;
+using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
+using PopGuy.Core.Toolbar;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.Input.KeyboardAndMouse;
@@ -9,9 +11,10 @@ using Windows.Win32.UI.WindowsAndMessaging;
 namespace PopGuy.Platform.Input;
 
 /// <summary>
-/// A key press or release seen by the low-level keyboard hook. Only the keys PopGuy watches (every modifier, C, and the
-/// keys of the registered hotkeys) carry their codes; any other key arrives as <see cref="OtherKey"/> with no virtual
-/// key or scan code, so the stream never holds what the user types (passwords), yet still breaks a double tap.
+/// A key press or release seen by the low-level keyboard hook. Only the keys PopGuy watches (every modifier, C, the
+/// navigation keys Page Up/Down, End, Home and the arrows, A pressed while Ctrl is down, and the keys of the registered
+/// hotkeys) carry their codes; any other key arrives as <see cref="OtherKey"/> with no virtual key or scan code, so the
+/// stream never holds what the user types (passwords), yet still breaks a double tap.
 /// </summary>
 /// <param name="VirtualKey">
 /// The virtual-key code (the hook reports the left and right modifiers separately: VK_LCONTROL…), or
@@ -63,8 +66,13 @@ public enum MouseEventKind
 /// <param name="Timestamp">The event's time in milliseconds of the system tick count (wraps after 49.7 days).</param>
 /// <param name="Injected">The event came from SendInput, not a mouse.</param>
 /// <param name="IsPopGuyMarker">The event is injected and carries <see cref="InputSynth.Marker"/>: PopGuy synthesized it.</param>
+/// <param name="ClickCount">
+/// For <see cref="MouseEventKind.LeftDown"/> and <see cref="MouseEventKind.LeftUp"/>: the press's place in a series of
+/// quick presses at one spot, by the system double-click time and rectangle (1, 2 = double-click, 3 = triple-click…),
+/// which a release reports for its press; else 0.
+/// </param>
 public readonly record struct MouseEvent(
-    MouseEventKind Kind, int X, int Y, int WheelDelta, int XButton, uint Timestamp, bool Injected, bool IsPopGuyMarker);
+    MouseEventKind Kind, int X, int Y, int WheelDelta, int XButton, uint Timestamp, bool Injected, bool IsPopGuyMarker, int ClickCount);
 
 /// <summary>
 /// Global keyboard and mouse input on one dedicated thread ("PopGuy input"): the WH_KEYBOARD_LL and WH_MOUSE_LL hooks,
@@ -134,9 +142,15 @@ public sealed class GlobalInput : IDisposable
     private int _disposed;
 
     // Ctrl state from the hook's own events. Hook callbacks only. A missed release (e.g. across the secure desktop)
-    // leaves it stuck down, which costs only a needless sequence-number read on later C presses.
+    // leaves it stuck down, which costs only a needless sequence-number read on later C presses (and a published A).
     private bool _leftControlDown;
     private bool _rightControlDown;
+
+    /// <summary>An A press was published (Ctrl was down): its release is published too. Keyboard hook only.</summary>
+    private bool _selectAllKeyDown;
+
+    /// <summary>The left-button press series, for <see cref="MouseEvent.ClickCount"/>. Mouse hook only.</summary>
+    private readonly ClickCounter _clicks = new();
 
     /// <summary>
     /// The sided modifiers the user holds (bits per <see cref="ModifierBit"/>), from every event but PopGuy's own:
@@ -330,7 +344,7 @@ public sealed class GlobalInput : IDisposable
                 uint? sequence = isDown && vk == (uint)VIRTUAL_KEY.VK_C && (_leftControlDown || _rightControlDown)
                     ? PInvoke.GetClipboardSequenceNumber()
                     : null;
-                var watched = IsWatched(vk);
+                var watched = IsWatched(vk, isDown);
                 _keys.Writer.TryWrite(new KeyEvent(
                     watched ? vk : KeyEvent.OtherKey,
                     watched ? data->scanCode : 0,
@@ -375,6 +389,7 @@ public sealed class GlobalInput : IDisposable
                 if (kind is { } k)
                 {
                     var injected = (data->flags & PInvoke.LLMHF_INJECTED) != 0;
+                    var clickCount = CountClick(k, data->pt.X, data->pt.Y, data->time);
                     _mouse.Writer.TryWrite(new MouseEvent(
                         k,
                         data->pt.X,
@@ -383,7 +398,8 @@ public sealed class GlobalInput : IDisposable
                         k is MouseEventKind.XDown or MouseEventKind.XUp ? high : 0,
                         data->time,
                         injected,
-                        injected && data->dwExtraInfo == InputSynth.Marker));
+                        injected && data->dwExtraInfo == InputSynth.Marker,
+                        clickCount));
                 }
             }
             catch (Exception e)
@@ -395,12 +411,51 @@ public sealed class GlobalInput : IDisposable
     }
 
     /// <summary>
-    /// The keys whose codes are published: every modifier, C (the Ctrl+C+C chord) and the keys of the registered
-    /// hotkeys. Keyboard hook only (it runs on the input thread, which alone touches <see cref="_registered"/>).
+    /// The left-button press series (Windows counts double-clicks per window, so a global hook counts its own): a left
+    /// press gets its count, a release the count of its press, another button's press ends the series. Both system
+    /// values are cheap reads, taken per press so a changed setting applies at once. Mouse hook only.
     /// </summary>
-    private bool IsWatched(uint vk)
+    private int CountClick(MouseEventKind kind, int x, int y, uint time)
     {
-        if (vk == (uint)VIRTUAL_KEY.VK_C || IsModifier(vk)) return true;
+        switch (kind)
+        {
+            case MouseEventKind.LeftDown:
+                var size = new Size(
+                    PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CXDOUBLECLK),
+                    PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYDOUBLECLK));
+                return _clicks.Press(new Point(x, y), time, PInvoke.GetDoubleClickTime(), size);
+            case MouseEventKind.LeftUp:
+                return _clicks.Count;
+            case MouseEventKind.RightDown or MouseEventKind.MiddleDown or MouseEventKind.XDown:
+                _clicks.Reset();
+                return 0;
+            default:
+                return 0;
+        }
+    }
+
+    /// <summary>
+    /// The keys whose codes are published: every modifier, C (the Ctrl+C+C chord), the navigation keys and A pressed
+    /// while Ctrl is down (the keyboard-selection gestures: neither reveals typed text), and the keys of the registered
+    /// hotkeys. An A press that was published has its release published too, so a reader tracking held keys never
+    /// sees A stuck down. Keyboard hook only (it runs on the input thread, which alone touches <see cref="_registered"/>).
+    /// </summary>
+    private bool IsWatched(uint vk, bool isDown)
+    {
+        if (vk == (uint)VIRTUAL_KEY.VK_C || IsModifier(vk) || vk is >= (uint)VIRTUAL_KEY.VK_PRIOR and <= (uint)VIRTUAL_KEY.VK_DOWN) return true;
+        if (vk == (uint)VIRTUAL_KEY.VK_A)
+        {
+            if (isDown && (_leftControlDown || _rightControlDown))
+            {
+                _selectAllKeyDown = true;
+                return true;
+            }
+            if (!isDown && _selectAllKeyDown)
+            {
+                _selectAllKeyDown = false;
+                return true;
+            }
+        }
         foreach (var key in _registered.Values)
         {
             if (key.VirtualKey == vk) return true;

@@ -94,6 +94,14 @@ public static class SelectionGesture
     public static bool ShouldAttemptClipboardFallback(bool fromMouseUp, Point? mouseReleasePoint, bool usesClipboardFallback) =>
         fromMouseUp && mouseReleasePoint is not null && usesClipboardFallback;
 
+    /// <summary>
+    /// Whether the text-select trigger may show the toolbar for a selection (macOS <c>shouldShowOnTextSelect</c>): with
+    /// "Only in editable text" on, only a selection a paste can replace passes, so read-only text (web pages, chat
+    /// messages) is ignored. The routing applies it to the text-select path alone: the double-click trigger, the chord
+    /// and the hotkeys never check it.
+    /// </summary>
+    public static bool ShouldShowOnTextSelect(bool isEditable, bool editableOnly) => !editableOnly || isEditable;
+
     /// <summary>Whether the app with this executable file name (e.g. "Code.exe", any case) needs the Ctrl+C fallback.</summary>
     public static bool UsesClipboardFallback(string exeName) => ClipboardFallbackExeNames.Contains(exeName);
 
@@ -113,4 +121,38 @@ public static class SelectionGesture
             _ => false,
         };
     }
+}
+
+/// <summary>
+/// Counts a series of left-button presses the way Windows does for double-clicks, which low-level hooks never report:
+/// a press within the double-click time of the previous one, and inside the double-click rectangle centred on it,
+/// continues the series (2 = double-click, 3 = triple-click, …); any other press starts a new one. Points are physical
+/// screen pixels, times the system tick count in milliseconds. Not thread-safe: one caller (the mouse hook).
+/// </summary>
+public sealed class ClickCounter
+{
+    private Point _last;
+    private uint _lastTime;
+
+    /// <summary>The count of the latest press (what its release reports); 0 before any press or after <see cref="Reset"/>.</summary>
+    public int Count { get; private set; }
+
+    /// <summary>Records a left-button press and returns its count.</summary>
+    /// <param name="doubleClickTimeMs">The system double-click time.</param>
+    /// <param name="doubleClickSize">The system double-click rectangle (width and height, centred on the previous press).</param>
+    public int Press(Point point, uint timestampMs, uint doubleClickTimeMs, Size doubleClickSize)
+    {
+        // Unchecked: the tick count wraps after 49.7 days.
+        var continues = Count > 0
+            && unchecked(timestampMs - _lastTime) <= doubleClickTimeMs
+            && Math.Abs(point.X - _last.X) <= doubleClickSize.Width / 2
+            && Math.Abs(point.Y - _last.Y) <= doubleClickSize.Height / 2;
+        Count = continues ? Count + 1 : 1;
+        _last = point;
+        _lastTime = timestampMs;
+        return Count;
+    }
+
+    /// <summary>Ends the series: another button's press, so the next left press counts 1.</summary>
+    public void Reset() => Count = 0;
 }

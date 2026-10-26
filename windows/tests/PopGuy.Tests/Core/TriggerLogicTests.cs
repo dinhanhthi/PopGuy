@@ -4,8 +4,9 @@ using PopGuy.Core.Toolbar;
 
 namespace PopGuy.Tests.Core;
 
-// Contract: the Ctrl+C+C chord detector (DoubleTapDetectorTests) and the selection-gesture helpers of
-// SelectionEvent.swift (GestureAnchorTests, ClipboardFallbackGateTests), plus the Windows keyboard-selection keys.
+// Contract: the Ctrl+C+C chord detector (DoubleTapDetectorTests), the selection-gesture helpers of
+// SelectionEvent.swift (GestureAnchorTests, ClipboardFallbackGateTests) and the text-select editable-only gate
+// (TextSelectEditableGateTests), plus the Windows keyboard-selection keys.
 public sealed class TriggerLogicTests
 {
     private static bool[] Feed(params (uint TimestampMs, bool IsChordKey)[] keys)
@@ -105,4 +106,12 @@ public sealed class TriggerLogicTests
     [InlineData(0x27, ShortcutModifiers.Win | ShortcutModifiers.Shift, false)] // Win+Shift+Right: moves the window
     public void KeyboardSelectionKeys(uint virtualKey, ShortcutModifiers modifiers, bool selects) =>
         Assert.Equal(selects, SelectionGesture.IsKeyboardSelection(virtualKey, modifiers));
+
+    [Theory]
+    [InlineData(true, true, true)] // editable-only on, editable source: show
+    [InlineData(false, true, false)] // editable-only on, read-only source (web page text): no toolbar
+    [InlineData(true, false, true)] // editable-only off: show
+    [InlineData(false, false, true)]
+    public void TextSelectEditableOnlyGate(bool isEditable, bool editableOnly, bool shows) =>
+        Assert.Equal(shows, SelectionGesture.ShouldShowOnTextSelect(isEditable, editableOnly));
 }
