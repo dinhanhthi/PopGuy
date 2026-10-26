@@ -87,6 +87,19 @@ internal sealed class AppServices : IDisposable
         remove => _controller.SettingsRequested -= value;
     }
 
+    /// <summary>A settings apply finished (see <see cref="ToolbarController.HotkeysApplied"/>). Thread pool.</summary>
+    public event Action? HotkeysApplied
+    {
+        add => _controller.HotkeysApplied += value;
+        remove => _controller.HotkeysApplied -= value;
+    }
+
+    /// <summary>Every hotkey of the last apply with its status (empty while suspended). Any thread.</summary>
+    public IReadOnlyList<HotkeyRegistration> HotkeyRegistrations => _hotkeys.Registrations;
+
+    /// <summary>Settings' shortcut recorder listens (see <see cref="ToolbarController.SetHotkeysSuspended"/>). Any thread.</summary>
+    public void SetHotkeysSuspended(bool suspended) => _controller.SetHotkeysSuspended(suspended);
+
     /// <summary>
     /// Builds every service and starts the triggers. UI thread (the toolbar window is created here). Throws when Windows
     /// refuses the hooks or the clipboard listener (<see cref="Win32Exception"/>); the log then has the reason.

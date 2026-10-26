@@ -49,6 +49,12 @@ internal sealed class ToolbarController : IDisposable
     /// <summary>One capture at a time (the chord and the hotkeys can fire together). Interlocked.</summary>
     private int _capturing;
 
+    /// <summary>Settings' shortcut recorder listens: no hotkey and no chord, so every key reaches it. Any thread.</summary>
+    private volatile bool _hotkeysSuspended;
+
+    /// <summary>One settings apply at a time, each reading the latest settings and suspension when it starts.</summary>
+    private readonly Lock _applyGate = new();
+
     /// <summary>The toolbar is on screen, for the pool threads (the window's own flag is UI thread only).</summary>
     private volatile bool _shown;
 
@@ -91,6 +97,9 @@ internal sealed class ToolbarController : IDisposable
 
     /// <summary>The toolbar's Settings button: the App opens the Settings window. UI thread.</summary>
     public event Action? SettingsRequested;
+
+    /// <summary>A settings apply finished: <see cref="HotkeyService.Registrations"/> has the new statuses. Thread pool.</summary>
+    public event Action? HotkeysApplied;
 
     /// <summary>Applies the settings, subscribes and starts the input loops. UI thread, once.</summary>
     public void Start()
@@ -145,21 +154,40 @@ internal sealed class ToolbarController : IDisposable
     private void OnSettingsChanged(object? sender, EventArgs e) => ApplySettings();
 
     /// <summary>
+    /// Settings' shortcut recorder: while <paramref name="suspended"/>, every hotkey is unregistered and the chord is
+    /// off, so a combo PopGuy owns reaches the recorder instead of firing. Applied off the calling thread, like a
+    /// settings change. Any thread.
+    /// </summary>
+    public void SetHotkeysSuspended(bool suspended)
+    {
+        _hotkeysSuspended = suspended;
+        ApplySettings();
+    }
+
+    /// <summary>
     /// The chord and the hotkeys follow the settings (bindings, custom actions, the chord flag and replacement, OCR), and
-    /// the selection pipeline the passive triggers. Off the calling thread: registering waits on the input thread. Each
-    /// run reads the latest settings, so runs that overlap still end on the newest.
+    /// the selection pipeline the passive triggers. Off the calling thread: registering waits on the input thread. Runs
+    /// are serialized and each reads the latest settings, so runs that overlap still end on the newest.
     /// </summary>
     private void ApplySettings() => Watch(Task.Run(() =>
     {
-        var settings = _settings.Current;
-        _chord.Apply(settings);
-        // The master switch: nothing arms while PopGuy is off (spec-1 §1.4).
-        if (!settings.PopGuyEnabled) _chord.Enabled = false;
-        // The pipeline also captures for the double-click trigger alone: the routing drops what it does not want.
-        _pipeline.Enabled = settings.PopGuyEnabled && (settings.TriggerOnSelectEnabled || settings.TriggerDoubleClickEnabled);
-        var refused = _hotkeys.Apply(settings).Count(r => r.Status != HotkeyStatus.Registered);
-        _log($"settings applied: chord {(_chord.Enabled ? "on" : "off")}, selection {(_pipeline.Enabled ? "on" : "off")}, "
-            + $"{_hotkeys.Registrations.Count} hotkeys, {refused} refused");
+        lock (_applyGate)
+        {
+            var settings = _settings.Current;
+            var suspended = _hotkeysSuspended;
+            _chord.Apply(settings);
+            // The master switch: nothing arms while PopGuy is off (spec-1 §1.4).
+            if (!settings.PopGuyEnabled || suspended) _chord.Enabled = false;
+            // The pipeline also captures for the double-click trigger alone: the routing drops what it does not want.
+            _pipeline.Enabled = settings.PopGuyEnabled && (settings.TriggerOnSelectEnabled || settings.TriggerDoubleClickEnabled);
+            var hotkeys = suspended
+                ? settings with { ShortcutBindings = [], ChordReplacementShortcut = null, OcrShortcut = null }
+                : settings;
+            var refused = _hotkeys.Apply(hotkeys).Count(r => r.Status != HotkeyStatus.Registered);
+            _log($"settings applied: chord {(_chord.Enabled ? "on" : "off")}, selection {(_pipeline.Enabled ? "on" : "off")}, "
+                + $"{_hotkeys.Registrations.Count} hotkeys, {refused} refused{(suspended ? ", hotkeys suspended" : "")}");
+        }
+        HotkeysApplied?.Invoke();
     }), "apply settings");
 
     // Triggers (pool threads until the hand-off to the UI thread).

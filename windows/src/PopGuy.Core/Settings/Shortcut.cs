@@ -34,6 +34,27 @@ public sealed record Shortcut(
         return string.Join("+", parts);
     }
 
+    /// <summary>
+    /// What a key press does while a shortcut recorder listens (macOS ShortcutRecorder, Windows rules): Esc cancels,
+    /// Backspace clears, a bare modifier key waits for the real key, and a key without Ctrl or Alt held is ignored (Shift
+    /// or Win alone would steal plain typing or the shell's keys). Anything else records <paramref name="virtualKey"/>
+    /// with <paramref name="held"/>. Only the first press counts, so a repeated-key chord like Ctrl+C+C cannot be recorded.
+    /// </summary>
+    /// <param name="recorded">The shortcut for <see cref="ShortcutKeyOutcome.Record"/>, else null.</param>
+    public static ShortcutKeyOutcome Interpret(uint virtualKey, ShortcutModifiers held, out Shortcut? recorded)
+    {
+        recorded = null;
+        if (virtualKey == 0x1B) return ShortcutKeyOutcome.Cancel;
+        if (virtualKey == 0x08) return ShortcutKeyOutcome.Clear;
+        if (IsModifierKey(virtualKey) || virtualKey is 0 or > 0xFE) return ShortcutKeyOutcome.Ignore;
+        if ((held & (ShortcutModifiers.Control | ShortcutModifiers.Alt)) == 0) return ShortcutKeyOutcome.Ignore;
+        recorded = new Shortcut(virtualKey, held);
+        return ShortcutKeyOutcome.Record;
+    }
+
+    /// <summary>Shift, Ctrl, Alt (generic and sided) and the Win keys.</summary>
+    private static bool IsModifierKey(uint vk) => vk is >= 0x10 and <= 0x12 or 0x5B or 0x5C or >= 0xA0 and <= 0xA5;
+
     // Layout-independent names only; punctuation (OEM) keys need the keyboard layout, which only Win32 knows.
     private static string KeyName(uint vk) => vk switch
     {
@@ -56,6 +77,22 @@ public sealed record Shortcut(
         0x2E => "Delete",
         _ => $"0x{vk:X2}",
     };
+}
+
+/// <summary>What a key press does in a shortcut recorder (<see cref="Shortcut.Interpret"/>).</summary>
+public enum ShortcutKeyOutcome
+{
+    /// <summary>Keep listening.</summary>
+    Ignore,
+
+    /// <summary>Stop listening, keep the current shortcut (Esc).</summary>
+    Cancel,
+
+    /// <summary>Stop listening, remove the shortcut (Backspace).</summary>
+    Clear,
+
+    /// <summary>Stop listening, save the recorded shortcut.</summary>
+    Record,
 }
 
 /// <summary>An action's global hotkey. JSON: <c>{"id":&lt;ActionIdentifier&gt;,"shortcut":&lt;Shortcut&gt;}</c>.</summary>

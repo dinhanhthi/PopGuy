@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
+using PopGuy.Controls;
 using PopGuy.Platform.Windowing;
 using PopGuy.Services;
 using PopGuy.Settings.Pages;
@@ -33,6 +34,7 @@ public sealed partial class SettingsWindow : Window
     {
         ["General"] = (typeof(GeneralPage), "\uE713"),
         ["Providers"] = (typeof(ProvidersPage), "\uE8D7"),
+        ["Triggers"] = (typeof(TriggersPage), "\uE7C9"),
         ["Appearance"] = (typeof(AppearancePage), "\uE771"),
     };
 
@@ -74,6 +76,7 @@ public sealed partial class SettingsWindow : Window
 
         RootGrid.Loaded += OnRootLoaded;
         Activated += OnFirstActivated;
+        Activated += OnActivated;
         Closed += OnClosed;
     }
 
@@ -120,16 +123,24 @@ public sealed partial class SettingsWindow : Window
         if (!_closing) ApplyMinimumSize();
     }
 
+    /// <summary>A shortcut recording ends when the window goes to the back: PopGuy's hotkeys are off while it records.</summary>
+    private void OnActivated(object sender, WindowActivatedEventArgs args)
+    {
+        if (args.WindowActivationState == WindowActivationState.Deactivated) ShortcutRecorder.CancelActive();
+    }
+
     /// <summary>Saves the frame while the window still answers, then lets go of everything that would call it.</summary>
     private void OnClosed(object sender, WindowEventArgs args)
     {
         _closing = true;
+        ShortcutRecorder.CancelActive();
         SaveFrame();
         Nav.SelectionChanged -= OnSelectionChanged;
         RootGrid.ActualThemeChanged -= OnActualThemeChanged;
         RootGrid.Loaded -= OnRootLoaded;
         if (_xamlRoot is not null) _xamlRoot.Changed -= OnXamlRootChanged;
         Activated -= OnFirstActivated;
+        Activated -= OnActivated;
         CompositionTarget.Rendering -= OnFirstPresentedRendering;
         _presentedTimer?.Stop();
         _backstopTimer?.Stop();
