@@ -1,15 +1,25 @@
+using System.Runtime.InteropServices;
+using System.Text.Json;
+using Microsoft.UI;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using PopGuy.Controls;
 using PopGuy.Core.Actions;
+using PopGuy.Core.Plugins;
 using PopGuy.Core.Settings;
 using PopGuy.Platform.Input;
 using PopGuy.Services;
 using PopGuy.Settings.Controls;
 using PopGuy.Settings.Panels;
 using PopGuy.Settings.ViewModels;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
+using CoreVirtualKeyStates = Windows.UI.Core.CoreVirtualKeyStates;
+using VirtualKey = Windows.System.VirtualKey;
 
 namespace PopGuy.Settings.Pages;
 
@@ -23,6 +33,9 @@ namespace PopGuy.Settings.Pages;
 /// action's type, title, icon, description or origin changed. Search and filter only hide cards. While a card's
 /// shortcut records, PopGuy's own hotkeys and chord are off (<see cref="AppServices.SetHotkeysSuspended"/>); after
 /// each apply, a shortcut Windows refused shows on its card. A change from elsewhere shows while the page is open.
+/// Export writes the custom actions to a JSON file; Import (a JSON file) and the plugin menu (a JSON or .popclipextz
+/// file, a .popclipext folder, a pasted snippet) read off the UI thread, then show <see cref="PluginImportConsentDialog"/>
+/// in the panel. Nothing imported runs or opens before the user adds it and clicks it.
 /// </summary>
 public sealed partial class ActionsPage : Page
 {
@@ -33,6 +46,9 @@ public sealed partial class ActionsPage : Page
     private ActionsViewModel? _model;
     private bool _subscribed;
     private ActionTypeFilter _filter = ActionTypeFilter.All;
+
+    /// <summary>A picker, dialog or read of an export or import is under way: another click waits for it.</summary>
+    private bool _transferring;
 
     /// <summary>The controls are being set from the settings: their change events are not the user's.</summary>
     private bool _syncing;
@@ -45,6 +61,12 @@ public sealed partial class ActionsPage : Page
         HoverTooltip.SetText(SettingsButtonToggle, SettingsButtonTooltip);
         AddButton.Click += (_, _) => OpenEditor(new CustomAction { Title = "", SystemPrompt = "" });
         HoverTooltip.SetText(AddButton, "Add action");
+        ExportButton.Click += (_, _) => Transfer(ExportAsync);
+        HoverTooltip.SetText(ExportButton, "Export custom actions");
+        ImportButton.Click += (_, _) => Transfer(ImportActionsAsync);
+        HoverTooltip.SetText(ImportButton, "Import custom actions");
+        PluginButton.Flyout = PluginMenu();
+        HoverTooltip.SetText(PluginButton, "Import plugin");
 
         foreach (var (_, name) in ActionsViewModel.Filters) TypeFilterBox.Items.Add(name);
         TypeFilterBox.SelectedIndex = 0;
@@ -111,6 +133,7 @@ public sealed partial class ActionsPage : Page
         _syncing = true;
         SettingsButtonToggle.IsOn = current.ShowToolbarSettingsButton;
         _syncing = false;
+        ExportButton.IsEnabled = current.CustomActions.Count > 0;
         LayoutEditor.Refresh();
         SyncCards(current);
         foreach (var (card, _) in _cards.Values) card.Update(current);
@@ -180,6 +203,275 @@ public sealed partial class ActionsPage : Page
         editor.Initialize(_model, action, panels);
         panels.Present(editor, editor.InitialFocus);
     }
+
+    // Export and import (macOS exportActions, importActions, importPluginFromFile, the snippet sheet).
+
+    /// <summary>The plugin menu (macOS: Choose file… / Paste snippet…). A file picker cannot pick a folder, so a .popclipext folder has its own item.</summary>
+    private MenuFlyout PluginMenu()
+    {
+        var menu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedRight };
+        menu.Items.Add(MenuItem("Choose file…", "\uE8E5", ImportPluginFileAsync));
+        menu.Items.Add(MenuItem("Choose .popclipext folder…", "\uE8B7", ImportPluginFolderAsync));
+        menu.Items.Add(MenuItem("Paste snippet…", "\uE77F", ImportSnippetAsync));
+        return menu;
+    }
+
+    private MenuFlyoutItem MenuItem(string text, string glyph, Func<Task> run)
+    {
+        var item = new MenuFlyoutItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
+        item.Click += (_, _) => Transfer(run);
+        return item;
+    }
+
+    /// <summary>Runs one export or import flow at a time.</summary>
+    private async void Transfer(Func<Task> run)
+    {
+        if (_transferring || _model is null) return;
+        _transferring = true;
+        try
+        {
+            await run();
+        }
+        catch (COMException e)
+        {
+            // A picker or dialog Windows refused to show.
+            _services?.Log.Write($"settings: import/export picker failed, 0x{e.HResult:X8}");
+        }
+        finally
+        {
+            _transferring = false;
+        }
+    }
+
+    /// <summary>Every custom action to a JSON file (macOS default name), encoded and written off the UI thread.</summary>
+    private async Task ExportAsync()
+    {
+        var actions = _model!.Current.CustomActions;
+        if (actions.Count == 0) return;
+        var picker = new FileSavePicker
+        {
+            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+            SuggestedFileName = Path.GetFileNameWithoutExtension(ActionExport.DefaultFileName),
+        };
+        picker.FileTypeChoices.Add("JSON", new List<string> { ".json" });
+        if (!Own(picker)) return;
+        var file = await picker.PickSaveFileAsync();
+        if (file?.Path is not { Length: > 0 } path) return;
+
+        var error = await Task.Run(() =>
+        {
+            byte[] json;
+            try
+            {
+                json = ActionExport.Serialize(actions);
+            }
+            catch (Exception e) when (e is JsonException or NotSupportedException)
+            {
+                return $"Could not encode the actions: {e.Message}";
+            }
+            try
+            {
+                File.WriteAllBytes(path, json);
+                return null;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return $"Could not write the file: {e.Message}";
+            }
+        });
+        if (error is not null) await AlertAsync("Export Failed", error);
+    }
+
+    /// <summary>Import custom actions: a PopGuy JSON file.</summary>
+    private async Task ImportActionsAsync()
+    {
+        if (await PickFileAsync(".json") is { } path) await ImportAsync(() => ReadActions(path));
+    }
+
+    /// <summary>The plugin menu's file: a PopGuy JSON file or a zipped PopClip extension (.popclipextz).</summary>
+    private async Task ImportPluginFileAsync()
+    {
+        if (await PickFileAsync(".json", ".popclipextz") is not { } path) return;
+        await ImportAsync(() => path.EndsWith(".popclipextz", StringComparison.OrdinalIgnoreCase) ? ReadArchive(path) : ReadActions(path));
+    }
+
+    /// <summary>The plugin menu's folder: a PopClip extension (.popclipext); any other folder fails with the reader's message.</summary>
+    private async Task ImportPluginFolderAsync()
+    {
+        var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
+        picker.FileTypeFilter.Add("*");
+        if (!Own(picker)) return;
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder?.Path is not { Length: > 0 } path) return;
+        await ImportAsync(() => ImportConsent.FromPlugin(PopClipAdapter.Adapt(PopClipReader.ReadFolder(path))));
+    }
+
+    private async Task ImportSnippetAsync()
+    {
+        if (await SnippetAsync() is { } snippet)
+            await ImportAsync(() => ImportConsent.FromPlugin(PopClipAdapter.Adapt(PopClipReader.ReadSnippet(snippet))));
+    }
+
+    private async Task<string?> PickFileAsync(params string[] types)
+    {
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary, ViewMode = PickerViewMode.List };
+        foreach (var type in types) picker.FileTypeFilter.Add(type);
+        if (!Own(picker)) return null;
+        var file = await picker.PickSingleFileAsync();
+        return file?.Path is { Length: > 0 } path ? path : null;
+    }
+
+    /// <summary>The picker belongs to the Settings window.</summary>
+    private bool Own(object picker)
+    {
+        if (XamlRoot?.ContentIslandEnvironment is not { } environment) return false;
+        InitializeWithWindow.Initialize(picker, Win32Interop.GetWindowFromWindowId(environment.AppWindowId));
+        return true;
+    }
+
+    /// <summary>
+    /// Reads and adapts off the UI thread, then shows the consent panel, or "Import Failed" with the macOS message. With
+    /// every action refused for its provider there is nothing to review: "Unsupported Provider" shows at once.
+    /// </summary>
+    private async Task ImportAsync(Func<ImportConsent> read)
+    {
+        var (consent, error) = await Task.Run<(ImportConsent?, string?)>(() =>
+        {
+            try
+            {
+                return (read(), null);
+            }
+            catch (ImportRefusedException e)
+            {
+                return (null, e.Message);
+            }
+            catch (PopClipReadException e)
+            {
+                return (null, e.Message);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return (null, "The file could not be read.");
+            }
+            catch (Exception e)
+            {
+                // Untrusted input: an unexpected failure is reported, never thrown on the UI thread.
+                _services?.Log.Write($"settings: import failed, {e.GetType().Name}");
+                return (null, null);
+            }
+        });
+        if (consent is null)
+        {
+            await AlertAsync("Import Failed", error ?? "The file could not be imported.");
+            return;
+        }
+        if (consent.Actions.Count == 0 && consent.UnsupportedProviderCount > 0)
+        {
+            await AlertAsync("Unsupported Provider", ImportConsent.UnsupportedProviderMessage(consent.UnsupportedProviderCount));
+            return;
+        }
+        ShowConsent(consent);
+    }
+
+    /// <summary>The consent panel; after Add, the actions dropped for their provider are reported (macOS handleConsentConfirm).</summary>
+    private void ShowConsent(ImportConsent consent)
+    {
+        if (_model is null || SlideOverPanel.Of(this) is not { } panels) return;
+        var dialog = new PluginImportConsentDialog();
+        dialog.Initialize(_model, consent, panels);
+        panels.Present(dialog, closed: () =>
+        {
+            if (dialog.Added && consent.UnsupportedProviderCount > 0)
+                Transfer(() => AlertAsync("Unsupported Provider", ImportConsent.UnsupportedProviderMessage(consent.UnsupportedProviderCount)));
+        });
+    }
+
+    /// <summary>A PopGuy JSON file through the import gate; the source name is the file name without its extension.</summary>
+    private static ImportConsent ReadActions(string path)
+    {
+        if (new FileInfo(path).Length > ActionImport.MaxFileBytes)
+            throw new ImportRefusedException(ImportConsent.RejectionMessage(ImportRejection.TooLarge));
+        var result = ActionImport.SanitizeImported(File.ReadAllBytes(path));
+        if (result.Rejection is { } rejection) throw new ImportRefusedException(ImportConsent.RejectionMessage(rejection));
+        return ImportConsent.FromNative(Path.GetFileNameWithoutExtension(path), result);
+    }
+
+    private static ImportConsent ReadArchive(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return ImportConsent.FromPlugin(PopClipAdapter.Adapt(PopClipReader.ReadArchive(stream)));
+    }
+
+    /// <summary>A refused PopGuy JSON file; the message is the macOS alert text.</summary>
+    private sealed class ImportRefusedException(string message) : Exception(message);
+
+    /// <summary>
+    /// The Paste PopClip Snippet dialog (macOS SnippetInputSheet): a monospace editor; Import… (or Ctrl+Enter, macOS
+    /// Cmd+Return) is off while it is blank. The trimmed text, or null when cancelled.
+    /// </summary>
+    private async Task<string?> SnippetAsync()
+    {
+        if (XamlRoot is null) return null;
+        var box = new TextBox
+        {
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.NoWrap,
+            FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+            Height = 240,
+        };
+        ScrollViewer.SetVerticalScrollBarVisibility(box, ScrollBarVisibility.Auto);
+        ScrollViewer.SetHorizontalScrollBarVisibility(box, ScrollBarVisibility.Auto);
+        AutomationProperties.SetName(box, "PopClip snippet");
+        var content = new StackPanel { Spacing = 12, Width = 480 };
+        content.Children.Add(new TextBlock
+        {
+            Text = "Paste a PopClip snippet in YAML, JSON, or the #popclip header format.",
+            TextWrapping = TextWrapping.Wrap,
+        });
+        content.Children.Add(box);
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Style = AppStyle("DefaultContentDialogStyle"),
+            Title = "Paste PopClip Snippet",
+            Content = content,
+            PrimaryButtonText = "Import…",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            IsPrimaryButtonEnabled = false,
+        };
+        box.TextChanged += (_, _) => dialog.IsPrimaryButtonEnabled = box.Text.Trim().Length > 0;
+        var submitted = false;
+        box.PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key != VirtualKey.Enter || !dialog.IsPrimaryButtonEnabled
+                || !InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(CoreVirtualKeyStates.Down)) return;
+            e.Handled = true;
+            submitted = true;
+            dialog.Hide();
+        };
+        var result = await dialog.ShowAsync();
+        var text = box.Text.Trim();
+        return (submitted || result == ContentDialogResult.Primary) && text.Length > 0 ? text : null;
+    }
+
+    /// <summary>A macOS-style alert: a title, the message and OK.</summary>
+    private async Task AlertAsync(string title, string message)
+    {
+        if (XamlRoot is null) return;
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Style = AppStyle("DefaultContentDialogStyle"),
+            Title = title,
+            Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
+            CloseButtonText = "OK",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        await dialog.ShowAsync();
+    }
+
+    private static Style AppStyle(string key) => (Style)Application.Current.Resources[key];
 
     // Shortcuts.
 

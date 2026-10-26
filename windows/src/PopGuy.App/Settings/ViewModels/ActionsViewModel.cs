@@ -80,6 +80,24 @@ internal sealed class ActionsViewModel
         }
     }
 
+    /// <summary>
+    /// The consent dialog's Add (macOS handleConsentConfirm): each action, already sanitized and marked from a plugin, is
+    /// added at the end of the action order. A failed write is logged and false; the ones before it stay added.
+    /// </summary>
+    public bool AddImported(IEnumerable<CustomAction> actions)
+    {
+        try
+        {
+            foreach (var action in actions) _settings.AddCustomAction(action);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log($"settings: imported actions not saved, {e.GetType().Name}");
+            return false;
+        }
+    }
+
     /// <summary>Removes the action with its shortcut and toolbar entries. A failed write is logged.</summary>
     public void DeleteCustomAction(Guid id)
     {

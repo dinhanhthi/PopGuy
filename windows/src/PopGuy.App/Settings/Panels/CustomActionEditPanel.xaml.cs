@@ -645,7 +645,7 @@ public sealed partial class CustomActionEditPanel : UserControl
         return line;
     }
 
-    private static void SetIcon(FontIcon target, ActionIcon icon)
+    internal static void SetIcon(FontIcon target, ActionIcon icon)
     {
         if (icon.Type == ActionIconType.Emoji)
         {
@@ -672,7 +672,7 @@ public sealed partial class CustomActionEditPanel : UserControl
 
     // Display names (macOS displayName).
 
-    private static string TypeName(CustomActionType type) => type switch
+    internal static string TypeName(CustomActionType type) => type switch
     {
         CustomActionType.Ai => "AI",
         CustomActionType.Translation => "Translation",
@@ -684,7 +684,7 @@ public sealed partial class CustomActionEditPanel : UserControl
         _ => "Shell Script",
     };
 
-    private static string AfterRunName(AfterRunBehavior behavior) => behavior switch
+    internal static string AfterRunName(AfterRunBehavior behavior) => behavior switch
     {
         AfterRunBehavior.CloseToolbar => "Close toolbar",
         AfterRunBehavior.None => "Do nothing",
