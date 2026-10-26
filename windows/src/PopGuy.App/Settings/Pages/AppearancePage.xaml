@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Settings → Appearance (macOS SettingsView.swift AppearanceView): toolbar zoom, result font size with a sample, and
-    formatting, as Windows 11 Settings cards under the macOS section headers. WinUI has no segmented picker: a
-    SelectorBar stands in. The live toolbar preview comes with the Actions page (Phase 14); Hide logo and the system
-    buttons gap live there too. The header is the window's.
+    Settings → Appearance (macOS SettingsView.swift AppearanceView): toolbar zoom, Hide logo and the system buttons gap
+    with a live toolbar preview, result font size with a sample, and formatting, as Windows 11 Settings cards under the
+    macOS section headers. WinUI has no segmented picker: a SelectorBar stands in. The preview is the Actions page's
+    layout editor in preview-only mode (macOS reuses ToolbarPreviewView in both). The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.AppearancePage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:controls="using:CommunityToolkit.WinUI.Controls">
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:settings="using:PopGuy.Settings.Controls">
 
     <Page.Resources>
         <Style x:Key="SectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
@@ -53,6 +54,9 @@
                 Header="Remove gap before system buttons">
                 <ToggleSwitch x:Name="InlineSystemButtonsToggle" AutomationProperties.Name="Remove gap before system buttons" />
             </controls:SettingsCard>
+
+            <!-- The toolbar at its real size for the zoom, from the saved settings (macOS ToolbarPreviewView). -->
+            <settings:ToolbarLayoutEditor x:Name="ToolbarPreview" Margin="0,8,0,0" />
 
             <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Result Text" />
 

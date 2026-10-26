@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using PopGuy.Core.Settings;
 using PopGuy.Services;
+using PopGuy.Settings.ViewModels;
 
 namespace PopGuy.Settings.Pages;
 
@@ -10,13 +11,14 @@ namespace PopGuy.Settings.Pages;
 /// Settings → Appearance (macOS SettingsView.swift AppearanceView, spec-3 §5.5, plus macOS's Hide logo and Remove gap
 /// before system buttons toggles, which the spec leaves out). The navigation parameter is the
 /// AppServices. Every control saves through <see cref="SettingsStore.Update"/> at once; the toolbar reads these settings
-/// on each presentation, so the next toolbar shows the change. The sample sentence shows the result text's size: the
-/// font size, grown by the zoom when "Include font size in zoom" is on. A change from elsewhere shows while the page is
-/// open.
+/// on each presentation, so the next toolbar shows the change; the toolbar preview (the layout editor, preview-only)
+/// shows it at once. The sample sentence shows the result text's size: the font size, grown by the zoom when "Include
+/// font size in zoom" is on. A change from elsewhere shows while the page is open.
 /// </summary>
 public sealed partial class AppearancePage : Page
 {
     private AppServices? _services;
+    private ActionsViewModel? _model;
     private bool _subscribed;
 
     /// <summary>The controls are being set from the settings: their change events are not the user's.</summary>
@@ -43,6 +45,9 @@ public sealed partial class AppearancePage : Page
     {
         base.OnNavigatedTo(e);
         _services = e.Parameter as AppServices;
+        if (_services is null || _model is not null) return;
+        _model = new ActionsViewModel(_services.Settings, _services.Credentials, _services.Providers, _services.Log.Write);
+        ToolbarPreview.Initialize(_model, _services, isEditable: false);
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -67,7 +72,7 @@ public sealed partial class AppearancePage : Page
     /// <summary>Queued: a change may be saved from any thread.</summary>
     private void OnSettingsChanged(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(Refresh);
 
-    /// <summary>Every control, and the sample, shows the current settings.</summary>
+    /// <summary>Every control, the toolbar preview and the sample show the current settings.</summary>
     private void Refresh()
     {
         if (_services is null) return;
@@ -81,6 +86,7 @@ public sealed partial class AppearancePage : Page
         InlineSystemButtonsToggle.IsOn = current.InlineToolbarSystemButtons;
         FormattingToggle.IsOn = current.PreserveFormatting;
         _syncing = false;
+        ToolbarPreview.Refresh();
         UpdateSample();
     }
 

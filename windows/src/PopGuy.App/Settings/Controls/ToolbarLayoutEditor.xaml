@@ -4,7 +4,8 @@
     toolbar (ToolbarView, not hit-testable) on its card, row 2 the editor's own More actions card; both are built in
     code (ToolbarLayoutEditor.xaml.cs). The surface takes the pointer for both rows (drag to reorder or move between
     them); the overlay holds the hover targets over the toolbar's actions and the drag ghost. The soft width warning shows below. The backdrop is a mid-tone "wallpaper" that both card
-    themes stand out on (macOS ToolbarPreviewBackdrop).
+    themes stand out on (macOS ToolbarPreviewBackdrop). Settings → Appearance uses it preview-only (Initialize): row 1
+    alone, centered, with no drag, hover names or warning (macOS ToolbarPreviewView).
 -->
 <UserControl
     x:Class="PopGuy.Settings.Controls.ToolbarLayoutEditor"

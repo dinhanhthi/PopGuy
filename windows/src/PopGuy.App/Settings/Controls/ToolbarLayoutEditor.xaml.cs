@@ -22,8 +22,9 @@ namespace PopGuy.Settings.Controls;
 /// the drop slot comes from the buttons' and chips' real bounds and shows live in the preview, then saves through
 /// <see cref="ToolbarLayout.MoveAction"/>; a click without a drag does nothing (In More actions and Show label are switches
 /// on the action cards, as on macOS). No caps; a soft warning shows when the toolbar card is wider than
-/// <see cref="ToolbarLimits.ToolbarWidthWarningThreshold"/>. ActionsPage calls <see cref="Refresh"/> on every
-/// settings change. UI thread only.
+/// <see cref="ToolbarLimits.ToolbarWidthWarningThreshold"/>. Preview-only (Settings → Appearance, macOS
+/// <c>ToolbarPreviewView.swift</c>): the toolbar alone, centered when it fits, with no More actions card, drag, hover
+/// names or width warning. Its page calls <see cref="Refresh"/> on every settings change. UI thread only.
 /// </summary>
 public sealed partial class ToolbarLayoutEditor : UserControl
 {
@@ -41,6 +42,9 @@ public sealed partial class ToolbarLayoutEditor : UserControl
     private readonly List<(ActionIdentifier Id, FrameworkElement Chip)> _chips = [];
 
     private ActionsViewModel? _model;
+
+    /// <summary>False for the preview-only mode (set once in <see cref="Initialize"/>).</summary>
+    private bool _isEditable = true;
     private ToolbarSession? _session;
     private ToolbarView? _view;
     private ToolbarViewModel? _viewModel;
@@ -66,11 +70,17 @@ public sealed partial class ToolbarLayoutEditor : UserControl
 
     /// <summary>
     /// Once, before the editor loads. The preview's session gets the app's providers and history but no API key, and
-    /// nothing ever runs it: the preview raises no action.
+    /// nothing ever runs it: the preview raises no action. <paramref name="isEditable"/> false shows the toolbar only.
     /// </summary>
-    internal void Initialize(ActionsViewModel model, AppServices services)
+    internal void Initialize(ActionsViewModel model, AppServices services, bool isEditable = true)
     {
         _model = model;
+        _isEditable = isEditable;
+        if (!isEditable)
+        {
+            MoreCard.Visibility = Visibility.Collapsed;
+            Surface.HorizontalAlignment = HorizontalAlignment.Center;
+        }
         _session = new ToolbarSession(new ActionEngine(services.Providers, _ => null), services.History, () => model.Current);
     }
 
@@ -125,7 +135,7 @@ public sealed partial class ToolbarLayoutEditor : UserControl
 
     private void RebuildMore()
     {
-        if (_viewModel is null) return;
+        if (_viewModel is null || !_isEditable) return;
         var zoom = _viewModel.Zoom;
         MoreTitle.FontSize = 12 * zoom;
         MoreChevron.FontSize = 10 * zoom;
@@ -165,7 +175,7 @@ public sealed partial class ToolbarLayoutEditor : UserControl
 
     /// <summary>
     /// After each layout: the host takes the zoomed card's size (the zoom is a render scale, so the view's layout size is
-    /// unscaled), the hover targets follow the buttons, the width warning follows the card, and a new preview's controls
+    /// unscaled), the hover targets and the width warning (editable only) follow, and a new preview's controls
     /// leave the tab order (hit-testing stops the pointer only: Enter on Ignore would open its confirmation). Idempotent,
     /// so the layout it may cause settles at once.
     /// </summary>
@@ -177,9 +187,9 @@ public sealed partial class ToolbarLayoutEditor : UserControl
         var height = _view.ActualHeight * zoom;
         if (PreviewHost.Width != width) PreviewHost.Width = width;
         if (PreviewHost.Height != height) PreviewHost.Height = height;
-        var wide = width > ToolbarLimits.ToolbarWidthWarningThreshold ? Visibility.Visible : Visibility.Collapsed;
+        var wide = _isEditable && width > ToolbarLimits.ToolbarWidthWarningThreshold ? Visibility.Visible : Visibility.Collapsed;
         if (WidthWarning.Visibility != wide) WidthWarning.Visibility = wide;
-        SyncTargets();
+        if (_isEditable) SyncTargets();
         if (!_tabStopsPending) return;
         _tabStopsPending = false;
         RemoveTabStops(_view);
@@ -228,7 +238,7 @@ public sealed partial class ToolbarLayoutEditor : UserControl
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
         var point = e.GetCurrentPoint(Surface);
-        if (_drag is not null || !point.Properties.IsLeftButtonPressed || _viewModel is null) return;
+        if (!_isEditable || _drag is not null || !point.Properties.IsLeftButtonPressed || _viewModel is null) return;
         if (HitTest(point.Position) is not { } hit) return;
         _drag = new DragSession
         {
