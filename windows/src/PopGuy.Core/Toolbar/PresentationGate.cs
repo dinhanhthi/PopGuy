@@ -73,13 +73,43 @@ public static class PresentationGate
         NormalizeDomain(host) is { } h && NormalizeDomain(domain) is { } d && (h == d || h.EndsWith("." + d, StringComparison.Ordinal));
 
     /// <summary>
+    /// The host of a browser address-bar value (macOS <c>BrowserURLReader.normalizeHost</c>), normalized by
+    /// <see cref="NormalizeDomain"/>; null unless it is a web page. Address bars hide "https://" (Chromium also "www."),
+    /// so a value without a scheme counts as a web address; with one, only http and https do ("chrome://newtab",
+    /// "edge://settings", "about:blank", "file:///…" and "view-source:…" have no host). "localhost:3000" is a host and a
+    /// port. White space (a search being typed) is no address.
+    /// </summary>
+    public static string? NormalizeHost(string? address)
+    {
+        var s = address?.Trim() ?? "";
+        if (s.Length == 0 || s.Any(char.IsWhiteSpace)) return null;
+        var end = s.IndexOfAny(['/', '?', '#']);
+        if (s.IndexOf(':') is var colon and >= 0 && (end < 0 || colon < end))
+        {
+            if (s.AsSpan(colon).StartsWith("://", StringComparison.Ordinal))
+            {
+                var scheme = s[..colon];
+                if (!scheme.Equals("http", StringComparison.OrdinalIgnoreCase) && !scheme.Equals("https", StringComparison.OrdinalIgnoreCase))
+                    return null;
+            }
+            else if (s[(colon + 1)..(end < 0 ? s.Length : end)] is not { Length: > 0 } port || !port.All(char.IsAsciiDigit))
+            {
+                return null;
+            }
+        }
+        return NormalizeDomain(s);
+    }
+
+    /// <summary>
     /// The bare lowercase host of a typed domain or URL (macOS <c>BrowserURLReader.normalizeDomain</c>, without IDNA):
     /// no scheme, user info, port, path, query, leading "." or "www.", trailing "."; null unless it has a dot or is
-    /// "localhost".
+    /// "localhost", and for white space inside. Settings → Ignore stores entries in this form.
     /// </summary>
-    private static string? NormalizeDomain(string? raw)
+    public static string? NormalizeDomain(string? raw)
     {
         var s = raw?.Trim().ToLowerInvariant() ?? "";
+        if (s.Any(char.IsWhiteSpace))
+            return null;
         if (s.IndexOf("://", StringComparison.Ordinal) is var scheme and >= 0)
             s = s[(scheme + 3)..];
         if (s.IndexOfAny(['/', '?', '#']) is var end and >= 0)

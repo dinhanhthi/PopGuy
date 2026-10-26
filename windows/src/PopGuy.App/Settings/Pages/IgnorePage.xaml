@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Settings → Ignore (macOS AppsView.swift): the Ignored Apps toggle and list, as Windows 11 Settings cards under the
-    macOS section header. The rows (one card per app) and the Add App… picker are built in code. Ignored Domains joins
-    in Phase 19. The header is the window's.
+    Settings → Ignore (macOS AppsView.swift): the Ignored Apps and Ignored Domains toggles and lists, as Windows 11
+    Settings cards under the macOS section headers. The rows (one card per app or domain) and the Add App… picker are
+    built in code. The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.IgnorePage"
@@ -63,6 +63,63 @@
                     Margin="1,8,0,0"
                     Style="{StaticResource CaptionStyle}"
                     Text="The toolbar will not appear when you select text in these apps. Turning this off also removes the &quot;Ignore this app&quot; button from the toolbar." />
+
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Ignored Domains" />
+
+                <controls:SettingsCard Header="Enable Ignored Domains">
+                    <ToggleSwitch x:Name="DomainsToggle" AutomationProperties.Name="Enable Ignored Domains" />
+                </controls:SettingsCard>
+
+                <StackPanel x:Name="DomainsPanel" Spacing="4">
+                    <Grid Margin="1,8,0,4" ColumnSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            Margin="0,2,0,0"
+                            VerticalAlignment="Top"
+                            FontSize="12"
+                            Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                            Glyph="&#xE7BA;" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Style="{StaticResource CaptionStyle}"
+                            Text="To match these domains, PopGuy reads the address of your current browser tab when you select text in Edge, Chrome, Brave or Firefox. While this is off, PopGuy never reads any browser address." />
+                    </Grid>
+                    <TextBlock
+                        x:Name="DomainsEmptyText"
+                        Margin="1,8,0,8"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="No ignored domains." />
+                    <StackPanel x:Name="DomainRows" Spacing="4" />
+                    <Grid Margin="0,4,0,0" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox
+                            x:Name="DomainBox"
+                            AutomationProperties.Name="Domain to ignore"
+                            PlaceholderText="example.com" />
+                        <Button
+                            x:Name="AddDomainButton"
+                            Grid.Column="1"
+                            Content="Add" />
+                    </Grid>
+                    <TextBlock
+                        x:Name="DomainError"
+                        Margin="1,0,0,0"
+                        Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        TextWrapping="Wrap"
+                        Visibility="Collapsed" />
+                </StackPanel>
+
+                <TextBlock
+                    Margin="1,8,0,0"
+                    Style="{StaticResource CaptionStyle}"
+                    Text="Hide the toolbar on these websites. Works in Edge, Chrome, Brave and Firefox. Desktop apps use Ignored Apps instead." />
             </StackPanel>
         </Grid>
     </ScrollViewer>

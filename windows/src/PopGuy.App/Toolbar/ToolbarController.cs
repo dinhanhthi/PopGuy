@@ -6,6 +6,7 @@ using PopGuy.Core.Json;
 using PopGuy.Core.Settings;
 using PopGuy.Core.Speak;
 using PopGuy.Core.Toolbar;
+using PopGuy.Platform.Browser;
 using PopGuy.Platform.Capture;
 using PopGuy.Platform.Input;
 using PopGuy.Platform.Output;
@@ -25,10 +26,13 @@ namespace PopGuy.Toolbar;
 /// Speak (its button, its hotkey, an assigned double-click) toggles <see cref="SpeakCoordinator"/> on the selection,
 /// orthogonal to the action runs; closing the toolbar or a new selection drops its "Listen again" (macOS). Look up and
 /// Dictionary custom actions run through the session like the other actions; a lookup's Listen speaks its headword.
+/// While Ignored Domains is on, a selection in a browser reads the tab's host (<see cref="BrowserUrlReader"/>) before it
+/// is presented: the gate's ignored domains and <c>{{domain}}</c> use it (macOS reads it only then, too).
 /// <para>
 /// Threading: the chord and hotkey events and the three input loops run on the thread pool; everything that touches the
 /// window, the view model or the presentation state runs on the UI thread (<see cref="DispatcherQueue"/>). Captures
-/// and clipboard writes run off it. Selected text, results and clipboard contents are never logged, only lengths.
+/// and clipboard writes run off it, and so does the browser read. Selected text, results and clipboard contents are never
+/// logged, only lengths; browser addresses and hosts are never logged either.
 /// </para>
 /// </summary>
 internal sealed class ToolbarController : IDisposable
@@ -73,6 +77,9 @@ internal sealed class ToolbarController : IDisposable
     private int _presentation;
     private bool _pasting;
 
+    /// <summary>Counts passive selections, so a browser read that finishes after a newer selection presents nothing.</summary>
+    private int _passiveSelections;
+
     /// <summary>A selection the toolbar was (or is about to be) shown for.</summary>
     /// <param name="Text">The selection; "" for <paramref name="Blocked"/>.</param>
     /// <param name="IsEditable">Paste back is offered.</param>
@@ -81,9 +88,10 @@ internal sealed class ToolbarController : IDisposable
     /// <param name="Blocked">The source runs as administrator: the toolbar shows the admin-app error instead.</param>
     /// <param name="Pointer">A passive selection's release point (a drag or a double-click), else null.</param>
     /// <param name="GrewDownward">A passive drag's direction, else null.</param>
+    /// <param name="Host">The browser tab's host (<see cref="ReadHost"/>), else null.</param>
     private sealed record CapturedSelection(
         string Text, bool IsEditable, Rectangle Selection, ForegroundApp Source, bool Blocked = false,
-        Point? Pointer = null, bool? GrewDownward = null);
+        Point? Pointer = null, bool? GrewDownward = null, string? Host = null);
 
     public ToolbarController(
         SettingsStore settings, ToolbarSession session, SpeakCoordinator speak, ToolbarWindow window, GlobalInput input,
@@ -258,6 +266,7 @@ internal sealed class ToolbarController : IDisposable
                 // Nothing read: an elevated app gets the admin-app error, anything else no toolbar.
                 capture = IsBlocked(fire.App) ? new("", false, Rectangle.Empty, fire.App, Blocked: true) : null;
             }
+            if (capture is { Blocked: false }) capture = capture with { Host = ReadHost(fire.App) };
             _log($"chord: uia {uia.Status}, {(capture is null ? "nothing captured" : capture.Blocked ? "blocked" : $"captured {capture.Text.Length} chars")}");
             if (capture is not null) _dispatcher.TryEnqueue(() => Present(capture, autoRun: null));
         }
@@ -325,7 +334,7 @@ internal sealed class ToolbarController : IDisposable
                 _log($"hotkey: capture {result.Status} ({result.Reason}, {result.Method}), {result.Text.Length} chars");
                 CapturedSelection? capture = result.Status switch
                 {
-                    SelectionCaptureStatus.Captured => new(result.Text, result.IsEditable, FirstRect(result.SelectionRects), source),
+                    SelectionCaptureStatus.Captured => new(result.Text, result.IsEditable, FirstRect(result.SelectionRects), source, Host: ReadHost(source)),
                     SelectionCaptureStatus.Blocked => new("", false, Rectangle.Empty, source, Blocked: true),
                     _ => null,
                 };
@@ -371,7 +380,7 @@ internal sealed class ToolbarController : IDisposable
         {
             var assigned = settings.DoubleClickAssignedAction;
             _log($"selection: double-click, {result.Text.Length} chars, {(assigned is null ? "show" : $"run {assigned.Type} {assigned.BuiltinKind}")}");
-            Present(capture, assigned);
+            PresentWithHost(capture, assigned);
             return;
         }
         if (!settings.TriggerOnSelectEnabled) return;
@@ -380,14 +389,37 @@ internal sealed class ToolbarController : IDisposable
             _log("selection: dropped, not editable");
             return;
         }
-        Present(capture, autoRun: null);
+        PresentWithHost(capture, autoRun: null);
+    }
+
+    /// <summary>
+    /// Presents a passive selection: from a browser while Ignored Domains is on, after its host is read on the thread
+    /// pool (the UI thread never waits on UI Automation), unless a newer passive selection came meanwhile; else at once.
+    /// UI thread.
+    /// </summary>
+    private void PresentWithHost(CapturedSelection capture, ActionIdentifier? autoRun)
+    {
+        var selection = ++_passiveSelections;
+        if (!ReadsHost(capture.Source))
+        {
+            Present(capture, autoRun);
+            return;
+        }
+        Watch(Task.Run(() =>
+        {
+            var withHost = capture with { Host = ReadHost(capture.Source) };
+            _dispatcher.TryEnqueue(() =>
+            {
+                if (selection == _passiveSelections) Present(withHost, autoRun);
+            });
+        }), "browser host");
     }
 
     // Presentation (UI thread).
 
     /// <summary>
-    /// Shows the toolbar for <paramref name="capture"/> if <see cref="PresentationGate"/> lets it (an ignored app, no
-    /// enabled action, or a re-entrant same-text event drops it), then runs <paramref name="autoRun"/>. A dropped
+    /// Shows the toolbar for <paramref name="capture"/> if <see cref="PresentationGate"/> lets it (an ignored app or
+    /// domain, no enabled action, or a re-entrant same-text event drops it), then runs <paramref name="autoRun"/>. A dropped
     /// selection runs nothing: a trailing double-click on a result keeps it (macOS still dispatches then).
     /// </summary>
     private void Present(CapturedSelection capture, ActionIdentifier? autoRun)
@@ -403,7 +435,8 @@ internal sealed class ToolbarController : IDisposable
             SpeakActive: _session.SpeakPhase != SpeakPhase.Idle,
             CanReplaySpeak: _viewModel.CanReplaySpeak,
             SourceExeName: capture.Source.Exe,
-            IsOwnProcess: capture.Source.IsOwnProcess), settings).Verdict;
+            IsOwnProcess: capture.Source.IsOwnProcess,
+            SourceHost: capture.Host), settings).Verdict;
         if (verdict != PresentationVerdict.Show)
         {
             _log($"present: dropped, {verdict}");
@@ -489,6 +522,7 @@ internal sealed class ToolbarController : IDisposable
             LanguageName = language.Name,
             SourceExeName = source.IsOwnProcess ? null : source.Exe,
             SourceAppName = source.DisplayName.Length > 0 ? source.DisplayName : null,
+            SourceDomain = source.IsOwnProcess ? null : capture.Host,
             SkipHistory = ignored,
         });
     }
@@ -817,8 +851,28 @@ internal sealed class ToolbarController : IDisposable
     /// </summary>
     private static bool IsIgnored(CapturedSelection capture, AppSettings settings) =>
         PresentationGate.Evaluate(
-            new PresentationInput(capture.Text, SourceExeName: capture.Source.Exe, IsOwnProcess: capture.Source.IsOwnProcess),
+            new PresentationInput(
+                capture.Text, SourceExeName: capture.Source.Exe, IsOwnProcess: capture.Source.IsOwnProcess, SourceHost: capture.Host),
             settings).Verdict is PresentationVerdict.IgnoredApp or PresentationVerdict.IgnoredDomain;
+
+    /// <summary>
+    /// The tab's host is read only while Ignored Domains is on, from a supported browser that is not PopGuy (macOS:
+    /// never otherwise, so no browser address is touched while the feature is off). Any thread.
+    /// </summary>
+    private bool ReadsHost(ForegroundApp source) =>
+        _settings.Current.IgnoredDomainsEnabled && !source.IsOwnProcess && BrowserUrlReader.IsSupportedBrowser(source.Exe);
+
+    /// <summary>
+    /// The source browser tab's host (<see cref="ReadsHost"/>), or null; up to 300 ms of UI Automation, so pool threads
+    /// only. Logs whether a host was found, never the host.
+    /// </summary>
+    private string? ReadHost(ForegroundApp source)
+    {
+        if (!ReadsHost(source)) return null;
+        var host = BrowserUrlReader.ReadHost(source.Hwnd, source.Exe);
+        _log($"browser: {source.Exe}, {(host is null ? "no host" : "host found")}");
+        return host;
+    }
 
     private static bool IsBlocked(ForegroundApp app) => app.IsElevated && !Environment.IsPrivilegedProcess;
 

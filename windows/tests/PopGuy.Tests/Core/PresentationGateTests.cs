@@ -80,6 +80,40 @@ public sealed class PresentationGateTests
     public void HostMatchesNormalizesBothSides(string host, string entry, bool expected) =>
         Assert.Equal(expected, PresentationGate.HostMatches(host, entry));
 
+    // Contract (privacy): the browser reader keeps only the host of a web page's address. Address bars hide "https://",
+    // so a bare host counts; browser pages, local files and other schemes have no host, and a search being typed is none.
+    [Theory]
+    [InlineData("https://www.Notion.so/team/page?x=1#top", "notion.so")]
+    [InlineData("http://example.com", "example.com")]
+    [InlineData("github.com/foo/bar", "github.com")]
+    [InlineData("  docs.github.com  ", "docs.github.com")]
+    [InlineData("localhost:3000/app", "localhost")]
+    [InlineData("https://user@bank.com:8443/x:y", "bank.com")]
+    [InlineData("chrome://newtab", null)]
+    [InlineData("edge://settings/privacy", null)]
+    [InlineData("about:blank", null)]
+    [InlineData("file:///C:/Users/me/doc.html", null)]
+    [InlineData("view-source:https://example.com", null)]
+    [InlineData("mailto:me@example.com", null)]
+    [InlineData("data:text/html,hello.world", null)]
+    [InlineData("search for example.com", null)]
+    [InlineData("hello", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void NormalizeHostKeepsOnlyAWebPageHost(string? address, string? expected) =>
+        Assert.Equal(expected, PresentationGate.NormalizeHost(address));
+
+    // Contract: Settings → Ignore stores a typed domain in the gate's form; what the gate cannot match is refused.
+    [Theory]
+    [InlineData("  Notion.SO/  ", "notion.so")]
+    [InlineData("https://www.notion.so/foo/bar", "notion.so")]
+    [InlineData("localhost", "localhost")]
+    [InlineData("https://", null)]
+    [InlineData("notion", null)]
+    [InlineData("not ion.so", null)]
+    public void NormalizeDomainIsTheStoredForm(string raw, string? expected) =>
+        Assert.Equal(expected, PresentationGate.NormalizeDomain(raw));
+
     // Contract: Settings → Ignore edits the list with the gate's rule. A picked path is stored as its lowercase file
     // name, once whatever its case; Remove drops every entry the gate would match, so a removed app shows again.
     [Fact]

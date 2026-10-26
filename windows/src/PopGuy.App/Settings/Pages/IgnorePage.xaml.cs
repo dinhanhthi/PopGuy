@@ -10,9 +10,11 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Navigation;
 using PopGuy.Controls;
 using PopGuy.Core.Settings;
+using PopGuy.Core.Toolbar;
 using PopGuy.Platform.SystemServices;
 using PopGuy.Services;
 using Windows.Storage.Pickers;
+using Windows.System;
 using WinRT.Interop;
 
 namespace PopGuy.Settings.Pages;
@@ -23,13 +25,22 @@ namespace PopGuy.Settings.Pages;
 /// (<see cref="IgnoredApps"/>, the gate's rule); a row shows the exe's icon and FileDescription when it can be found
 /// (a running process, or the path picked this session), else the generic icon and the exe name. "Add App…" opens a
 /// picker of the running apps with a window (<see cref="AppIcons.RunningApps"/>) with Browse… for an .exe. Rows show at
-/// once; names and icons fill in from the thread pool. Every change saves through <see cref="SettingsStore.Update"/>;
-/// a change from elsewhere (the toolbar's "Ignore this app") shows while the page is open.
+/// once; names and icons fill in from the thread pool. "Enable Ignored Domains" gates the domain list and every browser
+/// address read (macOS: off by default); a typed domain or URL is stored as the gate's bare host
+/// (<see cref="PresentationGate.NormalizeDomain"/>), and an invalid or duplicate one is refused under the field. Every
+/// change saves through <see cref="SettingsStore.Update"/>; a change from elsewhere (the toolbar's "Ignore this app")
+/// shows while the page is open.
 /// </summary>
 public sealed partial class IgnorePage : Page
 {
     /// <summary>AppIconDefault: an app whose icon is unknown or not loaded yet (macOS <c>app.dashed</c>).</summary>
     private const string GenericAppGlyph = "";
+
+    /// <summary>Globe: a domain row (macOS <c>globe</c>).</summary>
+    private const string DomainGlyph = "";
+
+    private const string InvalidDomainMessage = "Invalid domain — try \"example.com\".";
+    private const string DuplicateDomainMessage = "This domain is already in the list.";
 
     private static readonly TimeSpan SpinnerDelay = TimeSpan.FromMilliseconds(150);
 
@@ -43,6 +54,7 @@ public sealed partial class IgnorePage : Page
     private readonly HashSet<string> _resolving = [];
     private readonly Dictionary<string, SettingsCard> _rows = new();
     private IReadOnlyList<string> _shown = [];
+    private IReadOnlyList<string> _shownDomains = [];
     private AppServices? _services;
     private bool _subscribed;
     private bool _picking;
@@ -56,6 +68,16 @@ public sealed partial class IgnorePage : Page
         EnabledToggle.Toggled += (_, _) =>
             Save("ignoredAppsEnabled", s => s with { IgnoredAppsEnabled = EnabledToggle.IsOn });
         AddButton.Click += (_, _) => _ = PickAsync();
+        DomainsToggle.Toggled += (_, _) =>
+            Save("ignoredDomainsEnabled", s => s with { IgnoredDomainsEnabled = DomainsToggle.IsOn });
+        AddDomainButton.Click += (_, _) => AddDomain();
+        DomainBox.KeyDown += (_, e) =>
+        {
+            if (e.Key != VirtualKey.Enter) return;
+            e.Handled = true;
+            AddDomain();
+        };
+        DomainBox.TextChanged += (_, _) => DomainError.Visibility = Visibility.Collapsed;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -92,13 +114,74 @@ public sealed partial class IgnorePage : Page
         var current = _services.Settings.Current;
         _syncing = true;
         EnabledToggle.IsOn = current.IgnoredAppsEnabled;
+        DomainsToggle.IsOn = current.IgnoredDomainsEnabled;
         _syncing = false;
+        RefreshDomains(current);
         AppsPanel.Visibility = current.IgnoredAppsEnabled ? Visibility.Visible : Visibility.Collapsed;
         var keys = IgnoredApps.Keys(current.IgnoredAppExeNames);
         EmptyText.Visibility = keys.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (!keys.SequenceEqual(_shown)) ShowRows(keys);
         _ = ResolveAsync(keys);
     }
+
+    // Ignored Domains (macOS AppsView's domains section).
+
+    /// <summary>The domain rows: the stored entries in the gate's form, once each (an entry that matches nothing is not shown).</summary>
+    private void RefreshDomains(AppSettings current)
+    {
+        DomainsPanel.Visibility = current.IgnoredDomainsEnabled ? Visibility.Visible : Visibility.Collapsed;
+        var domains = DomainKeys(current.IgnoredDomains);
+        DomainsEmptyText.Visibility = domains.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (domains.SequenceEqual(_shownDomains)) return;
+        _shownDomains = domains;
+        DomainRows.Children.Clear();
+        foreach (var domain in domains) DomainRows.Children.Add(NewDomainRow(domain));
+    }
+
+    private SettingsCard NewDomainRow(string domain)
+    {
+        var remove = new Button
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Style = AppStyle("SubtleButtonStyle"),
+            Content = new FontIcon { Glyph = "", Style = PageStyle("CriticalIconStyle") },
+        };
+        HoverTooltip.SetText(remove, "Remove");
+        AutomationProperties.SetName(remove, $"Remove {domain}");
+        remove.Click += (_, _) => Save("ignoredDomains", s => s with
+        {
+            IgnoredDomains = s.IgnoredDomains.Where(d => PresentationGate.NormalizeDomain(d) != domain).ToList(),
+        });
+        return new SettingsCard
+        {
+            Header = domain,
+            HeaderIcon = new FontIcon { Glyph = DomainGlyph, Style = PageStyle("SecondaryIconStyle") },
+            Content = remove,
+        };
+    }
+
+    /// <summary>
+    /// Add (or Enter): the typed domain or URL as a bare host (macOS addIgnoredDomain), once. The field clears on
+    /// success; an invalid or duplicate entry keeps it and shows why until the text changes.
+    /// </summary>
+    private void AddDomain()
+    {
+        if (_services is null || DomainBox.Text.Trim() is not { Length: > 0 } raw) return;
+        string? error = null;
+        if (PresentationGate.NormalizeDomain(raw) is not { } domain) error = InvalidDomainMessage;
+        else if (DomainKeys(_services.Settings.Current.IgnoredDomains).Contains(domain)) error = DuplicateDomainMessage;
+        else Save("ignoredDomains", s => DomainKeys(s.IgnoredDomains).Contains(domain) ? s : s with { IgnoredDomains = [.. s.IgnoredDomains, domain] });
+        if (error is null)
+        {
+            DomainBox.Text = "";
+            return;
+        }
+        DomainError.Text = error;
+        DomainError.Visibility = Visibility.Visible;
+    }
+
+    private static List<string> DomainKeys(IEnumerable<string> entries) =>
+        entries.Select(PresentationGate.NormalizeDomain).OfType<string>().Distinct().ToList();
 
     // Rows (macOS IgnoredAppRow).
 
