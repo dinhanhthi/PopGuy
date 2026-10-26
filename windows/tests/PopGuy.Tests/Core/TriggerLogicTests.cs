@@ -73,6 +73,8 @@ public sealed class TriggerLogicTests
         var scheduled = SelectionGesture.Schedule(tripleClick, pending: doubleClick, fromMouseUp: true);
 
         Assert.False(scheduled.IsDoubleClick);
+        // Still mouse-driven: the release point lets the VS Code copy fallback read the line.
+        Assert.Equal(new Point(501, 400), tripleClick.MouseReleasePoint);
     }
 
     [Fact]
