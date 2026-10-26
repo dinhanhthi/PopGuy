@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     One action's card on Settings → Actions (macOS ActionsView.swift ActionCard): a SettingsExpander, collapsed by
-    default as on macOS. The header holds the title with the Built-in or From plugin badge and the Activate switch; the
-    icon, description and the rows of the action's kind (provider, model, tone, language, prompt, shortcut) are set in
-    code (ActionCard.xaml.cs), before the card is shown. The styles below give the code-built rows their theme colours.
+    default as on macOS. The header holds the title with the Built-in or From plugin badge and the Activate, In More
+    actions and Show label switches; the icon, description and the rows of the action's kind (provider, model, tone,
+    language, prompt, shortcut) are set in code (ActionCard.xaml.cs), before the card is shown. The styles below give the code-built rows their theme colours.
 -->
 <UserControl
     x:Class="PopGuy.Settings.Controls.ActionCard"
@@ -64,10 +64,34 @@
             </StackPanel>
         </controls:SettingsExpander.Header>
         <controls:SettingsExpander.Content>
-            <!-- Activate. The transparent wrapper takes the pointer, so the tooltip still shows while the switch is locked. -->
-            <Grid x:Name="EnabledHost" Background="Transparent">
-                <ToggleSwitch x:Name="EnabledToggle" AutomationProperties.Name="Activate" />
-            </Grid>
+            <!--
+                Activate, In More actions and Show label (macOS headerDetail). The transparent wrappers take the pointer,
+                so the tooltips still show while a switch is locked (Activate: the only enabled action; Show label: in
+                More actions).
+            -->
+            <StackPanel Orientation="Horizontal" Spacing="14">
+                <Grid x:Name="EnabledHost" Background="Transparent">
+                    <ToggleSwitch
+                        x:Name="EnabledToggle"
+                        AutomationProperties.Name="Activate"
+                        OffContent="Activate"
+                        OnContent="Activate" />
+                </Grid>
+                <Grid x:Name="InMoreHost" Background="Transparent">
+                    <ToggleSwitch
+                        x:Name="InMoreToggle"
+                        AutomationProperties.Name="In More actions"
+                        OffContent="In More actions"
+                        OnContent="In More actions" />
+                </Grid>
+                <Grid x:Name="ShowLabelHost" Background="Transparent">
+                    <ToggleSwitch
+                        x:Name="ShowLabelToggle"
+                        AutomationProperties.Name="Show label"
+                        OffContent="Show label"
+                        OnContent="Show label" />
+                </Grid>
+            </StackPanel>
         </controls:SettingsExpander.Content>
     </controls:SettingsExpander>
 </UserControl>

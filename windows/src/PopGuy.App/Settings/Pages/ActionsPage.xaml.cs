@@ -13,9 +13,10 @@ using PopGuy.Settings.ViewModels;
 namespace PopGuy.Settings.Pages;
 
 /// <summary>
-/// Settings → Actions (macOS ActionsView.swift, spec-3 §5.3): the toolbar's Settings-button switch, the search box and
-/// type filter, then one <see cref="ActionCard"/> per action in the action order (built-ins and custom actions; Speak
-/// and Look up come in Phase 19). The navigation parameter is the AppServices. A card is built once and updated on every
+/// Settings → Actions (macOS ActionsView.swift, spec-3 §5.3): the toolbar layout editor
+/// (<see cref="ToolbarLayoutEditor"/>), the toolbar's Settings-button switch, the search box and type filter, then one
+/// <see cref="ActionCard"/> per action in the action order (built-ins and custom actions; Speak and Look up come in
+/// Phase 19). The navigation parameter is the AppServices. A card is built once and updated on every
 /// settings change, so text being typed, a recording and the expansion survive; it is built again only when its custom
 /// action's type, title, icon, description or origin changed. Search and filter only hide cards. While a card's
 /// shortcut records, PopGuy's own hotkeys and chord are off (<see cref="AppServices.SetHotkeysSuspended"/>); after
@@ -62,6 +63,7 @@ public sealed partial class ActionsPage : Page
         _services = e.Parameter as AppServices;
         if (_services is null || _model is not null) return;
         _model = new ActionsViewModel(_services.Settings, _services.Credentials, _services.Providers, _services.Log.Write);
+        LayoutEditor.Initialize(_model, _services);
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -105,6 +107,7 @@ public sealed partial class ActionsPage : Page
         _syncing = true;
         SettingsButtonToggle.IsOn = current.ShowToolbarSettingsButton;
         _syncing = false;
+        LayoutEditor.Refresh();
         SyncCards(current);
         foreach (var (card, _) in _cards.Values) card.Update(current);
         ApplyFilter();

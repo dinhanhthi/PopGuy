@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Settings → Actions (macOS ActionsView.swift): a fixed header (the Settings-button switch, then the search box and
-    the type filter) above the scrolling action cards, one per action in the action order. The cards are built in code
-    (ActionsPage.xaml.cs, Controls/ActionCard). The toolbar layout editor (task 14.3) goes first in HeaderPanel, above the
-    switch row. Speak and Look up get their cards in Phase 19; adding, importing, exporting and editing custom actions
-    come in Phases 15 and 16. The header is the window's.
+    Settings → Actions (macOS ActionsView.swift): a fixed header (the toolbar layout editor, the Settings-button switch,
+    then the search box and the type filter) above the scrolling action cards, one per action in the action order. The
+    cards are built in code (ActionsPage.xaml.cs, Controls/ActionCard). Speak and Look up get their cards in Phase 19;
+    adding, importing, exporting and editing custom actions come in Phases 15 and 16. The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.ActionsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:PopGuy.Settings.Controls">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -23,6 +23,9 @@
             MaxWidth="1000"
             Margin="24,16,24,8"
             Spacing="8">
+
+            <!-- The live toolbar preview: drag to reorder or to move actions to and from More actions. -->
+            <controls:ToolbarLayoutEditor x:Name="LayoutEditor" />
 
             <!-- The toolbar's Settings button (macOS keeps this switch on the Actions page). -->
             <ToggleSwitch

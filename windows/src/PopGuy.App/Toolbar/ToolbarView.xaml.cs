@@ -132,6 +132,10 @@ public sealed partial class ToolbarView : UserControl
     /// <summary>The text boxes that take focus (prompt, refine, edit): the window's text input.</summary>
     public IReadOnlyList<TextBox> TextBoxes => [PromptBox, RefineBox, EditBox];
 
+    /// <summary>The inline actions' buttons, in row order: the Settings layout editor hit-tests them.</summary>
+    internal IEnumerable<(ActionIdentifier Id, FrameworkElement Button)> ActionButtons =>
+        _rowButtons.Where(b => b.Tag is ToolbarActionItem).Select(b => (((ToolbarActionItem)b.Tag).Id, (FrameworkElement)b));
+
     /// <summary>A text box opened (true) or closed (false), after its text was reset or seeded.</summary>
     public event Action<TextBox, bool>? TextBoxShown;
 
@@ -322,7 +326,8 @@ public sealed partial class ToolbarView : UserControl
         return picker;
     }
 
-    private static FrameworkElement Icon(ToolbarActionItem item) => item.Emoji is { } emoji
+    /// <summary>An action's icon as on its button (the layout editor's More actions chips use it too).</summary>
+    internal static FrameworkElement Icon(ToolbarActionItem item) => item.Emoji is { } emoji
         ? new TextBlock { Text = emoji, VerticalAlignment = VerticalAlignment.Center }
         : new FontIcon { FontFamily = SymbolFont, FontSize = 14, Glyph = item.Glyph ?? "" };
 

@@ -14,8 +14,9 @@ namespace PopGuy.Settings.Controls;
 
 /// <summary>
 /// One action's card on Settings → Actions (macOS ActionsView.swift: ActionCard and the card(for:) builders). The
-/// header: icon, title, Built-in or From plugin badge, description, and Activate, locked (the reason on hover) while
-/// the action is the only enabled one. The rows by kind: Improve and Shorten provider, model, tone, prompt; Proofread
+/// header: icon, title, Built-in or From plugin badge, description, and the switches Activate, locked (the reason on
+/// hover) while the action is the only enabled one, In More actions, and Show label, locked while the action is in More
+/// actions (its value is kept). The rows by kind: Improve and Shorten provider, model, tone, prompt; Proofread
 /// the same without tone; Prompt provider and model; Translate provider, model, target language, tone, additional
 /// prompt; a custom AI action provider, model, its required prompt; a custom translation action as Translate. Model,
 /// tone and prompt hide for the providers that ignore them. Every kind ends with its keyboard shortcut. Each change
@@ -28,6 +29,10 @@ public sealed partial class ActionCard : UserControl
     private const string ActivateTooltip = "Turn this action on or off";
     private const string LockedTooltip =
         "Disabled because this is the only active action. The toolbar needs at least one. Turn on another action first.";
+    private const string InMoreTooltip = "Show this action in the More actions menu instead of on the toolbar";
+    private const string ShowLabelTooltip = "Show the action's name next to its icon on the toolbar";
+    private const string ShowLabelLockedTooltip =
+        "Disabled because this action is in More actions, which always shows action names. Turn off In More actions to use it.";
     private const string PromptCaption =
         "Use {{text}} for the selected text. Also available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on).";
     private const string TranslatePromptCaption = "Added on top of the default translation prompt.";
@@ -51,6 +56,11 @@ public sealed partial class ActionCard : UserControl
         InitializeComponent();
         EnabledToggle.Toggled += (_, _) =>
             Save("enabled", s => ToolbarLayout.WithEnabled(s, Id, EnabledToggle.IsOn));
+        InMoreToggle.Toggled += (_, _) =>
+            Save("principalActionIDs", s => ToolbarLayout.WithPrincipal(s, Id, !InMoreToggle.IsOn));
+        ShowLabelToggle.Toggled += (_, _) =>
+            Save("labeledActionIDs", s => ToolbarLayout.WithLabeled(s, Id, ShowLabelToggle.IsOn));
+        HoverTooltip.SetText(InMoreHost, InMoreTooltip);
     }
 
     internal ActionIdentifier Id { get; private set; } = ActionIdentifier.Speak;
@@ -102,6 +112,12 @@ public sealed partial class ActionCard : UserControl
         var locked = ToolbarLayout.IsLastEnabledAction(current, Id);
         EnabledToggle.IsEnabled = !locked;
         HoverTooltip.SetText(EnabledHost, locked ? LockedTooltip : ActivateTooltip);
+        var principal = ToolbarLayout.IsPrincipal(current, Id);
+        InMoreToggle.IsOn = !principal;
+        // Kept while in More actions, which always shows names: locked, not cleared (macOS).
+        ShowLabelToggle.IsOn = ToolbarLayout.IsLabeled(current, Id);
+        ShowLabelToggle.IsEnabled = principal;
+        HoverTooltip.SetText(ShowLabelHost, principal ? ShowLabelTooltip : ShowLabelLockedTooltip);
         foreach (var update in _updates) update(current);
         _syncing = false;
     }

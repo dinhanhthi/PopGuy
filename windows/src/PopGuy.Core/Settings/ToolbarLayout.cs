@@ -65,6 +65,29 @@ public static class ToolbarLayout
     public static bool IsPrincipal(AppSettings s, ActionIdentifier id) => s.PrincipalActionIds?.Contains(id) ?? false;
 
     /// <summary>
+    /// <paramref name="s"/> with <paramref name="id"/> on the inline row (<paramref name="principal"/>) or in More
+    /// actions; the action order is kept (macOS setPrincipal).
+    /// </summary>
+    public static AppSettings WithPrincipal(AppSettings s, ActionIdentifier id, bool principal)
+    {
+        var current = s.PrincipalActionIds ?? [];
+        if (current.Contains(id) == principal) return s;
+        return s with { PrincipalActionIds = principal ? [.. current, id] : [.. current.Where(a => a != id)] };
+    }
+
+    public static bool IsLabeled(AppSettings s, ActionIdentifier id) => s.LabeledActionIds.Contains(id);
+
+    /// <summary>
+    /// <paramref name="s"/> with <paramref name="id"/>'s toolbar button showing its title next to the icon, or the icon
+    /// only (macOS setLabeled). The value is kept while the action is in More actions.
+    /// </summary>
+    public static AppSettings WithLabeled(AppSettings s, ActionIdentifier id, bool labeled)
+    {
+        if (IsLabeled(s, id) == labeled) return s;
+        return s with { LabeledActionIds = labeled ? [.. s.LabeledActionIds, id] : [.. s.LabeledActionIds.Where(a => a != id)] };
+    }
+
+    /// <summary>
     /// The settings as loaded: the action order cleaned up (<see cref="ReconcileOrder"/>), stale ids dropped from the
     /// inline row, and on first launch (no principal set yet) every enabled action put inline (macOS: no caps). An empty principal set is the user's choice and is kept.
     /// </summary>
@@ -96,9 +119,7 @@ public static class ToolbarLayout
     /// </summary>
     public static AppSettings MoveAction(AppSettings s, ActionIdentifier id, bool toPrincipal, int atIndex)
     {
-        var principal = s.PrincipalActionIds ?? [];
-        if (principal.Contains(id) != toPrincipal)
-            s = s with { PrincipalActionIds = toPrincipal ? [.. principal, id] : [.. principal.Where(a => a != id)] };
+        s = WithPrincipal(s, id, toPrincipal);
         if (!s.ActionOrder.Contains(id) || !IsEnabled(s, id))
             return s;
 
@@ -108,5 +129,56 @@ public static class ToolbarLayout
         // Each zone slot in the old order takes the next zone member; the other actions stay where they are.
         var slot = 0;
         return s with { ActionOrder = [.. s.ActionOrder.Select(a => InZone(a) ? reordered[slot++] : a)] };
+    }
+}
+
+/// <summary>
+/// The layout editor's drag math (macOS <c>ToolbarLayoutEditMath</c>): where a dragged action lands among a row's shown
+/// actions, and that slot as a <see cref="ToolbarLayout.MoveAction"/> index.
+/// </summary>
+public static class ToolbarLayoutEditMath
+{
+    /// <summary>
+    /// Insertion index of <paramref name="dragging"/> among the other items of a row, by neighbour swap with hysteresis:
+    /// the index steps right only once the pointer passes the centre of the next neighbour, and left only once it passes
+    /// the centre of the previous one, so uneven widths (labeled and icon-only buttons) do not flicker.
+    /// </summary>
+    /// <param name="current">The dragged item's current index among the others; 0 when it is entering the row.</param>
+    /// <param name="ordered">The row's shown order (may include <paramref name="dragging"/>).</param>
+    /// <param name="centers">Each shown item's horizontal centre; a missing neighbour stops the stepping.</param>
+    public static int InsertionIndex(
+        double pointerX,
+        int current,
+        IReadOnlyList<ActionIdentifier> ordered,
+        IReadOnlyDictionary<ActionIdentifier, double> centers,
+        ActionIdentifier dragging)
+    {
+        var others = ordered.Where(a => a != dragging).ToList();
+        var index = Math.Clamp(current, 0, others.Count);
+        while (index < others.Count && centers.TryGetValue(others[index], out var next) && pointerX > next)
+            index++;
+        while (index > 0 && centers.TryGetValue(others[index - 1], out var previous) && pointerX < previous)
+            index--;
+        return index;
+    }
+
+    /// <summary>
+    /// The <see cref="ToolbarLayout.MoveAction"/> index for slot <paramref name="shownIndex"/> among the row's shown
+    /// actions (<paramref name="shown"/>): the zone (<paramref name="zone"/>, its enabled actions) may hold actions the
+    /// toolbar does not show, so the slot is placed before the shown action it lands on, or after the last shown one.
+    /// </summary>
+    public static int ZoneIndex(
+        IReadOnlyList<ActionIdentifier> zone,
+        IReadOnlyList<ActionIdentifier> shown,
+        ActionIdentifier dragging,
+        int shownIndex)
+    {
+        var zoneOthers = zone.Where(a => a != dragging).ToList();
+        var shownOthers = shown.Where(a => a != dragging && zoneOthers.Contains(a)).ToList();
+        if (shownOthers.Count == 0) return zoneOthers.Count;
+        var index = Math.Clamp(shownIndex, 0, shownOthers.Count);
+        return index < shownOthers.Count
+            ? zoneOthers.IndexOf(shownOthers[index])
+            : zoneOthers.IndexOf(shownOthers[^1]) + 1;
     }
 }
