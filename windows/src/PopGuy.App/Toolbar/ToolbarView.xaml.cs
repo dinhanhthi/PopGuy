@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using PopGuy.Controls;
 using PopGuy.Core.Actions;
+using PopGuy.Core.Dictionaries;
 using PopGuy.Core.Text;
 using PopGuy.Core.Toolbar;
 using CoreVirtualKeyStates = Windows.UI.Core.CoreVirtualKeyStates;
@@ -102,6 +103,7 @@ public sealed partial class ToolbarView : UserControl
         IgnoreConfirmButton.Click += OnIgnoreConfirmClick;
         IgnoreCancelButton.Click += OnIgnoreCancelClick;
         ListenAgainButton.Click += OnListenAgainClick;
+        Lookup.ListenRequested += OnLookupListen;
         MoreMenu.Opening += OnMoreMenuOpening;
         MoreMenu.Closed += OnMenuClosed;
         // The icon-only buttons' titles (the actions get theirs with the row); macOS toolbarTooltip.
@@ -139,6 +141,8 @@ public sealed partial class ToolbarView : UserControl
             _viewModel.PropertyChanged += OnViewModelChanged;
             SyncDiffMode();
             RebuildActionRow();
+            SyncLookup();
+            Lookup.SetSpeakState(_viewModel.SpeakPhase, _viewModel.CanReplaySpeak);
             UpdateBindings();
         }
     }
@@ -206,6 +210,8 @@ public sealed partial class ToolbarView : UserControl
         IgnoreConfirmButton.Click -= OnIgnoreConfirmClick;
         IgnoreCancelButton.Click -= OnIgnoreCancelClick;
         ListenAgainButton.Click -= OnListenAgainClick;
+        Lookup.ListenRequested -= OnLookupListen;
+        Lookup.Detach();
         MoreMenu.Opening -= OnMoreMenuOpening;
         MoreMenu.Closed -= OnMenuClosed;
         ClearMenu(MoreMenu);
@@ -474,6 +480,14 @@ public sealed partial class ToolbarView : UserControl
                 break;
             case nameof(ToolbarViewModel.SpeakPhase):
                 SyncSpeakButton();
+                Lookup.SetSpeakState(ViewModel.SpeakPhase, ViewModel.CanReplaySpeak);
+                break;
+            case nameof(ToolbarViewModel.CanReplaySpeak):
+                Lookup.SetSpeakState(ViewModel.SpeakPhase, ViewModel.CanReplaySpeak);
+                break;
+            case nameof(ToolbarViewModel.DictionaryResults):
+                // Raised with every state refresh; LookupView rebuilds only when the results change.
+                SyncLookup();
                 break;
             case nameof(ToolbarViewModel.TargetLanguage):
                 if (_languageLabel is not null) _languageLabel.Text = ViewModel.TargetLanguage.Code;
@@ -531,6 +545,11 @@ public sealed partial class ToolbarView : UserControl
         }
     }
 
+    private void SyncLookup()
+    {
+        if (ViewModel.IsDictionaryResult) Lookup.Show(ViewModel.DictionaryResults, ViewModel.IsDictionaryNotFound);
+    }
+
     /// <summary>The Diff/Text toggle shows the view model's choice (a click toggles a ToggleButton by itself).</summary>
     private void SyncDiffMode()
     {
@@ -573,6 +592,11 @@ public sealed partial class ToolbarView : UserControl
     private void OnListenAgainClick(object sender, RoutedEventArgs e)
     {
         if (!_closed) ViewModel.RequestReplay();
+    }
+
+    private void OnLookupListen(DictionaryEntry entry)
+    {
+        if (!_closed) ViewModel.RequestListen(entry);
     }
 
     private void OnCloseClick(object sender, RoutedEventArgs e)

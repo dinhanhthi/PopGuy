@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Microsoft.UI.Dispatching;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Diff;
+using PopGuy.Core.Dictionaries;
 using PopGuy.Core.Icons;
 using PopGuy.Core.Settings;
 using PopGuy.Core.Speak;
@@ -41,6 +42,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         nameof(IsEditing), nameof(IsResultEditable), nameof(ShowsEditor), nameof(ShowsEditButton), nameof(ShowsDoneButton),
         nameof(ShowsRegenerate), nameof(ShowsRefine), nameof(RefineEnabled), nameof(ShowsPromptDivider),
         nameof(ShowsReadView), nameof(IsConfirmingIgnore), nameof(ShowsSystemGroup), nameof(ShowsSpeakDivider),
+        nameof(IsDictionaryResult), nameof(DictionaryResults), nameof(IsDictionaryNotFound), nameof(ShowsResultActions),
+        nameof(ShowsSpeakArea), nameof(ShowsSpokenText), nameof(ShowsListenAgain), nameof(ShowsSpeakFallback),
     ];
 
     /// <summary>The properties that follow the speak coordinator; raised together on every speak refresh.</summary>
@@ -94,6 +97,9 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     private bool _canReplaySpeak;
     private string? _spokenText;
     private bool _speakFellBack;
+    private bool _isLookup;
+    private IReadOnlyList<DictionaryProviderResult> _lookupResults = [];
+    private bool _lookupNotFound;
 
     public ToolbarViewModel(ToolbarSession session, DispatcherQueue dispatcher)
     {
@@ -142,6 +148,9 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     /// <summary>"Listen again" was clicked (macOS replaySpeak: the cached audio, no new request, no history).</summary>
     public event Action? ReplayRequested;
+
+    /// <summary>A lookup's Listen was clicked; the argument is the entry of the provider tab shown.</summary>
+    public event Action<DictionaryEntry>? ListenRequested;
 
     /// <summary>The inline row (<see cref="ToolbarLayout.PrincipalOrdered"/>), in order.</summary>
     public IReadOnlyList<ToolbarActionItem> Actions => _actions;
@@ -257,13 +266,13 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public bool ShowsDiffView => IsDiffResult && _showDiff;
 
-    public bool ShowsPlainResult => IsResult && !ShowsDiffView && !ShowsMarkdownResult && !IsEditing;
+    public bool ShowsPlainResult => IsResult && !ShowsDiffView && !ShowsMarkdownResult && !IsEditing && !IsDictionaryResult;
 
     /// <summary>
     /// The result rendered as Markdown ("Preserve &amp; render formatting", macOS MarkdownResultView). Never for an
     /// Improve or Proofread result: its Text mode stays plain, as on macOS. Copy and Paste back keep the raw Markdown.
     /// </summary>
-    public bool ShowsMarkdownResult => IsResult && !IsDiffResult && _preserveFormatting && !IsEditing;
+    public bool ShowsMarkdownResult => IsResult && !IsDiffResult && _preserveFormatting && !IsEditing && !IsDictionaryResult;
 
     /// <summary>The result's diff segments (computed once by the session when the run finished).</summary>
     public IReadOnlyList<DiffSegment> DiffSegments => _diff;
@@ -276,7 +285,22 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// <summary>A failed run can run again; an app-level error (<see cref="Fail"/>) cannot.</summary>
     public bool CanRetry => _failMessage is null && _state is ToolbarState.Error;
 
-    public bool ShowsPasteBack => IsResult && IsEditable;
+    public bool ShowsPasteBack => IsResult && IsEditable && !IsDictionaryResult;
+
+    /// <summary>
+    /// A lookup's result (Look up or a Dictionary custom action): the definitions show instead of the text, with Listen
+    /// and no Copy, Paste back, Edit, Regenerate or Refine (macOS).
+    /// </summary>
+    public bool IsDictionaryResult => IsResult && _isLookup;
+
+    /// <summary>The lookup's definitions, one per provider that found one (a tab each when there are several).</summary>
+    public IReadOnlyList<DictionaryProviderResult> DictionaryResults => _lookupResults;
+
+    /// <summary>The lookup found nothing: "No definition found" shows.</summary>
+    public bool IsDictionaryNotFound => IsDictionaryResult && _lookupNotFound;
+
+    /// <summary>The result's button row (Copy, Paste back, Edit, Regenerate, Refine); a lookup has none.</summary>
+    public bool ShowsResultActions => !IsDictionaryResult;
 
     public string Notice => _notice;
 
@@ -307,14 +331,14 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     public bool ShowsEditor => IsEditing;
 
     /// <summary>The read view (text, diff or Markdown); collapsed while editing.</summary>
-    public bool ShowsReadView => !IsEditing;
+    public bool ShowsReadView => !IsEditing && !IsDictionaryResult;
 
     public bool ShowsEditButton => IsResultEditable && !IsEditing;
 
     public bool ShowsDoneButton => IsEditing;
 
     /// <summary>Regenerate and Refine hide while editing, as on macOS.</summary>
-    public bool ShowsRegenerate => IsResult && !IsEditing;
+    public bool ShowsRegenerate => IsResult && !IsEditing && !IsDictionaryResult;
 
     public bool ShowsRefine => IsResult && _canRefine && !IsEditing;
 
@@ -330,8 +354,11 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// <summary>The text last spoken (macOS lastSpokenText), shown once playback ends.</summary>
     public string SpokenText => _spokenText ?? "";
 
-    /// <summary>The Speak area below the bar (macOS: speakPhase != idle || canReplaySpeak).</summary>
-    public bool ShowsSpeakArea => _speakPhase != SpeakPhase.Idle || _canReplaySpeak;
+    /// <summary>
+    /// The Speak area below the bar (macOS: speakPhase != idle || canReplaySpeak), never with a lookup: its Listen
+    /// button shows the speech state instead.
+    /// </summary>
+    public bool ShowsSpeakArea => (_speakPhase != SpeakPhase.Idle || _canReplaySpeak) && !_isLookup;
 
     public bool IsSpeakLoading => _speakPhase == SpeakPhase.Loading;
 
@@ -560,6 +587,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public void RequestReplay() => ReplayRequested?.Invoke();
 
+    public void RequestListen(DictionaryEntry entry) => ListenRequested?.Invoke(entry);
+
     /// <summary>A pick in the Translate picker: the next Translate uses it (it does not run; macOS parity).</summary>
     public void SetTargetLanguage(TargetLanguage language)
     {
@@ -612,6 +641,9 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         _editing = _session.IsEditing;
         _resultEditable = _session.IsResultEditable;
         _canRefine = _session.CanRefine;
+        _isLookup = _session.DictionaryAction is not null;
+        _lookupResults = _session.DictionaryResults;
+        _lookupNotFound = _session.IsDictionaryNotFound;
         foreach (var name in StateProperties) Raise(name);
     }
 
@@ -652,8 +684,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
                 // The view shows Stop instead while Speak is loading or playing.
                 return Builtin(id, "Speak", "speaker.wave.2", showsLabel);
             case ActionIdentifierType.Dictionary:
-                // Not on the row until Look up (Phase 18) exists: a button would do nothing.
-                return null;
+                return Builtin(id, "Look up", "character.book.closed", showsLabel);
             default:
                 var custom = settings.CustomActions.FirstOrDefault(a => a.Id == id.CustomId);
                 if (custom is null) return null;

@@ -429,6 +429,29 @@ public enum DictionaryProviderKind
     [JsonStringEnumMemberName("babylonBGL")] BabylonBgl,
 }
 
+public static class DictionaryProviderKindExtensions
+{
+    // DictionaryProviderKind.displayName: history's provider label.
+    public static string DisplayName(this DictionaryProviderKind kind) => kind switch
+    {
+        DictionaryProviderKind.MacOSBuiltin => "macOS Dictionary",
+        DictionaryProviderKind.Minhqnd => "minhqnd",
+        DictionaryProviderKind.FreeDictionaryApi => "Free Dictionary API",
+        DictionaryProviderKind.BabylonBgl => "Babylon (BGL)",
+        _ => kind.ToString(),
+    };
+
+    // DictionaryProviderKind.shortName: the Look up result's provider tabs.
+    public static string ShortName(this DictionaryProviderKind kind) => kind switch
+    {
+        DictionaryProviderKind.MacOSBuiltin => "macOS",
+        DictionaryProviderKind.Minhqnd => "minhqnd",
+        DictionaryProviderKind.FreeDictionaryApi => "Free API",
+        DictionaryProviderKind.BabylonBgl => "Babylon",
+        _ => kind.ToString(),
+    };
+}
+
 /// <summary>Dictionary lookup configuration. Every key is optional on decode.</summary>
 public sealed record DictionaryConfig
 {

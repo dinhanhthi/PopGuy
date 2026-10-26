@@ -3,6 +3,7 @@ using System.Globalization;
 using Microsoft.UI.Dispatching;
 using PopGuy.Core;
 using PopGuy.Core.Actions;
+using PopGuy.Core.Dictionaries;
 using PopGuy.Core.History;
 using PopGuy.Core.Providers;
 using PopGuy.Core.Providers.Cli;
@@ -51,7 +52,9 @@ internal sealed class AppServices : IDisposable
         var engine = new ActionEngine(Providers, ApiKey);
         // Script shells go in their own job, which what a script opens leaves (it outlives PopGuy, as on macOS).
         var scripts = new ScriptActionEngine(onStarted: process => ChildProcessJob.Scripts.Assign(process));
-        var session = new ToolbarSession(engine, History, () => Settings.Current, scripts: scripts);
+        // Babylon takes part in a lookup only while one of the settings' .bgl files is enabled (read at each lookup).
+        var dictionary = new DictionaryEngine(DictionaryEngine.DefaultProviders(() => Settings.Current.BabylonDictionaries));
+        var session = new ToolbarSession(engine, History, () => Settings.Current, scripts: scripts, dictionary: dictionary);
         // One cloud adapter per kind, created once; the coordinator reads each key when a request needs it (off the UI
         // thread: it routes on the thread pool), never caching it.
         var ttsProviders = new Dictionary<TtsProviderKind, ITtsProvider>

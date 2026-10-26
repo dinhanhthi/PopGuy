@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using PopGuy.Core;
 using PopGuy.Core.Actions;
+using PopGuy.Core.Dictionaries;
 using PopGuy.Core.History;
 using PopGuy.Core.Providers;
 using PopGuy.Core.Scripts;
@@ -271,5 +272,198 @@ public sealed class ToolbarSessionTests : IDisposable
         Assert.Equal(ToolbarState.Idle, session.State);
         Assert.False(finished);
         Assert.Empty(_history.Records);
+    }
+
+    // Look up and Dictionary custom actions (macOS ActionEngineHandler.runDictionary): the definitions replace the text
+    // result, a miss is an empty result recorded as a failure, and history labels the providers that answered.
+
+    private sealed class FakeDictionary(DictionaryEntry? entry, DictionaryLookupException? error = null, Task? hold = null)
+        : IDictionaryProvider
+    {
+        public List<(string Term, string? Language)> Calls { get; } = [];
+
+        public async Task<DictionaryEntry> LookupAsync(
+            string term, string? sourceLanguage, string? definitionLanguage, CancellationToken ct)
+        {
+            Calls.Add((term, definitionLanguage));
+            if (hold is not null)
+                await hold.WaitAsync(ct);
+            await Task.Yield();
+            if (error is not null)
+                throw error;
+            return entry!;
+        }
+    }
+
+    private static DictionaryEntry Entry(string source, string definition) =>
+        new("fox", [new LexicalEntry("en", "noun", [], [new Sense(definition, [], [])], null)], source);
+
+    private ToolbarSession LookupSession(
+        AppSettings settings, IReadOnlyDictionary<DictionaryProviderKind, IDictionaryProvider> providers, IProvider? ai = null)
+    {
+        var factory = new ProviderFactory();
+        if (ai is not null)
+            factory.Register(ProviderKind.OpenAi, _ => ai);
+        return new ToolbarSession(new ActionEngine(factory, _ => "pg-test-key"), _history, () => settings, new FrozenClock(),
+            dictionary: new DictionaryEngine(kind => providers.GetValueOrDefault(kind)));
+    }
+
+    private static readonly ToolbarRun LookUp = new(ActionIdentifier.Dictionary, "  fox \n") { TargetLanguage = "fr" };
+
+    [Fact]
+    public async Task LookUpShowsEveryProvidersDefinitionAndRecordsOneSuccess()
+    {
+        var minhqnd = new FakeDictionary(Entry("minhqnd", "a small wild dog"));
+        var free = new FakeDictionary(Entry("Free Dictionary", "a cunning person"));
+        var settings = new AppSettings { HistoryEnabled = true, DictionaryConfig = new DictionaryConfig { DefinitionLanguage = "vi" } };
+        var session = LookupSession(settings, new Dictionary<DictionaryProviderKind, IDictionaryProvider>
+        {
+            [DictionaryProviderKind.FreeDictionaryApi] = free,
+            [DictionaryProviderKind.Minhqnd] = minhqnd,
+        });
+
+        await session.RunAsync(LookUp);
+
+        Assert.Equal(new ToolbarState.Result("a small wild dog"), session.State);
+        Assert.Equal(ActionIdentifier.Dictionary, session.DictionaryAction);
+        Assert.Equal(
+            [DictionaryProviderKind.Minhqnd, DictionaryProviderKind.FreeDictionaryApi],
+            session.DictionaryResults.Select(r => r.ProviderKind));
+        Assert.False(session.IsDictionaryNotFound);
+        Assert.False(session.IsResultEditable);
+        Assert.False(session.CanRefine);
+        // The trimmed selection, in the Look up config's language (not the Translate picker's).
+        Assert.Equal(("fox", "vi"), Assert.Single(minhqnd.Calls));
+        var record = Assert.Single(_history.Records);
+        Assert.True(record.Success);
+        Assert.Equal("Look up", record.ActionName);
+        Assert.Null(record.ProviderKind);
+        Assert.Equal("minhqnd, Free Dictionary API", record.ProviderLabel);
+        Assert.Equal("vi", record.Model);
+        Assert.Equal("a small wild dog\n\na cunning person", record.Output);
+    }
+
+    [Fact]
+    public async Task LookUpMissIsAnEmptyResultRecordedAsAFailure()
+    {
+        var settings = new AppSettings { HistoryEnabled = true };
+        var session = LookupSession(settings, new Dictionary<DictionaryProviderKind, IDictionaryProvider>
+        {
+            [DictionaryProviderKind.Minhqnd] = new FakeDictionary(null, DictionaryLookupException.NotFound()),
+        });
+
+        await session.RunAsync(LookUp);
+
+        Assert.Equal(new ToolbarState.Result(""), session.State);
+        Assert.True(session.IsDictionaryNotFound);
+        Assert.Empty(session.DictionaryResults);
+        var record = Assert.Single(_history.Records);
+        Assert.False(record.Success);
+        Assert.Equal("No definition found", record.ErrorMessage);
+        Assert.Equal("All dictionary providers", record.ProviderLabel);
+    }
+
+    [Fact]
+    public async Task DictionaryCustomActionAsksOnlyItsProviderAndShowsItsError()
+    {
+        var action = new CustomAction
+        {
+            Title = "Define",
+            SystemPrompt = "",
+            Type = CustomActionType.Dictionary,
+            DictionaryConfig = new DictionaryConfig { Provider = DictionaryProviderKind.FreeDictionaryApi, DefinitionLanguage = "en" },
+        };
+        var minhqnd = new FakeDictionary(Entry("minhqnd", "a small wild dog"));
+        var settings = new AppSettings { HistoryEnabled = true, CustomActions = [action] };
+        var session = LookupSession(settings, new Dictionary<DictionaryProviderKind, IDictionaryProvider>
+        {
+            [DictionaryProviderKind.Minhqnd] = minhqnd,
+            [DictionaryProviderKind.FreeDictionaryApi] = new FakeDictionary(null, DictionaryLookupException.RateLimited()),
+        });
+
+        await session.RunAsync(new ToolbarRun(ActionIdentifier.Custom(action.Id), "fox"));
+
+        Assert.Equal(new ToolbarState.Error("Dictionary rate limit reached. Try again later."), session.State);
+        Assert.Equal(ActionIdentifier.Custom(action.Id), session.DictionaryAction);
+        Assert.Empty(minhqnd.Calls);
+        var record = Assert.Single(_history.Records);
+        Assert.False(record.Success);
+        Assert.Equal("Define", record.ActionName);
+        Assert.Equal("Free Dictionary API", record.ProviderLabel);
+        Assert.Equal("Dictionary rate limit reached. Try again later.", record.ErrorMessage);
+    }
+
+    // Hiding the toolbar (Stop) or a new run cancels the lookup: no state, no history from it.
+    [Fact]
+    public async Task StoppedLookupChangesNothingWhenItEnds()
+    {
+        var hold = new TaskCompletionSource();
+        var settings = new AppSettings { HistoryEnabled = true };
+        var session = LookupSession(settings, new Dictionary<DictionaryProviderKind, IDictionaryProvider>
+        {
+            [DictionaryProviderKind.Minhqnd] = new FakeDictionary(Entry("minhqnd", "a small wild dog"), hold: hold.Task),
+        });
+
+        var run = session.RunAsync(LookUp);
+        Assert.Equal(new ToolbarState.Running(""), session.State);
+        Assert.Equal(ActionIdentifier.Dictionary, session.DictionaryAction);
+        session.Stop();
+        hold.SetResult();
+        await run;
+
+        Assert.Equal(ToolbarState.Idle, session.State);
+        Assert.Null(session.DictionaryAction);
+        Assert.Empty(_history.Records);
+    }
+
+    [Fact]
+    public async Task AnotherRunReplacesTheLookup()
+    {
+        var settings = new AppSettings { HistoryEnabled = false };
+        var session = LookupSession(settings, new Dictionary<DictionaryProviderKind, IDictionaryProvider>
+        {
+            [DictionaryProviderKind.Minhqnd] = new FakeDictionary(Entry("minhqnd", "a small wild dog")),
+        }, new FakeProvider(["The fox"]));
+
+        await session.RunAsync(LookUp);
+        await session.RunAsync(Improve);
+
+        Assert.Equal(new ToolbarState.Result("The fox"), session.State);
+        Assert.Null(session.DictionaryAction);
+        Assert.Empty(session.DictionaryResults);
+        Assert.True(session.IsResultEditable || session.DiffSegments.Count > 0);
+    }
+
+    // macOS triggerDictionaryListen: a Dictionary custom action speaks with its own voice settings; Look up with the
+    // global ones and the selected cloud engine's config.
+    [Fact]
+    public void ListenVoiceFollowsTheLookupsAction()
+    {
+        var cloud = new SpeakSettings { SelectedEngine = SpeakEngineSelection.Cloud(TtsProviderKind.AzureTts) };
+        var action = new CustomAction
+        {
+            Title = "Define",
+            SystemPrompt = "",
+            Type = CustomActionType.Dictionary,
+            TtsConfig = new TtsProviderConfig { DefaultVoice = "own" },
+            DictionaryConfig = new DictionaryConfig { Accent = SpeakAccent.French, SpeakSettings = cloud },
+        };
+        var azure = new TtsProviderConfig { DefaultVoice = "global" };
+        var settings = new AppSettings
+        {
+            CustomActions = [action],
+            DictionaryConfig = new DictionaryConfig { Accent = SpeakAccent.UkEnglish, SpeakSettings = cloud },
+            TtsProviderConfigs = new Dictionary<string, TtsProviderConfig> { ["azure_tts"] = azure },
+        };
+
+        var own = ToolbarSession.ListenVoice(settings, ActionIdentifier.Custom(action.Id));
+        var global = ToolbarSession.ListenVoice(settings, ActionIdentifier.Dictionary);
+        var system = ToolbarSession.ListenVoice(
+            settings with { CustomActions = [action with { DictionaryConfig = new DictionaryConfig() }] },
+            ActionIdentifier.Custom(action.Id));
+
+        Assert.Equal(new DictionaryListenVoice(SpeakAccent.French, cloud, action.TtsConfig), own);
+        Assert.Equal(new DictionaryListenVoice(SpeakAccent.UkEnglish, cloud, azure), global);
+        Assert.Null(system.TtsConfig.DefaultVoice); // the system voice: no cloud config
     }
 }

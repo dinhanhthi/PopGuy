@@ -14,6 +14,7 @@
     x:Class="PopGuy.Toolbar.ToolbarView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:PopGuy.Toolbar"
     IsTabStop="False">
 
     <StackPanel x:Name="Card" Background="Transparent">
@@ -223,12 +224,14 @@
             <!--
                 Result: the Diff/Text toggle (Improve and Proofread), the selectable text, the inline diff or the
                 rendered Markdown (or the editor while editing), the refine input, then Copy, Paste back (editable
-                sources only), Edit/Done (non-diff results), Regenerate and Refine (icon only, as on macOS).
+                sources only), Edit/Done (non-diff results), Regenerate and Refine (icon only, as on macOS). A lookup
+                shows its definitions and Listen instead (LookupView), without the text or the buttons.
             -->
             <StackPanel
                 Padding="12,14,12,14"
                 Spacing="8"
                 Visibility="{x:Bind ViewModel.IsResult, Mode=OneWay}">
+                <local:LookupView x:Name="Lookup" Visibility="{x:Bind ViewModel.IsDictionaryResult, Mode=OneWay}" />
                 <!--
                     Above the result as on macOS (the button row has no room); checked states are set in code, and
                     so is the row's hint tooltip.
@@ -322,7 +325,8 @@
                     x:Name="ResultActions"
                     Margin="0,8,0,0"
                     Orientation="Horizontal"
-                    Spacing="8">
+                    Spacing="8"
+                    Visibility="{x:Bind ViewModel.ShowsResultActions, Mode=OneWay}">
                     <Button
                         x:Name="CopyButton"
                         AutomationProperties.Name="Copy"

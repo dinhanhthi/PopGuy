@@ -1,7 +1,9 @@
 using System.Text;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Diff;
+using PopGuy.Core.Dictionaries;
 using PopGuy.Core.History;
+using PopGuy.Core.Json;
 using PopGuy.Core.Providers;
 using PopGuy.Core.Scripts;
 using PopGuy.Core.Settings;
@@ -69,17 +71,22 @@ public sealed record ToolbarRun(ActionIdentifier Action, string Text)
 /// </summary>
 public sealed record ScriptRunFinished(AfterRunBehavior AfterRun, string? Output, int Generation);
 
+/// <summary>The Listen button's voice for a lookup: the accent, the speech settings and the cloud engine's config.</summary>
+public sealed record DictionaryListenVoice(SpeakAccent Accent, SpeakSettings Settings, TtsProviderConfig TtsConfig);
+
 /// <summary>
 /// Runs one provider action at a time and holds the toolbar state. <see cref="Changed"/> is raised on any thread (the
 /// App marshals to its UI thread): on every state transition, and while streaming at most once per
 /// <see cref="ProgressInterval"/>. A run that is stopped or replaced leaves no trace: no state change, no history
 /// (macOS generation guard, spec-2 §2.7). There is no automatic retry (spec-2 §2.8): Retry and Regenerate run again.
 /// It also holds the text inputs' state: the prompt input, the refine input and the editable result. A scriptable
-/// custom action runs through <paramref name="scripts"/> (none: it changes nothing) under the same rules.
+/// custom action runs through <paramref name="scripts"/> (none: it changes nothing) under the same rules, and so do
+/// Look up and a Dictionary custom action through <paramref name="dictionary"/>: their result is the providers'
+/// entries (<see cref="DictionaryResults"/>), not text.
 /// </summary>
 public sealed class ToolbarSession(
     ActionEngine engine, HistoryStore history, Func<AppSettings> settings, TimeProvider? clock = null,
-    IScriptActionRunner? scripts = null)
+    IScriptActionRunner? scripts = null, DictionaryEngine? dictionary = null)
 {
     /// <summary>
     /// The minimum time between two progress notifications. macOS appends per token and lets SwiftUI coalesce; WinUI
@@ -111,6 +118,12 @@ public sealed class ToolbarSession(
     // rejected; both reset with every new result. Replaced, never mutated, so a read under the lock is a snapshot.
     private IReadOnlyList<DiffSegment> _diff = [];
     private IReadOnlySet<int> _rejected = new HashSet<int>();
+
+    // The lookup shown or running (macOS isDictionaryAction, dictionaryEntries, isDictionaryNotFound). The results are
+    // replaced, never mutated, like the diff.
+    private ActionIdentifier? _lookupAction;
+    private IReadOnlyList<DictionaryProviderResult> _lookupResults = [];
+    private bool _lookupNotFound;
 
     public event Action? Changed;
 
@@ -157,6 +170,39 @@ public sealed class ToolbarSession(
     {
         lock (_gate)
             return CopyTextLocked();
+    }
+
+    /// <summary>
+    /// The action of the lookup running or shown (Look up or a Dictionary custom action), from its start until another
+    /// run or Stop (macOS isDictionaryAction); else null.
+    /// </summary>
+    public ActionIdentifier? DictionaryAction
+    {
+        get
+        {
+            lock (_gate)
+                return _lookupAction;
+        }
+    }
+
+    /// <summary>The lookup's definitions, one per provider that found one, in provider order; empty otherwise.</summary>
+    public IReadOnlyList<DictionaryProviderResult> DictionaryResults
+    {
+        get
+        {
+            lock (_gate)
+                return _lookupResults;
+        }
+    }
+
+    /// <summary>The lookup finished without a definition (a Result with no text, as on macOS).</summary>
+    public bool IsDictionaryNotFound
+    {
+        get
+        {
+            lock (_gate)
+                return _lookupNotFound;
+        }
     }
 
     /// <summary>The prompt input is open (macOS: it shows below the action row, also before any run).</summary>
@@ -272,9 +318,9 @@ public sealed class ToolbarSession(
     }
 
     /// <summary>
-    /// Cancels any run in flight and streams <paramref name="run"/> (or runs its script). The task completes when the
-    /// run ends; the App need not await it. Actions that are not provider-backed (Speak, Look up, a missing custom
-    /// action, Prompt without text) change nothing.
+    /// Cancels any run in flight and streams <paramref name="run"/> (or runs its script or lookup). The task completes
+    /// when the run ends; the App need not await it. Speak, a missing custom action, Prompt without text, and a lookup
+    /// without a dictionary engine change nothing.
     /// </summary>
     public Task RunAsync(ToolbarRun run) => Start(run, followUp: null);
 
@@ -347,6 +393,7 @@ public sealed class ToolbarSession(
                 return;
             _state = ToolbarState.Idle;
             ClearDiffLocked();
+            ClearLookupLocked();
             _edited = "";
             _promptInputActive = false;
             _refineInputActive = false;
@@ -369,6 +416,7 @@ public sealed class ToolbarSession(
             _lastKind = null;
             _state = new ToolbarState.Result(text);
             ClearDiffLocked();
+            ClearLookupLocked();
             _edited = text;
             _editing = false;
             _refineInputActive = false;
@@ -394,6 +442,8 @@ public sealed class ToolbarSession(
         var s = settings();
         if (followUp is null && ScriptAction(run, s) is { } script)
             return scripts is null ? Task.CompletedTask : StartScript(run, script, s);
+        if (followUp is null && ResolveLookup(run, s) is { } lookup)
+            return dictionary is null ? Task.CompletedTask : StartLookup(run, lookup, s);
         if (Resolve(run, s) is not { } resolved)
             return Task.CompletedTask;
 
@@ -410,6 +460,7 @@ public sealed class ToolbarSession(
             _state = new ToolbarState.Running("");
             _editing = false;
             _refineInputActive = false;
+            ClearLookupLocked();
             if (run.Action == ActionIdentifier.Builtin(ActionKind.Prompt))
                 _promptInputActive = false;
         }
@@ -438,6 +489,7 @@ public sealed class ToolbarSession(
             _state = new ToolbarState.Running("");
             _editing = false;
             _refineInputActive = false;
+            ClearLookupLocked();
         }
         Changed?.Invoke();
         return RunScript(run, action, s, generation, ct);
@@ -496,6 +548,147 @@ public sealed class ToolbarSession(
         }
         if (error is null)
             ScriptFinished?.Invoke(new ScriptRunFinished(action.AfterRun, output, generation));
+    }
+
+    private sealed record Lookup(string ActionName, DictionaryConfig Config, bool AllProviders, string MissLabel);
+
+    // macOS ActionEngineHandler.dictionary: Look up asks every provider with the global config, a Dictionary custom
+    // action only its own provider. The run's TargetLanguage (the Translate picker) is not the definition language.
+    private static Lookup? ResolveLookup(ToolbarRun run, AppSettings s)
+    {
+        if (run.Action.Type == ActionIdentifierType.Dictionary)
+            return new("Look up", s.DictionaryConfig, AllProviders: true, "All dictionary providers");
+        if (run.Action.Type != ActionIdentifierType.Custom)
+            return null;
+        var custom = s.CustomActions.FirstOrDefault(a => a.Id == run.Action.CustomId && a.Type == CustomActionType.Dictionary);
+        if (custom is null)
+            return null;
+        var name = custom.Title.Trim().Length == 0 ? "Dictionary" : custom.Title;
+        return new(name, custom.DictionaryConfig, AllProviders: false, custom.DictionaryConfig.Provider.DisplayName());
+    }
+
+    // The lookup shows the running state at once (click reacts first); no refine, no diff, no edit.
+    private Task StartLookup(ToolbarRun run, Lookup lookup, AppSettings s)
+    {
+        int generation;
+        CancellationToken ct;
+        lock (_gate)
+        {
+            CancelLocked();
+            generation = _generation;
+            _cts = new CancellationTokenSource();
+            ct = _cts.Token;
+            _lastRun = run;
+            _lastKind = null;
+            _state = new ToolbarState.Running("");
+            _editing = false;
+            _refineInputActive = false;
+            _lookupAction = run.Action;
+            _lookupResults = [];
+            _lookupNotFound = false;
+        }
+        Changed?.Invoke();
+        return RunLookup(run, lookup, s, generation, ct);
+    }
+
+    private async Task RunLookup(ToolbarRun run, Lookup lookup, AppSettings s, int generation, CancellationToken ct)
+    {
+        var startedAt = _clock.GetUtcNow();
+        var term = run.Text.Trim();
+        IReadOnlyList<DictionaryProviderResult> results = [];
+        string? error = null;
+
+        async Task<IReadOnlyList<DictionaryProviderResult>> Fetch()
+        {
+            if (lookup.AllProviders)
+                return await dictionary!.LookupAllAsync(term, lookup.Config, ct);
+            if (term.Length == 0)
+                throw DictionaryLookupException.NotFound();
+            return [new DictionaryProviderResult(lookup.Config.Provider, await dictionary!.LookupAsync(term, lookup.Config, ct))];
+        }
+
+        try
+        {
+            // Off the caller's thread: a Babylon lookup reads and indexes its files before its first await.
+            results = await Task.Run(Fetch, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return; // Stopped or replaced: the newer generation owns the state.
+        }
+        catch (DictionaryLookupException e) when (e.Kind == DictionaryLookupErrorKind.NotFound)
+        {
+        }
+        catch (DictionaryLookupException e)
+        {
+            error = e.Message;
+        }
+        catch (Exception e)
+        {
+            error = DictionaryLookupException.Network(e.Message).Message;
+        }
+
+        var found = error is null && results.Count > 0;
+        var preview = found ? LookupPreview(results[0].Entry) : "";
+        ToolbarState final = error is not null ? new ToolbarState.Error(error) : new ToolbarState.Result(preview);
+        lock (_gate)
+        {
+            if (generation != _generation)
+                return;
+            _state = final;
+            ClearDiffLocked();
+            _edited = preview;
+            _lookupResults = found ? results : [];
+            _lookupNotFound = error is null && !found;
+            _cts?.Dispose();
+            _cts = null;
+        }
+        Changed?.Invoke();
+
+        // macOS runDictionary: a miss is a failure, so history never counts "No definition found" as a result.
+        if (s.HistoryEnabled && !run.SkipHistory)
+        {
+            history.Record(new HistoryRecord
+            {
+                ActionName = lookup.ActionName,
+                ProviderLabel = found ? string.Join(", ", results.Select(r => r.ProviderKind.DisplayName())) : lookup.MissLabel,
+                Model = lookup.Config.DefinitionLanguage,
+                SourceBundleId = run.SourceExeName,
+                SourceAppName = run.SourceAppName ?? run.SourceExeName,
+                DurationMs = (int)(_clock.GetUtcNow() - startedAt).TotalMilliseconds,
+                Success = found,
+                ErrorMessage = found ? null : error ?? DictionaryLookupException.NotFound().Message,
+                Input = run.Text,
+                Output = found ? string.Join("\n\n", results.Select(r => LookupPreview(r.Entry))) : "",
+            }, s.HistoryStoreFullText);
+        }
+    }
+
+    /// <summary>An entry's one-line summary (macOS dictionaryPreview): its first definition, else its text, else the headword.</summary>
+    private static string LookupPreview(DictionaryEntry entry) =>
+        entry.LexicalEntries.FirstOrDefault()?.Senses.FirstOrDefault()?.Definition ?? entry.RawText ?? entry.Headword;
+
+    /// <summary>
+    /// The Listen button's voice for a lookup by <paramref name="action"/> (macOS triggerDictionaryListen): a Dictionary
+    /// custom action's own accent, speech settings and cloud config (none for the system voice); else Look up's, with
+    /// the selected cloud engine's config from the settings.
+    /// </summary>
+    public static DictionaryListenVoice ListenVoice(AppSettings s, ActionIdentifier action)
+    {
+        var custom = action.Type == ActionIdentifierType.Custom
+            ? s.CustomActions.FirstOrDefault(a => a.Id == action.CustomId && a.Type == CustomActionType.Dictionary)
+            : null;
+        if (custom is not null)
+        {
+            var own = custom.DictionaryConfig;
+            return new(own.Accent, own.SpeakSettings,
+                own.SpeakSettings.SelectedEngine.CloudProvider is null ? new TtsProviderConfig() : custom.TtsConfig);
+        }
+        var config = s.DictionaryConfig;
+        var tts = config.SpeakSettings.SelectedEngine.CloudProvider is { } kind
+            ? s.TtsProviderConfigs.GetValueOrDefault(RawValueEnumConverter<TtsProviderKind>.ToRaw(kind)) ?? new TtsProviderConfig()
+            : new TtsProviderConfig();
+        return new(config.Accent, config.SpeakSettings, tts);
     }
 
     private sealed record Resolved(EngineAction Action, string ActionName, ProviderKind Kind, string Model, string Language);
@@ -641,7 +834,7 @@ public sealed class ToolbarSession(
         return _diff.Count == 0 ? _edited : DiffHunks.Merged(_diff, _rejected);
     }
 
-    private bool IsResultEditableLocked() => _state is ToolbarState.Result && _diff.Count == 0;
+    private bool IsResultEditableLocked() => _state is ToolbarState.Result && _diff.Count == 0 && _lookupAction is null;
 
     private bool CanRefineLocked() =>
         _state is ToolbarState.Result && _lastRun is not null
@@ -662,6 +855,13 @@ public sealed class ToolbarSession(
     {
         _diff = [];
         _rejected = new HashSet<int>();
+    }
+
+    private void ClearLookupLocked()
+    {
+        _lookupAction = null;
+        _lookupResults = [];
+        _lookupNotFound = false;
     }
 
     // Bump the generation first so the old run's late tokens and completion are discarded (spec-2 §2.7). The cancelled

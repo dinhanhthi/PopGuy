@@ -1,6 +1,7 @@
 using System.Drawing;
 using Microsoft.UI.Dispatching;
 using PopGuy.Core.Actions;
+using PopGuy.Core.Dictionaries;
 using PopGuy.Core.Json;
 using PopGuy.Core.Settings;
 using PopGuy.Core.Speak;
@@ -22,7 +23,8 @@ namespace PopGuy.Toolbar;
 /// action runs one. It also handles the toolbar's clicks (actions, the prompt, Stop, Copy, Paste back, Close, Ignore
 /// this app, Settings), a script action's after-run delivery (spec-4 §4.4) and the dismissal rules of spec-1 §3.8.
 /// Speak (its button, its hotkey, an assigned double-click) toggles <see cref="SpeakCoordinator"/> on the selection,
-/// orthogonal to the action runs; closing the toolbar or a new selection drops its "Listen again" (macOS).
+/// orthogonal to the action runs; closing the toolbar or a new selection drops its "Listen again" (macOS). Look up and
+/// Dictionary custom actions run through the session like the other actions; a lookup's Listen speaks its headword.
 /// <para>
 /// Threading: the chord and hotkey events and the three input loops run on the thread pool; everything that touches the
 /// window, the view model or the presentation state runs on the UI thread (<see cref="DispatcherQueue"/>). Captures
@@ -126,6 +128,7 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.IgnoreAppRequested += OnIgnoreApp;
         _viewModel.SettingsRequested += OnSettingsRequested;
         _viewModel.ReplayRequested += OnReplayRequested;
+        _viewModel.ListenRequested += OnListenRequested;
         _viewModel.BindSpeak(_speak);
         _session.ScriptFinished += OnScriptFinished;
         ApplySettings();
@@ -156,6 +159,7 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.IgnoreAppRequested -= OnIgnoreApp;
         _viewModel.SettingsRequested -= OnSettingsRequested;
         _viewModel.ReplayRequested -= OnReplayRequested;
+        _viewModel.ListenRequested -= OnListenRequested;
         _session.ScriptFinished -= OnScriptFinished;
         Hide();
     }
@@ -292,12 +296,6 @@ internal sealed class ToolbarController : IDisposable
         if (id == HotkeyService.ChordReplacementId)
         {
             if (!_window.IsShown) StartCapture(source, autoRun: null);
-            return;
-        }
-        if (id.Type is ActionIdentifierType.Dictionary)
-        {
-            // Look up (Phase 18) does not exist yet.
-            _log($"hotkey: {id} is not available yet");
             return;
         }
         if (!ToolbarLayout.IsEnabled(settings, id)) return;
@@ -532,6 +530,24 @@ internal sealed class ToolbarController : IDisposable
         if (!_window.IsShown) return;
         _log("speak: listen again");
         Watch(_speak.ReplayAsync(), "listen again");
+    }
+
+    /// <summary>
+    /// A lookup's Listen (macOS triggerDictionaryListen): stops speech while it is loading or playing, else speaks the
+    /// entry's headword with the lookup action's voice, the entry's own recording first. Records nothing (macOS).
+    /// </summary>
+    private void OnListenRequested(DictionaryEntry entry)
+    {
+        if (!_window.IsShown || _session.DictionaryAction is not { } action) return;
+        if (_speak.Phase != SpeakPhase.Idle)
+        {
+            _log("listen: stop");
+            _speak.Stop();
+            return;
+        }
+        var voice = ToolbarSession.ListenVoice(_settings.Current, action);
+        _log($"listen: {voice.Settings.SelectedEngine.DisplayName()}, {(entry.PrimaryAudioUrl is null ? "no" : "with")} entry audio");
+        Watch(_speak.SpeakDictionaryAsync(entry.Headword, entry.PrimaryAudioUrl, voice.Accent, voice.Settings, voice.TtsConfig), "listen");
     }
 
     /// <summary>Hides the toolbar (which stops the session and drops "Listen again", stopping speech) and forgets the selection.</summary>
