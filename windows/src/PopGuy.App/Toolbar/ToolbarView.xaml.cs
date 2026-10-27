@@ -514,8 +514,12 @@ public sealed partial class ToolbarView : UserControl
                 GapColumn.Width = ViewModel.ShowsSystemGap ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
                 break;
             case nameof(ToolbarViewModel.ShowsBody):
-                // macOS: while a body shows, the bar is at least its minimum width, so the gap reaches the card's edge.
-                Bar.MinWidth = ViewModel.ShowsBody ? MinBodyWidth : 0;
+            case nameof(ToolbarViewModel.OcrThumbnailWidth):
+                SyncBarMinWidth();
+                break;
+            case nameof(ToolbarViewModel.OcrThumbnailSource):
+                // Raised before the old thumbnail is disposed: the brush lets go of it first.
+                OcrPreviewBrush.ImageSource = ViewModel.OcrThumbnailSource;
                 break;
             case nameof(ToolbarViewModel.IsResult):
                 if (!ViewModel.IsResult) ResetCopyButton();
@@ -731,6 +735,16 @@ public sealed partial class ToolbarView : UserControl
     }
 
     // Width: the body follows the bar (the window follows the card's size).
+
+    /// <summary>
+    /// macOS: while a body shows, the bar is at least its minimum width, so the gap reaches the card's edge; under an OCR
+    /// thumbnail, at least the thumbnail's width (its margins are the bar's padding), so the card has no empty strip.
+    /// </summary>
+    private void SyncBarMinWidth()
+    {
+        var thumbnail = ViewModel.ShowsOcrThumbnail ? ViewModel.OcrThumbnailWidth + Bar.Padding.Left + Bar.Padding.Right : 0;
+        Bar.MinWidth = Math.Max(ViewModel.ShowsBody ? MinBodyWidth : 0, thumbnail);
+    }
 
     private void OnBarSizeChanged(object sender, SizeChangedEventArgs e) => FitBodyWidth();
 

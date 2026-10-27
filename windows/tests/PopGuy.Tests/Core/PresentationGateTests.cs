@@ -42,6 +42,7 @@ public sealed class PresentationGateTests
         { "ignored exe, full path", Shown with { SourceExeName = @"C:\Program Files\KeePass\KeePass.exe" }, Settings, PresentationVerdict.IgnoredApp },
         { "null exe entry matches nothing", Shown, Settings with { IgnoredAppExeNames = [null!, "keepass.exe"] }, PresentationVerdict.Show },
         { "blank exe entries match an empty source", Shown with { SourceExeName = "" }, Settings with { IgnoredAppExeNames = [" ", @"C:\foo\"] }, PresentationVerdict.Show },
+        { "no source app (an OCR capture) is never ignored", Shown with { SourceExeName = null }, Settings with { IgnoredAppExeNames = [" ", "keepass.exe"] }, PresentationVerdict.Show },
         { "ignored apps off", Shown with { SourceExeName = "keepass.exe" }, Settings with { IgnoredAppsEnabled = false }, PresentationVerdict.Show },
         { "own process is never ignored", Shown with { SourceExeName = "PopGuy.exe", IsOwnProcess = true, SourceHost = "notion.so" }, Settings, PresentationVerdict.Show },
         { "ignored subdomain", Shown with { SourceHost = "team.notion.so" }, Settings, PresentationVerdict.IgnoredDomain },

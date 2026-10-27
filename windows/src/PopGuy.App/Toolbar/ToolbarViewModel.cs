@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Diff;
 using PopGuy.Core.Dictionaries;
@@ -7,6 +9,7 @@ using PopGuy.Core.Icons;
 using PopGuy.Core.Settings;
 using PopGuy.Core.Speak;
 using PopGuy.Core.Toolbar;
+using Windows.Graphics.Imaging;
 
 namespace PopGuy.Toolbar;
 
@@ -22,6 +25,26 @@ public sealed partial record ToolbarActionItem(ActionIdentifier Id, string Label
 }
 
 /// <summary>
+/// An OCR capture's region for the toolbar's thumbnail: the image source and the bitmap it was made from (BGRA8,
+/// premultiplied, physical pixels), kept alive together (whether the source keeps its own copy of the pixels is not
+/// documented) and disposed together by <see cref="ToolbarViewModel"/>. UI thread only.
+/// </summary>
+public sealed class OcrThumbnail(SoftwareBitmapSource source, SoftwareBitmap bitmap) : IDisposable
+{
+    public SoftwareBitmapSource Source => source;
+
+    public int PixelWidth => bitmap.PixelWidth;
+
+    public int PixelHeight => bitmap.PixelHeight;
+
+    public void Dispose()
+    {
+        source.Dispose();
+        bitmap.Dispose();
+    }
+}
+
+/// <summary>
 /// The toolbar window's state (macOS <c>ToolbarViewModel.swift</c>, the UI half; the logic is Core's
 /// <see cref="ToolbarSession"/>). It shows the session's state, plus two app-level messages the session does not own:
 /// <see cref="Fail"/> (an error with no run to retry, e.g. the admin-app error) and <see cref="ShowNotice"/> (a note
@@ -29,9 +52,10 @@ public sealed partial record ToolbarActionItem(ActionIdentifier Id, string Label
 /// result font, the Translate target) is read from the settings on every presentation. The window's clicks become the
 /// <c>…Requested</c> / <see cref="ActionInvoked"/> events, which the controller handles; Regenerate, Retry, Refine and
 /// Edit go to the session directly. The prompt and refine drafts live here (the controller's Esc and outside-click rules
-/// read them). Speak is orthogonal to the session's state (macOS): <see cref="BindSpeak"/> mirrors the coordinator's
-/// phase, replay and spoken text, and copies the phase into <see cref="ToolbarSession.SpeakPhase"/>. UI thread only,
-/// except the session's and the coordinator's <c>Changed</c>, which may arrive on any thread and are marshalled here.
+/// read them), and so does an OCR capture's thumbnail (<see cref="ShowOcrThumbnail"/>). Speak is orthogonal to the
+/// session's state (macOS): <see cref="BindSpeak"/> mirrors the coordinator's phase, replay and spoken text, and copies
+/// the phase into <see cref="ToolbarSession.SpeakPhase"/>. UI thread only, except the session's and the coordinator's
+/// <c>Changed</c>, which may arrive on any thread and are marshalled here.
 /// </summary>
 public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 {
@@ -67,6 +91,17 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         nameof(ShowsSettingsDivider), nameof(ShowsSystemGap), nameof(ShowsSystemGroup), nameof(Zoom),
         nameof(ResultFontSize), nameof(ResultLineHeight), nameof(TargetLanguage),
     ];
+
+    /// <summary>
+    /// The OCR thumbnail's box in DIPs (before the zoom): the region is fitted into it, a small one scaled up (macOS:
+    /// 460×300). Narrower than macOS's so it never widens the card past the body's minimum width (the window is the
+    /// card here; on macOS the thumbnail floats apart from it).
+    /// </summary>
+    private const double OcrThumbnailMaxWidth = 324;
+    private const double OcrThumbnailMaxHeight = 200;
+
+    private static readonly string[] OcrThumbnailProperties =
+        [nameof(OcrThumbnailSource), nameof(ShowsOcrThumbnail), nameof(OcrThumbnailWidth), nameof(OcrThumbnailHeight)];
 
     private readonly ToolbarSession _session;
     private readonly DispatcherQueue _dispatcher;
@@ -106,6 +141,9 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     private bool _isLookup;
     private IReadOnlyList<DictionaryProviderResult> _lookupResults = [];
     private bool _lookupNotFound;
+    private OcrThumbnail? _ocrThumbnail;
+    private double _ocrThumbnailWidth;
+    private double _ocrThumbnailHeight;
 
     public ToolbarViewModel(ToolbarSession session, DispatcherQueue dispatcher)
     {
@@ -231,6 +269,19 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     private double ResultFontScale => _zoomIncludesFontSize ? 1 : 1 / _zoom;
 
     private bool HasActionControls => _actions.Count > 0 || HasOverflow;
+
+    /// <summary>
+    /// The OCR capture's region (macOS ocrPreviewImage), above the action bar: set only on the OCR path, after
+    /// <see cref="Present"/>; every presentation and hide clears it.
+    /// </summary>
+    public ImageSource? OcrThumbnailSource => _ocrThumbnail?.Source;
+
+    public bool ShowsOcrThumbnail => _ocrThumbnail is not null;
+
+    /// <summary>The thumbnail's size in DIPs (its aspect-fit into the box); 0 without one.</summary>
+    public double OcrThumbnailWidth => _ocrThumbnailWidth;
+
+    public double OcrThumbnailHeight => _ocrThumbnailHeight;
 
     /// <summary>The selection is in an editable field: Paste back is offered (spec-1 §2.5).</summary>
     public bool IsEditable
@@ -410,6 +461,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     public void Present(AppSettings settings, bool isEditable, bool canIgnoreApp, string? sourceHost = null)
     {
         _session.Stop();
+        // Only the OCR path shows a thumbnail, after this (macOS update).
+        ClearOcrThumbnail();
         PromptDraft = "";
         RefineDraft = "";
         _actions = Items(settings, ToolbarLayout.PrincipalOrdered(settings));
@@ -444,10 +497,34 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         Refresh();
     }
 
+    /// <summary>
+    /// Shows <paramref name="thumbnail"/> above the action bar (macOS handleOCRCapture), aspect-fitted into the box; the
+    /// view model owns it from here and disposes it when it clears. Call it after <see cref="Present"/>, before the show.
+    /// </summary>
+    public void ShowOcrThumbnail(OcrThumbnail thumbnail)
+    {
+        ClearOcrThumbnail();
+        var ratio = thumbnail.PixelWidth > 0 && thumbnail.PixelHeight > 0
+            ? (double)thumbnail.PixelWidth / thumbnail.PixelHeight
+            : 16.0 / 9.0;
+        var width = OcrThumbnailMaxWidth;
+        var height = width / ratio;
+        if (height > OcrThumbnailMaxHeight)
+        {
+            height = OcrThumbnailMaxHeight;
+            width = height * ratio;
+        }
+        _ocrThumbnail = thumbnail;
+        _ocrThumbnailWidth = Math.Round(width);
+        _ocrThumbnailHeight = Math.Round(height);
+        foreach (var name in OcrThumbnailProperties) Raise(name);
+    }
+
     /// <summary>Cancels any run and returns to idle (every hide calls it).</summary>
     public void Stop()
     {
         _session.Stop();
+        ClearOcrThumbnail();
         PromptDraft = "";
         RefineDraft = "";
         ClearMessages();
@@ -508,6 +585,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         _session.Changed -= OnSessionChanged;
         if (_speak is not null) _speak.Changed -= OnSpeakChanged;
         _session.Stop();
+        _ocrThumbnail?.Dispose();
+        _ocrThumbnail = null;
     }
 
     // Window → view model (the clicks).
@@ -639,6 +718,17 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         ClearMessages();
         _ = _session.RegenerateAsync();
         Refresh();
+    }
+
+    /// <summary>The view lets go of the thumbnail first (the raise), then it is disposed.</summary>
+    private void ClearOcrThumbnail()
+    {
+        if (_ocrThumbnail is not { } old) return;
+        _ocrThumbnail = null;
+        _ocrThumbnailWidth = 0;
+        _ocrThumbnailHeight = 0;
+        foreach (var name in OcrThumbnailProperties) Raise(name);
+        old.Dispose();
     }
 
     private void ClearMessages()

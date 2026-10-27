@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Settings → Triggers (macOS TriggersView.swift): the text-selection and double-click triggers, the Ctrl+C+C chord and
-    its replacement shortcut, as Windows 11 Settings cards under the macOS section headers. Screen Text Capture (OCR)
-    joins in Phase 20. The header is the window's.
+    its replacement shortcut, and Screen Text Capture (OCR) with its shortcut, as Windows 11 Settings cards under the
+    macOS section headers. macOS's Screen Recording row has no Windows counterpart (no such permission). The header is
+    the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.TriggersPage"
@@ -115,6 +116,53 @@
                         x:Name="RecordButton"
                         VerticalAlignment="Center"
                         AutomationProperties.Name="Record a replacement shortcut"
+                        Style="{StaticResource SubtleButtonStyle}">
+                        <FontIcon FontSize="14" Glyph="&#xE7C8;" />
+                    </Button>
+                </StackPanel>
+            </controls:SettingsCard>
+
+            <!-- The tray's Capture Screen Text… scrolls here while the feature is off (SettingsWindow.SelectSection). -->
+            <TextBlock
+                x:Name="OcrHeader"
+                Style="{StaticResource SectionHeaderStyle}"
+                Text="Screen Text Capture (OCR)" />
+
+            <controls:SettingsCard
+                Description="Select any region of the screen and PopGuy recognizes the text in it, then hands it to the toolbar to copy. Useful for text you can't select normally — images, PDFs, video captions."
+                Header="Enable Screen Text Capture">
+                <ToggleSwitch x:Name="OcrToggle" AutomationProperties.Name="Enable Screen Text Capture" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard x:Name="OcrShortcutCard" Header="Keyboard shortcut">
+                <controls:SettingsCard.Description>
+                    <StackPanel Spacing="2">
+                        <TextBlock
+                            x:Name="OcrStatusText"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            TextWrapping="Wrap"
+                            Visibility="Collapsed" />
+                        <TextBlock
+                            Text="Assign a shortcut to start a capture from anywhere (e.g. Ctrl+Shift+2). Also available from the tray icon."
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </controls:SettingsCard.Description>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <popguy:ShortcutRecorder
+                        x:Name="OcrRecorder"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Screen Text Capture shortcut" />
+                    <Button
+                        x:Name="OcrClearButton"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Remove shortcut"
+                        Style="{StaticResource SubtleButtonStyle}">
+                        <FontIcon FontSize="14" Glyph="&#xE894;" />
+                    </Button>
+                    <Button
+                        x:Name="OcrRecordButton"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Record shortcut"
                         Style="{StaticResource SubtleButtonStyle}">
                         <FontIcon FontSize="14" Glyph="&#xE7C8;" />
                     </Button>

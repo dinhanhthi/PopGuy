@@ -23,6 +23,27 @@
         </StackPanel.RenderTransform>
 
         <!--
+            The OCR capture's region (macOS ocrPreview), above the bar: aspect-fitted (its size comes from the view
+            model), rounded by the rectangle (a Border's corner radius does not clip its child). Its image is set in
+            code; a press on it drags the toolbar like the padding.
+        -->
+        <Rectangle
+            Width="{x:Bind ViewModel.OcrThumbnailWidth, Mode=OneWay}"
+            Height="{x:Bind ViewModel.OcrThumbnailHeight, Mode=OneWay}"
+            Margin="8,8,8,0"
+            HorizontalAlignment="Left"
+            AutomationProperties.Name="Captured screen region"
+            RadiusX="6"
+            RadiusY="6"
+            Stroke="{ThemeResource CardStrokeColorDefaultBrush}"
+            StrokeThickness="1"
+            Visibility="{x:Bind ViewModel.ShowsOcrThumbnail, Mode=OneWay}">
+            <Rectangle.Fill>
+                <ImageBrush x:Name="OcrPreviewBrush" Stretch="Fill" />
+            </Rectangle.Fill>
+        </Rectangle>
+
+        <!--
             Action bar (macOS actionBar): the logo, the inline actions with a divider between each (built in code from
             the settings), More actions, then the system buttons and Close. The system buttons follow a gap that the
             gap column widens to the bar's right edge, or sit inline after a divider each (inlineToolbarSystemButtons;

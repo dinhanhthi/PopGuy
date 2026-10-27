@@ -66,7 +66,8 @@ public partial class App : Application
 
         try
         {
-            _tray = new TrayIcon(_services.Settings, _dispatcher, ShowSettings, Shutdown, _services.Log.Write);
+            _tray = new TrayIcon(
+                _services.Settings, _dispatcher, ShowSettings, ShowSettingsSection, CaptureScreenText, Shutdown, _services.Log.Write);
             _tray.SessionEnding += OnSessionEnding;
         }
         catch (System.ComponentModel.Win32Exception e)
@@ -97,6 +98,22 @@ public partial class App : Application
             _settingsWindow.Closed += OnSettingsClosed;
         }
         _settingsWindow.Show();
+    }
+
+    /// <summary>
+    /// The tray's History…, About PopGuy… and Capture Screen Text… (OCR off): Settings comes to the front on
+    /// <paramref name="tag"/>'s page (see <see cref="SettingsWindow.SelectSection"/>). UI thread.
+    /// </summary>
+    private void ShowSettingsSection(string tag, bool focusOcrSection)
+    {
+        ShowSettings();
+        _settingsWindow?.SelectSection(tag, focusOcrSection);
+    }
+
+    /// <summary>The tray's Capture Screen Text… with OCR on. UI thread.</summary>
+    private void CaptureScreenText()
+    {
+        if (!_shutDown) _services?.CaptureScreenText();
     }
 
     /// <summary>Settings closed: PopGuy runs on in the tray (it quits only from Quit PopGuy, or here without a tray icon).</summary>

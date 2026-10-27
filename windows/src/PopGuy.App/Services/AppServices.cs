@@ -13,6 +13,7 @@ using PopGuy.Core.Settings;
 using PopGuy.Core.Speak;
 using PopGuy.Core.Speak.CloudTts;
 using PopGuy.Core.Toolbar;
+using PopGuy.Ocr;
 using PopGuy.Platform.Capture;
 using PopGuy.Platform.Input;
 using PopGuy.Platform.Speech;
@@ -35,6 +36,7 @@ internal sealed class AppServices : IDisposable
     private readonly HotkeyService _hotkeys;
     private readonly SelectionPipeline _pipeline;
     private readonly ToolbarWindow _toolbar;
+    private readonly OcrCaptureController _ocr;
     private readonly ToolbarController _controller;
     private readonly SpeakCoordinator _speak;
     private readonly SystemTts _systemTts = new();
@@ -83,8 +85,10 @@ internal sealed class AppServices : IDisposable
             _hotkeys = new HotkeyService(_input, log.Write);
             _pipeline = new SelectionPipeline(_input, log.Write);
             _toolbar = new ToolbarWindow(session);
+            // Its overlays are made per capture; the controller wires its text to the toolbar.
+            _ocr = new OcrCaptureController(log.Write);
             _controller = new ToolbarController(
-                Settings, session, _speak, _toolbar, _input, chord, _hotkeys, _pipeline, dispatcher, log.Write);
+                Settings, session, _speak, _toolbar, _ocr, _input, chord, _hotkeys, _pipeline, dispatcher, log.Write);
         }
         catch
         {
@@ -139,6 +143,9 @@ internal sealed class AppServices : IDisposable
 
     /// <summary>Settings' shortcut recorder listens (see <see cref="ToolbarController.SetHotkeysSuspended"/>). Any thread.</summary>
     public void SetHotkeysSuspended(bool suspended) => _controller.SetHotkeysSuspended(suspended);
+
+    /// <summary>The tray's Capture Screen Text… (see <see cref="ToolbarController.BeginOcrCapture"/>). UI thread.</summary>
+    public void CaptureScreenText() => _controller.BeginOcrCapture();
 
     /// <summary>
     /// Builds every service and starts the triggers. UI thread (the toolbar window is created here). Throws when Windows

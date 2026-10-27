@@ -1,16 +1,19 @@
 using System.Drawing;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Media.Imaging;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Dictionaries;
 using PopGuy.Core.Settings;
 using PopGuy.Core.Speak;
 using PopGuy.Core.Toolbar;
+using PopGuy.Ocr;
 using PopGuy.Platform.Browser;
 using PopGuy.Platform.Capture;
 using PopGuy.Platform.Input;
 using PopGuy.Platform.Output;
 using PopGuy.Platform.SystemServices;
 using PopGuy.Platform.Windowing;
+using Windows.Graphics.Imaging;
 
 namespace PopGuy.Toolbar;
 
@@ -27,7 +30,9 @@ namespace PopGuy.Toolbar;
 /// drops its "Listen again" (macOS). Look up and
 /// Dictionary custom actions run through the session like the other actions; a lookup's Listen speaks its headword.
 /// While Ignored Domains is on, a selection in a browser reads the tab's host (<see cref="BrowserUrlReader"/>) before it
-/// is presented: the gate's ignored domains and <c>{{domain}}</c> use it (macOS reads it only then, too).
+/// is presented: the gate's ignored domains and <c>{{domain}}</c> use it (macOS reads it only then, too). The OCR
+/// hotkey and the tray's Capture Screen Text… start an <see cref="OcrCaptureController"/> capture, whose text shows
+/// like a selection with no source app, copy-only, under a thumbnail of the region (macOS handleOCRCapture).
 /// <para>
 /// Threading: the chord and hotkey events and the three input loops run on the thread pool; everything that touches the
 /// window, the view model or the presentation state runs on the UI thread (<see cref="DispatcherQueue"/>). Captures
@@ -46,6 +51,7 @@ internal sealed class ToolbarController : IDisposable
     private readonly SpeakCoordinator _speak;
     private readonly ToolbarWindow _window;
     private readonly ToolbarViewModel _viewModel;
+    private readonly OcrCaptureController _ocr;
     private readonly GlobalInput _input;
     private readonly ChordMonitor _chord;
     private readonly HotkeyService _hotkeys;
@@ -92,19 +98,26 @@ internal sealed class ToolbarController : IDisposable
     /// <param name="Pointer">A passive selection's release point (a drag or a double-click), else null.</param>
     /// <param name="GrewDownward">A passive drag's direction, else null.</param>
     /// <param name="Host">The browser tab's host (<see cref="ReadHost"/>), else null.</param>
+    /// <param name="IsOcr">An OCR capture (<see cref="OcrSource"/>): shown while PopGuy is off too.</param>
+    /// <param name="Failure">
+    /// An OCR capture that ended without text (with <paramref name="Blocked"/>): the toolbar shows this error instead of
+    /// the admin-app one, past the gate.
+    /// </param>
     private sealed record CapturedSelection(
         string Text, bool IsEditable, Rectangle Selection, ForegroundApp Source, bool Blocked = false,
-        Point? Pointer = null, bool? GrewDownward = null, string? Host = null);
+        Point? Pointer = null, bool? GrewDownward = null, string? Host = null, bool IsOcr = false, string? Failure = null);
 
     public ToolbarController(
-        SettingsStore settings, ToolbarSession session, SpeakCoordinator speak, ToolbarWindow window, GlobalInput input,
-        ChordMonitor chord, HotkeyService hotkeys, SelectionPipeline pipeline, DispatcherQueue dispatcher, Action<string> log)
+        SettingsStore settings, ToolbarSession session, SpeakCoordinator speak, ToolbarWindow window, OcrCaptureController ocr,
+        GlobalInput input, ChordMonitor chord, HotkeyService hotkeys, SelectionPipeline pipeline, DispatcherQueue dispatcher,
+        Action<string> log)
     {
         _settings = settings;
         _session = session;
         _speak = speak;
         _window = window;
         _viewModel = window.ViewModel;
+        _ocr = ocr;
         _input = input;
         _chord = chord;
         _hotkeys = hotkeys;
@@ -143,6 +156,8 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.ListenRequested += OnListenRequested;
         _viewModel.BindSpeak(_speak);
         _session.ScriptFinished += OnScriptFinished;
+        _ocr.OnText = OnOcrText;
+        _ocr.OnFailed = OnOcrFailed;
         ApplySettings();
 
         var token = _stop.Token;
@@ -174,6 +189,8 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.ReplayRequested -= OnReplayRequested;
         _viewModel.ListenRequested -= OnListenRequested;
         _session.ScriptFinished -= OnScriptFinished;
+        _ocr.OnText = null;
+        _ocr.OnFailed = null;
         Hide();
     }
 
@@ -290,7 +307,12 @@ internal sealed class ToolbarController : IDisposable
     {
         if (id == HotkeyService.OcrCaptureId)
         {
-            _log("hotkey: OCR capture is not available yet");
+            // macOS: the hotkey checks the master switch and the opt-in when it fires (the tray item does not).
+            _dispatcher.TryEnqueue(() =>
+            {
+                var settings = _settings.Current;
+                if (settings.PopGuyEnabled && settings.OcrEnabled) BeginOcrCapture();
+            });
             return;
         }
         var source = ForegroundApp.Snapshot();
@@ -352,6 +374,67 @@ internal sealed class ToolbarController : IDisposable
             }
         }), "capture");
     }
+
+    // OCR (UI thread).
+
+    /// <summary>
+    /// The OCR hotkey and the tray's Capture Screen Text… (Screen Text Capture is on; the tray opens Settings otherwise):
+    /// hides the toolbar, so the freeze-frame does not show it, then starts a capture. Nothing while one runs.
+    /// </summary>
+    public void BeginOcrCapture()
+    {
+        if (_ocr.IsCapturing) return;
+        Hide();
+        _log("ocr: capture started");
+        _ocr.BeginCapture();
+    }
+
+    /// <summary>
+    /// An OCR capture's text (macOS handleOCRCapture): shown like a selection at the mouse-up point, with the region as a
+    /// thumbnail above the bar (made first, so the window is sized for it; without it if that fails). The text came from
+    /// pixels: not editable (Copy, no Paste back) and no source app (<see cref="OcrSource"/>). Never logged.
+    /// </summary>
+    private async void OnOcrText(string text, Point anchorPx, SoftwareBitmap bitmap)
+    {
+        OcrThumbnail? thumbnail = null;
+        SoftwareBitmapSource? source = null;
+        try
+        {
+            source = new SoftwareBitmapSource();
+            await source.SetBitmapAsync(bitmap);
+            thumbnail = new OcrThumbnail(source, bitmap);
+        }
+        catch (Exception e)
+        {
+            _log($"ocr: no thumbnail, {e.GetType().Name}");
+            source?.Dispose();
+            bitmap.Dispose();
+        }
+        _log($"ocr: {text.Length} chars");
+        Present(new CapturedSelection(text, IsEditable: false, Rectangle.Empty, OcrSource(), Pointer: anchorPx, IsOcr: true),
+            autoRun: null, thumbnail);
+    }
+
+    /// <summary>
+    /// An OCR capture that ended without text (macOS: an alert with the title and the message): the toolbar's error at
+    /// the pointer, where the user just dragged. Non-blocking and dismissed like any toolbar (Close, a click outside);
+    /// a dialog would need a window of its own and take the foreground from the app behind. The message says it all,
+    /// so the title only goes to the log (it is one of the controller's fixed titles).
+    /// </summary>
+    private void OnOcrFailed(string title, string message)
+    {
+        _log($"ocr: {title}");
+        Present(new CapturedSelection("", false, Rectangle.Empty, OcrSource(), Blocked: true,
+            Pointer: ToolbarWindowStyle.CursorPosition(), IsOcr: true, Failure: message), autoRun: null);
+    }
+
+    /// <summary>
+    /// An OCR capture's source: no app (macOS: PopGuy is frontmost after the overlay, so it has no bundle id), so no
+    /// Ignore this app, no history source and no ignore-list match; only the foreground window (the capture gave it
+    /// back), for the toolbar's foreground hand-back.
+    /// </summary>
+    private static ForegroundApp OcrSource() =>
+        new(ToolbarWindowStyle.ForegroundWindow(), 0, null, "", IsElevated: false, IsOwnProcess: false);
 
     /// <summary>The one reader of the pipeline's selections: each is routed on the UI thread.</summary>
     private async Task ReadSelectionsAsync(CancellationToken token)
@@ -426,13 +509,19 @@ internal sealed class ToolbarController : IDisposable
     /// <summary>
     /// Shows the toolbar for <paramref name="capture"/> if <see cref="PresentationGate"/> lets it (an ignored app or
     /// domain, no enabled action, or a re-entrant same-text event drops it), then runs <paramref name="autoRun"/>. A dropped
-    /// selection runs nothing: a trailing double-click on a result keeps it (macOS still dispatches then).
+    /// selection runs nothing: a trailing double-click on a result keeps it (macOS still dispatches then). An OCR capture
+    /// shows while PopGuy is off too (macOS: the menu-bar item always captures), its failure past the gate (macOS: an
+    /// alert); <paramref name="thumbnail"/> (OCR) goes above the bar, or is disposed when nothing shows.
     /// </summary>
-    private void Present(CapturedSelection capture, ActionIdentifier? autoRun)
+    private void Present(CapturedSelection capture, ActionIdentifier? autoRun, OcrThumbnail? thumbnail = null)
     {
         var settings = _settings.Current;
-        if (!settings.PopGuyEnabled) return;
-        var verdict = PresentationGate.Evaluate(new PresentationInput(
+        if (!settings.PopGuyEnabled && !capture.IsOcr)
+        {
+            thumbnail?.Dispose();
+            return;
+        }
+        var verdict = capture.Failure is not null ? PresentationVerdict.Show : PresentationGate.Evaluate(new PresentationInput(
             // A blocked capture has no text but still shows (its error): the message stands in for the gate.
             capture.Blocked ? AdminAppMessage : capture.Text,
             IsShowing: _window.IsShown,
@@ -446,6 +535,7 @@ internal sealed class ToolbarController : IDisposable
         if (verdict != PresentationVerdict.Show)
         {
             _log($"present: dropped, {verdict}");
+            thumbnail?.Dispose();
             return;
         }
 
@@ -457,13 +547,15 @@ internal sealed class ToolbarController : IDisposable
         // A new selection: the previous one's speech stops and its "Listen again" goes (macOS update).
         _speak.ClearReplay();
         _viewModel.Present(settings, capture.IsEditable, CanIgnore(capture.Source), capture.Host);
+        // After Present (which clears it), before the show (which sizes the window for the content).
+        if (thumbnail is not null) _viewModel.ShowOcrThumbnail(thumbnail);
         // No pointer (the chord, the hotkeys, a keyboard selection): placed below the selection rect, or at the cursor
         // when there is none (spec-1 §3.2).
         _window.ShowAt(capture.Pointer, capture.GrewDownward, capture.Selection, capture.Source);
         _shown = true;
         if (capture.Blocked)
         {
-            _viewModel.Fail(AdminAppMessage);
+            _viewModel.Fail(capture.Failure ?? AdminAppMessage);
             return;
         }
         if (autoRun is { } id) RunAction(id);
@@ -812,11 +904,22 @@ internal sealed class ToolbarController : IDisposable
     /// Pastes into the source, on the UI thread (PasteBack may give the source the foreground only from there). One at
     /// a time. Pasted → the toolbar hides, or stays for a script's Paste result (macOS); Blocked → the admin-app error;
     /// Refused → the result is copied instead with a short reason, or, when the clipboard could not be saved, left alone
-    /// with a note. A script's Paste result has no result panel for the note, so it shows as the error instead.
+    /// with a note. A script's Paste result has no result panel for the note, so it shows as the error instead. OCR text
+    /// is always copied instead.
     /// </summary>
     private async Task PasteAsync(string text, bool scriptResult)
     {
         if (_pasting || _current is not { Blocked: false } capture || text.Length == 0) return;
+        if (capture.IsOcr)
+        {
+            // No field to paste into (macOS: Copy only); only a script's Paste result gets here. The paste policy would
+            // let a window of a known class through, so it is never asked.
+            CopyInBackground(text, "ocr paste, copied instead");
+            const string note = "Copied instead — screen text has no field to paste into.";
+            if (scriptResult) _viewModel.Fail(note);
+            else _viewModel.ShowNotice(note);
+            return;
+        }
         _pasting = true;
         // Text input off first; PasteBack then gives the source the foreground back if the toolbar has it.
         _window.EndTextInput(handBack: false);

@@ -54,6 +54,9 @@ public sealed partial class SettingsWindow : Window
     private XamlRoot? _xamlRoot;
     private bool _closing;
 
+    /// <summary>Triggers' OCR section is to scroll into view once its page is up (<see cref="SelectSection"/>).</summary>
+    private bool _focusOcrSection;
+
     /// <summary>The one-shot re-realizations after the first show, kept so they tick.</summary>
     private DispatcherQueueTimer? _presentedTimer;
     private DispatcherQueueTimer? _backstopTimer;
@@ -99,6 +102,21 @@ public sealed partial class SettingsWindow : Window
         Activate();
     }
 
+    /// <summary>
+    /// Picks the sidebar item <paramref name="tag"/> (a <see cref="Pages"/> key) as a click would (macOS
+    /// SettingsNavigator.section): the tray's History…, About PopGuy… and Capture Screen Text… while OCR is off. With
+    /// <paramref name="focusOcrSection"/>, Triggers then scrolls to its OCR section (macOS focusOCRSection).
+    /// </summary>
+    internal void SelectSection(string tag, bool focusOcrSection = false)
+    {
+        _focusOcrSection = focusOcrSection;
+        var item = Nav.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(i => i.Tag as string == tag);
+        if (item is null) return;
+        // Already picked: its page is up, or comes on the turn ShowSection queued (which focuses it then).
+        if (ReferenceEquals(Nav.SelectedItem, item)) FocusPendingSection();
+        else Nav.SelectedItem = item;
+    }
+
     // Sections.
 
     private void OnSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -115,9 +133,18 @@ public sealed partial class SettingsWindow : Window
         DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
         {
             if (_closing || Nav.SelectedItem is not NavigationViewItem { Tag: string current } || current != tag) return;
-            if (ContentFrame.CurrentSourcePageType == section.Page) return;
-            ContentFrame.Navigate(section.Page, _services, new SuppressNavigationTransitionInfo());
+            if (ContentFrame.CurrentSourcePageType != section.Page)
+                ContentFrame.Navigate(section.Page, _services, new SuppressNavigationTransitionInfo());
+            FocusPendingSection();
         });
+    }
+
+    /// <summary>The pending OCR focus, once Triggers is the page (it scrolls after its own layout).</summary>
+    private void FocusPendingSection()
+    {
+        if (!_focusOcrSection || ContentFrame.Content is not TriggersPage triggers) return;
+        _focusOcrSection = false;
+        triggers.FocusOcrSection();
     }
 
     // Lifetime.
