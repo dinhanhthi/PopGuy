@@ -111,7 +111,7 @@ public static class ProviderKindExtensions
         ProviderKind.ClaudeCli => "Claude CLI (subscription)",
         ProviderKind.CodexCli => "Codex CLI (subscription)",
         ProviderKind.GeminiCli => "Gemini CLI (subscription)",
-        ProviderKind.MlxLocal => "Local (MLX)",
+        ProviderKind.MlxLocal => "Local model (on this PC)", // macOS "Local (MLX)"; llama.cpp here.
         _ => kind.ToString(),
     };
 

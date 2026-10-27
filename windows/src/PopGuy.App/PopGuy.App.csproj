@@ -34,6 +34,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Also brings LLamaSharp.Backend.Cpu's build props, which copy this RuntimeIdentifier's llama.cpp natives. -->
+    <ProjectReference Include="..\PopGuy.LocalLLM\PopGuy.LocalLLM.csproj" />
     <ProjectReference Include="..\PopGuy.Platform\PopGuy.Platform.csproj" />
   </ItemGroup>
 

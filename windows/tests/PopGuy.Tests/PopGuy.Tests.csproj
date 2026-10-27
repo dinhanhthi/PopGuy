@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PopGuy.Core\PopGuy.Core.csproj" />
+    <ProjectReference Include="..\..\src\PopGuy.LocalLLM\PopGuy.LocalLLM.csproj" />
   </ItemGroup>
 
   <!-- The macOS example plugins, linked (not copied into the repo) so both apps read the same files. -->
