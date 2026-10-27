@@ -138,7 +138,6 @@ jobs:
         working-directory: windows
         env:
           POPGUY_TEST_MODELS: ${{ runner.temp }}/popguy-test-models
-          POPGUY_TEST_GGUF_ALL: '1' # TEMP 21.3: one run of the all-catalog check (about 12 GB of downloads), then remove this line.
         run: |
           "Runner: $env:RUNNER_ARCH, OS arch: $([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)"
           dotnet test tests/PopGuy.Tests/PopGuy.Tests.csproj --filter "Category=NativeLLM" --logger "console;verbosity=detailed"
