@@ -56,6 +56,8 @@ public sealed partial class SettingsWindow : Window
 
     /// <summary>Triggers' OCR section is to scroll into view once its page is up (<see cref="SelectSection"/>).</summary>
     private bool _focusOcrSection;
+    // The tray asked for the OCR section: each first-show re-attach resets the page's scroll, so it scrolls there again.
+    private bool _refocusOcrOnReattach;
 
     /// <summary>The one-shot re-realizations after the first show, kept so they tick.</summary>
     private DispatcherQueueTimer? _presentedTimer;
@@ -110,6 +112,7 @@ public sealed partial class SettingsWindow : Window
     internal void SelectSection(string tag, bool focusOcrSection = false)
     {
         _focusOcrSection = focusOcrSection;
+        _refocusOcrOnReattach = focusOcrSection;
         var item = Nav.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(i => i.Tag as string == tag);
         if (item is null) return;
         // Already picked: its page is up, or comes on the turn ShowSection queued (which focuses it then).
@@ -230,6 +233,7 @@ public sealed partial class SettingsWindow : Window
         var content = RootHost.Content;
         RootHost.Content = null;
         RootHost.Content = content;
+        if (_refocusOcrOnReattach && ContentFrame.Content is TriggersPage triggers) triggers.FocusOcrSection();
     }
 
     // Frame: the outer frame's top-left in physical screen pixels, its size in DIPs (so it keeps its size across DPIs).

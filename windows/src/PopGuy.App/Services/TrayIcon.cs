@@ -108,10 +108,25 @@ internal sealed class TrayIcon : IDisposable
     /// macOS captureScreenTextOCR: a capture once Screen Text Capture is on (read at the click), else Settings › Triggers
     /// at the OCR section, so the item never silently does nothing. Not gated by the master switch (macOS).
     /// </summary>
+    private static readonly TimeSpan MenuFadeDelay = TimeSpan.FromMilliseconds(350);
+
     private void CaptureScreenText()
     {
-        if (_settings.Current.OcrEnabled) _captureScreenText();
-        else _openSettingsSection("Triggers", true);
+        if (!_settings.Current.OcrEnabled)
+        {
+            _openSettingsSection("Triggers", true);
+            return;
+        }
+        // The menu fades out after the click: capturing at once froze it into the picture.
+        var timer = _dispatcher.CreateTimer();
+        timer.Interval = MenuFadeDelay;
+        timer.IsRepeating = false;
+        timer.Tick += (t, _) =>
+        {
+            t.Stop();
+            _captureScreenText();
+        };
+        timer.Start();
     }
 
     /// <summary>Flips one setting; <see cref="SettingsStore.Changed"/> then updates the triggers and the icon.</summary>
