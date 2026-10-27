@@ -51,12 +51,19 @@ public sealed class OcrCaptureController(Action<string> log)
     /// <summary>A capture is in progress (the overlay is up, or the OCR is running).</summary>
     public bool IsCapturing { get; private set; }
 
-    /// <summary>Begins a capture. Does nothing while one is in progress (macOS too).</summary>
-    public void BeginCapture()
+    /// <summary>The capture in progress, or the last one.</summary>
+    private Task _run = Task.CompletedTask;
+
+    /// <summary>
+    /// Begins a capture and returns it: the task completes once it has fully ended (overlay closed, OCR done, callbacks
+    /// called), whatever the outcome. While one is in progress, returns that one and starts nothing (macOS too).
+    /// </summary>
+    public Task BeginCapture()
     {
-        if (IsCapturing) return;
+        if (IsCapturing) return _run;
         IsCapturing = true;
-        _ = RunCaptureAsync();
+        _run = RunCaptureAsync();
+        return _run;
     }
 
     private async Task RunCaptureAsync()

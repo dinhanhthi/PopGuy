@@ -28,6 +28,9 @@ internal sealed class TrayIcon : IDisposable
     private readonly Action<string> _log;
     private readonly NotifyIcon _icon;
 
+    /// <summary>Capture Screen Text…'s wait for the menu to fade (kept so it ticks); null until the first click.</summary>
+    private DispatcherQueueTimer? _captureTimer;
+
     /// <param name="openSettings">Opens the Settings window. Runs from the dispatcher queue, after the menu closed.</param>
     /// <param name="openSettingsSection">
     /// Opens Settings on a page (a sidebar tag), with Triggers scrolled to its OCR section when the flag is set. Runs from
@@ -67,6 +70,7 @@ internal sealed class TrayIcon : IDisposable
         _settings.Changed -= OnSettingsChanged;
         _icon.Clicked -= OnClicked;
         _icon.TaskbarThemeChanged -= Refresh;
+        _captureTimer?.Stop();
         _icon.Dispose();
     }
 
@@ -104,12 +108,12 @@ internal sealed class TrayIcon : IDisposable
 
     private void OnClicked() => _dispatcher.TryEnqueue(() => _openSettings());
 
+    private static readonly TimeSpan MenuFadeDelay = TimeSpan.FromMilliseconds(350);
+
     /// <summary>
     /// macOS captureScreenTextOCR: a capture once Screen Text Capture is on (read at the click), else Settings › Triggers
     /// at the OCR section, so the item never silently does nothing. Not gated by the master switch (macOS).
     /// </summary>
-    private static readonly TimeSpan MenuFadeDelay = TimeSpan.FromMilliseconds(350);
-
     private void CaptureScreenText()
     {
         if (!_settings.Current.OcrEnabled)
@@ -117,16 +121,21 @@ internal sealed class TrayIcon : IDisposable
             _openSettingsSection("Triggers", true);
             return;
         }
-        // The menu fades out after the click: capturing at once froze it into the picture.
-        var timer = _dispatcher.CreateTimer();
-        timer.Interval = MenuFadeDelay;
-        timer.IsRepeating = false;
-        timer.Tick += (t, _) =>
+        // The menu fades out after the click: capturing at once froze it into the picture. A second click while it waits
+        // restarts the wait: one capture.
+        if (_captureTimer is null)
         {
-            t.Stop();
-            _captureScreenText();
-        };
-        timer.Start();
+            _captureTimer = _dispatcher.CreateTimer();
+            _captureTimer.Interval = MenuFadeDelay;
+            _captureTimer.IsRepeating = false;
+            _captureTimer.Tick += (t, _) =>
+            {
+                t.Stop();
+                _captureScreenText();
+            };
+        }
+        _captureTimer.Stop();
+        _captureTimer.Start();
     }
 
     /// <summary>Flips one setting; <see cref="SettingsStore.Changed"/> then updates the triggers and the icon.</summary>

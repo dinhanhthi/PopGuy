@@ -78,6 +78,17 @@ internal sealed class ToolbarController : IDisposable
     /// <summary>The last left press was on the toolbar: its release is not a selection either. Mouse loop only.</summary>
     private bool _pressOnToolbar;
 
+    /// <summary>
+    /// The mouse is kept from the selection pipeline until this <see cref="Environment.TickCount64"/>: long.MaxValue while
+    /// an OCR capture runs, then <see cref="OcrMuteGraceMs"/> more. Else the region drag on the overlay reached it, and
+    /// its read after the debounce (the overlay closed, the user's app given the foreground back) captured a selection
+    /// still in that app and raced the OCR toolbar. Interlocked (Volatile); 0: not muted.
+    /// </summary>
+    private long _pipelineMutedUntil;
+
+    /// <summary>Covers the hook's release of the drag, which may reach the mouse loop after the capture ended.</summary>
+    private const long OcrMuteGraceMs = 300;
+
     // UI thread only.
     private CapturedSelection? _current;
     private int _presentation;
@@ -386,7 +397,23 @@ internal sealed class ToolbarController : IDisposable
         if (_ocr.IsCapturing) return;
         Hide();
         _log("ocr: capture started");
-        _ocr.BeginCapture();
+        // Before the overlay shows, so the drag's press is muted too.
+        Volatile.Write(ref _pipelineMutedUntil, long.MaxValue);
+        Watch(UnmutePipelineAfterAsync(_ocr.BeginCapture()), "ocr");
+    }
+
+    /// <summary>Unmutes the selection pipeline (after the grace) once the OCR capture ended, even if it failed.</summary>
+    private async Task UnmutePipelineAfterAsync(Task capture)
+    {
+        try
+        {
+            await capture;
+        }
+        finally
+        {
+            // A capture that began meanwhile keeps its own mute.
+            if (!_ocr.IsCapturing) Volatile.Write(ref _pipelineMutedUntil, Environment.TickCount64 + OcrMuteGraceMs);
+        }
     }
 
     /// <summary>
@@ -729,7 +756,8 @@ internal sealed class ToolbarController : IDisposable
     /// <summary>
     /// Passes a mouse event to the selection pipeline, except a left press or release on the toolbar or its menus, and
     /// the release of a press there (a drag of the toolbar, a selection in its result): a click on a toolbar button would
-    /// otherwise cancel a capture in flight or re-present the toolbar. Mouse loop only.
+    /// otherwise cancel a capture in flight or re-present the toolbar. Nothing while an OCR capture runs (see
+    /// <see cref="_pipelineMutedUntil"/>). Mouse loop only.
     /// </summary>
     private void FeedPipeline(MouseEvent mouse)
     {
@@ -745,6 +773,7 @@ internal sealed class ToolbarController : IDisposable
             _pressOnToolbar = false;
             if (onToolbar) return;
         }
+        if (Environment.TickCount64 < Volatile.Read(ref _pipelineMutedUntil)) return;
         _pipeline.Handle(mouse);
     }
 
