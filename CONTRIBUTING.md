@@ -12,8 +12,8 @@ Thanks for your interest — contributions are welcome!
 - **Changing the Windows port (`windows/`)?**
   1. Run its tests: `dotnet test windows/tests/PopGuy.Tests/PopGuy.Tests.csproj` (.NET 10 SDK; works on macOS
      and Windows).
-  2. The app itself (WinUI 3) is built by GitHub Actions (`.github/workflows/windows.yml`) on every push and pull
-     request that touches `windows/`; check that the run is green. See [windows/README.md](windows/README.md).
+  2. The app itself (WinUI 3) is built by GitHub Actions (`.github/workflows/windows.yml`) on every pull request that
+     touches `windows/`; check that the run is green. See [windows/README.md](windows/README.md).
   3. UI text is English only; tooltips go through the app's `HoverTooltip`, never the default WinUI tooltip.
 
 ## License

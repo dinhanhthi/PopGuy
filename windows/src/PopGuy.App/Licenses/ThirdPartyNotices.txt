@@ -6,7 +6,7 @@ PopGuy is free and open source under the GNU Affero General Public License v3.0
 software, each under its own license, reproduced or linked below.
 
 
-.NET runtime
+.NET runtime (and its Microsoft.Bcl.*, Microsoft.Extensions.*.Abstractions and System.* packages)
   https://github.com/dotnet/runtime
   Copyright (c) .NET Foundation and Contributors
   License: MIT (text below)
@@ -20,9 +20,30 @@ Windows App SDK and WinUI 3 (Microsoft.WindowsAppSDK.Base, .Foundation, .WinUI,
   Software License Terms for the Microsoft Windows App SDK (license.txt in each package,
   https://aka.ms/windowsappsdk).
 
+Microsoft Edge WebView2 SDK (Microsoft.Web.WebView2, brought in by WinUI)
+  https://aka.ms/webview2
+  Copyright (C) Microsoft Corporation. All rights reserved.
+  License: the BSD-style license in the package's LICENSE.txt (redistribution in source and binary forms permitted
+  with its notice and disclaimer)
+
 Windows Community Toolkit (CommunityToolkit.WinUI.Controls.SettingsControls)
   https://github.com/CommunityToolkit/Windows
   Copyright (c) .NET Foundation and Contributors
+  License: MIT (text below)
+
+.NET Community Toolkit (CommunityToolkit.Common, CommunityToolkit.HighPerformance)
+  https://github.com/CommunityToolkit/dotnet
+  Copyright (c) .NET Foundation and Contributors
+  License: MIT (text below)
+
+Reactive Extensions for .NET (System.Linq.Async, System.Interactive.Async)
+  https://github.com/dotnet/reactive
+  Copyright (c) .NET Foundation and Contributors
+  License: MIT (text below)
+
+Microsoft.Extensions.AI.Abstractions
+  https://github.com/dotnet/extensions
+  Copyright (c) .NET Foundation. All rights reserved.
   License: MIT (text below)
 
 C#/Win32 P/Invoke source generator (Microsoft.Windows.CsWin32; used at build time)

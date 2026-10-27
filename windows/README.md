@@ -57,7 +57,7 @@ Regenerate on macOS, not Windows, so the files keep LF line endings.
 
 `.github/workflows/windows.yml` runs on pushes to `windows` and `main` and on pull requests that touch `windows/` or the workflow:
 
-- `test` (windows-latest, x64) and `test-arm64` (windows-11-arm, without the native llama.cpp tests): `dotnet test` of `tests/PopGuy.Tests`.
+- `test` (windows-latest, x64) and `test-arm64` (windows-11-arm): `dotnet test` of `tests/PopGuy.Tests`, both without the native llama.cpp tests (`native-smoke` runs those).
 - `test-platform` (windows-latest): `dotnet test` of `tests/PopGuy.Platform.Tests` (Platform's Windows-only tests).
 - `native-smoke` (windows-latest and windows-11-arm): loads a small GGUF model through LLamaSharp and streams an answer (the model is cached by its SHA-256).
 - `package` (matrix `x64`, `arm64`): `dotnet publish` of the App (Debug, self-contained, version `0.0.<run number>`), then checks the PE machine type (the llama.cpp natives too), the PRI resources and the embedded manifest's WinRT activatable classes. Uploads the artifact `PopGuy-win-<arch>`.

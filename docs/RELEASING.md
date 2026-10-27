@@ -442,6 +442,8 @@ repository's **latest** release: the README's and the website's macOS download l
    unpublished version links to a 404.
 4. Once the bump is on `main`, run `gh workflow run deploy-pages.yml --ref main` so the site picks up the new Windows
    version even when only the csproj changed.
+   For the **first** Windows release: run `release.sh` from the `windows` branch and publish `windows-v0.1.0`
+   before merging `windows` into `main` (the merge deploys the site with the Windows buttons).
 5. Installed copies check GitHub once a day (or at once with Check for Updates) and offer **Update now**.
 
 Never publish a `-dev` tag's packages: those QA builds read their update feed from the `POPGUY_UPDATE_URL` environment
