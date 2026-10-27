@@ -77,7 +77,10 @@ internal sealed class ToolbarController : IDisposable
     private int _presentation;
     private bool _pasting;
 
-    /// <summary>Counts passive selections, so a browser read that finishes after a newer selection presents nothing.</summary>
+    /// <summary>
+    /// Counts passive selections, presses outside the toolbar and shows, so a browser read that finishes after newer
+    /// input presents nothing.
+    /// </summary>
     private int _passiveSelections;
 
     /// <summary>A selection the toolbar was (or is about to be) shown for.</summary>
@@ -397,8 +400,8 @@ internal sealed class ToolbarController : IDisposable
 
     /// <summary>
     /// Presents a passive selection: from a browser while Ignored Domains is on, after its host is read on the thread
-    /// pool (the UI thread never waits on UI Automation), unless a newer passive selection came meanwhile; else at once.
-    /// UI thread.
+    /// pool (the UI thread never waits on UI Automation), unless a newer selection, a press (<see cref="ReadMouseAsync"/>)
+    /// or a show came meanwhile; else at once. UI thread.
     /// </summary>
     private void PresentWithHost(CapturedSelection capture, ActionIdentifier? autoRun)
     {
@@ -448,6 +451,8 @@ internal sealed class ToolbarController : IDisposable
 
         _current = capture;
         _presentation++;
+        // A chord or hotkey show cancels a passive selection's pending browser read.
+        _passiveSelections++;
         _pasting = false;
         // A new selection: the previous one's speech stops and its "Listen again" goes (macOS update).
         _speak.ClearReplay();
@@ -558,7 +563,7 @@ internal sealed class ToolbarController : IDisposable
             SourceExeName = source.IsOwnProcess ? null : source.Exe,
             SourceAppName = source.DisplayName.Length > 0 ? source.DisplayName : null,
             SkipHistory = IsIgnored(capture, settings),
-        }, engine, voice.Accent, voice.ActionName);
+        }, engine, voice.Accent);
     }
 
     /// <summary>"Listen again": the cached audio, or the system voice again (no new cloud request, no history).</summary>
@@ -607,9 +612,14 @@ internal sealed class ToolbarController : IDisposable
             {
                 if (mouse.IsPopGuyMarker) continue;
                 FeedPipeline(mouse);
-                if (!_shown) continue;
                 if (mouse.Kind is not (MouseEventKind.LeftDown or MouseEventKind.RightDown or MouseEventKind.MiddleDown)) continue;
                 var point = new Point(mouse.X, mouse.Y);
+                // Any press outside the toolbar, shown or not, cancels a passive selection's pending browser read (the
+                // click that cleared the selection). Never the gesture's own: its press is read before its release, and
+                // the selection is emitted only after the release, the debounce and the capture, so it is queued later.
+                var onToolbar = mouse.Kind == MouseEventKind.LeftDown ? _pressOnToolbar : IsOnToolbar(point);
+                if (!onToolbar) _dispatcher.TryEnqueue(() => _passiveSelections++);
+                if (!_shown) continue;
                 var timestamp = mouse.Timestamp;
                 _dispatcher.TryEnqueue(() =>
                 {

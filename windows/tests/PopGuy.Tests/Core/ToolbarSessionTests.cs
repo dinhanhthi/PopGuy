@@ -468,8 +468,7 @@ public sealed class ToolbarSessionTests : IDisposable
     }
 
     // macOS triggerCustomAction's speech branch: a Speech custom action speaks with its own speech settings, accent and
-    // cloud config (not the Speak settings') and records its title; the built-in Speak uses the global ones; any other
-    // action does not speak.
+    // cloud config (not the Speak settings'); the built-in Speak uses the global ones; any other action does not speak.
     [Fact]
     public void SpeakVoiceFollowsTheSpeechAction()
     {
@@ -501,10 +500,10 @@ public sealed class ToolbarSessionTests : IDisposable
         };
 
         Assert.Equal(
-            new SpeakVoice("Speak", SpeakAccent.French, ownSpeak, speech.TtsConfig),
+            new SpeakVoice(SpeakAccent.French, ownSpeak, speech.TtsConfig),
             ToolbarSession.SpeakVoiceFor(settings, ActionIdentifier.Custom(speech.Id)));
         Assert.Equal(
-            new SpeakVoice("Speak", SpeakAccent.UkEnglish, globalSpeak, azure),
+            new SpeakVoice(SpeakAccent.UkEnglish, globalSpeak, azure),
             ToolbarSession.SpeakVoiceFor(settings, ActionIdentifier.Speak));
         Assert.Null(ToolbarSession.SpeakVoiceFor(settings, ActionIdentifier.Custom(ai.Id)));
         Assert.Null(ToolbarSession.SpeakVoiceFor(settings, ActionIdentifier.Builtin(ActionKind.Improve)));

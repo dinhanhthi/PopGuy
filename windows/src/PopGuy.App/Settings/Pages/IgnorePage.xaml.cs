@@ -41,6 +41,7 @@ public sealed partial class IgnorePage : Page
 
     private const string InvalidDomainMessage = "Invalid domain — try \"example.com\".";
     private const string DuplicateDomainMessage = "This domain is already in the list.";
+    private const string NotSavedMessage = "Not saved: the settings file could not be written.";
 
     private static readonly TimeSpan SpinnerDelay = TimeSpan.FromMilliseconds(150);
 
@@ -162,7 +163,7 @@ public sealed partial class IgnorePage : Page
 
     /// <summary>
     /// Add (or Enter): the typed domain or URL as a bare host (macOS addIgnoredDomain), once. The field clears on
-    /// success; an invalid or duplicate entry keeps it and shows why until the text changes.
+    /// success; an invalid or duplicate entry, or a failed save, keeps it and shows why until the text changes.
     /// </summary>
     private void AddDomain()
     {
@@ -170,7 +171,8 @@ public sealed partial class IgnorePage : Page
         string? error = null;
         if (PresentationGate.NormalizeDomain(raw) is not { } domain) error = InvalidDomainMessage;
         else if (DomainKeys(_services.Settings.Current.IgnoredDomains).Contains(domain)) error = DuplicateDomainMessage;
-        else Save("ignoredDomains", s => DomainKeys(s.IgnoredDomains).Contains(domain) ? s : s with { IgnoredDomains = [.. s.IgnoredDomains, domain] });
+        else if (!Save("ignoredDomains", s => DomainKeys(s.IgnoredDomains).Contains(domain) ? s : s with { IgnoredDomains = [.. s.IgnoredDomains, domain] }))
+            error = NotSavedMessage;
         if (error is null)
         {
             DomainBox.Text = "";
@@ -473,18 +475,23 @@ public sealed partial class IgnorePage : Page
 
     private static Style AppStyle(string key) => (Style)Application.Current.Resources[key];
 
-    /// <summary>Saves one change; a failed write is logged and the page goes back to the saved settings.</summary>
-    private void Save(string key, Func<AppSettings, AppSettings> change)
+    /// <summary>
+    /// Saves one change; false when nothing was saved. A failed write is logged and the page goes back to the saved
+    /// settings.
+    /// </summary>
+    private bool Save(string key, Func<AppSettings, AppSettings> change)
     {
-        if (_syncing || _services is null) return;
+        if (_syncing || _services is null) return false;
         try
         {
             _services.Settings.Update(change);
+            return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             _services.Log.Write($"settings: {key} not saved, {e.GetType().Name}");
             Refresh();
+            return false;
         }
     }
 }

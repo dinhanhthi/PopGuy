@@ -1,3 +1,4 @@
+using System.Globalization;
 using PopGuy.Core.Settings;
 
 namespace PopGuy.Core.Toolbar;
@@ -103,7 +104,9 @@ public static class PresentationGate
     /// <summary>
     /// The bare lowercase host of a typed domain or URL (macOS <c>BrowserURLReader.normalizeDomain</c>, without IDNA):
     /// no scheme, user info, port, path, query, leading "." or "www.", trailing "."; null unless it has a dot or is
-    /// "localhost", and for white space inside. Settings → Ignore stores entries in this form.
+    /// "localhost", and for white space inside. A Unicode host becomes its punycode "xn--" form (IDNA, as macOS does),
+    /// then only ASCII letters, digits, ".", "-" and "_" are kept: the host goes into AI prompts and the settings.
+    /// Settings → Ignore stores entries in this form.
     /// </summary>
     public static string? NormalizeDomain(string? raw)
     {
@@ -120,6 +123,19 @@ public static class PresentationGate
         s = s.Trim('.');
         if (s.StartsWith("www.", StringComparison.Ordinal))
             s = s[4..];
+        if (!s.All(char.IsAscii))
+        {
+            try
+            {
+                s = new IdnMapping().GetAscii(s);
+            }
+            catch (ArgumentException)
+            {
+                return null;
+            }
+        }
+        if (!s.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c is '.' or '-' or '_'))
+            return null;
         return s.Contains('.') || s == "localhost" ? s : null;
     }
 }

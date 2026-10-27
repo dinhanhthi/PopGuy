@@ -96,6 +96,9 @@ public sealed class PresentationGateTests
     [InlineData("view-source:https://example.com", null)]
     [InlineData("mailto:me@example.com", null)]
     [InlineData("data:text/html,hello.world", null)]
+    [InlineData("https://xn--mnchen-3ya.de/karte", "xn--mnchen-3ya.de")]
+    [InlineData("https://www.münchen.de/karte", "xn--mnchen-3ya.de")]
+    [InlineData("https://ex\"ample.com/", null)]
     [InlineData("search for example.com", null)]
     [InlineData("hello", null)]
     [InlineData("", null)]
@@ -103,7 +106,8 @@ public sealed class PresentationGateTests
     public void NormalizeHostKeepsOnlyAWebPageHost(string? address, string? expected) =>
         Assert.Equal(expected, PresentationGate.NormalizeHost(address));
 
-    // Contract: Settings → Ignore stores a typed domain in the gate's form; what the gate cannot match is refused.
+    // Contract: Settings → Ignore stores a typed domain in the gate's form; what the gate cannot match is refused, and
+    // so is anything but an ASCII host (it goes into AI prompts); a Unicode domain is stored as its punycode form.
     [Theory]
     [InlineData("  Notion.SO/  ", "notion.so")]
     [InlineData("https://www.notion.so/foo/bar", "notion.so")]
@@ -111,6 +115,12 @@ public sealed class PresentationGateTests
     [InlineData("https://", null)]
     [InlineData("notion", null)]
     [InlineData("not ion.so", null)]
+    [InlineData("xn--mnchen-3ya.de", "xn--mnchen-3ya.de")]
+    [InlineData("my_host.example.com", "my_host.example.com")]
+    [InlineData("münchen.de", "xn--mnchen-3ya.de")]
+    [InlineData("{{domain}}.com", null)]
+    [InlineData("a\"b.com", null)]
+    [InlineData("a'b.com", null)]
     public void NormalizeDomainIsTheStoredForm(string raw, string? expected) =>
         Assert.Equal(expected, PresentationGate.NormalizeDomain(raw));
 
