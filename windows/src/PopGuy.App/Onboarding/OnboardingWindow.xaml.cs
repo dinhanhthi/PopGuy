@@ -144,12 +144,12 @@ public sealed partial class OnboardingWindow : Window
 
     /// <summary>
     /// Enter is Next (macOS defaultAction), except where Enter is the control's own: a text or password field, a button
-    /// (it clicks it), a combo box, and the shortcut recorder (which records it, or cancels).
+    /// (it clicks it), a combo box or its list item, and the shortcut recorder (which records it, or cancels).
     /// </summary>
     private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key != VirtualKey.Enter || RootGrid.XamlRoot is not { } root) return;
-        if (FocusManager.GetFocusedElement(root) is TextBox or PasswordBox or ButtonBase or ComboBox or ShortcutRecorder)
+        if (FocusManager.GetFocusedElement(root) is TextBox or PasswordBox or ButtonBase or ComboBox or ComboBoxItem or ShortcutRecorder)
             return;
         e.Handled = true;
         OnPrimary();

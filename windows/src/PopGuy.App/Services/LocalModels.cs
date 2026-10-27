@@ -1,7 +1,6 @@
 using PopGuy.Core.Actions;
 using PopGuy.Core.Settings;
 using PopGuy.LocalLLM;
-using PopGuy.Onboarding;
 
 namespace PopGuy.Services;
 
