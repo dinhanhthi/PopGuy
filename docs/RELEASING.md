@@ -419,3 +419,36 @@ curl -fsSL https://dinhanhthi.github.io/PopGuy/appcast.xml | head
 - [ ] `appcast.xml` regenerated (EdDSA-signed) and hosted at `SUFeedURL`
 - [ ] GitHub Release `.zip` URL matches the appcast enclosure
 - [ ] End-to-end update verified from the previous build
+
+---
+
+## Windows releases (Velopack)
+
+PopGuy for Windows has its own version (`<Version>` in `windows/src/PopGuy.App/PopGuy.App.csproj`), its own changelog
+(`windows/CHANGELOG.md`) and its own tags (`windows-v<version>`). It is built on GitHub Actions only
+(`.github/workflows/windows-release.yml`), packed by Velopack and not code-signed. The macOS release always stays the
+repository's **latest** release: the README's and the website's macOS download links point at `/releases/latest`.
+
+### Per release
+
+1. Bump `<Version>` in the App csproj and add a `## [<version>]` section to `windows/CHANGELOG.md`; commit them on the
+   branch you release from.
+2. Run `bash windows/scripts/release.sh` on the Mac. It pushes `windows-v<version>`, waits for the release run, downloads
+   and checks both architectures' packages (`PopGuy-win-<arch>-Setup.exe`, the full nupkg, `releases.win-<arch>.json`),
+   creates the GitHub release as a draft, then asks and publishes it with `--latest=false`. If you publish from the web
+   UI instead, untick **Set as the latest release** first.
+3. Publish the release **before** the version bump reaches `main`: the website builds its Windows download links from
+   the csproj version (`windows-v<Version>/PopGuy-win-<arch>-Setup.exe`), so a site deployed from `main` with an
+   unpublished version links to a 404.
+4. Once the bump is on `main`, run `gh workflow run deploy-pages.yml --ref main` so the site picks up the new Windows
+   version even when only the csproj changed.
+5. Installed copies check GitHub once a day (or at once with Check for Updates) and offer **Update now**.
+
+Never publish a `-dev` tag's packages: those QA builds read their update feed from the `POPGUY_UPDATE_URL` environment
+variable, and the app's update check skips `-dev` tags.
+
+### Rollback
+
+Unpublish (back to draft) or delete the bad `windows-v<version>` release. Velopack's check then finds the newest
+remaining Windows release; copies that already updated stay on the bad version until a newer one is published (Velopack
+does not downgrade), so fix forward with a new version.

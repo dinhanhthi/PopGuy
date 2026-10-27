@@ -11,6 +11,9 @@ or run a **custom AI action** on it. Think PopClip, with a configurable AI backe
 &nbsp;·&nbsp; **[▶ Watch the demo](https://www.youtube.com/watch?v=-ctYYSC4bWM)**
 &nbsp;·&nbsp; macOS 13+ &nbsp;·&nbsp; signed &amp; notarized
 
+**[⬇ Download for Windows](https://github.com/dinhanhthi/PopGuy/releases?q=windows-v&expanded=true)**
+&nbsp;·&nbsp; Windows 11 (x64 &amp; ARM64)
+
 </div>
 
 ## Features
@@ -46,6 +49,22 @@ plaintext.
 - macOS 13.0 or later
 - Xcode 26.x (only to build from source)
 
+## Windows
+
+PopGuy for Windows is a native port with the same features (C# .NET 10 + WinUI 3).
+
+- **Requirements:** Windows 11 (build 22000 or later), x64 or ARM64.
+- **Install:** download `PopGuy-win-x64-Setup.exe` or `PopGuy-win-arm64-Setup.exe` from the
+  latest `windows-v…` release on the
+  [Releases page](https://github.com/dinhanhthi/PopGuy/releases?q=windows-v&expanded=true) and
+  run it. It installs for your user only (no administrator rights) and updates itself after that.
+- **SmartScreen:** the installer is not code-signed, so Windows shows "Windows protected your
+  PC". Click **More info → Run anyway**.
+- No permission is needed to read selected text. API keys are stored in **Windows Credential
+  Manager**. Apps running as administrator are out of reach.
+- **Building:** the Windows app is built on GitHub Actions only; on a Mac you can run its Core
+  tests. See **[windows/README.md](windows/README.md)**.
+
 ## Build from source
 
 ```sh
@@ -80,7 +99,7 @@ Program membership is required.
 ## Repository layout
 
 - `macos/` — the macOS app (Xcode project, sources, tests, `CHANGELOG.md`)
-- `windows/` — the Windows port (coming)
+- `windows/` — the Windows port (C# .NET 10 + WinUI 3, `CHANGELOG.md`, release scripts)
 - `website/` — the landing page and docs site
 - `scripts/` — macOS release scripts
 - `assets/` — logos and artwork (app icon, README images)

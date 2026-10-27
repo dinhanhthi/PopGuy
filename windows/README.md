@@ -10,18 +10,23 @@ The Windows port of PopGuy: C# on .NET 10 with WinUI 3 (Windows App SDK), for Wi
 | `global.json` | Pins the .NET 10 SDK (`10.0.100`, `latestFeature`). |
 | `Directory.Build.props` | Shared settings: nullable on, warnings are errors. |
 | `Directory.Packages.props` | Central package versions. |
-| `src/PopGuy.Core` | `net10.0`, no Windows APIs: models, JSON, import gate, and (later phases) settings, providers and the action engine. Builds and tests on macOS. |
+| `src/PopGuy.Core` | `net10.0`, no Windows APIs: settings, actions and the action engine, providers, scripts, plugins and the action library, Speak and dictionaries, history, the update release selector. Builds and tests on macOS. |
 | `src/PopGuy.Platform` | `net10.0-windows10.0.26100.0`, AnyCPU: Win32 / UI Automation / clipboard / input through CsWin32. CsWin32-generated types are `internal`; App uses Platform's public wrappers. |
+| `src/PopGuy.LocalLLM` | `net10.0`: local models through LLamaSharp (llama.cpp CPU backend): the GGUF catalog, the downloader and the provider. |
 | `src/PopGuy.App` | The WinUI 3 app (assembly `PopGuy`, root namespace `PopGuy`, so App code uses `namespace PopGuy.<Folder>`). |
-| `tests/PopGuy.Tests` | xUnit v3 tests for Core (references Core only). |
-| `scripts/vm-install.ps1` | Installs a CI build in the QA VM. |
+| `tests/PopGuy.Tests` | xUnit v3 tests for Core and LocalLLM. |
+| `tests/PopGuy.Platform.Tests` | xUnit v3 tests for Platform (Windows only, run on CI). |
+| `CHANGELOG.md` | The Windows release notes (Keep a Changelog); `scripts/release.sh` publishes a version's section. |
+| `scripts/vm-install.ps1` | Installs a CI build (`-Folder`) or a release installer (`-Setup`) in the QA VM. |
+| `scripts/release.sh` | Releases a version from the Mac (see Releasing). |
+| `scripts/serve-update.sh` | Serves a local update feed to the QA VM (update tests only). |
 | `tools/make-icon.py` | Regenerates `src/PopGuy.App/Assets/PopGuy.ico`. |
 
-Project graph: `App → Platform → Core`, `Tests → Core`.
+Project graph: `App → Platform → Core`, `App → LocalLLM`, `Tests → Core, LocalLLM`, `Platform.Tests → Platform`.
 
 ## Prerequisites and local checks (macOS)
 
-The Windows app is built only on GitHub Actions. On a Mac you can run the Core tests and type-check Platform with the .NET 10 SDK installed in `~/.dotnet`:
+The Windows app is built only on GitHub Actions. On a Mac you can run the Core and LocalLLM tests and type-check Platform with the .NET 10 SDK installed in `~/.dotnet`:
 
 ```sh
 ~/.dotnet/dotnet test windows/tests/PopGuy.Tests/PopGuy.Tests.csproj
@@ -52,8 +57,12 @@ Regenerate on macOS, not Windows, so the files keep LF line endings.
 
 `.github/workflows/windows.yml` runs on pushes to `windows` and `main` and on pull requests that touch `windows/` or the workflow:
 
-- `test` (windows-latest, x64) and `test-arm64` (windows-11-arm): `dotnet test` of `tests/PopGuy.Tests`.
-- `package` (matrix `x64`, `arm64`): `dotnet publish` of the App (Debug, self-contained, version `0.0.<run number>`), then checks the PE machine type, the PRI resources and the embedded manifest's WinRT activatable classes. Uploads the artifact `PopGuy-win-<arch>`.
+- `test` (windows-latest, x64) and `test-arm64` (windows-11-arm, without the native llama.cpp tests): `dotnet test` of `tests/PopGuy.Tests`.
+- `test-platform` (windows-latest): `dotnet test` of `tests/PopGuy.Platform.Tests` (Platform's Windows-only tests).
+- `native-smoke` (windows-latest and windows-11-arm): loads a small GGUF model through LLamaSharp and streams an answer (the model is cached by its SHA-256).
+- `package` (matrix `x64`, `arm64`): `dotnet publish` of the App (Debug, self-contained, version `0.0.<run number>`), then checks the PE machine type (the llama.cpp natives too), the PRI resources and the embedded manifest's WinRT activatable classes. Uploads the artifact `PopGuy-win-<arch>`.
+
+`.github/workflows/windows-release.yml` runs on `windows-v*` tags: a Release publish per architecture, packed by Velopack (`vpk pack`, with the VC++ runtime as a framework the installer adds) into `PopGuy-win-<arch>-Setup.exe`, `PopGuy-win-<arch>-Portable.zip`, `PopGuy-<version>-win-<arch>-full.nupkg` and the feed `releases.win-<arch>.json`. A tag with `-dev` builds with `UPDATE_URL_OVERRIDE`, so that build reads its update feed from `POPGUY_UPDATE_URL` (QA only; never publish a `-dev` release).
 
 Download a build:
 
@@ -72,16 +81,27 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Z:\Downloads\PopGuy-win\<run
 
 `vm-install.ps1` copies the app to `C:\PopGuyQA\builds\<run id>`, unblocks it and, with `-Launch`, starts it through `explorer.exe` (the VM tool kills child processes when its command returns). Arguments for the app need `-Wait`. Test fixtures live in `C:\PopGuyQA`. See the script's help for every parameter.
 
-DEBUG builds accept harness arguments instead of the usual tray start; they write to `%APPDATA%\PopGuy\Probes` and never write selected text, only its length:
+DEBUG builds accept harness arguments instead of the usual tray start; they write to `%APPDATA%\PopGuy\Probes` and never write selected text, only its length (API keys never):
 
 - `--spike <seconds>`: resident run of global input, clipboard cache, hotkey, chord and the test toolbar; logs `spike-<ts>.jsonl`.
 - `--probe-uia <delaySeconds>`: one UI Automation read of the focused selection into `probe-uia-<ts>.json`.
+- `--import-key <provider|tts:raw> <path>`: saves the key in a UTF-8 text file to Credential Manager, then exits (QA key files).
+- `--seed-settings <provider> <model> [baseUrl] [--on-select] [--double-click <action>]`: maps the built-in actions to that provider and model, optionally turns on Show on Text Selection and the double-click trigger, then exits.
+- `--selftest-toolbar`: starts as usual and shows the toolbar with a canned result.
 
-Every DEBUG launch also writes `hello.json` (process architecture, OS, version). Later phases add their own arguments here.
+Every DEBUG launch also writes `hello.json` (process architecture, OS, version) and logs Speak to `speak-<ts>.jsonl`.
+
+Update tests: push two temporary `windows-v0.0.9xx-dev` tags (deleting each after its run), install the older one's `Setup.exe` with `vm-install.ps1 -Setup`, serve the newer one's packages with `scripts/serve-update.sh <folder>` and start PopGuy with `POPGUY_UPDATE_URL=http://<Mac address>:8765`.
+
+## Releasing
+
+1. Bump `<Version>` in `src/PopGuy.App/PopGuy.App.csproj` and add its `## [<version>]` section to `CHANGELOG.md`; commit.
+2. Run `bash windows/scripts/release.sh` on the Mac: it pushes the tag `windows-v<version>`, waits for `windows-release.yml`, downloads and checks both architectures' packages, creates the GitHub release as a draft, then asks and publishes it as **not** the latest release (the macOS release stays "latest" for the website and README links).
+3. Installed copies find the release within a day (or at once with Check for Updates). See `docs/RELEASING.md` for the website step and rollback.
 
 ## Constraints
 
-- **Unpackaged, self-contained:** `WindowsPackageType=None`, `SelfContained` and `WindowsAppSDKSelfContained`. Distribution is a direct download with Velopack updates, unsigned.
+- **Unpackaged, self-contained:** `WindowsPackageType=None`, `SelfContained` and `WindowsAppSDKSelfContained`. Distribution is a direct download (Velopack's Setup.exe, per user, no administrator rights) with Velopack updates, unsigned. Velopack installs into `%LOCALAPPDATA%\PopGuy`; PopGuy's own data lives in `%APPDATA%\PopGuy` (settings, history) and `%LOCALAPPDATA%\PopGuyData` (log, models), which an uninstall keeps.
 - **Windows App SDK component packages** (Base, Foundation, WinUI, InteractiveExperiences, DWrite) with central versions, not the metapackage.
 - **No trimming and no Native AOT:** CsWin32's classic COM interop breaks under both.
 - **CsWin32:** generated types stay `internal`. List enum types in `NativeMethods.txt`, never enum members. APIs whose signature differs per architecture (`Shell_NotifyIcon`, `SHGetFileInfo`, `*Ptr` functions) are hand-declared, because Platform is AnyCPU.
