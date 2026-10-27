@@ -1,5 +1,7 @@
+using PopGuy.Core.Actions;
 using PopGuy.Core.Settings;
 using PopGuy.LocalLLM;
+using PopGuy.Onboarding;
 
 namespace PopGuy.Services;
 
@@ -49,6 +51,13 @@ internal sealed class LocalModels
     /// <summary>The last download or delete failure, cleared by the next one.</summary>
     public string? Error { get; private set; }
 
+    /// <summary>
+    /// The wizard's Local AI download (macOS pendingOnboardingLocalMapID): once that model is on disk, Improve, Shorten,
+    /// Proofread and Prompt run it, even when the wizard closed meanwhile. In memory only; a cancel, a failure, another
+    /// download or the wizard's cloud choice clears it.
+    /// </summary>
+    public string? PendingOnboardingMapId { get; set; }
+
     /// <summary>The model an action without a local model id runs: the one set here, else the catalog's.</summary>
     public string DefaultId => GgufCatalog.Find(_settings.Current.DefaultLocalModelId)?.Id ?? GgufCatalog.Default.Id;
 
@@ -97,6 +106,7 @@ internal sealed class LocalModels
     public async Task DownloadAsync(GgufModel entry)
     {
         if (ActiveDownloadId is not null || _deleting.Contains(entry.Id)) return;
+        if (PendingOnboardingMapId != entry.Id) PendingOnboardingMapId = null;
         var run = _download = new CancellationTokenSource();
         ActiveDownloadId = entry.Id;
         DownloadFraction = null;
@@ -117,6 +127,8 @@ internal sealed class LocalModels
             if (FileState(entry) == LocalModelFile.Installed) await Provider.UnloadAsync(run.Token);
             await Task.Run(() => Downloader.DownloadAsync(entry, progress, run.Token), run.Token);
             _log($"local model: {entry.Id} downloaded");
+            if (PendingOnboardingMapId == entry.Id)
+                OnboardingActions.Save(_settings, _log, s => OnboardingActions.WithAiActionsOn(s, ProviderKind.MlxLocal, entry.Id));
         }
         catch (OperationCanceledException) when (run.IsCancellationRequested)
         {
@@ -130,6 +142,7 @@ internal sealed class LocalModels
         }
         finally
         {
+            if (PendingOnboardingMapId == entry.Id) PendingOnboardingMapId = null;
             _download = null;
             run.Dispose();
             ActiveDownloadId = null;

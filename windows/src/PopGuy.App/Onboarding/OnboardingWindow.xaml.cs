@@ -57,6 +57,9 @@ public sealed partial class OnboardingWindow : Window
     // Choose Your Actions: each switch with the wrapper that carries its tooltip (a disabled switch gets no pointer).
     private readonly List<(ActionIdentifier Id, ToggleSwitch Toggle, Grid Wrapper)> _actionToggles = [];
 
+    // Set Up a Provider.
+    private OnboardingProviderPage _providerPage = null!;
+
     // You're All Set.
     private ToggleSwitch _loginToggle = null!;
     private TextBlock _loginErrorText = null!;
@@ -153,32 +156,37 @@ public sealed partial class OnboardingWindow : Window
     }
 
     private UIElement WelcomeStep() => StepPanel(Header(
-        "", "Welcome to PopGuy",
+        "\uE8C1", "Welcome to PopGuy",
         "Select text in any app. A toolbar appears nearby with Improve, Translate, and your own actions."));
 
     /// <summary>The Windows step in place of the macOS Accessibility permission: what PopGuy reads, and its one limit.</summary>
     private UIElement ReadsTextStep()
     {
         var ready = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        ready.Children.Add(Icon("", "SuccessIconStyle", 16));
+        ready.Children.Add(Icon("\uE930", "SuccessIconStyle", 16));
         ready.Children.Add(new TextBlock { Text = "No permission is needed", Style = Res("SuccessTextStyle") });
 
         return StepPanel(
             Header(
-                "", "How PopGuy Reads Text",
+                "\uE890", "How PopGuy Reads Text",
                 "PopGuy reads the text you select through Windows UI Automation. When an app doesn't share its selection, " +
                 "PopGuy copies it for a moment and puts your clipboard back right after."),
             ready,
             Card(Note(
-                "", "CautionIconStyle",
+                "\uE7BA", "CautionIconStyle",
                 "Apps running as administrator are out of reach: Windows doesn't let PopGuy read their text or paste into " +
                 "them. Run those apps without administrator rights to use PopGuy there.")));
     }
 
-    /// <summary>The provider chooser comes in task 22.2; until then the step shows its header only.</summary>
-    private UIElement ProviderStep() => StepPanel(Header(
-        "", "Set Up a Provider",
-        "Choose Local AI to run privately on your PC, or a Cloud API key for the best quality."));
+    private UIElement ProviderStep()
+    {
+        _providerPage = new OnboardingProviderPage(_services, Res);
+        return StepPanel(
+            Header(
+                "\uE8D7", "Set Up a Provider",
+                "Choose Local AI to run privately on your PC, or a Cloud API key for the best quality."),
+            _providerPage);
+    }
 
     private UIElement AppearsStep()
     {
@@ -189,9 +197,9 @@ public sealed partial class OnboardingWindow : Window
         AutomationProperties.SetName(_recorder, "Replacement shortcut");
         _recorder.RecordingStarted += OnRecordingStarted;
         _recorder.RecordingEnded += OnRecordingEnded;
-        _clearButton = IconButton("", "Clear — revert to Ctrl+C+C");
+        _clearButton = IconButton("\uE894", "Clear — revert to Ctrl+C+C");
         _clearButton.Click += (_, _) => Save("chordReplacementShortcut", s => s with { ChordReplacementShortcut = null });
-        _recordButton = IconButton("", "Record a replacement shortcut (e.g. Ctrl+Shift+Space)");
+        _recordButton = IconButton("\uE7C8", "Record a replacement shortcut (e.g. Ctrl+Shift+Space)");
         _recordButton.Click += (_, _) => _recorder.Start();
         // The chord's own badge while no replacement is set (macOS ShortcutBadge "⌘C+C").
         _chordBadge = new Border
@@ -233,11 +241,11 @@ public sealed partial class OnboardingWindow : Window
             _onSelectToggle,
             Secondary("Shows the toolbar the moment you select text. That can feel busy, so it's off by default."),
             Note(
-                "", "CautionIconStyle",
+                "\uE7BA", "CautionIconStyle",
                 "May not work well in some editors (for example Cursor, VS Code, or Notion). Use Ctrl+C+C there instead."));
 
         return StepPanel(
-            Header("", "How PopGuy Appears", "Trigger PopGuy with Ctrl+C+C, or show the toolbar when you select text."),
+            Header("\uE765", "How PopGuy Appears", "Trigger PopGuy with Ctrl+C+C, or show the toolbar when you select text."),
             chordCard,
             selectCard,
             Secondary("You can change these anytime in Settings → Triggers."));
@@ -287,7 +295,7 @@ public sealed partial class OnboardingWindow : Window
         }
 
         return StepPanel(
-            Header("", "Choose Your Actions", "Pick which actions appear on the toolbar."),
+            Header("\uE945", "Choose Your Actions", "Pick which actions appear on the toolbar."),
             Secondary("You can enable all of these. You can change this later in Settings → Actions."),
             Card(rows));
     }
@@ -306,13 +314,13 @@ public sealed partial class OnboardingWindow : Window
         _loginErrorText = new TextBlock { Style = Res("CriticalTextStyle"), Visibility = Visibility.Collapsed };
 
         var tour = new StackPanel { Spacing = 8 };
-        tour.Children.Add(TourRow("", "Select text and press Ctrl+C+C, or turn on Show on text selection in Settings."));
+        tour.Children.Add(TourRow("\uE8C1", "Select text and press Ctrl+C+C, or turn on Show on text selection in Settings."));
         tour.Children.Add(TourRow(
             SymbolMap.Glyph("wand.and.stars"),
             "Click Improve to rewrite selected text with AI; a diff shows what changed before you apply."));
         tour.Children.Add(TourRow(SymbolMap.Glyph("globe"), "Click Translate to convert text to your target language."));
-        tour.Children.Add(TourRow("", "Press Ctrl+C+C (double-tap) on selected text to show the toolbar."));
-        tour.Children.Add(TourRow("", "Create custom AI actions in Settings with your own system prompt."));
+        tour.Children.Add(TourRow("\uE765", "Press Ctrl+C+C (double-tap) on selected text to show the toolbar."));
+        tour.Children.Add(TourRow("\uE945", "Create custom AI actions in Settings with your own system prompt."));
 
         var openSettings = new Button { Content = "Open Settings…" };
         openSettings.Click += (_, _) => _openSettings();
@@ -322,7 +330,7 @@ public sealed partial class OnboardingWindow : Window
         more.Children.Add(openSettings);
 
         return StepPanel(
-            Header("", "You're All Set", "Start PopGuy at login so it's always ready."),
+            Header("\uE734", "You're All Set", "Start PopGuy at login so it's always ready."),
             _loginToggle,
             _loginErrorText,
             tour,
@@ -548,6 +556,7 @@ public sealed partial class OnboardingWindow : Window
         _closing = true;
         ShortcutRecorder.CancelActive();
         _services.Settings.Changed -= OnSettingsChanged;
+        _providerPage.Detach();
         RootGrid.PreviewKeyDown -= OnPreviewKeyDown;
         Activated -= OnFirstActivated;
         Activated -= OnActivated;
