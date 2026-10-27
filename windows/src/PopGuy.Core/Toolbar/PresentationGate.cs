@@ -102,7 +102,7 @@ public static class PresentationGate
     }
 
     /// <summary>
-    /// The bare lowercase host of a typed domain or URL (macOS <c>BrowserURLReader.normalizeDomain</c>, without IDNA):
+    /// The bare lowercase host of a typed domain or URL (macOS <c>BrowserURLReader.normalizeDomain</c>):
     /// no scheme, user info, port, path, query, leading "." or "www.", trailing "."; null unless it has a dot or is
     /// "localhost", and for white space inside. A Unicode host becomes its punycode "xn--" form (IDNA, as macOS does),
     /// then only ASCII letters, digits, ".", "-" and "_" are kept: the host goes into AI prompts and the settings.
