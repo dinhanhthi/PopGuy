@@ -12,6 +12,13 @@
     The downloaded artifact folder. Either a per-arch artifact that contains
     app\PopGuy.exe, or a folder that contains win-arm64\app and/or win-x64\app.
 
+.PARAMETER Setup
+    Instead of -Folder: a release's PopGuy-win-<arch>-Setup.exe, or a folder
+    that holds it (this machine's architecture is picked). The installer is
+    copied to C:\PopGuyQA and run with --silent, which installs PopGuy into
+    %LOCALAPPDATA%\PopGuy (Velopack). Start the installed copy afterwards with
+    explorer.exe: one started by the installer ends with this command.
+
 .PARAMETER Launch
     Start PopGuy.exe after installing. Without -Wait the app is started through
     explorer.exe, which hands the launch to the shell, and the new process id is
@@ -40,13 +47,17 @@
     powershell -NoProfile -ExecutionPolicy Bypass -File Z:\Downloads\PopGuy-win\<RUN>\vm-install.ps1 -Folder Z:\Downloads\PopGuy-win\<RUN> -Launch
 
 .EXAMPLE
+    powershell -NoProfile -ExecutionPolicy Bypass -File Z:\Downloads\PopGuy-update\vm-install.ps1 -Setup Z:\Downloads\PopGuy-update\0.0.900-dev
+
+.EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -Command "& 'Z:\Downloads\PopGuy-win\<RUN>\vm-install.ps1' -Folder 'Z:\Downloads\PopGuy-win\<RUN>' -Args '--spike' -Wait"
 
     Use -Command (not -File) to pass app arguments: under -File, a value such as
     --spike is read as a parameter name and a,b stays one string.
 #>
 param(
-    [Parameter(Mandatory = $true)][string]$Folder,
+    [string]$Folder,
+    [string]$Setup,
     [switch]$Launch,
     [Alias('Args')][string[]]$AppArgs = @(),
     [switch]$Wait,
@@ -80,7 +91,31 @@ function Find-AppFolder {
     throw "PopGuy.exe not found for $arch under '$Folder' (looked in '$flat' and '$perArch')."
 }
 
+function Install-Setup {
+    $arch = Get-Arch
+    $installer = $Setup
+    if (Test-Path -LiteralPath $Setup -PathType Container) {
+        $installer = Join-Path $Setup "PopGuy-win-$arch-Setup.exe"
+    }
+    if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
+        throw "Installer not found: '$installer' (pass PopGuy-win-$arch-Setup.exe or the folder that holds it)."
+    }
+    Get-Process PopGuy -ErrorAction SilentlyContinue | Stop-Process -Force
+    New-Item -ItemType Directory -Path 'C:\PopGuyQA' -Force | Out-Null
+    $local = Join-Path 'C:\PopGuyQA' (Split-Path -Leaf $installer)
+    Copy-Item -LiteralPath $installer -Destination $local -Force
+    $proc = Start-Process -FilePath $local -ArgumentList '--silent' -PassThru -Wait
+    Write-Host "Ran $local --silent, exit code $($proc.ExitCode)."
+    exit $proc.ExitCode
+}
+
 try {
+    if (($Folder -and $Setup) -or -not ($Folder -or $Setup)) {
+        throw 'Pass either -Folder (a CI app folder) or -Setup (a release installer).'
+    }
+    if ($Setup) {
+        Install-Setup
+    }
     if ($AppArgs.Count -gt 0 -and -not $Wait) {
         throw 'App arguments need -Wait: the VM tool kills child processes when the command returns. Run vm-install with -Wait inside a long-timeout vmpal_exec call.'
     }
