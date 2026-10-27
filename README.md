@@ -57,7 +57,8 @@ PopGuy for Windows is a native port with the same features (C# .NET 10 + WinUI 3
 - **Install:** download `PopGuy-win-x64-Setup.exe` or `PopGuy-win-arm64-Setup.exe` from the
   latest `windows-v…` release on the
   [Releases page](https://github.com/dinhanhthi/PopGuy/releases?q=windows-v&expanded=true) and
-  run it. It installs for your user only (no administrator rights) and updates itself after that.
+  run it. It installs for your user only (no administrator rights), then checks for updates daily and offers to
+  install them.
 - **SmartScreen:** the installer is not code-signed, so Windows shows "Windows protected your
   PC". Click **More info → Run anyway**.
 - No permission is needed to read selected text. API keys are stored in **Windows Credential
