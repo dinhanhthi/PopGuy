@@ -114,7 +114,12 @@ internal sealed class TrayIcon : IDisposable
             new("About PopGuy…", () => _dispatcher.TryEnqueue(() => _openSettingsSection("About", false))),
             new("Setup Guide…", () => _dispatcher.TryEnqueue(() => _openSetupGuide())),
             NotifyIconMenuItem.Separator,
-            new("Check for Updates…", () => _dispatcher.TryEnqueue(_updates.CheckNow), Enabled: _updates.CanCheck),
+            // On About, where the result shows (macOS: Sparkle's window for a check the user starts).
+            new("Check for Updates…", () => _dispatcher.TryEnqueue(() =>
+            {
+                _openSettingsSection("About", false);
+                _updates.CheckNow();
+            }), Enabled: _updates.CanCheck),
             NotifyIconMenuItem.Separator,
             // Queued: quitting disposes the icon, which must not happen inside its own window procedure.
             new("Quit PopGuy", () => _dispatcher.TryEnqueue(() => _quit())),

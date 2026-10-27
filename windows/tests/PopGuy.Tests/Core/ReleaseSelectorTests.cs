@@ -1,3 +1,4 @@
+using System.Text.Json;
 using PopGuy.Core.Updates;
 
 namespace PopGuy.Tests.Core;
@@ -11,6 +12,8 @@ public sealed class ReleaseSelectorTests
             "published_at": "2026-10-15T20:54:37Z", "assets": [ { "name": "PopGuy-1.3.2.dmg" } ] },
           { "tag_name": "windows-v0.2.0", "name": "next", "draft": true, "prerelease": false,
             "published_at": null, "assets": [] },
+          { "tag_name": "windows-v0.1.2-dev", "draft": false, "prerelease": false,
+            "published_at": "2026-10-16T10:00:00Z", "assets": [] },
           { "tag_name": "windows-v0.1.1-beta", "draft": false, "prerelease": true,
             "published_at": "2026-10-14T10:00:00Z", "assets": [] },
           { "tag_name": "windows-v0.1.0", "name": "PopGuy for Windows 0.1.0", "draft": false, "prerelease": false,
@@ -22,7 +25,7 @@ public sealed class ReleaseSelectorTests
         """;
 
     [Fact]
-    public void OnlyPublishedWindowsReleasesAreRead()
+    public void OnlyPublishedWindowsReleasesAreReadNeverAQaBuild()
     {
         var selected = ReleaseSelector.WindowsReleases(ReleaseSelector.Parse(Releases), includePrereleases: false);
 
@@ -40,5 +43,6 @@ public sealed class ReleaseSelectorTests
     }
 
     [Fact]
-    public void AnUnreadableResponseHasNoReleases() => Assert.Empty(ReleaseSelector.Parse("<html>rate limited</html>"));
+    public void AnUnreadableResponseFailsTheCheck() =>
+        Assert.ThrowsAny<JsonException>(() => ReleaseSelector.Parse("<html>sign in to the network</html>"));
 }

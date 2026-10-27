@@ -7,9 +7,14 @@
 # 2. Asks, then pushes the tag windows-v<version>, which runs .github/workflows/windows-release.yml.
 # 3. Waits for the run and downloads both architectures' packages to build/windows-release/<version>/.
 # 4. Checks that each architecture has its Setup.exe, full nupkg and releases.win-<arch>.json.
-# 5. Creates the GitHub release as a draft, not the latest one (the macOS release stays "latest" for the website
-#    and Sparkle), with the version's section of windows/CHANGELOG.md as its notes. It never publishes: click
-#    Publish on GitHub once the draft looks right.
+# 5. Creates the GitHub release as a draft, with the version's section of windows/CHANGELOG.md as its notes.
+# 6. Asks, then publishes it as not the latest release: GitHub decides "latest" at publish time, and the README's and
+#    the website's macOS download links point at /releases/latest, so the macOS release must stay "latest". Answer no
+#    to check the draft on GitHub first, then run the printed command (in the web UI, untick "Set as the latest
+#    release" before Publish).
+#
+# Never publish a -dev tag's packages: QA builds read their update feed from an environment variable (the app's
+# update check skips -dev tags too).
 set -euo pipefail
 
 root="$(git rev-parse --show-toplevel)"
@@ -84,8 +89,18 @@ done
 ls -l "$out"
 
 gh release create "$tag" "$out"/* \
-  --draft --latest=false \
+  --draft \
   --title "PopGuy for Windows $version" \
   --notes-file "$notes"
+echo "Draft release $tag created."
 
-echo "Draft release $tag created. Check it on GitHub, then click Publish."
+publish=(gh release edit "$tag" --draft=false --latest=false)
+read -r -p "Publish $tag now (not as the latest release)? [y/N] " answer
+if [[ "$answer" == [yY] ]]; then
+  "${publish[@]}"
+  echo "Published $tag; the macOS release stays the latest."
+else
+  echo "Not published. Check the draft on GitHub, then run:"
+  echo "  ${publish[*]}"
+  echo "(In the web UI, untick \"Set as the latest release\" before Publish.)"
+fi

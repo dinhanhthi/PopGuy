@@ -88,7 +88,12 @@ public sealed partial class SettingsWindow : Window
         ContentRoot.Children.Add(panels);
 
         UpdateNowButton.Click += (_, _) => _services.Updates.ApplyAndRestart();
-        CheckUpdatesButton.Click += (_, _) => _services.Updates.CheckNow();
+        // On About, where the result shows.
+        CheckUpdatesButton.Click += (_, _) =>
+        {
+            SelectSection("About");
+            _services.Updates.CheckNow();
+        };
         HoverTooltip.SetText(CheckUpdatesButton, "Check for a newer version of PopGuy");
         _services.Updates.Changed += OnUpdatesChanged;
         OnUpdatesChanged();

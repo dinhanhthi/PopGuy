@@ -71,8 +71,12 @@ internal sealed class UpdateService : IDisposable
     /// <summary>The downloaded version, sanitized for display; null until one is ready.</summary>
     public string? PendingVersion { get; private set; }
 
-    /// <summary>Whether Check for Updates may start a check now (installed, no check or download running).</summary>
-    public bool CanCheck => IsInstalled && State is not (UpdateState.Checking or UpdateState.Downloading);
+    /// <summary>
+    /// Whether Check for Updates may start a check now (installed, no check or download running, no update waiting:
+    /// then Update now is the offer).
+    /// </summary>
+    public bool CanCheck =>
+        IsInstalled && State is not (UpdateState.Checking or UpdateState.Downloading or UpdateState.Ready);
 
     /// <summary>The About card's line for the current state, or null when there is nothing to say yet.</summary>
     public string? StatusText => State switch
@@ -128,7 +132,7 @@ internal sealed class UpdateService : IDisposable
     /// </summary>
     private async Task CheckAsync(bool userInitiated)
     {
-        if (_manager is not { } manager || !CanCheck || State == UpdateState.Ready) return;
+        if (_manager is not { } manager || !CanCheck) return;
         SetState(UpdateState.Checking);
         try
         {

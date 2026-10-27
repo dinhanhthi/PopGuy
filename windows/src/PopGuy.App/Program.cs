@@ -85,15 +85,14 @@ public static class Program
         return true;
     }
 
-    /// <summary>A failure leaves the value (it starts nothing once uninstalled); the uninstall must go on.</summary>
+    /// <summary>Any failure leaves the value (it starts nothing once uninstalled): the uninstall must go on.</summary>
     private static void DisableLaunchAtLogin()
     {
         try
         {
             LaunchAtLogin.SetEnabled(false);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException
-            or InvalidOperationException)
+        catch (Exception e)
         {
             System.Diagnostics.Debug.WriteLine($"Launch at login not removed: {e.GetType().Name}");
         }
