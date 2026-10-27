@@ -1,14 +1,18 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppLifecycle;
+using PopGuy.Platform.SystemServices;
 using PopGuy.Platform.Windowing;
+using Velopack;
 
 namespace PopGuy;
 
 /// <summary>
 /// The entry point (the csproj defines DISABLE_XAML_GENERATED_MAIN): what the generated Main does, plus single
-/// instance. A second launch hands its activation to the running instance (which brings Settings to the front) and
-/// exits, so there is only ever one set of hooks and hotkeys.
+/// instance. Velopack's startup comes first: Setup.exe, the updater and the uninstaller start PopGuy with their own
+/// arguments, which it handles and exits on (and it applies a downloaded update before this copy runs). A second launch
+/// hands its activation to the running instance (which brings Settings to the front) and exits, so there is only ever
+/// one set of hooks and hotkeys.
 /// <para>
 /// DEBUG harness runs (any argument starting with "--", e.g. <c>--spike</c>, <c>--probe-uia</c>, <c>--import-key</c>)
 /// skip the single-instance check: they must run even while PopGuy is running (an <c>--import-key</c> that redirected
@@ -29,6 +33,8 @@ public static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // Uninstall removes the Run value too: it would start a PopGuy that is gone.
+        VelopackApp.Build().OnBeforeUninstallFastCallback(_ => DisableLaunchAtLogin()).Run();
         WinRT.ComWrappersSupport.InitializeComWrappers();
         if (!IsHarnessRun(args) && RedirectedToRunningInstance()) return;
 
@@ -77,6 +83,20 @@ public static class Program
         // toolbar and would take the foreground from the source app.
         ToolbarWindowStyle.AllowForegroundFor(owner.ProcessId);
         return true;
+    }
+
+    /// <summary>A failure leaves the value (it starts nothing once uninstalled); the uninstall must go on.</summary>
+    private static void DisableLaunchAtLogin()
+    {
+        try
+        {
+            LaunchAtLogin.SetEnabled(false);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException
+            or InvalidOperationException)
+        {
+            System.Diagnostics.Debug.WriteLine($"Launch at login not removed: {e.GetType().Name}");
+        }
     }
 
     /// <summary>A later launch redirected here (on a background thread): show Settings.</summary>

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     The Settings window (macOS SettingsView.swift): a fixed sidebar of the sections, the selected section's pinned header
-    (icon and title) above its page, and a footer across the bottom with the version and the author and GitHub links.
+    (icon and title) above its page, and a footer across the bottom with the version, Check for Updates and the author
+    and GitHub links. While an update is ready, a banner across the top offers it (macOS SettingsView's update banner).
     Each phase that builds a page adds its sidebar item here (Tag = the page's name, see SettingsWindow.Pages).
     A NavigationView in Left mode with the pane always open (no toggle, no compact mode): a closed compact pane would
     attach the default tooltips to its items, which the app never shows (HoverTooltip only).
@@ -53,13 +54,26 @@
                     </Style>
                 </Grid.Resources>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
+                <!-- The update banner (macOS: "Version X is available" / "Update now"): no close button, which would bring a default tooltip. -->
+                <InfoBar
+                    x:Name="UpdateBanner"
+                    Grid.Row="0"
+                    IsClosable="False"
+                    IsOpen="False"
+                    Severity="Informational">
+                    <InfoBar.ActionButton>
+                        <Button x:Name="UpdateNowButton" Content="Update now" />
+                    </InfoBar.ActionButton>
+                </InfoBar>
+
                 <NavigationView
                     x:Name="Nav"
-                    Grid.Row="0"
+                    Grid.Row="1"
                     CompactModeThresholdWidth="0"
                     ExpandedModeThresholdWidth="0"
                     IsBackButtonVisible="Collapsed"
@@ -149,9 +163,9 @@
                     </Grid>
                 </NavigationView>
 
-                <!-- Footer (macOS SettingsFooter): Check for Updates joins it in Phase 23. -->
+                <!-- Footer (macOS SettingsFooter). -->
                 <Grid
-                    Grid.Row="1"
+                    Grid.Row="2"
                     Padding="16,4,16,4"
                     BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                     BorderThickness="0,1,0,0"
@@ -163,12 +177,24 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock
-                        x:Name="VersionText"
+                    <StackPanel
                         Grid.Column="0"
-                        VerticalAlignment="Center"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Style="{StaticResource CaptionTextBlockStyle}" />
+                        Orientation="Horizontal"
+                        Spacing="4">
+                        <TextBlock
+                            x:Name="VersionText"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}" />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="·" />
+                        <HyperlinkButton x:Name="CheckUpdatesButton" Padding="4,2,4,2">
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Check for Updates" />
+                        </HyperlinkButton>
+                    </StackPanel>
                     <HyperlinkButton
                         Grid.Column="2"
                         Padding="4,2,4,2"

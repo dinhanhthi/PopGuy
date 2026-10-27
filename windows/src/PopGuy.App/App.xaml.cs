@@ -54,6 +54,7 @@ public partial class App : Application
             UnhandledException += OnUnhandledException;
             _services.SettingsRequested += ShowSettings;
             _services.SetupGuideRequested += ShowOnboarding;
+            _services.Updates.ExitRequested += Shutdown;
 #if DEBUG
             if (selfTestSource is not null) _services.ShowCannedToolbar(PopGuy.Debug.Probes.SelfTestText, selfTestSource);
 #endif
@@ -70,8 +71,8 @@ public partial class App : Application
         try
         {
             _tray = new TrayIcon(
-                _services.Settings, _dispatcher, ShowSettings, ShowSettingsSection, CaptureScreenText, ShowOnboarding, Shutdown,
-                _services.Log.Write);
+                _services.Settings, _services.Updates, _dispatcher, ShowSettings, ShowSettingsSection, CaptureScreenText,
+                ShowOnboarding, Shutdown, _services.Log.Write);
             _tray.SessionEnding += OnSessionEnding;
         }
         catch (System.ComponentModel.Win32Exception e)
@@ -187,6 +188,7 @@ public partial class App : Application
         {
             _services.SettingsRequested -= ShowSettings;
             _services.SetupGuideRequested -= ShowOnboarding;
+            _services.Updates.ExitRequested -= Shutdown;
         }
         UnhandledException -= OnUnhandledException;
         if (_tray is not null) _tray.SessionEnding -= OnSessionEnding;

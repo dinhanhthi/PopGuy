@@ -84,8 +84,14 @@ public sealed partial class SettingsWindow : Window
         // Over the sidebar, the page and the footer, as on macOS.
         var panels = new SlideOverPanel(
             (Style)ContentRoot.Resources["SlideOverBackdropStyle"], (Style)ContentRoot.Resources["SlideOverSheetStyle"]);
-        Grid.SetRowSpan(panels, 2);
+        Grid.SetRowSpan(panels, 3);
         ContentRoot.Children.Add(panels);
+
+        UpdateNowButton.Click += (_, _) => _services.Updates.ApplyAndRestart();
+        CheckUpdatesButton.Click += (_, _) => _services.Updates.CheckNow();
+        HoverTooltip.SetText(CheckUpdatesButton, "Check for a newer version of PopGuy");
+        _services.Updates.Changed += OnUpdatesChanged;
+        OnUpdatesChanged();
 
         Nav.SelectionChanged += OnSelectionChanged;
         Nav.SelectedItem = Nav.MenuItems[0];
@@ -118,6 +124,18 @@ public sealed partial class SettingsWindow : Window
         // Already picked: its page is up, or comes on the turn ShowSection queued (which focuses it then).
         if (ReferenceEquals(Nav.SelectedItem, item)) FocusPendingSection();
         else Nav.SelectedItem = item;
+    }
+
+    // Updates.
+
+    /// <summary>The banner while an update is ready; Check for Updates while a check may start (macOS canCheckForUpdates).</summary>
+    private void OnUpdatesChanged()
+    {
+        if (_closing) return;
+        var updates = _services.Updates;
+        UpdateBanner.Title = updates.State == UpdateState.Ready ? $"Version {updates.PendingVersion} is available" : "";
+        UpdateBanner.IsOpen = updates.State == UpdateState.Ready;
+        CheckUpdatesButton.IsEnabled = updates.CanCheck;
     }
 
     // Sections.
@@ -178,6 +196,7 @@ public sealed partial class SettingsWindow : Window
         ShortcutRecorder.CancelActive();
         SaveFrame();
         Nav.SelectionChanged -= OnSelectionChanged;
+        _services.Updates.Changed -= OnUpdatesChanged;
         RootGrid.ActualThemeChanged -= OnActualThemeChanged;
         RootGrid.Loaded -= OnRootLoaded;
         if (_xamlRoot is not null) _xamlRoot.Changed -= OnXamlRootChanged;

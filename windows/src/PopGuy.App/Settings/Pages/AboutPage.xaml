@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Settings → About (macOS AboutView.swift, spec-3 §5.8): the PopGuy card (logo, name, version, GitHub link) and the
-    Info card (Author, Website, Contact, Discussions), as Windows 11 Settings cards under the macOS card titles. The
-    Updates card joins in Phase 23. The header is the window's.
+    Updates card (automatic checks, Check for Updates… and the last result) and the Info card (Author, Website, Contact,
+    Discussions), as Windows 11 Settings cards under the macOS card titles. The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.AboutPage"
@@ -16,6 +16,10 @@
         </Style>
         <Style x:Key="CaptionStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="AccentStatusStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+            <Setter Property="Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
     </Page.Resources>
@@ -58,6 +62,25 @@
                     Margin="1,8,0,0"
                     Style="{StaticResource CaptionStyle}"
                     Text="Free and open source (AGPLv3)." />
+
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Updates" />
+
+                <controls:SettingsCard Header="Automatically check for updates">
+                    <ToggleSwitch x:Name="AutoCheckToggle" AutomationProperties.Name="Automatically check for updates" />
+                </controls:SettingsCard>
+                <controls:SettingsCard Header="Check for Updates">
+                    <controls:SettingsCard.Description>
+                        <TextBlock x:Name="UpdateStatusText" TextWrapping="Wrap" />
+                    </controls:SettingsCard.Description>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button
+                            x:Name="UpdateNowButton"
+                            Content="Update now"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Visibility="Collapsed" />
+                        <Button x:Name="CheckButton" Content="Check for Updates…" />
+                    </StackPanel>
+                </controls:SettingsCard>
 
                 <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Info" />
 

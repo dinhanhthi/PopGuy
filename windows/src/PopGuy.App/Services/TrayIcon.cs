@@ -6,8 +6,8 @@ namespace PopGuy.Services;
 
 /// <summary>
 /// The tray icon and its menu (spec-3 §5.9, the macOS status item, in its order): Disable/Enable PopGuy, Show on Text
-/// Selection, Show on Double-Click, Capture Screen Text…, Settings…, History…, About PopGuy…, Setup Guide… and Quit
-/// PopGuy, rebuilt from the settings each time it opens. Phase 23 adds the update items; the macOS
+/// Selection, Show on Double-Click, Capture Screen Text…, Settings…, History…, About PopGuy…, Setup Guide…, Check for
+/// Updates… and Quit PopGuy, with Update to vX… first while an update is ready; rebuilt each time it opens. The macOS
 /// Accessibility items have no Windows counterpart. Capture Screen Text… is always enabled (macOS): with Screen Text
 /// Capture off it opens Settings › Triggers at the OCR section instead of capturing. The icon follows the taskbar's
 /// theme (a dark glyph on a light taskbar, a white one on a dark taskbar) and dims while PopGuy is disabled. A left
@@ -20,6 +20,7 @@ namespace PopGuy.Services;
 internal sealed class TrayIcon : IDisposable
 {
     private readonly SettingsStore _settings;
+    private readonly UpdateService _updates;
     private readonly DispatcherQueue _dispatcher;
     private readonly Action _openSettings;
     private readonly Action<string, bool> _openSettingsSection;
@@ -42,10 +43,11 @@ internal sealed class TrayIcon : IDisposable
     /// <param name="quit">Quit PopGuy. Runs from the dispatcher queue, never inside the icon's window procedure.</param>
     /// <exception cref="System.ComponentModel.Win32Exception">Windows refused the icon's window.</exception>
     public TrayIcon(
-        SettingsStore settings, DispatcherQueue dispatcher, Action openSettings, Action<string, bool> openSettingsSection,
+        SettingsStore settings, UpdateService updates, DispatcherQueue dispatcher, Action openSettings, Action<string, bool> openSettingsSection,
         Action captureScreenText, Action openSetupGuide, Action quit, Action<string> log)
     {
         _settings = settings;
+        _updates = updates;
         _dispatcher = dispatcher;
         _openSettings = openSettings;
         _openSettingsSection = openSettingsSection;
@@ -85,7 +87,14 @@ internal sealed class TrayIcon : IDisposable
     {
         var current = _settings.Current;
         var enabled = current.PopGuyEnabled;
-        return
+        List<NotifyIconMenuItem> items = [];
+        // macOS: "Update to vX…" and a separator first while an update waits (Update now restarts PopGuy).
+        if (_updates.State == UpdateState.Ready)
+        {
+            items.Add(new($"Update to v{_updates.PendingVersion}…", () => _dispatcher.TryEnqueue(_updates.ApplyAndRestart)));
+            items.Add(NotifyIconMenuItem.Separator);
+        }
+        items.AddRange(
         [
             new(enabled ? "Disable PopGuy" : "Enable PopGuy",
                 () => Toggle("popGuyEnabled", s => s with { PopGuyEnabled = !s.PopGuyEnabled })),
@@ -105,9 +114,12 @@ internal sealed class TrayIcon : IDisposable
             new("About PopGuy…", () => _dispatcher.TryEnqueue(() => _openSettingsSection("About", false))),
             new("Setup Guide…", () => _dispatcher.TryEnqueue(() => _openSetupGuide())),
             NotifyIconMenuItem.Separator,
+            new("Check for Updates…", () => _dispatcher.TryEnqueue(_updates.CheckNow), Enabled: _updates.CanCheck),
+            NotifyIconMenuItem.Separator,
             // Queued: quitting disposes the icon, which must not happen inside its own window procedure.
             new("Quit PopGuy", () => _dispatcher.TryEnqueue(() => _quit())),
-        ];
+        ]);
+        return items;
     }
 
     private void OnClicked() => _dispatcher.TryEnqueue(() => _openSettings());

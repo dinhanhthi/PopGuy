@@ -62,6 +62,7 @@ internal sealed class AppServices : IDisposable
         var local = new LlamaProvider(model => downloader.ResolvePath(model, Settings.Current.DefaultLocalModelId));
         Providers.Register(ProviderKind.MlxLocal, _ => local);
         LocalModels = new LocalModels(downloader, local, Settings, log.Write);
+        Updates = new UpdateService(Settings, dispatcher, log.Write);
         var engine = new ActionEngine(Providers, ApiKey);
         // Script shells go in their own job, which what a script opens leaves (it outlives PopGuy, as on macOS).
         var scripts = new ScriptActionEngine(onStarted: process => ChildProcessJob.Scripts.Assign(process));
@@ -125,6 +126,9 @@ internal sealed class AppServices : IDisposable
     /// <summary>The local models' files, download and default, for Settings → Providers → Local AI. UI thread.</summary>
     public LocalModels LocalModels { get; }
 
+    /// <summary>Velopack updates: the checks, the ready update and Update now. UI thread.</summary>
+    public UpdateService Updates { get; }
+
     /// <summary>The toolbar's Settings button (see <see cref="ToolbarController.SettingsRequested"/>). UI thread.</summary>
     public event Action? SettingsRequested
     {
@@ -178,6 +182,7 @@ internal sealed class AppServices : IDisposable
             var services = new AppServices(log, paths, dispatcher);
             services._controller.Start();
             services.PrepareBabylonIndexes();
+            services.Updates.Start();
             return services;
         }
         catch (Exception e)
@@ -266,6 +271,7 @@ internal sealed class AppServices : IDisposable
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        Updates.Dispose();
         _speak.Stop();
         _speakPreview?.Stop();
         _controller.Dispose();

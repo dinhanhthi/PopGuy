@@ -8,8 +8,8 @@ namespace PopGuy.Core.Settings;
 /// <summary>
 /// Everything in settings.json (spec-3 §1; macOS <c>SettingsStore.swift</c>). JSON names are the macOS UserDefaults
 /// keys without the <c>settings.</c> prefix; defaults are the macOS ones (spec-1 §0). The MLX and Dock keys are not
-/// ported; the Windows keys are <c>ignoredAppExeNames</c>, <c>defaultLocalModelID</c> and the Windows
-/// <see cref="Shortcut"/> form. A missing key
+/// ported; the Windows keys are <c>ignoredAppExeNames</c>, <c>defaultLocalModelID</c>,
+/// <c>automaticallyChecksForUpdates</c> and the Windows <see cref="Shortcut"/> form. A missing key
 /// reads as its default. API keys are never stored here: they live in Windows Credential Manager.
 /// </summary>
 public sealed record AppSettings
@@ -94,6 +94,12 @@ public sealed record AppSettings
     [JsonPropertyName("defaultLocalModelID")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? DefaultLocalModelId { get; init; }
+
+    /// <summary>
+    /// Windows only: check for updates at launch and once a day (macOS: Sparkle's own automaticallyChecksForUpdates,
+    /// on by default).
+    /// </summary>
+    [JsonPropertyName("automaticallyChecksForUpdates")] public bool AutomaticallyChecksForUpdates { get; init; } = true;
 
     // Ignore lists (§1.7). Apps are matched by process exe name (e.g. "keepass.exe"), not a bundle id.
     [JsonPropertyName("ignoredAppsEnabled")] public bool IgnoredAppsEnabled { get; init; } = true;

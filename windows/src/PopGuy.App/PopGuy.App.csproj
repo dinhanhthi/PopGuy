@@ -18,6 +18,9 @@
     <ApplicationIcon>Assets\PopGuy.ico</ApplicationIcon>
     <!-- Program.cs is the entry point (single instance); the XAML compiler must not generate a Main. -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <!-- The -dev release tags (QA): the update feed may come from POPGUY_UPDATE_URL (Services/UpdateService). Appended
+         here, never passed as -p:DefineConstants, which would replace DISABLE_XAML_GENERATED_MAIN. -->
+    <DefineConstants Condition="'$(PopGuyUpdateOverride)' == 'true'">$(DefineConstants);UPDATE_URL_OVERRIDE</DefineConstants>
     <!-- Never PublishTrimmed or NativeAOT: Platform's CsWin32 classic COM interop breaks under trimming and AOT. -->
   </PropertyGroup>
 
@@ -31,6 +34,8 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
     <!-- SettingsCard and SettingsExpander for the Settings window (Phase 12 on). -->
     <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" />
+    <!-- Install, update and uninstall (Phase 23). -->
+    <PackageReference Include="Velopack" />
   </ItemGroup>
 
   <ItemGroup>
