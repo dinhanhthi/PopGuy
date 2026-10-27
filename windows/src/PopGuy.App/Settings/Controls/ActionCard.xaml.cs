@@ -353,12 +353,11 @@ public sealed partial class ActionCard : UserControl
         _updates.Add(s =>
         {
             var current = read(s);
-            var providers = ActionsViewModel.PickerProviders(allowed, current);
-            if (!providers.SequenceEqual(shown))
+            if (!allowed.SequenceEqual(shown))
             {
-                shown = providers;
+                shown = allowed;
                 box.Items.Clear();
-                foreach (var provider in providers) box.Items.Add(provider.DisplayName());
+                foreach (var provider in allowed) box.Items.Add(provider.DisplayName());
             }
             box.SelectedIndex = IndexOf(shown, current);
             var latency = current.LatencyWarning();

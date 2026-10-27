@@ -8,7 +8,8 @@ namespace PopGuy.Core.Settings;
 /// <summary>
 /// Everything in settings.json (spec-3 §1; macOS <c>SettingsStore.swift</c>). JSON names are the macOS UserDefaults
 /// keys without the <c>settings.</c> prefix; defaults are the macOS ones (spec-1 §0). The MLX and Dock keys are not
-/// ported; the Windows keys are <c>ignoredAppExeNames</c> and the Windows <see cref="Shortcut"/> form. A missing key
+/// ported; the Windows keys are <c>ignoredAppExeNames</c>, <c>defaultLocalModelID</c> and the Windows
+/// <see cref="Shortcut"/> form. A missing key
 /// reads as its default. API keys are never stored here: they live in Windows Credential Manager.
 /// </summary>
 public sealed record AppSettings
@@ -85,6 +86,14 @@ public sealed record AppSettings
     [JsonPropertyName("ocrShortcut")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Shortcut? OcrShortcut { get; init; }
+
+    /// <summary>
+    /// Windows only: the local model (a <c>gguf-…</c> catalog id) an action runs when its model id is empty or names
+    /// no local model, set on Settings → Providers → Local AI; null is the catalog's default.
+    /// </summary>
+    [JsonPropertyName("defaultLocalModelID")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DefaultLocalModelId { get; init; }
 
     // Ignore lists (§1.7). Apps are matched by process exe name (e.g. "keepass.exe"), not a bundle id.
     [JsonPropertyName("ignoredAppsEnabled")] public bool IgnoredAppsEnabled { get; init; } = true;

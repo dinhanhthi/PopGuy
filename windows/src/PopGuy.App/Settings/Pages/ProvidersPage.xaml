@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Settings → Providers (macOS SettingsView.swift APIKeysTab): a pinned segment bar above the provider cards of the
-    picked segment. WinUI has no segmented picker: a SelectorBar stands in. Local AI (Phase 21) and Dictionary
-    (Phase 18) join the bar with their features. The cards and key rows are built in code (ProvidersPage.xaml.cs): the
-    styles below give them their theme colours. The header is the window's.
+    picked segment. WinUI has no segmented picker: a SelectorBar stands in. Dictionary (Phase 18) joins the bar with its
+    feature. The cards, key rows and Local AI's model rows are built in code (ProvidersPage.xaml.cs): the styles below
+    give them their theme colours. The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.ProvidersPage"
@@ -38,6 +38,18 @@
             <Setter Property="FontSize" Value="14" />
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
         </Style>
+        <Style x:Key="BadgeStyle" TargetType="Border">
+            <Setter Property="Padding" Value="6,1,6,2" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="{ThemeResource ControlFillColorSecondaryBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style x:Key="DividerStyle" TargetType="Rectangle">
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Fill" Value="{ThemeResource DividerStrokeColorDefaultBrush}" />
+        </Style>
     </Page.Resources>
 
     <Grid>
@@ -52,6 +64,7 @@
             Margin="20,8,24,4"
             AutomationProperties.Name="Provider category">
             <SelectorBarItem Text="AI" />
+            <SelectorBarItem Text="Local AI" />
             <SelectorBarItem Text="Translation" />
             <SelectorBarItem Text="Speech" />
         </SelectorBar>
@@ -61,6 +74,7 @@
             <Grid>
                 <Grid MaxWidth="1000" Margin="24,8,24,24">
                     <StackPanel x:Name="AiCards" Spacing="8" />
+                    <StackPanel x:Name="LocalCards" Spacing="8" Visibility="Collapsed" />
                     <StackPanel x:Name="TranslationCards" Spacing="8" Visibility="Collapsed" />
                     <StackPanel x:Name="SpeechCards" Spacing="8" Visibility="Collapsed" />
                 </Grid>

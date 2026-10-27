@@ -13,6 +13,7 @@ using PopGuy.Core.Settings;
 using PopGuy.Core.Speak;
 using PopGuy.Core.Speak.CloudTts;
 using PopGuy.Core.Toolbar;
+using PopGuy.LocalLLM;
 using PopGuy.Ocr;
 using PopGuy.Platform.Capture;
 using PopGuy.Platform.Input;
@@ -54,6 +55,13 @@ internal sealed class AppServices : IDisposable
         // A lambda, not the method group: Shared is created on the first CLI run, so a refused job object fails that
         // run only, never the launch.
         Providers = new ProviderFactory(cli: new CliRunner(onStarted: process => ChildProcessJob.Shared.Assign(process)));
+        // One downloader and one provider (one model in memory) for every run and Settings. The token stops a download,
+        // never a timeout: models are GBs.
+        var downloader = new ModelDownloader(
+            ModelDownloader.DefaultFolder(paths), new HttpClient { Timeout = Timeout.InfiniteTimeSpan });
+        var local = new LlamaProvider(model => downloader.ResolvePath(model, Settings.Current.DefaultLocalModelId));
+        Providers.Register(ProviderKind.MlxLocal, _ => local);
+        LocalModels = new LocalModels(downloader, local, Settings, log.Write);
         var engine = new ActionEngine(Providers, ApiKey);
         // Script shells go in their own job, which what a script opens leaves (it outlives PopGuy, as on macOS).
         var scripts = new ScriptActionEngine(onStarted: process => ChildProcessJob.Scripts.Assign(process));
@@ -113,6 +121,9 @@ internal sealed class AppServices : IDisposable
 
     /// <summary>The provider adapters, for the Settings Verify checks too (its CLI runner puts every CLI in the job object).</summary>
     public ProviderFactory Providers { get; }
+
+    /// <summary>The local models' files, download and default, for Settings → Providers → Local AI. UI thread.</summary>
+    public LocalModels LocalModels { get; }
 
     /// <summary>The toolbar's Settings button (see <see cref="ToolbarController.SettingsRequested"/>). UI thread.</summary>
     public event Action? SettingsRequested

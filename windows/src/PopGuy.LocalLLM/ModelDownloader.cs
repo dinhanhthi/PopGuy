@@ -89,8 +89,27 @@ public sealed class ModelDownloader
         }
     }
 
-    /// <summary>The <c>LlamaProvider</c> resolver: an action's model id (<see cref="GgufCatalog.Resolve"/>) to its file, or null.</summary>
-    public string? ResolvePath(string? modelId) => PathFor(GgufCatalog.Resolve(modelId));
+    /// <summary>
+    /// A partial download of <paramref name="entry"/> is there, which <see cref="DownloadAsync"/> resumes. Never throws:
+    /// false for an entry that is not a safe catalog entry.
+    /// </summary>
+    public bool HasPartial(GgufModel entry)
+    {
+        try
+        {
+            return File.Exists(FinalPath(entry) + PartSuffix);
+        }
+        catch (Exception e) when (e is ModelDownloadException or IOException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The <c>LlamaProvider</c> resolver: an action's model id (<see cref="GgufCatalog.Resolve"/>, with the default set in
+    /// Settings) to its file, or null.
+    /// </summary>
+    public string? ResolvePath(string? modelId, string? defaultId = null) => PathFor(GgufCatalog.Resolve(modelId, defaultId));
 
     /// <summary>
     /// Downloads <paramref name="entry"/>, resuming its partial file, and verifies it before the final rename. Throws

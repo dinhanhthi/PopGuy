@@ -62,8 +62,9 @@ public static class GgufCatalog
 
     /// <summary>
     /// The entry an action's model id runs: a catalog id as is, a macOS id through its GGUF twin, anything else
-    /// (another macOS model, an empty or unknown id) the default model.
+    /// (another macOS model, an empty or unknown id) the default model: <paramref name="defaultId"/> (the one set in
+    /// Settings) when it is a catalog id, else <see cref="Default"/>.
     /// </summary>
-    public static GgufModel Resolve(string? id) =>
-        Find(id) ?? (id is not null && MacIds.TryGetValue(id, out var twin) ? Find(twin) : null) ?? Default;
+    public static GgufModel Resolve(string? id, string? defaultId = null) =>
+        Find(id) ?? (id is not null && MacIds.TryGetValue(id, out var twin) ? Find(twin) : null) ?? Find(defaultId) ?? Default;
 }

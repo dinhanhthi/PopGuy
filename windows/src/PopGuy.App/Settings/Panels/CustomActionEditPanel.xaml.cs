@@ -430,7 +430,7 @@ public sealed partial class CustomActionEditPanel : UserControl
     /// <summary>The provider picker; the CLI latency warning shows under its title (macOS latencyNote).</summary>
     private void ProviderRow(IReadOnlyList<ProviderKind> allowed)
     {
-        var providers = ActionsViewModel.PickerProviders(allowed, _draft.ProviderKind);
+        var providers = allowed;
         var box = new ComboBox { MinWidth = 220 };
         AutomationProperties.SetName(box, "Provider");
         foreach (var provider in providers) box.Items.Add(provider.DisplayName());

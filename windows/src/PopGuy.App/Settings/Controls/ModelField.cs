@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using PopGuy.Controls;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Providers;
+using PopGuy.LocalLLM;
 using PopGuy.Settings.ViewModels;
 using VirtualKey = Windows.System.VirtualKey;
 
@@ -12,7 +13,7 @@ namespace PopGuy.Settings.Controls;
 
 /// <summary>
 /// The Model input of an action card (macOS ModelField): free text, a menu of the provider's suggested models
-/// (<see cref="ProviderKindExtensions.CuratedModels"/>), Check (a one-token call through ProviderModelValidator) whose
+/// (<see cref="ProviderKindExtensions.CuratedModels"/>; the local model's <see cref="GgufCatalog"/> ids), Check (a one-token call through ProviderModelValidator) whose
 /// outcome shows for 1 s, and a notice with a one-click replacement when the text is a deprecated id
 /// (<see cref="ModelDeprecations"/>). The text is handed to <see cref="Committed"/> 500 ms after the last keystroke, on
 /// Enter, when a suggestion is picked and when the box loses focus. Styles come from the owning card, so they follow the
@@ -35,6 +36,8 @@ public sealed partial class ModelField : UserControl
     private readonly FontIcon _deprecationIcon = new() { Glyph = "\uE7BA", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _deprecationText = new();
     private readonly Button _replace = new();
+
+    private static readonly IReadOnlyList<string> LocalModelIds = [.. GgufCatalog.All.Select(m => m.Id)];
 
     private ActionsViewModel? _model;
     private Func<string, Style>? _style;
@@ -128,7 +131,8 @@ public sealed partial class ModelField : UserControl
             CancelCheck();
             HideFeedback();
         }
-        var suggestions = kind.CuratedModels();
+        // The local model's ids come from its catalog, which Core cannot see.
+        var suggestions = kind == ProviderKind.MlxLocal ? LocalModelIds : kind.CuratedModels();
         if (!suggestions.SequenceEqual(_shownSuggestions))
         {
             _shownSuggestions = suggestions;

@@ -1,3 +1,4 @@
+using System.Globalization;
 using CommunityToolkit.WinUI.Controls;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -5,10 +6,12 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Microsoft.UI.Xaml.Shapes;
 using PopGuy.Controls;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Providers;
 using PopGuy.Core.Settings;
+using PopGuy.LocalLLM;
 using PopGuy.Services;
 using PopGuy.Settings.ViewModels;
 using VirtualKey = Windows.System.VirtualKey;
@@ -16,9 +19,10 @@ using VirtualKey = Windows.System.VirtualKey;
 namespace PopGuy.Settings.Pages;
 
 /// <summary>
-/// Settings → Providers (macOS SettingsView.swift APIKeysTab, spec-3 §5.2): the AI, Translation and Speech segments,
-/// one card per provider. API keys go only to Credential Manager, after a live check (<see cref="ProvidersViewModel"/>);
-/// a saved key shows only as a masked preview. Base URLs, CLI paths and the Azure region save through
+/// Settings → Providers (macOS SettingsView.swift APIKeysTab, spec-3 §5.2): the AI, Local AI, Translation and Speech
+/// segments, one card per provider; Local AI lists the downloadable local models (<see cref="LocalModels"/>). API keys
+/// go only to Credential Manager, after a live check (<see cref="ProvidersViewModel"/>); a saved key shows only as a
+/// masked preview. Base URLs, CLI paths and the Azure region save through
 /// <see cref="SettingsStore.Update"/> 500 ms after the last keystroke, when the box loses focus and when the page goes
 /// (as GeneralPage's Global Prompt); a UNC or <c>\\?\</c> CLI path is refused. The navigation parameter is the
 /// AppServices. A change from elsewhere shows while the page is open.
@@ -30,6 +34,9 @@ public sealed partial class ProvidersPage : Page
 
     private readonly List<SettingField> _fields = [];
     private readonly List<CliCard> _clis = [];
+    private readonly List<LocalRow> _localRows = [];
+    private TextBlock? _localError;
+    private Grid? _localErrorRow;
     private AppServices? _services;
     private ProvidersViewModel? _model;
     private bool _subscribed;
@@ -54,14 +61,21 @@ public sealed partial class ProvidersPage : Page
         if (_services is null || _model is not null) return;
         _model = new ProvidersViewModel(_services.Settings, _services.Credentials, _services.Providers, _services.Log.Write);
         BuildCards(_model);
+        BuildLocalCards(_services.LocalModels);
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (_services is null || _model is null) return;
-        if (!_subscribed) _services.Settings.Changed += OnSettingsChanged;
+        if (!_subscribed)
+        {
+            _services.Settings.Changed += OnSettingsChanged;
+            _services.LocalModels.Changed += RenderLocal;
+        }
         _subscribed = true;
         RefreshFields();
+        RenderLocal();
+        _ = _services.LocalModels.RefreshAsync();
         if (_keysLoaded) return;
         _keysLoaded = true;
         _ = _model.LoadKeysAsync();
@@ -77,6 +91,8 @@ public sealed partial class ProvidersPage : Page
         FlushFields();
         if (IsLoaded) return;
         _services.Settings.Changed -= OnSettingsChanged;
+        // A download goes on without the page (macOS: the store runs it).
+        _services.LocalModels.Changed -= RenderLocal;
         _subscribed = false;
         foreach (var cli in _clis)
         {
@@ -85,16 +101,21 @@ public sealed partial class ProvidersPage : Page
         }
     }
 
-    /// <summary>Queued: a change may be saved from any thread.</summary>
-    private void OnSettingsChanged(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(RefreshFields);
+    /// <summary>Queued: a change may be saved from any thread. The default local model is a setting too.</summary>
+    private void OnSettingsChanged(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(() =>
+    {
+        RefreshFields();
+        RenderLocal();
+    });
 
     private void ShowSegment()
     {
         var index = SegmentBar.Items.IndexOf(SegmentBar.SelectedItem);
         if (index < 0) return;
         AiCards.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
-        TranslationCards.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
-        SpeechCards.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+        LocalCards.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
+        TranslationCards.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+        SpeechCards.Visibility = index == 3 ? Visibility.Visible : Visibility.Collapsed;
         CardsScroller.ChangeView(null, 0, null, disableAnimation: true);
     }
 
@@ -230,6 +251,242 @@ public sealed partial class ProvidersPage : Page
     private static Style AppStyle(string key) => (Style)Application.Current.Resources[key];
 
     private static Visibility Shown(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
+
+    // Local AI (macOS LocalModelsView.swift; LocalModelMemoryInfoView.swift's panel is the expander below the card).
+
+    /// <summary>
+    /// The models card: the subtitle, the last error, then one row per catalog model; then the memory guidance. The
+    /// state lives in <see cref="LocalModels"/>, so a download shows again when the page comes back.
+    /// </summary>
+    private void BuildLocalCards(LocalModels local)
+    {
+        var warning = new FontIcon { Glyph = "\uE7BA", Style = PageStyle("CautionIconStyle"), VerticalAlignment = VerticalAlignment.Top };
+        _localError = new TextBlock { Style = PageStyle("CaptionStyle") };
+        _localErrorRow = new Grid { ColumnSpacing = 8, Visibility = Visibility.Collapsed };
+        _localErrorRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _localErrorRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _localErrorRow.Children.Add(warning);
+        Grid.SetColumn(_localError, 1);
+        _localErrorRow.Children.Add(_localError);
+
+        List<UIElement> content =
+        [
+            Caption("Run AI privately — no API key, no internet required."),
+            Caption("An action set to Local model (on this PC) runs the model in its Model field; an empty or unknown id runs the default model."),
+            _localErrorRow,
+        ];
+        foreach (var entry in GgufCatalog.All)
+        {
+            content.Add(new Rectangle { Style = PageStyle("DividerStyle") });
+            var row = new LocalRow(this, local, entry);
+            _localRows.Add(row);
+            content.Add(row.Root);
+        }
+        Add(LocalCards, Card("Local (On-Device) Models", null, [.. content]));
+        Add(LocalCards, MemoryGuidance());
+    }
+
+    private void RenderLocal()
+    {
+        if (_services is null || _localError is null || _localErrorRow is null) return;
+        var error = _services.LocalModels.Error;
+        _localError.Text = error ?? "";
+        _localErrorRow.Visibility = Shown(error is not null);
+        foreach (var row in _localRows) row.Render();
+    }
+
+    /// <summary>
+    /// macOS "How Models Use Memory", for llama.cpp in PopGuy's own process: no idle picker, Unload button or
+    /// "In memory" badge here, and the model is freed after 5 minutes without a run.
+    /// </summary>
+    private static SettingsExpander MemoryGuidance()
+    {
+        (string Title, string Text)[] sections =
+        [
+            ("What \"needs X GB RAM\" means",
+                "The RAM figure is an estimate of the memory a model uses while it runs, its working space included. It is guidance for choosing a model that suits your PC, not a live usage counter: pick one that leaves room for your other apps."),
+            ("When a model loads (cold start)",
+                "A model is not loaded when you download it or when PopGuy starts. It loads the first time you run an action that uses it: the multi-gigabyte model file is read from disk into memory, which takes a few seconds for small models and longer for large ones. Once loaded, every later action with the same model starts fast."),
+            ("One model at a time",
+                "Only the model you are using takes memory. If you run an action with a different model, the previous one is unloaded before the new one loads. You will not have two models in memory at once."),
+            ("Downloaded does not mean in memory",
+                "Downloading several models only uses disk space — it does not use memory. A model takes memory only while it is loaded."),
+            ("Automatic release",
+                "After 5 minutes without an action, the model is unloaded and its memory is freed. The next action loads it again. Deleting a model also unloads it first."),
+        ];
+        var expander = new SettingsExpander
+        {
+            Header = "How models use memory",
+            Description = "What the RAM figures mean, and when a model loads and frees its memory.",
+        };
+        foreach (var (title, text) in sections)
+        {
+            expander.Items.Add(new SettingsCard
+            {
+                Header = title,
+                Description = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap },
+            });
+        }
+        return expander;
+    }
+
+    /// <summary>"1.3 GB": a download's size in decimal gigabytes (macOS ByteCountFormatter's file style).</summary>
+    private static string SizeText(long bytes) => $"{(bytes / 1e9).ToString("0.0", CultureInfo.CurrentCulture)} GB";
+
+    /// <summary>"needs about 4.4 GB RAM": the catalog's estimate while loaded.</summary>
+    private static string RamText(int megabytes) => $"needs about {(megabytes / 1024.0).ToString("0.#", CultureInfo.CurrentCulture)} GB RAM";
+
+    /// <summary>
+    /// One model (macOS LocalModelsView.modelRow): its name and Default badge, size and RAM, then the controls of its
+    /// state: Cancel while it downloads (with the progress below), Installed with Set as default and Delete, or Download
+    /// (Resume over a partial file, which Delete also removes). Every click shows at once; the work runs in
+    /// <see cref="LocalModels"/>.
+    /// </summary>
+    private sealed class LocalRow
+    {
+        private readonly ProvidersPage _page;
+        private readonly LocalModels _local;
+        private readonly GgufModel _entry;
+        private readonly Border _defaultBadge;
+        private readonly StackPanel _controls = new() { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+        private readonly StackPanel _installed = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
+        private readonly StackPanel _deleting = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
+        private readonly ProgressRing _deletingRing = new() { Width = 16, Height = 16, IsActive = false };
+        private readonly Button _setDefault = new() { Content = "Set as default" };
+        private readonly Button _download = new();
+        private readonly Button _cancel = new() { Content = "Cancel" };
+        private readonly Button _delete = new() { Content = "Delete" };
+        private readonly StackPanel _progress = new() { Spacing = 3 };
+        private readonly ProgressBar _bar = new() { Minimum = 0, Maximum = 1 };
+        private readonly TextBlock _progressText;
+
+        public LocalRow(ProvidersPage page, LocalModels local, GgufModel entry)
+        {
+            _page = page;
+            _local = local;
+            _entry = entry;
+
+            var name = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            name.Children.Add(new TextBlock { Text = entry.DisplayName, VerticalAlignment = VerticalAlignment.Center });
+            _defaultBadge = new Border
+            {
+                Style = page.PageStyle("BadgeStyle"),
+                Child = new TextBlock { Text = "Default", Style = page.PageStyle("CaptionStyle") },
+            };
+            HoverTooltip.SetText(_defaultBadge, "Runs when an action's model is empty or not a local model");
+            name.Children.Add(_defaultBadge);
+            var details = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+            details.Children.Add(name);
+            details.Children.Add(page.Caption($"{SizeText(entry.Bytes)} · {RamText(entry.RamMB)}"));
+
+            _installed.Children.Add(new FontIcon { Glyph = "\uEC61", Style = page.PageStyle("SuccessIconStyle"), VerticalAlignment = VerticalAlignment.Center });
+            _installed.Children.Add(new TextBlock { Text = "Installed", Style = page.PageStyle("CaptionStyle"), VerticalAlignment = VerticalAlignment.Center });
+            _deleting.Children.Add(_deletingRing);
+            _deleting.Children.Add(new TextBlock { Text = "Deleting…", Style = page.PageStyle("CaptionStyle"), VerticalAlignment = VerticalAlignment.Center });
+            _download.Style = AppStyle("AccentButtonStyle");
+            HoverTooltip.SetText(_setDefault, "Use this model when an action's model is empty or not a local model");
+            HoverTooltip.SetText(_cancel, "Cancel the download; Resume continues it later");
+            HoverTooltip.SetText(_delete, "Remove this model from disk");
+            AutomationProperties.SetName(_setDefault, $"Set {entry.DisplayName} as default");
+            AutomationProperties.SetName(_cancel, $"Cancel the download of {entry.DisplayName}");
+            AutomationProperties.SetName(_delete, $"Delete {entry.DisplayName}");
+            foreach (var element in new FrameworkElement[] { _installed, _deleting, _setDefault, _download, _cancel, _delete })
+            {
+                element.VerticalAlignment = VerticalAlignment.Center;
+                _controls.Children.Add(element);
+            }
+
+            var top = new Grid { ColumnSpacing = 8 };
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            top.Children.Add(details);
+            Grid.SetColumn(_controls, 1);
+            top.Children.Add(_controls);
+
+            _progressText = page.Caption("");
+            AutomationProperties.SetName(_bar, $"Download of {entry.DisplayName}");
+            _progress.Children.Add(_bar);
+            _progress.Children.Add(_progressText);
+
+            Root.Children.Add(top);
+            Root.Children.Add(_progress);
+
+            _setDefault.Click += (_, _) => _local.SetDefault(_entry);
+            _download.Click += (_, _) => _ = _local.DownloadAsync(_entry);
+            _cancel.Click += (_, _) => _local.CancelDownload();
+            _delete.Click += async (_, _) => await ConfirmDeleteAsync();
+            Render();
+        }
+
+        public StackPanel Root { get; } = new() { Spacing = 8 };
+
+        public void Render()
+        {
+            var file = _local.FileState(_entry);
+            var downloading = _local.ActiveDownloadId == _entry.Id;
+            var otherDownloading = _local.ActiveDownloadId is not null && !downloading;
+            var deleting = _local.IsDeleting(_entry);
+            var installed = !downloading && !deleting && file == LocalModelFile.Installed;
+            var isDefault = _local.DefaultId == _entry.Id;
+
+            _defaultBadge.Visibility = Shown(isDefault);
+            _controls.Visibility = Shown(_local.IsLoaded);
+            _installed.Visibility = Shown(installed);
+            _deleting.Visibility = Shown(deleting);
+            _deletingRing.IsActive = deleting;
+            _setDefault.Visibility = Shown(installed && !isDefault);
+            _cancel.Visibility = Shown(downloading);
+            _delete.Visibility = Shown(!downloading && !deleting && file != LocalModelFile.Missing);
+
+            var resume = file == LocalModelFile.Partial;
+            _download.Visibility = Shown(!downloading && !deleting && file != LocalModelFile.Installed);
+            _download.Content = resume ? "Resume" : "Download";
+            _download.IsEnabled = !otherDownloading;
+            AutomationProperties.SetName(_download, $"{(resume ? "Resume" : "Download")} {_entry.DisplayName}");
+            HoverTooltip.SetText(_download, otherDownloading
+                ? "Another model is downloading — wait for it to finish"
+                : resume ? $"Resume the download of {_entry.DisplayName}" : $"Download {_entry.DisplayName}");
+
+            // macOS: "Preparing" until the first bytes, then the percentage.
+            _progress.Visibility = Shown(downloading);
+            var fraction = downloading ? _local.DownloadFraction : null;
+            _bar.IsIndeterminate = fraction is null;
+            _bar.Value = fraction ?? 0;
+            _progressText.Text = fraction is { } f
+                ? $"Downloading {_entry.DisplayName}… {(int)Math.Round(f * 100)}%"
+                : $"Preparing {_entry.DisplayName}…";
+        }
+
+        /// <summary>Delete after a confirmation (macOS: "Delete … ?").</summary>
+        private async Task ConfirmDeleteAsync()
+        {
+            if (_page.XamlRoot is null) return;
+            var dialog = new ContentDialog
+            {
+                XamlRoot = _page.XamlRoot,
+                Style = AppStyle("DefaultContentDialogStyle"),
+                Title = $"Delete {_entry.DisplayName}?",
+                Content = new TextBlock
+                {
+                    Text = "This will remove the model files from this PC. You can download it again later.",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                PrimaryButtonText = "Delete",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            try
+            {
+                if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                // Another dialog is open.
+                return;
+            }
+            await _local.DeleteAsync(_entry);
+        }
+    }
 
     // Settings fields.
 

@@ -120,7 +120,7 @@ public static class ProviderKindExtensions
 
     /// <summary>
     /// ProviderKind.curatedModels: the model suggestions in Settings (any id can still be typed). Empty for the
-    /// user-defined runtimes and the translation services; the local model's catalog comes with its adapter.
+    /// user-defined runtimes and the translation services; the local model's come from its catalog in the App.
     /// </summary>
     public static IReadOnlyList<string> CuratedModels(this ProviderKind kind) => kind switch
     {
@@ -149,7 +149,7 @@ public static class ProviderKindExtensions
         ProviderKind.ClaudeCli => "Optional. A model alias (opus/sonnet/haiku/fable) or full id; empty uses the CLI default.",
         ProviderKind.CodexCli => "Optional. A model id (e.g. gpt-6.1-sol); empty uses the CLI default.",
         ProviderKind.GeminiCli => "Optional. A model id (e.g. gemini-3.8-flash); empty uses the CLI default.",
-        _ => "Local models are not available on Windows yet.",
+        _ => "Pick a downloaded local model, e.g. \"gguf-qwen3.5-4b\". Download models in Settings → Providers → Local AI; an empty or unknown id runs the default local model.",
     };
 
     /// <summary>ProviderKind.latencyWarning: shown under the provider picker for the subscription CLIs; null otherwise.</summary>

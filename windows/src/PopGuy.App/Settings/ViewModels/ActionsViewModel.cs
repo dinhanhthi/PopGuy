@@ -262,13 +262,6 @@ internal sealed class ActionsViewModel
     public static AppSettings WithCustom(AppSettings settings, ActionIdentifier id, Func<CustomAction, CustomAction> change) =>
         settings with { CustomActions = [.. settings.CustomActions.Select(a => a.Id == id.CustomId ? change(a) : a)] };
 
-    /// <summary>
-    /// The provider picker's entries: <paramref name="allowed"/> without the local model, which has no Windows adapter
-    /// yet (macOS hides it on unsupported Macs), unless it is the saved one.
-    /// </summary>
-    public static IReadOnlyList<ProviderKind> PickerProviders(IReadOnlyList<ProviderKind> allowed, ProviderKind current) =>
-        [.. allowed.Where(k => k != ProviderKind.MlxLocal || k == current)];
-
     // Speak card (macOS SpeakCardView for Speak, CustomSpeechFields for a custom Speech action).
 
     /// <summary>The Speak card's preview player, apart from the toolbar's Speak; null without one.</summary>
