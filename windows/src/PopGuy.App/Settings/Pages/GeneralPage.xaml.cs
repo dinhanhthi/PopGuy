@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using PopGuy.Core.Settings;
+using PopGuy.Controls;
 using PopGuy.Core.Text;
 using PopGuy.Platform.SystemServices;
 using PopGuy.Services;
@@ -36,6 +37,8 @@ public sealed partial class GeneralPage : Page
         ConfirmCloseToggle.Toggled += (_, _) =>
             Save("confirmCloseAfterResult", s => s with { ConfirmCloseAfterResult = ConfirmCloseToggle.IsOn });
         LoginToggle.Toggled += (_, _) => OnLoginToggled();
+        SetupGuideButton.Click += (_, _) => _services?.RequestSetupGuide();
+        HoverTooltip.SetText(SetupGuideButton, "Replay the first-run setup guide");
         PromptBox.TextChanged += (_, _) => OnPromptChanged();
         PromptBox.LostFocus += (_, _) => SavePrompt();
         Loaded += OnLoaded;

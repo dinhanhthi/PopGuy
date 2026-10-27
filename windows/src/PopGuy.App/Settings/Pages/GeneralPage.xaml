@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Settings → General (macOS GeneralView.swift): Enable PopGuy, Start at login, the Global Prompt and the close
-    confirmation, as Windows 11 Settings cards under the macOS section headers. The Dock toggle has no Windows
-    counterpart; Setup Guide… comes with the wizard (Phase 22). The header is the window's.
+    confirmation and Setup Guide…, as Windows 11 Settings cards under the macOS section headers. The Dock toggle has no
+    Windows counterpart. The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.GeneralPage"
@@ -45,6 +45,12 @@
                     </StackPanel>
                 </controls:SettingsCard.Description>
                 <ToggleSwitch x:Name="LoginToggle" AutomationProperties.Name="Start at login" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
+                Description="Opens the first-run walkthrough again. Settings stays open."
+                Header="Setup Guide">
+                <Button x:Name="SetupGuideButton" Content="Setup Guide…" />
             </controls:SettingsCard>
 
             <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Global Prompt" />

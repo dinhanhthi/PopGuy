@@ -6,8 +6,8 @@ namespace PopGuy.Services;
 
 /// <summary>
 /// The tray icon and its menu (spec-3 §5.9, the macOS status item, in its order): Disable/Enable PopGuy, Show on Text
-/// Selection, Show on Double-Click, Capture Screen Text…, Settings…, History…, About PopGuy… and Quit PopGuy, rebuilt
-/// from the settings each time it opens. Later phases add Setup Guide… (22) and the update items (23); the macOS
+/// Selection, Show on Double-Click, Capture Screen Text…, Settings…, History…, About PopGuy…, Setup Guide… and Quit
+/// PopGuy, rebuilt from the settings each time it opens. Phase 23 adds the update items; the macOS
 /// Accessibility items have no Windows counterpart. Capture Screen Text… is always enabled (macOS): with Screen Text
 /// Capture off it opens Settings › Triggers at the OCR section instead of capturing. The icon follows the taskbar's
 /// theme (a dark glyph on a light taskbar, a white one on a dark taskbar) and dims while PopGuy is disabled. A left
@@ -24,6 +24,7 @@ internal sealed class TrayIcon : IDisposable
     private readonly Action _openSettings;
     private readonly Action<string, bool> _openSettingsSection;
     private readonly Action _captureScreenText;
+    private readonly Action _openSetupGuide;
     private readonly Action _quit;
     private readonly Action<string> _log;
     private readonly NotifyIcon _icon;
@@ -37,17 +38,19 @@ internal sealed class TrayIcon : IDisposable
     /// the dispatcher queue.
     /// </param>
     /// <param name="captureScreenText">Starts an OCR capture (Screen Text Capture is on). Runs from the dispatcher queue.</param>
+    /// <param name="openSetupGuide">Opens the first-launch wizard again. Runs from the dispatcher queue.</param>
     /// <param name="quit">Quit PopGuy. Runs from the dispatcher queue, never inside the icon's window procedure.</param>
     /// <exception cref="System.ComponentModel.Win32Exception">Windows refused the icon's window.</exception>
     public TrayIcon(
         SettingsStore settings, DispatcherQueue dispatcher, Action openSettings, Action<string, bool> openSettingsSection,
-        Action captureScreenText, Action quit, Action<string> log)
+        Action captureScreenText, Action openSetupGuide, Action quit, Action<string> log)
     {
         _settings = settings;
         _dispatcher = dispatcher;
         _openSettings = openSettings;
         _openSettingsSection = openSettingsSection;
         _captureScreenText = captureScreenText;
+        _openSetupGuide = openSetupGuide;
         _quit = quit;
         _log = log;
         _icon = new NotifyIcon(IconPath(), !settings.Current.PopGuyEnabled, "PopGuy", log);
@@ -100,6 +103,7 @@ internal sealed class TrayIcon : IDisposable
             new("Settings…", () => _dispatcher.TryEnqueue(() => _openSettings())),
             new("History…", () => _dispatcher.TryEnqueue(() => _openSettingsSection("History", false))),
             new("About PopGuy…", () => _dispatcher.TryEnqueue(() => _openSettingsSection("About", false))),
+            new("Setup Guide…", () => _dispatcher.TryEnqueue(() => _openSetupGuide())),
             NotifyIconMenuItem.Separator,
             // Queued: quitting disposes the icon, which must not happen inside its own window procedure.
             new("Quit PopGuy", () => _dispatcher.TryEnqueue(() => _quit())),

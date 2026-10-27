@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using PopGuy.Onboarding;
 using PopGuy.Services;
 using PopGuy.Settings;
 #if DEBUG
@@ -21,6 +22,7 @@ public partial class App : Application
         typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
 
     private SettingsWindow? _settingsWindow;
+    private OnboardingWindow? _onboardingWindow;
     private AppServices? _services;
     private TrayIcon? _tray;
     private DispatcherQueue? _dispatcher;
@@ -44,13 +46,14 @@ public partial class App : Application
             ? PopGuy.Platform.SystemServices.ForegroundApp.Snapshot()
             : null;
 #endif
-        // PopGuy starts in the tray only: no window until Settings opens (the first-launch wizard comes in Phase 22).
+        // PopGuy starts in the tray only: no window until Settings opens, except the wizard on a first launch.
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         try
         {
             _services = AppServices.Start(_dispatcher);
             UnhandledException += OnUnhandledException;
             _services.SettingsRequested += ShowSettings;
+            _services.SetupGuideRequested += ShowOnboarding;
 #if DEBUG
             if (selfTestSource is not null) _services.ShowCannedToolbar(PopGuy.Debug.Probes.SelfTestText, selfTestSource);
 #endif
@@ -67,7 +70,8 @@ public partial class App : Application
         try
         {
             _tray = new TrayIcon(
-                _services.Settings, _dispatcher, ShowSettings, ShowSettingsSection, CaptureScreenText, Shutdown, _services.Log.Write);
+                _services.Settings, _dispatcher, ShowSettings, ShowSettingsSection, CaptureScreenText, ShowOnboarding, Shutdown,
+                _services.Log.Write);
             _tray.SessionEnding += OnSessionEnding;
         }
         catch (System.ComponentModel.Win32Exception e)
@@ -76,6 +80,8 @@ public partial class App : Application
             _services.Log.Write($"tray: not created, error {e.NativeErrorCode}");
             ShowSettings();
         }
+
+        if (!_services.Settings.Current.HasOnboarded) ShowOnboarding();
     }
 
     /// <summary>A later launch redirected here (any thread, see Program): Settings comes to the front.</summary>
@@ -98,6 +104,37 @@ public partial class App : Application
             _settingsWindow.Closed += OnSettingsClosed;
         }
         _settingsWindow.Show();
+    }
+
+    /// <summary>
+    /// The first-launch wizard, and Setup Guide… (tray, Settings → General): the one wizard comes to the front, made first
+    /// when none is open. UI thread.
+    /// </summary>
+    private void ShowOnboarding()
+    {
+        if (_shutDown || _services is null) return;
+        if (_onboardingWindow is null)
+        {
+            _onboardingWindow = new OnboardingWindow(_services, ShowSettings);
+            _onboardingWindow.Closed += OnOnboardingClosed;
+        }
+        _onboardingWindow.Show();
+    }
+
+    /// <summary>The wizard closed, by Get Started or any other way: it is not shown at launch again (macOS hasOnboarded).</summary>
+    private void OnOnboardingClosed(object sender, WindowEventArgs args)
+    {
+        if (_onboardingWindow is not null) _onboardingWindow.Closed -= OnOnboardingClosed;
+        _onboardingWindow = null;
+        if (_services is null || _services.Settings.Current.HasOnboarded) return;
+        try
+        {
+            _services.Settings.Update(s => s with { HasOnboarded = true });
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _services.Log.Write($"settings: hasOnboarded not saved, {e.GetType().Name}");
+        }
     }
 
     /// <summary>
@@ -139,7 +176,18 @@ public partial class App : Application
             _settingsWindow.Close();
             _settingsWindow = null;
         }
-        if (_services is not null) _services.SettingsRequested -= ShowSettings;
+        // Quitting is not finishing: a first-launch wizard closed this way shows again at the next launch (macOS).
+        if (_onboardingWindow is not null)
+        {
+            _onboardingWindow.Closed -= OnOnboardingClosed;
+            _onboardingWindow.Close();
+            _onboardingWindow = null;
+        }
+        if (_services is not null)
+        {
+            _services.SettingsRequested -= ShowSettings;
+            _services.SetupGuideRequested -= ShowOnboarding;
+        }
         UnhandledException -= OnUnhandledException;
         if (_tray is not null) _tray.SessionEnding -= OnSessionEnding;
         _tray?.Dispose();

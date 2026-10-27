@@ -132,6 +132,12 @@ internal sealed class AppServices : IDisposable
         remove => _controller.SettingsRequested -= value;
     }
 
+    /// <summary>Settings → General's Setup Guide… (see <see cref="RequestSetupGuide"/>). UI thread.</summary>
+    public event Action? SetupGuideRequested;
+
+    /// <summary>Opens the wizard again (the App shows it). UI thread.</summary>
+    public void RequestSetupGuide() => SetupGuideRequested?.Invoke();
+
     /// <summary>A settings apply finished (see <see cref="ToolbarController.HotkeysApplied"/>). Thread pool.</summary>
     public event Action? HotkeysApplied
     {
