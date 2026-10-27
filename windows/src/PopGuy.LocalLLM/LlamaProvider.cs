@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading.Channels;
 using LLama;
 using LLama.Common;
 using LLama.Exceptions;
@@ -15,8 +16,10 @@ namespace PopGuy.LocalLLM;
 /// with llama.cpp (LLamaSharp), the counterpart of macOS <c>MLXLocalProvider</c> and its MLX helper. One model is
 /// loaded at a time and kept between runs, one run streams at a time, and the weights are freed after
 /// <see cref="IdleTimeout"/> without a run (the helper's idle unload). Every failure is a
-/// <see cref="ProviderError"/> of kind Transport, as macOS wraps every helper failure; cancelling the token throws
-/// OperationCanceledException. Building one touches no native code, so the factory lambda never throws.
+/// <see cref="ProviderError"/> of kind Transport, as macOS wraps every helper failure (natives that cannot load get
+/// the Visual C++ runtime hint); cancelling the token throws OperationCanceledException. Building one touches no native
+/// code, so the factory lambda never throws, and a run's native work happens on the thread pool, never on the caller's
+/// thread.
 /// </summary>
 public sealed class LlamaProvider : IProvider
 {
@@ -28,6 +31,15 @@ public sealed class LlamaProvider : IProvider
         "This text is too long for this model. Select a shorter passage or choose another model for this action.";
 
     internal const string LoadFailedMessage = "The local model could not be loaded.";
+
+    /// <summary>
+    /// The llama.cpp natives need the Visual C++ runtime (msvcp140, vcruntime140), which a PC without the
+    /// redistributable lacks. A native load that failed in a type initializer stays failed for the life of the process,
+    /// hence the restart rather than a retry.
+    /// </summary>
+    internal const string RuntimeMissingMessage =
+        "The local model needs the Microsoft Visual C++ Runtime, which isn't installed. Install the Visual C++ " +
+        "Redistributable (2015–2022) for your PC, then restart PopGuy.";
     internal const string RunFailedMessage = "The local model stopped with an error.";
 
     /// <summary>How long the weights stay loaded after a run (the macOS helper's 300 s default).</summary>
@@ -58,13 +70,49 @@ public sealed class LlamaProvider : IProvider
             ? [new("user", input)]
             : [new("system", systemPrompt), new("user", input)];
 
+        // The run goes on in the background, feeding a channel: loading the natives and the weights, the prefill and
+        // each token's sampling are native calls that would otherwise run on the caller's (UI) thread up to their
+        // first real await, and every await of this iterator would resume there. Leaving early stops the run.
+        var channel = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var token = stop.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await GenerateAsync(path, messages, LlamaSettings.MaxTokens(options.MaxTokens),
+                    piece => channel.Writer.TryWrite(piece), token);
+                channel.Writer.TryComplete();
+            }
+            catch (Exception error)
+            {
+                channel.Writer.TryComplete(error);
+            }
+        }, CancellationToken.None);
+        var finished = false;
+        try
+        {
+            await foreach (var piece in channel.Reader.ReadAllAsync(ct))
+                yield return piece;
+            finished = true;
+        }
+        finally
+        {
+            if (!finished)
+                stop.Cancel();
+        }
+    }
+
+    private async Task GenerateAsync(
+        string path, List<ChatMessage> messages, int maxTokens, Action<string> write, CancellationToken ct)
+    {
         await _lock.WaitAsync(ct);
         try
         {
             var loaded = await LoadAsync(path, ct);
-            using var run = await Run.StartAsync(loaded, messages, LlamaSettings.MaxTokens(options.MaxTokens), ct);
+            using var run = await Run.StartAsync(loaded, messages, maxTokens, ct);
             while (await run.NextAsync(ct) is { } piece)
-                yield return piece;
+                write(piece);
         }
         finally
         {
@@ -143,7 +191,7 @@ public sealed class LlamaProvider : IProvider
         {
             // A cancelled load can fail as a load error: the caller still sees a cancellation.
             ct.ThrowIfCancellationRequested();
-            throw ProviderError.Transport(LoadFailedMessage);
+            throw ProviderError.Transport(LlamaSettings.IsNativeLoadFailure(e) ? RuntimeMissingMessage : LoadFailedMessage);
         }
     }
 
@@ -340,6 +388,24 @@ internal static class LlamaSettings
 
     /// <summary>Tokens of context (KV cache) next to the weights: 16K on 16 GB PCs and up, 8K below.</summary>
     internal static int ContextSize(long totalMemoryBytes) => totalMemoryBytes >= LargeMemoryBytes ? 16_384 : 8_192;
+
+    /// <summary>
+    /// Whether <paramref name="error"/> (or an exception inside it) is the llama.cpp natives failing to load: a DLL
+    /// or one of its dependencies missing (the Visual C++ runtime), the wrong architecture, or LLamaSharp's own
+    /// "native library" load error, possibly wrapped in its type initializer's failure.
+    /// </summary>
+    internal static bool IsNativeLoadFailure(Exception error)
+    {
+        for (Exception? e = error; e is not null; e = e.InnerException)
+        {
+            if (e is DllNotFoundException or BadImageFormatException
+                || (e is RuntimeError && e.Message.Contains("native library", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /// <summary>The token cap of an answer, clamped to 1…16384 as the macOS helper does.</summary>
     internal static int MaxTokens(int requested) => Math.Clamp(requested, 1, 16_384);

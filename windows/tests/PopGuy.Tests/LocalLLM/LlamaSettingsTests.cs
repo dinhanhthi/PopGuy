@@ -1,3 +1,4 @@
+using LLama.Exceptions;
 using PopGuy.Core.Providers;
 using PopGuy.LocalLLM;
 
@@ -41,6 +42,24 @@ public sealed class LlamaSettingsTests
         Assert.Equal(ProviderErrorKind.Transport, error.Kind);
         Assert.Equal($"Transport error: {LlamaProvider.NotDownloadedMessage}", error.Message);
     }
+
+    // A PC without the Visual C++ redistributable: llama.dll's dependencies are missing (Win32 error 126), seen raw, in
+    // NativeApi's type initializer or as LLamaSharp's own load error. Other load failures keep the generic message.
+    public static TheoryData<Exception, bool> LoadFailures => new()
+    {
+        { new DllNotFoundException("llama"), true },
+        { new TypeInitializationException("LLama.Native.NativeApi", new DllNotFoundException("llama")), true },
+        { new TypeInitializationException("LLama.Native.NativeApi", new RuntimeError("The native library cannot be correctly loaded.")), true },
+        { new RuntimeError("Failed to load the native library. Please check the log for more information."), true },
+        { new BadImageFormatException("ggml.dll"), true },
+        { new IOException("The file is in use."), false },
+        { new RuntimeError("Failed to load model 'x.gguf'."), false },
+    };
+
+    [Theory]
+    [MemberData(nameof(LoadFailures))]
+    public void NativeLoadFailuresAreToldApart(Exception error, bool native) =>
+        Assert.Equal(native, LlamaSettings.IsNativeLoadFailure(error));
 
     private const string QwenTemplate =
         "{%- if add_generation_prompt %}{{- '<|im_start|>assistant\\n' }}{%- if enable_thinking is defined and " +
