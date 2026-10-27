@@ -1,5 +1,6 @@
 using Microsoft.UI.Dispatching;
 using PopGuy.Core.Settings;
+using PopGuy.Core.Updates;
 using Velopack;
 using Velopack.Sources;
 
@@ -9,8 +10,8 @@ namespace PopGuy.Services;
 internal enum UpdateState { Idle, Checking, Downloading, Ready, UpToDate, Failed }
 
 /// <summary>
-/// Updates through Velopack (spec-3 §7, macOS Sparkle): the GitHub releases of PopGuy (the <c>windows-v…</c> ones; the
-/// macOS releases carry no Velopack feed). Only an installed copy (Setup.exe) can update; a build run from a folder
+/// Updates through Velopack (spec-3 §7, macOS Sparkle): the GitHub releases of PopGuy, the <c>windows-v…</c> ones only
+/// (<see cref="WindowsReleasesSource"/>). Only an installed copy (Setup.exe) can update; a build run from a folder
 /// shows Check for Updates disabled. With <see cref="AppSettings.AutomaticallyChecksForUpdates"/> on, it checks 10 s
 /// after launch and once a day; a found update downloads in the background, then waits (Sparkle's gentle reminder): the
 /// Settings banner, the About card and the tray offer "Update now", which restarts PopGuy into it. Builds made with
@@ -190,7 +191,7 @@ internal sealed class UpdateService : IDisposable
 #if UPDATE_URL_OVERRIDE
         if (Environment.GetEnvironmentVariable("POPGUY_UPDATE_URL") is { Length: > 0 } url) return new SimpleWebSource(url);
 #endif
-        return new GithubSource(RepoUrl, accessToken: null, prerelease: false);
+        return new WindowsReleasesSource(RepoUrl);
     }
 
     /// <summary>
@@ -202,5 +203,33 @@ internal sealed class UpdateService : IDisposable
         var kept = new string(raw.Where(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '+' or ' ').ToArray()).Trim();
         if (kept.Length > 32) kept = kept[..32].Trim();
         return kept.Length == 0 ? null : kept;
+    }
+}
+
+/// <summary>
+/// Velopack's GitHub source over the Windows releases only (<see cref="ReleaseSelector"/>): Velopack's own reads the 10
+/// newest releases, which the macOS releases of the shared repository can fill. Anonymous (the public API), so assets
+/// come by their browser download URLs, as in Velopack.
+/// </summary>
+internal sealed class WindowsReleasesSource(string repoUrl) : GithubSource(repoUrl, accessToken: null, prerelease: false)
+{
+    protected override async Task<GithubRelease[]> GetReleases(bool includePrereleases)
+    {
+        var url = new Uri(GetApiBaseUrl(RepoUri), $"repos{RepoUri.AbsolutePath}/releases?per_page={ReleaseSelector.PageSize}");
+        var json = await Downloader.DownloadString(url.ToString(), GetRequestHeaders("application/vnd.github.v3+json"))
+            .ConfigureAwait(false);
+        return [.. ReleaseSelector.WindowsReleases(ReleaseSelector.Parse(json), includePrereleases).Select(r => new GithubRelease
+        {
+            Name = r.Name ?? r.TagName,
+            Prerelease = r.Prerelease,
+            PublishedAt = r.PublishedAt?.UtcDateTime,
+            Assets = [.. (r.Assets ?? []).Select(a => new GithubReleaseAsset
+            {
+                Name = a.Name,
+                Url = a.Url,
+                BrowserDownloadUrl = a.BrowserDownloadUrl,
+                ContentType = a.ContentType,
+            })],
+        })];
     }
 }
