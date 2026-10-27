@@ -83,4 +83,37 @@ public static class ScreenCapture
             PInvoke.ReleaseDC(HWND.Null, screen);
         }
     }
+
+    /// <summary>
+    /// The pixels of each of <paramref name="rectsPx"/> (relative to the top-left of <paramref name="source"/>, a BGRA8
+    /// bitmap such as <see cref="Capture"/>'s) as new bitmaps the caller disposes, in the same order: the region
+    /// overlay's freeze-frame is cut into per-monitor backgrounds and the selected region without a second capture. The
+    /// source's pixels are read once for all of them. Only the part of a rect inside the source is copied; null for a
+    /// rect whose part is empty, every one null when the source is not BGRA8. Any thread.
+    /// </summary>
+    public static SoftwareBitmap?[] Crop(SoftwareBitmap source, IReadOnlyList<Rectangle> rectsPx)
+    {
+        var crops = new SoftwareBitmap?[rectsPx.Count];
+        if (source.BitmapPixelFormat != BitmapPixelFormat.Bgra8) return crops;
+        var bounds = new Rectangle(0, 0, source.PixelWidth, source.PixelHeight);
+
+        // BGRA8 rows have no padding: the stride is the width times 4.
+        var sourceStride = source.PixelWidth * 4;
+        var pixels = new byte[checked(sourceStride * source.PixelHeight)];
+        source.CopyToBuffer(pixels.AsBuffer());
+        for (var i = 0; i < crops.Length; i++)
+        {
+            var rect = Rectangle.Intersect(rectsPx[i], bounds);
+            if (rect.Width <= 0 || rect.Height <= 0) continue;
+            var stride = rect.Width * 4;
+            var cropped = new byte[checked(stride * rect.Height)];
+            for (var row = 0; row < rect.Height; row++)
+            {
+                Buffer.BlockCopy(pixels, (rect.Y + row) * sourceStride + rect.X * 4, cropped, row * stride, stride);
+            }
+            crops[i] = SoftwareBitmap.CreateCopyFromBuffer(
+                cropped.AsBuffer(), BitmapPixelFormat.Bgra8, rect.Width, rect.Height, source.BitmapAlphaMode);
+        }
+        return crops;
+    }
 }
