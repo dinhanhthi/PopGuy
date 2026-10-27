@@ -1,5 +1,5 @@
 import { ButtonLink } from "../components/ButtonLink";
-import { DOWNLOAD_URL, GITHUB_URL } from "../constants";
+import { DOWNLOAD_URL, GITHUB_URL, WINDOWS_DOWNLOAD_ARM64, WINDOWS_DOWNLOAD_X64 } from "../constants";
 
 const steps = [
   "Select text in any app, or capture text from the screen.",
@@ -18,11 +18,11 @@ const features = [
 ];
 
 const providers = [
-  ["AI", "OpenAI, Anthropic, Gemini, OpenRouter, GLM, any OpenAI-compatible API, Ollama, LM Studio, and local MLX models."],
+  ["AI", "OpenAI, Anthropic, Gemini, OpenRouter, GLM, any OpenAI-compatible API, Ollama, LM Studio, and local models (MLX on Mac, llama.cpp on Windows)."],
   ["CLI", "Claude, Codex, and Gemini CLI use your subscription. No API key needed."],
   ["Translate", "DeepL, Google Translate."],
-  ["Speech", "macOS voices, Google Cloud TTS, Azure Speech."],
-  ["Dictionary", "macOS Dictionary, Wiktionary, and more."]
+  ["Speech", "system voices, Google Cloud TTS, Azure Speech."],
+  ["Dictionary", "macOS Dictionary (Mac), Wiktionary, and more."]
 ];
 
 export function HomePage() {
@@ -30,12 +30,17 @@ export function HomePage() {
     <main>
       <section className="hero">
         <h1>A guy pops up from your selected text with magic.</h1>
-        <p>Select text in any Mac app, pick an action, and get the result right there.</p>
+        <p>Select text in any app on your Mac or PC, pick an action, and get the result right there.</p>
         <div className="actions">
-          <ButtonLink href={DOWNLOAD_URL} icon="download">Download</ButtonLink>
+          <ButtonLink href={DOWNLOAD_URL} icon="download">Download for macOS</ButtonLink>
           <ButtonLink href={GITHUB_URL} icon="github" variant="secondary">GitHub</ButtonLink>
         </div>
         <p className="note">Free and open source. macOS 13+. Keys stay in Keychain.</p>
+        <div className="actions">
+          <ButtonLink href={WINDOWS_DOWNLOAD_X64} icon="download" variant="secondary">Windows (x64)</ButtonLink>
+          <ButtonLink href={WINDOWS_DOWNLOAD_ARM64} icon="download" variant="secondary">Windows (ARM64)</ButtonLink>
+        </div>
+        <p className="note">Windows 11. Keys stay in Credential Manager.</p>
       </section>
 
       <div className="video-frame">

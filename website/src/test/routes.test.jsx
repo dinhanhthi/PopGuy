@@ -27,7 +27,7 @@ describe("website routes", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the docs table of contents with the five main sections", () => {
+  it("renders the docs table of contents with the six main sections", () => {
     renderAt("/docs");
 
     const docsNavigation = screen.getByRole("navigation", {
@@ -37,12 +37,13 @@ describe("website routes", () => {
 
     expect(links.map((link) => link.textContent)).toEqual([
       "Installation",
+      "Windows",
       "Action Types",
       "Create an Action",
       "Create a Plugin",
       "PopClip Extensions"
     ]);
-    expect(links[1]).toHaveAttribute("href", "#action-types");
+    expect(links[2]).toHaveAttribute("href", "#action-types");
     expect(
       links.filter((link) => link.getAttribute("aria-current") === "true")
     ).toHaveLength(1);
@@ -56,10 +57,22 @@ describe("website routes", () => {
     expect(screen.queryByText(/`/)).not.toBeInTheDocument();
   });
 
-  it("shows a single Download link on the home page without a Pro checkout", () => {
+  it("shows the macOS and Windows downloads on the home page without a Pro checkout", () => {
     renderAt("/");
 
-    expect(screen.getAllByRole("link", { name: /Download/ })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: /Download for macOS/ })).toHaveAttribute(
+      "href",
+      "https://github.com/dinhanhthi/PopGuy/releases/latest"
+    );
+    // A public download contract: the windows-v<csproj Version> release's Velopack Setup.exe per architecture.
+    for (const [name, arch] of [["Windows (x64)", "x64"], ["Windows (ARM64)", "arm64"]]) {
+      expect(screen.getByRole("link", { name })).toHaveAttribute(
+        "href",
+        expect.stringMatching(
+          new RegExp(`^https://github\\.com/dinhanhthi/PopGuy/releases/download/windows-v\\d+\\.\\d+\\.\\d+/PopGuy-win-${arch}-Setup\\.exe$`)
+        )
+      );
+    }
     expect(
       screen.queryByText(["Get", "Pro"].join(" "))
     ).not.toBeInTheDocument();
