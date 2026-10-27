@@ -1,7 +1,8 @@
 name: Windows
 
-# Builds the Windows port (windows/): runs the unit tests once they exist on x64 and ARM64, and publishes an
-# unpackaged, self-contained app folder per architecture for the QA VM (artifact PopGuy-win-<arch>).
+# Builds the Windows port (windows/): runs the unit tests once they exist and the native llama.cpp smoke tests on x64
+# and ARM64, and publishes an unpackaged, self-contained app folder per architecture for the QA VM (artifact
+# PopGuy-win-<arch>).
 # No MSIX, no signing, no certificate and no secrets: the app runs straight from the folder.
 
 on:
@@ -52,11 +53,11 @@ jobs:
         if: steps.probe.outputs.has_tests != 'true'
         run: "'no tests yet: windows/tests/PopGuy.Tests/PopGuy.Tests.csproj does not exist'"
 
-      # Run from windows/ so global.json applies.
+      # The native model tests run only in the native-smoke job. Run from windows/ so global.json applies.
       - name: Test
         if: steps.probe.outputs.has_tests == 'true'
         working-directory: windows
-        run: dotnet test tests/PopGuy.Tests/PopGuy.Tests.csproj
+        run: dotnet test tests/PopGuy.Tests/PopGuy.Tests.csproj --filter "Category!=NativeLLM"
 
   # Same as test, on a native ARM64 runner (the QA VM is ARM64).
   test-arm64:
@@ -86,7 +87,7 @@ jobs:
       - name: Test
         if: steps.probe.outputs.has_tests == 'true'
         working-directory: windows
-        run: dotnet test tests/PopGuy.Tests/PopGuy.Tests.csproj
+        run: dotnet test tests/PopGuy.Tests/PopGuy.Tests.csproj --filter "Category!=NativeLLM"
 
   # The Platform tests: the capture policy, and the clipboard guard on the runner's real clipboard.
   test-platform:
@@ -106,6 +107,41 @@ jobs:
       - name: Test
         working-directory: windows
         run: dotnet test tests/PopGuy.Platform.Tests/PopGuy.Platform.Tests.csproj --logger "console;verbosity=normal"
+
+  # LlamaProvider on the real llama.cpp natives (LLamaSharp) on x64 and ARM64. The tests download their pinned,
+  # SHA-256 checked smoke model from Hugging Face into POPGUY_TEST_MODELS, cached between runs.
+  native-smoke:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, windows-11-arm]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # Pinned, not global-json-file: on SDK release days the resolver picks a version whose files are not on
+          # the download feed yet (10.0.403 on 2026-10-25), which fails every job. global.json still rolls forward.
+          dotnet-version: 10.0.402
+
+      # Keyed by the SHA-256 of the smoke model (Qwen3-0.6B Q8_0).
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/popguy-test-models
+          key: popguy-test-models-9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031
+
+      - name: Native smoke tests
+        working-directory: windows
+        env:
+          POPGUY_TEST_MODELS: ${{ runner.temp }}/popguy-test-models
+          POPGUY_TEST_GGUF_ALL: '1' # TEMP 21.3: one run of the all-catalog check (about 12 GB of downloads), then remove this line.
+        run: |
+          "Runner: $env:RUNNER_ARCH, OS arch: $([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)"
+          dotnet test tests/PopGuy.Tests/PopGuy.Tests.csproj --filter "Category=NativeLLM" --logger "console;verbosity=detailed"
 
   package:
     runs-on: windows-latest
@@ -144,8 +180,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # Fails unless the folder is a runnable unpackaged self-contained WinUI app for this architecture: the Windows
-      # App SDK runtime and WinUI binaries, a .pri resource index, and the WinRT activatable-class registrations
-      # (an unpackaged app has no package manifest, so they must be in the app's own manifest).
+      # App SDK runtime and WinUI binaries, the llama.cpp natives, a .pri resource index, and the WinRT activatable-class
+      # registrations (an unpackaged app has no package manifest, so they must be in the app's own manifest).
       - name: Check artifact contents
         run: |
           function Get-PeMachine([string]$path) {
@@ -174,6 +210,21 @@ jobs:
             $machine = Get-PeMachine $path
             '{0,-30} 0x{1:X4}' -f $name, $machine
             if ($machine -ne $expected) { $errors += ('{0}: machine 0x{1:X4}, expected 0x{2:X4}' -f $name, $machine, $expected) }
+          }
+
+          # The llama.cpp natives (LLamaSharp.Backend.Cpu, through PopGuy.LocalLLM) for this architecture, searched
+          # recursively: x64 splits them into avx/avx2/avx512/noavx folders.
+          $rt = "runtimes/win-$env:ARCH"
+          $llamaDir = Join-Path $env:APP_DIR "$rt/native"
+          foreach ($name in @('llama.dll', 'ggml.dll', 'ggml-base.dll', 'ggml-cpu.dll')) {
+            $found = @(if (Test-Path -LiteralPath $llamaDir) { Get-ChildItem -LiteralPath $llamaDir -Recurse -File -Filter $name })
+            if ($found.Count -eq 0) { $errors += "Missing $rt/native/**/$name in the publish folder"; continue }
+            foreach ($file in $found) {
+              $machine = Get-PeMachine $file.FullName
+              $rel = $file.FullName.Substring($env:APP_DIR.Length + 1)
+              '{0,-50} 0x{1:X4}' -f $rel, $machine
+              if ($machine -ne $expected) { $errors += ('{0}: machine 0x{1:X4}, expected 0x{2:X4}' -f $rel, $machine, $expected) }
+            }
           }
 
           $pri = @(Get-ChildItem -LiteralPath $env:APP_DIR -File -Filter '*.pri')
