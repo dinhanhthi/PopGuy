@@ -82,7 +82,7 @@ internal sealed class ToolbarController : IDisposable
     /// The mouse is kept from the selection pipeline until this <see cref="Environment.TickCount64"/>: long.MaxValue while
     /// an OCR capture runs, then <see cref="OcrMuteGraceMs"/> more. Else the region drag on the overlay reached it, and
     /// its read after the debounce (the overlay closed, the user's app given the foreground back) captured a selection
-    /// still in that app and raced the OCR toolbar. Interlocked (Volatile); 0: not muted.
+    /// still in that app and raced the OCR toolbar. Volatile; 0: not muted.
     /// </summary>
     private long _pipelineMutedUntil;
 

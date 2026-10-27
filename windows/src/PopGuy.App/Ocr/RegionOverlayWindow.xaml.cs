@@ -204,8 +204,13 @@ public sealed partial class RegionOverlayWindow : Window
         if (!_closed && ToolbarWindowStyle.ForegroundWindow() == Hwnd) Root.Focus(FocusState.Programmatic);
     }
 
+    /// <summary>
+    /// A close from outside (Alt+F4) cancels the capture: otherwise it never ends and the selection pipeline stays
+    /// muted. The controller unsubscribes before <see cref="Dismiss"/>, so its own close raises nothing.
+    /// </summary>
     private void OnClosed(object sender, WindowEventArgs args)
     {
+        var cancelled = Cancelled;
         _closed = true;
         Root.SizeChanged -= OnRootSizeChanged;
         Root.PointerPressed -= OnPointerPressed;
@@ -221,6 +226,7 @@ public sealed partial class RegionOverlayWindow : Window
         Moved = null;
         Released = null;
         Cancelled = null;
+        cancelled?.Invoke();
     }
 }
 
