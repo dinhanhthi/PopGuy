@@ -173,3 +173,11 @@ EnumWindows
 IsWindowVisible
 GetWindowTextW
 IUIAutomationCondition
+BitBlt
+CreateCompatibleDC
+SelectObject
+DeleteDC
+GetDC
+ReleaseDC
+GdiFlush
+ROP_CODE
