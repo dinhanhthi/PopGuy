@@ -48,6 +48,8 @@
   <ItemGroup>
     <Content Remove="Assets\AppIcon.png;Assets\ToolbarLogo.png;Assets\TrayIcon-light.ico;Assets\TrayIcon-dark.ico" />
     <Content Include="Assets\AppIcon.png;Assets\ToolbarLogo.png;Assets\TrayIcon-light.ico;Assets\TrayIcon-dark.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Settings → About → Acknowledgements opens it from next to PopGuy.exe. -->
+    <Content Include="Licenses\ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- The Phase 3 spike toolbar is a DEBUG harness (like Debug/Probes.cs): left out of every other build. -->

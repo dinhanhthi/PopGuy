@@ -2,7 +2,7 @@
 <!--
     Settings → About (macOS AboutView.swift, spec-3 §5.8): the PopGuy card (logo, name, version, GitHub link) and the
     Updates card (automatic checks, Check for Updates… and the last result) and the Info card (Author, Website, Contact,
-    Discussions), as Windows 11 Settings cards under the macOS card titles. The header is the window's.
+    Discussions, Acknowledgements), as Windows 11 Settings cards under the macOS card titles. The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.AboutPage"
@@ -95,6 +95,9 @@
                 </controls:SettingsCard>
                 <controls:SettingsCard Header="Discussions">
                     <HyperlinkButton Content="GitHub Discussions" NavigateUri="https://github.com/dinhanhthi/PopGuy/discussions" />
+                </controls:SettingsCard>
+                <controls:SettingsCard Description="The open source software PopGuy is built with, and its licenses." Header="Acknowledgements">
+                    <HyperlinkButton x:Name="AcknowledgementsButton" Content="Third-party notices" />
                 </controls:SettingsCard>
             </StackPanel>
         </Grid>

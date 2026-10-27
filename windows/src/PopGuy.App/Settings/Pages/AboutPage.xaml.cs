@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -14,7 +16,8 @@ namespace PopGuy.Settings.Pages;
 /// it. The Updates card shows <see cref="UpdateService"/>: the automatic checks switch
 /// (<see cref="AppSettings.AutomaticallyChecksForUpdates"/>), Check for Updates… (disabled while a check runs or when
 /// PopGuy is not installed) and the last result, with Update now once an update is ready. The links open through
-/// HyperlinkButton's NavigateUri. The navigation parameter is the AppServices.
+/// HyperlinkButton's NavigateUri; Acknowledgements opens <c>Licenses\ThirdPartyNotices.txt</c> next to PopGuy.exe in the
+/// default text editor. The navigation parameter is the AppServices.
 /// </summary>
 public sealed partial class AboutPage : Page
 {
@@ -31,6 +34,7 @@ public sealed partial class AboutPage : Page
         AutoCheckToggle.Toggled += (_, _) => OnAutoCheckToggled();
         CheckButton.Click += (_, _) => _services?.Updates.CheckNow();
         UpdateNowButton.Click += (_, _) => _services?.Updates.ApplyAndRestart();
+        AcknowledgementsButton.Click += (_, _) => OpenAcknowledgements();
         HoverTooltip.SetText(CheckButton, "Check for a newer version of PopGuy");
         HoverTooltip.SetText(UpdateNowButton, "Restart PopGuy into the new version");
         Loaded += OnLoaded;
@@ -79,6 +83,20 @@ public sealed partial class AboutPage : Page
         UpdateNowButton.Visibility = updates.State == UpdateState.Ready ? Visibility.Visible : Visibility.Collapsed;
         UpdateStatusText.Text = updates.StatusText ?? "";
         UpdateStatusText.Style = (Style)Resources[updates.State == UpdateState.Ready ? "AccentStatusStyle" : "CaptionStyle"];
+    }
+
+    /// <summary>The notices file in the default app for .txt; a failure (no file, no handler) is logged.</summary>
+    private void OpenAcknowledgements()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Licenses", "ThirdPartyNotices.txt");
+        try
+        {
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
+        }
+        catch (Exception e) when (e is Win32Exception or InvalidOperationException or FileNotFoundException)
+        {
+            _services?.Log.Write($"about: acknowledgements not opened, {e.GetType().Name}");
+        }
     }
 
     private void OnAutoCheckToggled()

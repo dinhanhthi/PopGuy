@@ -1,0 +1,90 @@
+PopGuy for Windows — Third-Party Notices
+========================================
+
+PopGuy is free and open source under the GNU Affero General Public License v3.0
+(https://www.gnu.org/licenses/agpl-3.0.html). It includes or uses the following third-party
+software, each under its own license, reproduced or linked below.
+
+
+.NET runtime
+  https://github.com/dotnet/runtime
+  Copyright (c) .NET Foundation and Contributors
+  License: MIT (text below)
+
+Windows App SDK and WinUI 3 (Microsoft.WindowsAppSDK.Base, .Foundation, .WinUI,
+.InteractiveExperiences, .DWrite)
+  https://github.com/microsoft/WindowsAppSDK
+  https://github.com/microsoft/microsoft-ui-xaml
+  Copyright (c) Microsoft Corporation
+  License: the source is MIT; the NuGet runtime packages are distributed under the Microsoft
+  Software License Terms for the Microsoft Windows App SDK (license.txt in each package,
+  https://aka.ms/windowsappsdk).
+
+Windows Community Toolkit (CommunityToolkit.WinUI.Controls.SettingsControls)
+  https://github.com/CommunityToolkit/Windows
+  Copyright (c) .NET Foundation and Contributors
+  License: MIT (text below)
+
+C#/Win32 P/Invoke source generator (Microsoft.Windows.CsWin32; used at build time)
+  https://github.com/microsoft/CsWin32
+  Copyright (c) Microsoft Corporation
+  License: MIT (text below)
+
+Velopack (installer and updates)
+  https://github.com/velopack/velopack
+  Copyright (c) 2021 Caelan Sayler
+  Copyright (c) 2024 Velopack Ltd.
+  License: MIT (text below)
+
+YamlDotNet
+  https://github.com/aaubry/YamlDotNet
+  Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Antoine Aubry and contributors
+  License: MIT (text below)
+
+Microsoft.Data.Sqlite
+  https://github.com/dotnet/efcore
+  Copyright (c) .NET Foundation and Contributors
+  License: MIT (text below)
+
+SQLitePCLRaw (bundle_e_sqlite3, lib.e_sqlite3, core)
+  https://github.com/ericsink/SQLitePCL.raw
+  Copyright SourceGear (formerly labeled Zumero, a dba name for SourceGear)
+  License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+
+SQLite
+  https://sqlite.org
+  Public domain (https://sqlite.org/copyright.html)
+
+LLamaSharp and LLamaSharp.Backend.Cpu
+  https://github.com/SciSharp/LLamaSharp
+  Copyright (c) 2025 SciSharp STACK
+  License: MIT (text below)
+
+llama.cpp and ggml (the native libraries shipped by LLamaSharp.Backend.Cpu)
+  https://github.com/ggml-org/llama.cpp
+  Copyright (c) 2023-2026 The ggml authors
+  License: MIT (text below)
+
+Microsoft Visual C++ Redistributable (installed by the PopGuy installer for the local model)
+  https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist
+  Copyright (c) Microsoft Corporation
+  License: Microsoft Software License Terms for Microsoft Visual C++ Redistributable
+
+
+MIT License
+-----------
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
