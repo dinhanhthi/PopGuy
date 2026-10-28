@@ -148,8 +148,8 @@ public sealed record ActionConfig(
     [property: JsonPropertyName("providerKind")] ProviderKind ProviderKind,
     [property: JsonPropertyName("model")] string Model)
 {
-    /// <summary>The first curated OpenAI model, as on macOS (the spec's "gpt-5.5" is stale).</summary>
-    public const string DefaultModel = "gpt-6.1-sol";
+    /// <summary>The first curated OpenAI model (the spec's "gpt-5.5" is stale).</summary>
+    public const string DefaultModel = "gpt-6.1-terra";
 
     /// <summary>Improve, Shorten, Proofread: replaces the predefined prompt. Translate: added to it. Null: none.</summary>
     [JsonPropertyName("customPrompt")]

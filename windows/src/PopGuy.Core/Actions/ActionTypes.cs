@@ -119,13 +119,15 @@ public static class ProviderKindExtensions
     public static bool UsesModel(this ProviderKind kind) => kind is not (ProviderKind.DeepL or ProviderKind.GoogleTranslate);
 
     /// <summary>
-    /// ProviderKind.curatedModels: the model suggestions in Settings (any id can still be typed). Empty for the
-    /// user-defined runtimes and the translation services; the local model's come from its catalog in the App.
+    /// ProviderKind.curatedModels: the model suggestions in Settings (any id can still be typed); the first is the
+    /// provider's default (the wizard points the actions at it). Empty for the user-defined runtimes and the
+    /// translation services; the local model's come from its catalog in the App.
     /// </summary>
     public static IReadOnlyList<string> CuratedModels(this ProviderKind kind) => kind switch
     {
-        ProviderKind.OpenAi or ProviderKind.CodexCli => ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"],
-        ProviderKind.Anthropic => ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
+        ProviderKind.OpenAi => ["gpt-6.1-terra", "gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"],
+        ProviderKind.CodexCli => ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"],
+        ProviderKind.Anthropic => ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
         ProviderKind.Gemini => ["gemini-4-argon", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
         ProviderKind.Glm => ["glm-5.3", "glm-5.3-flashx", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-4.7"],
         ProviderKind.OpenRouter => ["openai/gpt-6.1-sol", "anthropic/claude-opus-5.5", "google/gemini-4-argon", "z-ai/glm-5.3"],

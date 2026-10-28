@@ -51,9 +51,9 @@ internal sealed class LocalModels
     public string? Error { get; private set; }
 
     /// <summary>
-    /// The wizard's Local AI download (macOS pendingOnboardingLocalMapID): once that model is on disk, Improve, Shorten,
-    /// Proofread and Prompt run it, even when the wizard closed meanwhile. In memory only; a cancel, a failure, another
-    /// download or the wizard's cloud choice clears it.
+    /// The wizard's Local AI download (macOS pendingOnboardingLocalMapID): once that model is on disk, the built-ins
+    /// run it (OnboardingActions.WithAiActionsOn), even when the wizard closed meanwhile. In memory only; a cancel, a
+    /// failure, another download or the wizard's cloud choice clears it.
     /// </summary>
     public string? PendingOnboardingMapId { get; set; }
 

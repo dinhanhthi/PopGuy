@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The Action Library panel (macOS ActionLibraryView.swift), shown in the SlideOverPanel: a header (title, subtitle,
-    Done) with the panel's symmetric padding, the search row, then the scrolling category sections of preset cards. The
-    sections and cards are built in code (ActionLibraryPanel.xaml.cs); the styles below give them their theme colours.
+    The Action Library panel (macOS ActionLibraryView.swift), shown as the SlideOverPanel's centered modal: a header
+    (title, subtitle, Done) with the panel's symmetric padding, the search row, then the scrolling category sections of
+    preset cards. The sections and cards are built in code (ActionLibraryPanel.xaml.cs); the styles below give them their
+    theme colours.
 -->
 <UserControl
     x:Class="PopGuy.Settings.Panels.ActionLibraryPanel"

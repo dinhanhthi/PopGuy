@@ -10,7 +10,9 @@ namespace PopGuy.Settings.Panels;
 
 /// <summary>
 /// The Settings window's slide-over (macOS SlideOverPanel.swift): a dimmed backdrop over the whole window content and,
-/// on the right, a sheet 3/4 of the window wide (never under 480 DIPs, or the minimum the content asks for) that slides in. Esc or a click on the backdrop
+/// on the right, a sheet 3/4 of the window wide (never under 480 DIPs, or the minimum the content asks for) that slides
+/// in. Presented centered, the sheet is a modal instead (Windows only; the Action Library): rounded, 4/5 of the window
+/// wide and as tall as the window less a margin, fading in as it rises a little. Esc or a click on the backdrop
 /// closes it. One panel at a time: presenting another replaces it. The window hosts one above its content; a page finds
 /// it with <see cref="Of"/>. The content lays out its own header with <see cref="HeaderPadding"/> (the macOS
 /// ActionLibraryView structure: the same gap above and below the header, which never moves on resize). The backdrop and
@@ -20,6 +22,10 @@ public sealed partial class SlideOverPanel : Grid
 {
     private const double WidthFraction = 0.75;
     private const double MinSheetWidth = 480;
+    private const double CenteredWidthFraction = 0.8;
+    private const double CenteredMaxWidth = 960;
+    private const double CenteredMargin = 32;
+    private const double CenteredRise = 16;
     private static readonly TimeSpan SlideDuration = TimeSpan.FromMilliseconds(280);
 
     private readonly Border _backdrop;
@@ -27,6 +33,7 @@ public sealed partial class SlideOverPanel : Grid
     private readonly TranslateTransform _slide = new();
     private Storyboard? _animation;
     private double _minWidth = MinSheetWidth;
+    private bool _centered;
     private Action? _closed;
     private UIElement? _returnFocus;
 
@@ -51,7 +58,7 @@ public sealed partial class SlideOverPanel : Grid
         };
         Children.Add(_backdrop);
         Children.Add(_sheet);
-        SizeChanged += (_, _) => UpdateWidth();
+        SizeChanged += (_, _) => UpdateSize();
         KeyDown += OnKeyDown;
     }
 
@@ -78,8 +85,11 @@ public sealed partial class SlideOverPanel : Grid
     /// Shows <paramref name="content"/> at once and slides it in; <paramref name="initialFocus"/> (else the first control
     /// in it) takes the focus, so Esc reaches the panel. <paramref name="closed"/> runs once the panel has closed, however
     /// it closed. <paramref name="minWidth"/>: the sheet's minimum width (macOS ActionLibraryView asks for 560).
+    /// <paramref name="centered"/>: a modal in the middle of the window instead of a sheet on the right.
     /// </summary>
-    public void Present(FrameworkElement content, UIElement? initialFocus = null, Action? closed = null, double minWidth = MinSheetWidth)
+    public void Present(
+        FrameworkElement content, UIElement? initialFocus = null, Action? closed = null, double minWidth = MinSheetWidth,
+        bool centered = false)
     {
         // Open or still sliding out: that one finishes first.
         if (_sheet.Child is not null) Finish();
@@ -87,10 +97,12 @@ public sealed partial class SlideOverPanel : Grid
         _returnFocus = XamlRoot is { } root ? FocusManager.GetFocusedElement(root) as UIElement : null;
         _closed = closed;
         _minWidth = minWidth;
+        _centered = centered;
+        ApplyPlacement();
         _sheet.Child = content;
         IsOpen = true;
         Visibility = Visibility.Visible;
-        UpdateWidth();
+        UpdateSize();
         Animate(opening: true);
 
         // Once the content is in the live tree.
@@ -125,39 +137,70 @@ public sealed partial class SlideOverPanel : Grid
         Close();
     }
 
-    private void UpdateWidth()
+    /// <summary>A full-height sheet on the right (the window's style), or a rounded modal in the middle.</summary>
+    private void ApplyPlacement()
+    {
+        if (_centered)
+        {
+            _sheet.HorizontalAlignment = HorizontalAlignment.Center;
+            _sheet.VerticalAlignment = VerticalAlignment.Center;
+            _sheet.BorderThickness = new Thickness(1);
+            _sheet.CornerRadius = new CornerRadius(8);
+            return;
+        }
+        _sheet.HorizontalAlignment = HorizontalAlignment.Right;
+        _sheet.VerticalAlignment = VerticalAlignment.Stretch;
+        _sheet.ClearValue(Border.BorderThicknessProperty);
+        _sheet.ClearValue(Border.CornerRadiusProperty);
+        _sheet.ClearValue(HeightProperty);
+    }
+
+    private void UpdateSize()
     {
         var width = SheetWidth();
         if (width > 0) _sheet.Width = width;
-    }
-
-    /// <summary>3/4 of the host (never under the minimum, never over the host). The host's width: the panel is laid out only once shown.</summary>
-    private double SheetWidth()
-    {
-        var width = Parent is FrameworkElement host && host.ActualWidth > 0 ? host.ActualWidth : ActualWidth;
-        return Math.Min(width, Math.Max(width * WidthFraction, _minWidth));
+        var height = HostSize().Height;
+        if (_centered && height > 0) _sheet.Height = Math.Max(0, height - 2 * CenteredMargin);
     }
 
     /// <summary>
-    /// Slides the sheet in or out and fades the backdrop with it (macOS easeInOut, 0.28 s). The last animation holds its
-    /// end values until the next one, or <see cref="Finish"/>, stops it.
+    /// The slide-over: 3/4 of the host (never under the minimum, never over the host). The modal: 4/5 of it, at most
+    /// <see cref="CenteredMaxWidth"/>, never under the minimum, and always inside the margin.
+    /// </summary>
+    private double SheetWidth()
+    {
+        var width = HostSize().Width;
+        if (!_centered) return Math.Min(width, Math.Max(width * WidthFraction, _minWidth));
+        var preferred = Math.Max(Math.Min(width * CenteredWidthFraction, CenteredMaxWidth), _minWidth);
+        return Math.Max(0, Math.Min(width - 2 * CenteredMargin, preferred));
+    }
+
+    /// <summary>The host's size: the panel is laid out only once shown.</summary>
+    private (double Width, double Height) HostSize() => Parent is FrameworkElement host && host.ActualWidth > 0
+        ? (host.ActualWidth, host.ActualHeight)
+        : (ActualWidth, ActualHeight);
+
+    /// <summary>
+    /// Slides the sheet in or out and fades the backdrop with it (macOS easeInOut, 0.28 s); the modal rises and fades
+    /// with the backdrop instead. The last animation holds its end values until the next one, or <see cref="Finish"/>,
+    /// stops it.
     /// </summary>
     private void Animate(bool opening)
     {
-        var distance = SheetWidth();
-        var fromX = opening ? distance : _slide.X;
+        var distance = _centered ? CenteredRise : SheetWidth();
+        var fromOffset = opening ? distance : _centered ? _slide.Y : _slide.X;
         var fromOpacity = opening ? 0 : _backdrop.Opacity;
         _animation?.Stop();
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
         var slide = new DoubleAnimation
         {
-            From = fromX,
+            From = fromOffset,
             To = opening ? 0 : distance,
             Duration = SlideDuration,
             EasingFunction = ease,
         };
         Storyboard.SetTarget(slide, _slide);
-        Storyboard.SetTargetProperty(slide, "X");
+        Storyboard.SetTargetProperty(slide, _centered ? "Y" : "X");
         var fade = new DoubleAnimation
         {
             From = fromOpacity,
@@ -170,6 +213,19 @@ public sealed partial class SlideOverPanel : Grid
         var animation = _animation = new Storyboard();
         animation.Children.Add(slide);
         animation.Children.Add(fade);
+        if (_centered)
+        {
+            var sheetFade = new DoubleAnimation
+            {
+                From = fromOpacity,
+                To = opening ? 1 : 0,
+                Duration = SlideDuration,
+                EasingFunction = ease,
+            };
+            Storyboard.SetTarget(sheetFade, _sheet);
+            Storyboard.SetTargetProperty(sheetFade, "Opacity");
+            animation.Children.Add(sheetFade);
+        }
         animation.Completed += (_, _) =>
         {
             if (_animation == animation && !opening) Finish();

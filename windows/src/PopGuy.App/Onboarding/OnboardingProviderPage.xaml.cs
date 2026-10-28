@@ -21,11 +21,12 @@ internal enum ProviderMode { Local, Cloud }
 
 /// <summary>
 /// The wizard's Set Up a Provider step (macOS OnboardingProviderPage.swift). Local AI downloads the first catalog model
-/// through <see cref="LocalModels"/> (the download outlives the wizard); once it is on disk, Improve, Shorten, Proofread
-/// and Prompt run it (first launch only, see <see cref="PointAiActionsAtLocalIfReady"/>, and after a download started
-/// here through <see cref="LocalModels.PendingOnboardingMapId"/>). Cloud API key checks the typed key with the provider,
-/// stores it in Credential Manager (never in the field or the logs; the field shows only a masked preview of a saved
-/// key), then points the matching actions at that provider. Lives as long as the wizard: <see cref="Detach"/> when it
+/// through <see cref="LocalModels"/> (the download outlives the wizard); once it is on disk, the built-ins run it
+/// (OnboardingActions.WithAiActionsOn; first launch only, see <see cref="PointAiActionsAtLocalIfReady"/>, and after a
+/// download started here through <see cref="LocalModels.PendingOnboardingMapId"/>). Cloud API key checks the typed key
+/// with the provider, stores it in Credential Manager (never in the field or the logs; the field shows only a masked
+/// preview of a saved key), then points the matching actions at that provider; a key saved before does the same when
+/// Next leaves the step (<see cref="CommitSavedKey"/>). Lives as long as the wizard: <see cref="Detach"/> when it
 /// closes. UI thread only.
 /// </summary>
 public sealed partial class OnboardingProviderPage : UserControl
@@ -345,7 +346,7 @@ public sealed partial class OnboardingProviderPage : UserControl
 
     /// <summary>
     /// macOS pointAIActionsAtLocalIfReady: on a first launch only (a replayed guide remaps actions only after a download
-    /// started here), with Local AI chosen and the model on disk, Improve, Shorten, Proofread and Prompt run it.
+    /// started here), with Local AI chosen and the model on disk, the built-ins run it.
     /// </summary>
     private void PointAiActionsAtLocalIfReady()
     {
@@ -385,7 +386,7 @@ public sealed partial class OnboardingProviderPage : UserControl
         HoverTooltip.SetText(_keyLink, $"Open {kind.DisplayName()} to create an API key");
         _actionNote.Text = kind is ProviderKind.DeepL or ProviderKind.GoogleTranslate
             ? "Powers Translate."
-            : "Powers Improve, Shorten, Proofread, and Prompt.";
+            : "Powers Improve, Shorten, Proofread, Prompt, and Translate.";
         RefreshSaveButton();
     }
 
@@ -408,6 +409,17 @@ public sealed partial class OnboardingProviderPage : UserControl
         _savedHint.Visibility = preview is not null && _savedLabel.Visibility != Visibility.Visible
             ? Visibility.Visible
             : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Next leaves the step with Cloud API key chosen and its provider's key saved before (not verified here, which
+    /// already pointed the actions): the actions are pointed at that provider, as a verified key would.
+    /// </summary>
+    internal void CommitSavedKey()
+    {
+        if (_mode != ProviderMode.Cloud || _verify is not null || _savedHint.Visibility != Visibility.Visible) return;
+        var kind = CloudProvider;
+        OnboardingActions.Save(_services.Settings, _services.Log.Write, s => OnboardingActions.WithCloudProvider(s, kind));
     }
 
     /// <summary>

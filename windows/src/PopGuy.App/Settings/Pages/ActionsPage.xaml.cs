@@ -209,13 +209,16 @@ public sealed partial class ActionsPage : Page
         panels.Present(editor, editor.InitialFocus);
     }
 
-    /// <summary>Shows the Action Library at once, over the window (macOS showingLibrary); an install refreshes the cards through the settings change.</summary>
+    /// <summary>
+    /// Shows the Action Library at once, as a modal in the middle of the window (macOS showingLibrary slides it in); an
+    /// install refreshes the cards through the settings change.
+    /// </summary>
     private void OpenLibrary()
     {
         if (_model is null || SlideOverPanel.Of(this) is not { } panels) return;
         var library = new ActionLibraryPanel();
         library.Initialize(_model, panels);
-        panels.Present(library, library.InitialFocus, minWidth: ActionLibraryPanel.SheetMinWidth);
+        panels.Present(library, library.InitialFocus, minWidth: ActionLibraryPanel.SheetMinWidth, centered: true);
     }
 
     // Export and import (macOS exportActions, importActions, importPluginFromFile, the snippet sheet).

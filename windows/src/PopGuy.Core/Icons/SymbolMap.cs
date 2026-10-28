@@ -27,14 +27,14 @@ public static class SymbolMap
     private static readonly Dictionary<string, string> Glyphs = new(StringComparer.Ordinal)
     {
         // The built-ins (Improve, Shorten, Proofread, Prompt, Translate, Speak, Look up) not in the curated list.
-        ["text.badge.minus"] = "\uE738", // Remove
+        ["text.badge.minus"] = "\uE73F", // BackToWindow (arrows pointing in: shorter)
         ["checkmark.bubble"] = "\uE73E", // CheckMark
         ["bubble.and.pencil"] = "\uE8F2", // ChatBubbles
 
         // Writing / text.
         ["sparkles"] = Sparkles,
-        ["wand.and.stars"] = "\uE70F", // Edit
-        ["wand.and.rays"] = "\uE70F", // Edit
+        ["wand.and.stars"] = "\uEDFB", // CalligraphyPen (Edit is the result's Edit button)
+        ["wand.and.rays"] = "\uEDFB", // CalligraphyPen
         ["pencil"] = "\uE70F", // Edit
         ["pencil.line"] = "\uE70F", // Edit
         ["pencil.and.outline"] = "\uEF60", // TextEdit
@@ -222,7 +222,7 @@ public static class SymbolMap
         ["crown"] = Sparkles,
         ["trophy"] = Sparkles,
         ["rosette"] = Sparkles,
-        ["wand.and.stars.inverse"] = "\uE70F", // Edit
+        ["wand.and.stars.inverse"] = "\uEDFB", // CalligraphyPen
         ["scope"] = "\uE81D", // Location
         ["target"] = "\uE81D", // Location
         ["scalemass"] = "\uE9D9", // Diagnostic

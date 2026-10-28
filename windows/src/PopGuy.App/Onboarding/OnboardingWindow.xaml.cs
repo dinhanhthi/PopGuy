@@ -59,6 +59,8 @@ public sealed partial class OnboardingWindow : Window
 
     // Set Up a Provider.
     private OnboardingProviderPage _providerPage = null!;
+    /// <summary>The provider step's panel: leaving it with Next commits a saved key (<see cref="ShowStep"/>).</summary>
+    private UIElement _providerStep = null!;
 
     // You're All Set.
     private ToggleSwitch _loginToggle = null!;
@@ -121,6 +123,7 @@ public sealed partial class OnboardingWindow : Window
 
     private void ShowStep(int step)
     {
+        if (step > _step && ReferenceEquals(PageHost.Content, _providerStep)) _providerPage.CommitSavedKey();
         _step = Math.Clamp(step, 0, StepCount - 1);
         PageHost.Content = _steps[_step];
         PageScroller.ChangeView(null, 0, null, disableAnimation: true);
@@ -183,7 +186,7 @@ public sealed partial class OnboardingWindow : Window
     private UIElement ProviderStep()
     {
         _providerPage = new OnboardingProviderPage(_services, Res);
-        return StepPanel(
+        return _providerStep = StepPanel(
             Header(
                 "\uE8D7", "Set Up a Provider",
                 "Choose Local AI to run privately on your PC, or a Cloud API key for the best quality."),
