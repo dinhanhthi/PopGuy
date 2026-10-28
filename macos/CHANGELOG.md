@@ -15,6 +15,12 @@ heading, which the release body shows under `## Windows`.
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.4.0] - 2026-10-28
+
+### Changed
+
+- No changes on macOS; this version ships with the Windows update.
+
 ## [1.3.2] - 2026-10-15
 
 ### Added

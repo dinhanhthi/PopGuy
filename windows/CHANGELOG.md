@@ -7,6 +7,15 @@ GitHub release: each version has a section here and one with the same `## [X.Y.Z
 `macos/CHANGELOG.md`, and `scripts/publish-release.sh` puts both in the release body (this one under `## Windows`).
 Before 1.4.0 Windows had its own versions (0.1.0).
 
+## [1.4.0] - 2026-10-28
+
+### Changed
+
+- PopGuy for Windows now shares its version and its GitHub release with the macOS app, so each release carries the
+  installer and the portable zip for x64 and ARM64. Update checks read these shared releases.
+- Copies installed from 0.1.0 do not update to 1.4.0 by themselves: install 1.4.0 once from the latest release (your
+  settings, history and API keys are kept); later versions update automatically.
+
 ## [0.1.0]
 
 ### Added

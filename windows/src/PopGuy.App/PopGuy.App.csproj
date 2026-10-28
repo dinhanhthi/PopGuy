@@ -13,7 +13,7 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <AssemblyName>PopGuy</AssemblyName>
     <RootNamespace>PopGuy</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>1.4.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\PopGuy.ico</ApplicationIcon>
     <!-- Program.cs is the entry point (single instance); the XAML compiler must not generate a Main. -->
