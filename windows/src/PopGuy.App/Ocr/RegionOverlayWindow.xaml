@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    One monitor's part of the OCR region overlay: the freeze-frame of that monitor, dimmed except inside the selection,
+    and the selection's white outline. The root takes the crosshair cursor, the pointer and Esc.
+-->
+<Window
+    x:Class="PopGuy.Ocr.RegionOverlayWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ocr="using:PopGuy.Ocr"
+    Title="PopGuy screen capture">
+
+    <!-- Black, so the root hit-tests everywhere; the frozen image covers it. -->
+    <ocr:CrosshairGrid x:Name="Root" Background="Black" IsTabStop="True" UseSystemFocusVisuals="False">
+        <Image x:Name="Frozen" Stretch="Fill" IsHitTestVisible="False" />
+        <!-- The dim layer: the whole window minus the selection (even-odd), built in code. -->
+        <Path x:Name="Dim" Fill="#40000000" IsHitTestVisible="False" />
+        <Canvas IsHitTestVisible="False">
+            <Border x:Name="SelectionBorder" BorderBrush="White" BorderThickness="1" Visibility="Collapsed" />
+        </Canvas>
+    </ocr:CrosshairGrid>
+</Window>

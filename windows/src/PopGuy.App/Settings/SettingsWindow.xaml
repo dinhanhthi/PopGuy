@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The Settings window (macOS SettingsView.swift): a fixed sidebar of the sections, the selected section's pinned header
+    (icon and title) above its page, and a footer across the bottom with the version, Check for Updates and the author
+    and GitHub links. While an update is ready, a banner across the top offers it (macOS SettingsView's update banner).
+    Each phase that builds a page adds its sidebar item here (Tag = the page's name, see SettingsWindow.Pages).
+    A NavigationView in Left mode with the pane always open (no toggle, no compact mode): a closed compact pane would
+    attach the default tooltips to its items, which the app never shows (HoverTooltip only).
+-->
+<Window
+    x:Class="PopGuy.Settings.SettingsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="PopGuy Settings">
+
+    <!--
+        The solid base background of Windows 11's own apps (Windows Settings' colour), never Mica: Mica takes a tint from
+        the wallpaper. The sidebar's hover and selection fills and the card strokes are translucent theme brushes, so they
+        stay neutral on it.
+    -->
+    <Grid x:Name="RootGrid" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Title bar (the standard 32 height): the whole row drags the window; the caption buttons sit on its right. -->
+        <StackPanel
+            x:Name="AppTitleBar"
+            Grid.Row="0"
+            Padding="12,0,0,0"
+            Background="Transparent"
+            Orientation="Horizontal"
+            Spacing="8">
+            <!-- The app icon: an extended title bar draws no system icon. -->
+            <Image
+                Width="16"
+                Height="16"
+                VerticalAlignment="Center"
+                Source="ms-appx:///Assets/AppIcon.png" />
+            <TextBlock
+                VerticalAlignment="Center"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="PopGuy Settings" />
+        </StackPanel>
+
+        <!-- Everything below the title bar: taken out and put back after the first show (SettingsWindow.Reattach). -->
+        <ContentControl
+            x:Name="RootHost"
+            Grid.Row="1"
+            HorizontalContentAlignment="Stretch"
+            VerticalContentAlignment="Stretch"
+            IsTabStop="False">
+            <!-- The slide-over panel (Panels/SlideOverPanel) is added last, in code, over both rows. -->
+            <Grid x:Name="ContentRoot">
+                <Grid.Resources>
+                    <Style x:Key="SlideOverBackdropStyle" TargetType="Border">
+                        <Setter Property="Background" Value="{ThemeResource SmokeFillColorDefaultBrush}" />
+                    </Style>
+                    <Style x:Key="SlideOverSheetStyle" TargetType="Border">
+                        <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
+                        <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorDefaultBrush}" />
+                        <Setter Property="BorderThickness" Value="1,0,0,0" />
+                    </Style>
+                </Grid.Resources>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- The update banner (macOS: "Version X is available" / "Update now"): no close button, which would bring a default tooltip. -->
+                <InfoBar
+                    x:Name="UpdateBanner"
+                    Grid.Row="0"
+                    IsClosable="False"
+                    IsOpen="False"
+                    Severity="Informational">
+                    <InfoBar.ActionButton>
+                        <Button x:Name="UpdateNowButton" Content="Update now" />
+                    </InfoBar.ActionButton>
+                </InfoBar>
+
+                <NavigationView
+                    x:Name="Nav"
+                    Grid.Row="1"
+                    CompactModeThresholdWidth="0"
+                    ExpandedModeThresholdWidth="0"
+                    IsBackButtonVisible="Collapsed"
+                    IsPaneOpen="True"
+                    IsPaneToggleButtonVisible="False"
+                    IsSettingsVisible="False"
+                    IsTitleBarAutoPaddingEnabled="False"
+                    OpenPaneLength="160"
+                    PaneDisplayMode="Left">
+                    <!-- No raised content layer (Windows Settings has none): the page sits on the window's background. -->
+                    <NavigationView.Resources>
+                        <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent" />
+                        <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent" />
+                    </NavigationView.Resources>
+                    <NavigationView.MenuItems>
+                        <NavigationViewItem Content="General" Tag="General">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE713;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <NavigationViewItem Content="Providers" Tag="Providers">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE8D7;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <NavigationViewItem Content="Actions" Tag="Actions">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE945;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <NavigationViewItem Content="History" Tag="History">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE81C;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <NavigationViewItem Content="Triggers" Tag="Triggers">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE7C9;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <NavigationViewItem Content="Appearance" Tag="Appearance">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE771;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <NavigationViewItem Content="Ignore" Tag="Ignore">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xED1A;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <NavigationViewItem Content="About" Tag="About">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE946;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                    </NavigationView.MenuItems>
+
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- The pinned header (macOS SettingsTabScaffold): the page scrolls below it. -->
+                        <StackPanel
+                            Grid.Row="0"
+                            Margin="24,8,24,8"
+                            Orientation="Horizontal"
+                            Spacing="8">
+                            <FontIcon
+                                x:Name="HeaderIcon"
+                                Width="24"
+                                VerticalAlignment="Center"
+                                FontSize="18"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock
+                                x:Name="HeaderTitle"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource SubtitleTextBlockStyle}" />
+                        </StackPanel>
+                        <Rectangle
+                            Grid.Row="1"
+                            Height="1"
+                            Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                        <Frame
+                            x:Name="ContentFrame"
+                            Grid.Row="2"
+                            IsNavigationStackEnabled="False"
+                            IsTabStop="False" />
+                    </Grid>
+                </NavigationView>
+
+                <!-- Footer (macOS SettingsFooter). -->
+                <Grid
+                    Grid.Row="2"
+                    Padding="16,4,16,4"
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    BorderThickness="0,1,0,0"
+                    ColumnSpacing="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel
+                        Grid.Column="0"
+                        Orientation="Horizontal"
+                        Spacing="4">
+                        <TextBlock
+                            x:Name="VersionText"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}" />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="·" />
+                        <HyperlinkButton x:Name="CheckUpdatesButton" Padding="4,2,4,2">
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Check for Updates" />
+                        </HyperlinkButton>
+                    </StackPanel>
+                    <HyperlinkButton
+                        Grid.Column="2"
+                        Padding="4,2,4,2"
+                        NavigateUri="https://dinhanhthi.com">
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Anh-Thi DINH" />
+                    </HyperlinkButton>
+                    <TextBlock
+                        Grid.Column="3"
+                        VerticalAlignment="Center"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="·" />
+                    <HyperlinkButton
+                        Grid.Column="4"
+                        Padding="4,2,4,2"
+                        NavigateUri="https://github.com/dinhanhthi/PopGuy">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <FontIcon FontSize="12" Glyph="&#xE943;" />
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="GitHub" />
+                        </StackPanel>
+                    </HyperlinkButton>
+                </Grid>
+            </Grid>
+        </ContentControl>
+    </Grid>
+</Window>

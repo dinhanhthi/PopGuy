@@ -1,0 +1,250 @@
+using System.Globalization;
+using PopGuy.Core.Actions;
+
+namespace PopGuy.Core.Icons;
+
+/// <summary>
+/// The icon picker's choices (macOS <c>IconPickerView.swift</c>): its curated SF Symbol names, in its order, each drawn
+/// through <see cref="SymbolMap"/>, and its emoji quick-picks. The picker stores the name or the emoji in
+/// <see cref="ActionIcon"/>, so settings stay portable between macOS and Windows.
+/// </summary>
+public static class IconCatalog
+{
+    /// <summary>macOS <c>curatedSymbols</c>.</summary>
+    public static IReadOnlyList<string> Symbols { get; } =
+    [
+        // Writing / text.
+        "sparkles",
+        "wand.and.stars",
+        "wand.and.rays",
+        "pencil",
+        "pencil.line",
+        "pencil.and.outline",
+        "square.and.pencil",
+        "highlighter",
+        "textformat",
+        "textformat.abc",
+        "textformat.size",
+        "textformat.alt",
+        "character",
+        "character.cursor.ibeam",
+        "abc",
+        "text.bubble",
+        "character.bubble",
+        "quote.bubble",
+        "quote.opening",
+        "quote.closing",
+        "text.quote",
+        "captions.bubble",
+        "bubble.left",
+        "bubble.right",
+        "bubble.left.and.bubble.right",
+        "text.alignleft",
+        "text.aligncenter",
+        "text.alignright",
+        "text.justify",
+        "text.append",
+        "text.insert",
+        "text.badge.plus",
+        "text.badge.checkmark",
+        // Organisation.
+        "list.bullet",
+        "list.number",
+        "list.dash",
+        "list.bullet.indent",
+        "checklist",
+        "checkmark",
+        "checkmark.circle",
+        "checkmark.seal",
+        "tag",
+        "tag.fill",
+        "bookmark",
+        "bookmark.fill",
+        "flag",
+        "flag.fill",
+        "tray",
+        "tray.full",
+        "folder",
+        "folder.fill",
+        "archivebox",
+        "square.grid.2x2",
+        "rectangle.grid.1x2",
+        // Navigation / actions.
+        "arrow.right",
+        "arrow.left",
+        "arrow.up",
+        "arrow.down",
+        "arrow.uturn.left",
+        "arrow.uturn.right",
+        "arrow.triangle.2.circlepath",
+        "arrow.clockwise",
+        "arrow.up.arrow.down",
+        "arrow.left.arrow.right",
+        "arrow.right.circle",
+        "arrowshape.turn.up.right",
+        "chevron.right",
+        "chevron.up.chevron.down",
+        "magnifyingglass",
+        "magnifyingglass.circle",
+        "link",
+        "paperclip",
+        "command",
+        "option",
+        "return",
+        // Documents.
+        "doc",
+        "doc.on.doc",
+        "doc.text",
+        "doc.text.magnifyingglass",
+        "doc.append",
+        "doc.richtext",
+        "doc.plaintext",
+        "clipboard",
+        "list.clipboard",
+        "note.text",
+        "newspaper",
+        "book",
+        "book.closed",
+        "text.book.closed",
+        // Coding / technical.
+        "terminal",
+        "chevron.left.forwardslash.chevron.right",
+        "curlybraces",
+        "curlybraces.square",
+        "function",
+        "number",
+        "numbersign",
+        "percent",
+        "plus.forwardslash.minus",
+        "x.squareroot",
+        "sum",
+        "chevron.left.slash.chevron.right",
+        "cpu",
+        "memorychip",
+        "externaldrive",
+        "server.rack",
+        "network",
+        "ladybug",
+        "hammer",
+        "wrench.and.screwdriver",
+        "gearshape",
+        "gearshape.2",
+        "slider.horizontal.3",
+        // Communication.
+        "envelope",
+        "envelope.open",
+        "paperplane",
+        "paperplane.fill",
+        "message",
+        "message.fill",
+        "phone",
+        "bell",
+        "bell.fill",
+        "megaphone",
+        "at",
+        "person",
+        "person.2",
+        "person.crop.circle",
+        "globe.americas",
+        "globe.europe.africa",
+        // Knowledge / learning.
+        "lightbulb",
+        "lightbulb.fill",
+        "brain",
+        "brain.head.profile",
+        "graduationcap",
+        "books.vertical",
+        "character.book.closed",
+        "studentdesk",
+        "questionmark.circle",
+        "exclamationmark.circle",
+        "info.circle",
+        "eye",
+        "eyeglasses",
+        // Time / calendar.
+        "calendar",
+        "calendar.badge.clock",
+        "clock",
+        "clock.arrow.circlepath",
+        "alarm",
+        "timer",
+        "hourglass",
+        "stopwatch",
+        // Creative / misc.
+        "paintbrush",
+        "paintbrush.pointed",
+        "paintpalette",
+        "scissors",
+        "star",
+        "star.fill",
+        "heart",
+        "heart.fill",
+        "bolt",
+        "bolt.fill",
+        "flame",
+        "flame.fill",
+        "leaf",
+        "leaf.fill",
+        "drop",
+        "sparkle",
+        "globe",
+        "hand.thumbsup",
+        "hand.thumbsup.fill",
+        "hand.raised",
+        "face.smiling",
+        "gift",
+        "crown",
+        "trophy",
+        "rosette",
+        "wand.and.stars.inverse",
+        "scope",
+        "target",
+        "scalemass",
+        "gauge",
+        "speedometer",
+        "lock",
+        "lock.open",
+        "key",
+        "shield",
+        "trash",
+        "pin",
+        "mappin",
+        "location",
+        "camera",
+        "photo",
+        "mic",
+        "speaker.wave.2",
+        "music.note",
+        "play",
+        "waveform",
+        "character.book.closed.fill",
+        "text.magnifyingglass",
+    ];
+
+    /// <summary>macOS <c>curatedEmoji</c>.</summary>
+    public static IReadOnlyList<string> Emoji { get; } =
+    [
+        "✨", "🔧", "🌍", "📝", "✅", "❤️", "⭐️", "🔥",
+        "💡", "📋", "🔍", "🎯", "🚀", "📌", "🏷️", "🔗",
+        "✉️", "💬", "🧠", "🎓", "📚", "🔤", "🔢", "⚡️",
+        "🎨", "✂️", "👍", "😊", "🌟", "📖",
+    ];
+
+    /// <summary>The symbols whose name contains <paramref name="query"/>, ignoring case; all of them for an empty query.</summary>
+    public static IReadOnlyList<string> Search(string query) => query.Length == 0
+        ? Symbols
+        : Symbols.Where(name => name.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    /// <summary>
+    /// The icon for the emoji box's text (macOS keeps its last character): the last grapheme, so an emoji made of several
+    /// code points stays whole; <see cref="ActionIcon.Default"/> for an empty box.
+    /// </summary>
+    public static ActionIcon EmojiFromInput(string text)
+    {
+        if (text.Length == 0) return ActionIcon.Default;
+        var elements = StringInfo.GetTextElementEnumerator(text);
+        var last = "";
+        while (elements.MoveNext()) last = elements.GetTextElement();
+        return ActionIcon.Emoji(last);
+    }
+}

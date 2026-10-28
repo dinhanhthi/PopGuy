@@ -1,0 +1,440 @@
+using System.Globalization;
+using PopGuy.Core.Actions;
+using PopGuy.Core.Speak.CloudTts;
+using PopGuy.Core.Toolbar;
+
+namespace PopGuy.Core.Speak;
+
+// Routes Speak between the system voice and a cloud provider, and publishes one phase for the toolbar (macOS
+// SpeakCoordinator.swift, spec-4 §1.5-1.10), and the dictionary Listen path: the entry's audio, else a word's recording,
+// else the selected engine (§1.6 B). UNTRUSTED DATA: the spoken text is never logged or put in an error, nor is a key.
+
+/// <summary>
+/// One Speak request at a time: <see cref="SpeakAsync"/>, <see cref="SpeakDictionaryAsync"/>, <see cref="ReplayAsync"/>
+/// and <see cref="Stop"/> each cancel the previous request, and a request that was superseded never plays or falls back. Speak is orthogonal to the
+/// toolbar's action state: the App mirrors <see cref="Phase"/> into <see cref="ToolbarSession.SpeakPhase"/> and
+/// <see cref="CanReplay"/> into <see cref="PresentationInput.CanReplaySpeak"/>. A request publishes Loading on the
+/// caller's thread and routes on the thread pool, so the key read and the synthesis never block a UI thread.
+/// </summary>
+public sealed class SpeakCoordinator
+{
+    /// <summary>
+    /// How long audio may take to become audible once it is handed to the player. Without an audio device the player
+    /// may never start or fail; the request then ends (no fallback: the system voice would hang the same way).
+    /// </summary>
+    public static readonly TimeSpan DefaultPlaybackStartTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// What "Listen again" plays: cached cloud audio, a new system rendering (never a new cloud request), or the
+    /// dictionary audio fetched again (the entry's URL, or the word's recording).
+    /// </summary>
+    private enum ReplaySource { None, System, CloudCache, DictionaryUrl, DictionaryWord }
+
+    private readonly record struct Request(int Generation, CancellationToken Token);
+
+    private readonly ISystemTts _system;
+    private readonly IAudioPlayback _playback;
+    private readonly Func<TtsProviderKind, ITtsProvider?> _cloudProviders;
+    private readonly Func<TtsProviderKind, string?> _cloudKeys;
+    private readonly DictionaryAudioEngine _dictionary;
+    private readonly TimeSpan _playbackStartTimeout;
+    private readonly object _gate = new();
+
+    private SpeakPhase _phase;
+    private bool _didFallBack;
+    private string? _lastText;
+    private bool _canReplay;
+    private int _generation;
+    private CancellationTokenSource? _cts;
+    private ReplaySource _replaySource;
+    private byte[]? _cloudAudio;
+    private string? _dictionaryUrl;
+    private SpeakAccent _lastAccent;
+    private SpeakSettings _lastSettings = new();
+
+    /// <param name="cloudProviders">The adapter for a kind; null when there is none (the system voice plays).</param>
+    /// <param name="cloudKeys">The saved key for a kind (<c>SecretIds.Tts(kind)</c>); null or empty means none.</param>
+    /// <param name="playbackStartTimeout">Default <see cref="DefaultPlaybackStartTimeout"/>.</param>
+    /// <param name="dictionary">The Listen button's audio source; default one on the shared HTTP client.</param>
+    public SpeakCoordinator(
+        ISystemTts system, IAudioPlayback playback,
+        Func<TtsProviderKind, ITtsProvider?> cloudProviders, Func<TtsProviderKind, string?> cloudKeys,
+        TimeSpan? playbackStartTimeout = null, DictionaryAudioEngine? dictionary = null)
+    {
+        _system = system;
+        _playback = playback;
+        _cloudProviders = cloudProviders;
+        _cloudKeys = cloudKeys;
+        _playbackStartTimeout = playbackStartTimeout ?? DefaultPlaybackStartTimeout;
+        _dictionary = dictionary ?? new DictionaryAudioEngine();
+    }
+
+    /// <summary>Raised after any published state changes, on the thread that changed it.</summary>
+    public event Action? Changed;
+
+    /// <summary>Loading from the request until audio is audible, then Playing until it ends or stops.</summary>
+    public SpeakPhase Phase
+    {
+        get
+        {
+            lock (_gate)
+                return _phase;
+        }
+    }
+
+    public bool IsSpeaking => Phase == SpeakPhase.Playing;
+
+    /// <summary>A cloud engine was selected but the system voice played. Reset by each Speak, not by Stop.</summary>
+    public bool DidFallBackToSystem
+    {
+        get
+        {
+            lock (_gate)
+                return _didFallBack;
+        }
+    }
+
+    /// <summary>The trimmed text of the last Speak (the toolbar's spoken-text body); null after <see cref="ClearReplay"/>.</summary>
+    public string? LastSpokenText
+    {
+        get
+        {
+            lock (_gate)
+                return _lastText;
+        }
+    }
+
+    /// <summary>"Listen again" is available: audio played for the current text. Survives Stop.</summary>
+    public bool CanReplay
+    {
+        get
+        {
+            lock (_gate)
+                return _canReplay;
+        }
+    }
+
+    /// <summary>
+    /// Speaks <paramref name="text"/> (trimmed; blank changes nothing) with the selected engine. A cloud engine falls
+    /// back to the system voice when the provider has no adapter, the text is over the character limit, no key is
+    /// saved, or the request or its audio fails. The task completes when the request ends; the App need not await it.
+    /// </summary>
+    public Task SpeakAsync(string text, SpeakAccent accent, SpeakSettings settings, TtsProviderConfig ttsConfig)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0)
+            return Task.CompletedTask;
+        var request = Begin(trimmed, accent, settings, dictionaryUrl: null);
+        return Task.Run(() => RouteAsync(request, trimmed, accent, settings, ttsConfig));
+    }
+
+    /// <summary>
+    /// The dictionary Listen button, with the Look up action's own accent and settings: plays
+    /// <paramref name="nativeAudioUrl"/> (https only), else the Free Dictionary recording of a single English word
+    /// (when <see cref="SpeakSettings.DictionaryAudioEnabled"/> and the accent has one), else speaks like
+    /// <see cref="SpeakAsync"/>. A blank headword changes nothing.
+    /// </summary>
+    public Task SpeakDictionaryAsync(
+        string headword, string? nativeAudioUrl, SpeakAccent accent, SpeakSettings settings, TtsProviderConfig ttsConfig)
+    {
+        var trimmed = headword.Trim();
+        if (trimmed.Length == 0)
+            return Task.CompletedTask;
+        var request = Begin(trimmed, accent, settings, nativeAudioUrl);
+        return Task.Run(() => RouteDictionaryAsync(request, trimmed, nativeAudioUrl, accent, settings, ttsConfig));
+    }
+
+    /// <summary>
+    /// "Listen again": replays the cached cloud audio with no request, or renders the last text again with the system
+    /// voice (also after a cloud fallback, so a replay never re-bills). Changes nothing without a replay.
+    /// </summary>
+    public Task ReplayAsync()
+    {
+        Request request;
+        CancellationTokenSource? previous;
+        ReplaySource source;
+        byte[]? cloudAudio;
+        string? url;
+        string text;
+        SpeakAccent accent;
+        SpeakSettings settings;
+        lock (_gate)
+        {
+            if (_replaySource == ReplaySource.None || _lastText is not { Length: > 0 } last)
+                return Task.CompletedTask;
+            (request, previous) = BeginLocked();
+            (source, cloudAudio, url, text, accent, settings) =
+                (_replaySource, _cloudAudio, _dictionaryUrl, last, _lastAccent, _lastSettings);
+            if (source == ReplaySource.CloudCache)
+                _didFallBack = false;
+        }
+        previous?.Cancel();
+        Changed?.Invoke();
+        return Task.Run(() => source switch
+        {
+            ReplaySource.CloudCache when cloudAudio is not null =>
+                ReplayCloudAsync(request, cloudAudio, text, accent, settings),
+            ReplaySource.DictionaryUrl when url is not null => ReplayDictionaryAsync(
+                request, ct => _dictionary.FetchUrlAsync(url, ct), source, text, accent, settings),
+            ReplaySource.DictionaryWord when accent.DictionaryVariant() is { } variant => ReplayDictionaryAsync(
+                request, ct => _dictionary.FetchWordAsync(text, variant, ct), source, text, accent, settings),
+            _ => SpeakSystemAsync(request, text, accent, settings),
+        });
+    }
+
+    /// <summary>Stops playback and cancels any request in flight; "Listen again" stays available.</summary>
+    public void Stop()
+    {
+        CancellationTokenSource? previous;
+        bool changed;
+        lock (_gate)
+        {
+            previous = _cts;
+            _cts = null;
+            _generation++;
+            changed = _phase != SpeakPhase.Idle;
+            _phase = SpeakPhase.Idle;
+        }
+        previous?.Cancel();
+        if (changed)
+            Changed?.Invoke();
+    }
+
+    /// <summary>Stops and drops the replay and the spoken text (the toolbar closed, or a new selection arrived).</summary>
+    public void ClearReplay()
+    {
+        Stop();
+        lock (_gate)
+        {
+            _replaySource = ReplaySource.None;
+            _canReplay = false;
+            _lastText = null;
+            _cloudAudio = null;
+            _dictionaryUrl = null;
+        }
+        Changed?.Invoke();
+    }
+
+    /// <summary>Starts a new Speak or Listen request: Loading, and no replay until its audio plays.</summary>
+    private Request Begin(string text, SpeakAccent accent, SpeakSettings settings, string? dictionaryUrl)
+    {
+        Request request;
+        CancellationTokenSource? previous;
+        lock (_gate)
+        {
+            (request, previous) = BeginLocked();
+            _didFallBack = false;
+            _lastText = text;
+            _lastAccent = accent;
+            _lastSettings = settings;
+            _replaySource = ReplaySource.None;
+            _canReplay = false;
+            _cloudAudio = null;
+            _dictionaryUrl = dictionaryUrl;
+        }
+        previous?.Cancel();
+        Changed?.Invoke();
+        return request;
+    }
+
+    /// <summary>Supersedes the current request (its source is cancelled by the caller, outside the lock).</summary>
+    private (Request, CancellationTokenSource?) BeginLocked()
+    {
+        var previous = _cts;
+        _cts = new CancellationTokenSource();
+        _generation++;
+        _phase = SpeakPhase.Loading;
+        return (new Request(_generation, _cts.Token), previous);
+    }
+
+    private bool IsCurrent(Request request)
+    {
+        lock (_gate)
+            return request.Generation == _generation;
+    }
+
+    private async Task RouteAsync(
+        Request request, string text, SpeakAccent accent, SpeakSettings settings, TtsProviderConfig ttsConfig)
+    {
+        if (settings.SelectedEngine.CloudProvider is { } kind)
+        {
+            if (await TrySpeakCloudAsync(request, kind, text, accent, settings, ttsConfig) || !FallBack(request))
+                return;
+        }
+        await SpeakSystemAsync(request, text, accent, settings);
+    }
+
+    private async Task RouteDictionaryAsync(
+        Request request, string text, string? url, SpeakAccent accent, SpeakSettings settings, TtsProviderConfig ttsConfig)
+    {
+        if (url is not null
+            && await TryPlayDictionaryAsync(request, ct => _dictionary.FetchUrlAsync(url, ct), ReplaySource.DictionaryUrl))
+            return;
+        if (settings.DictionaryAudioEnabled && accent.DictionaryVariant() is { } variant && SpeakRules.IsSingleWord(text)
+            && await TryPlayDictionaryAsync(
+                request, ct => _dictionary.FetchWordAsync(text, variant, ct), ReplaySource.DictionaryWord))
+            return;
+        if (IsCurrent(request))
+            await RouteAsync(request, text, accent, settings, ttsConfig);
+    }
+
+    /// <summary>True when the dictionary audio handled the request (played, or was superseded); false to fall back.</summary>
+    private async Task<bool> TryPlayDictionaryAsync(
+        Request request, Func<CancellationToken, Task<byte[]?>> fetch, ReplaySource source)
+    {
+        var audio = await fetch(request.Token);
+        if (!IsCurrent(request))
+            return true;
+        return audio is not null
+            && await PlayAsync(request, new MemoryStream(audio), AudioContentTypes.Mp3, source, cloudAudio: null);
+    }
+
+    /// <summary>A dictionary replay that cannot fetch or play again renders the text with the system voice.</summary>
+    private async Task ReplayDictionaryAsync(
+        Request request, Func<CancellationToken, Task<byte[]?>> fetch, ReplaySource source, string text,
+        SpeakAccent accent, SpeakSettings settings)
+    {
+        if (!await TryPlayDictionaryAsync(request, fetch, source))
+            await SpeakSystemAsync(request, text, accent, settings);
+    }
+
+    /// <summary>True when the cloud handled the request (played, or was superseded); false to fall back.</summary>
+    private async Task<bool> TrySpeakCloudAsync(
+        Request request, TtsProviderKind kind, string text, SpeakAccent accent, SpeakSettings settings,
+        TtsProviderConfig ttsConfig)
+    {
+        // The limit counts user-perceived characters, as Swift does.
+        if (_cloudProviders(kind) is not { } provider
+            || new StringInfo(text).LengthInTextElements > settings.CloudCharLimit
+            || _cloudKeys(kind) is not { Length: > 0 } key)
+            return false;
+
+        byte[]? audio = null;
+        try
+        {
+            var language = accent.Bcp47();
+            var synthesis = new TtsSynthesisRequest(
+                text, TtsVoices.Resolve(language, ttsConfig, provider), language,
+                SpeakRules.CloudSpeechSpeed(settings.Rate), settings.Pitch, ttsConfig);
+            audio = await provider.SynthesizeAsync(synthesis, key, request.Token);
+        }
+        catch (Exception)
+        {
+            // Any failure falls back (macOS parity); the error is not shown.
+        }
+        if (!IsCurrent(request))
+            return true;
+        if (audio is not { Length: > 0 })
+            return false;
+        return await PlayAsync(request, new MemoryStream(audio), AudioContentTypes.Mp3, ReplaySource.CloudCache, audio);
+    }
+
+    private async Task ReplayCloudAsync(
+        Request request, byte[] audio, string text, SpeakAccent accent, SpeakSettings settings)
+    {
+        if (!await PlayAsync(request, new MemoryStream(audio), AudioContentTypes.Mp3, ReplaySource.CloudCache, audio))
+            await SpeakSystemAsync(request, text, accent, settings);
+    }
+
+    private async Task SpeakSystemAsync(Request request, string text, SpeakAccent accent, SpeakSettings settings)
+    {
+        Stream audio;
+        try
+        {
+            var voice = SpeakRules.ResolveSystemVoice(_system.Voices(), settings, accent);
+            audio = await _system.SynthesizeAsync(text, voice, settings.Rate, settings.Pitch, request.Token);
+        }
+        catch (Exception)
+        {
+            // No voice, or a synthesis error: nothing to play.
+            Finish(request);
+            return;
+        }
+        if (!IsCurrent(request))
+        {
+            await audio.DisposeAsync();
+            return;
+        }
+        await PlayAsync(request, audio, AudioContentTypes.Wav, ReplaySource.System, cloudAudio: null);
+        Finish(request);
+    }
+
+    /// <summary>
+    /// Plays until the audio ends. False when it failed before it was audible and the request is still current (the
+    /// caller may fall back); true otherwise, with the phase back to Idle. Audio that is not audible within the start
+    /// timeout is stopped, and the request ends there.
+    /// </summary>
+    private async Task<bool> PlayAsync(
+        Request request, Stream audio, string contentType, ReplaySource source, byte[]? cloudAudio)
+    {
+        var started = false;
+        var timedOut = false;
+        using var play = CancellationTokenSource.CreateLinkedTokenSource(request.Token);
+        using var guard = CancellationTokenSource.CreateLinkedTokenSource(request.Token);
+        try
+        {
+            // The player calls started on a media thread.
+            var playing = _playback.PlayAsync(audio, contentType, () =>
+            {
+                Volatile.Write(ref started, true);
+                Started(request, source, cloudAudio);
+            }, play.Token);
+            var first = await Task.WhenAny(playing, Task.Delay(_playbackStartTimeout, guard.Token));
+            guard.Cancel();
+            if (first != playing && !Volatile.Read(ref started) && !request.Token.IsCancellationRequested)
+            {
+                timedOut = true;
+                play.Cancel();
+            }
+            await playing;
+        }
+        catch (Exception)
+        {
+            // Stopped, superseded, timed out, or undecodable audio.
+        }
+        if (!Volatile.Read(ref started) && !timedOut && IsCurrent(request))
+            return false;
+        Finish(request);
+        return true;
+    }
+
+    private void Started(Request request, ReplaySource source, byte[]? cloudAudio)
+    {
+        lock (_gate)
+        {
+            if (request.Generation != _generation)
+                return;
+            _phase = SpeakPhase.Playing;
+            _replaySource = source;
+            _canReplay = true;
+            // Cached only once it plays, so undecodable audio never becomes the replay.
+            if (cloudAudio is not null)
+                _cloudAudio = cloudAudio;
+        }
+        Changed?.Invoke();
+    }
+
+    /// <summary>Records a cloud fallback; false when the request was superseded.</summary>
+    private bool FallBack(Request request)
+    {
+        lock (_gate)
+        {
+            if (request.Generation != _generation)
+                return false;
+            _didFallBack = true;
+        }
+        Changed?.Invoke();
+        return true;
+    }
+
+    private void Finish(Request request)
+    {
+        lock (_gate)
+        {
+            if (request.Generation != _generation || _phase == SpeakPhase.Idle)
+                return;
+            _phase = SpeakPhase.Idle;
+        }
+        Changed?.Invoke();
+    }
+}

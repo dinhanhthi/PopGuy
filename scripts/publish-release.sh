@@ -22,8 +22,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PBXPROJ="$REPO_ROOT/PopGuy.xcodeproj/project.pbxproj"
-CHANGELOG="$REPO_ROOT/CHANGELOG.md"
+PBXPROJ="$REPO_ROOT/macos/PopGuy.xcodeproj/project.pbxproj"
+CHANGELOG="$REPO_ROOT/macos/CHANGELOG.md"
 
 cd "$REPO_ROOT"
 
@@ -50,7 +50,7 @@ command -v git >/dev/null || { echo "error: git not installed" >&2; exit 1; }
 # A version bump that wasn't committed yields a stale VERSION here and then trips the
 # zip-name check in §2. All targets share one MARKETING_VERSION after bump-version.sh;
 # require it to be unambiguous so the tag can't silently pick the wrong number.
-VERSION="$(git show "HEAD:PopGuy.xcodeproj/project.pbxproj" \
+VERSION="$(git show "HEAD:macos/PopGuy.xcodeproj/project.pbxproj" \
   | grep -Eo 'MARKETING_VERSION = [^;]+;' \
   | sed -E 's/MARKETING_VERSION = (.+);/\1/' | sort -u)"
 if [[ -z "$VERSION" ]]; then
@@ -115,7 +115,7 @@ if git ls-remote --exit-code --tags origin "$TAG" >/dev/null 2>&1; then
   echo "error: tag $TAG already exists on origin. Bump the version." >&2
   exit 1
 fi
-if [[ -n "$(git status --porcelain)" ]]; then
+if [[ -n "$(git status --porcelain -- macos scripts appcast.xml LICENSE)" ]]; then
   echo "warning: working tree has uncommitted changes — the tag will point at HEAD, not your working copy." >&2
 fi
 

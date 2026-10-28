@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Settings → About (macOS AboutView.swift, spec-3 §5.8): the PopGuy card (logo, name, version, GitHub link), why
+    Windows warns about the unsigned app (Windows only), the Updates card (automatic checks, Check for Updates… and the
+    last result) and the Info card (Author, Website, Contact, Discussions, Acknowledgements), as Windows 11 Settings
+    cards under the macOS card titles. The header is the window's.
+-->
+<Page
+    x:Class="PopGuy.Settings.Pages.AboutPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls">
+
+    <Page.Resources>
+        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
+            <Setter Property="Margin" Value="1,24,0,4" />
+        </Style>
+        <Style x:Key="CaptionStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="AccentStatusStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+            <Setter Property="Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <!-- Compact cards: the toolkit's 68 high, 16 padded cards leave most of a one-line card empty. -->
+        <Style TargetType="controls:SettingsCard">
+            <Setter Property="MinHeight" Value="48" />
+            <Setter Property="Padding" Value="16,8,16,8" />
+        </Style>
+        <!-- The links end near the card's padding, as switches and buttons do (Fluent's link padding is 11 a side). -->
+        <Style TargetType="HyperlinkButton">
+            <Setter Property="Padding" Value="4,2,4,2" />
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer>
+        <!-- A stretched Grid takes the viewport width: a MaxWidth child placed straight in the ScrollViewer is centered by its narrower desired width and overflows the right edge on wide windows. -->
+        <Grid>
+            <StackPanel
+                MaxWidth="1000"
+                Margin="24,16,24,24"
+                Spacing="4">
+
+                <TextBlock
+                    Margin="1,0,0,4"
+                    Style="{StaticResource SectionHeaderStyle}"
+                    Text="PopGuy" />
+
+                <controls:SettingsCard ContentAlignment="Left">
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <!-- The app icon: the 256 px frame of PopGuy.ico (copied out as AppIcon.png, since the .ico is embedded in the exe only). -->
+                        <Image
+                            Width="64"
+                            Height="64"
+                            VerticalAlignment="Center"
+                            Source="ms-appx:///Assets/AppIcon.png" />
+                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="PopGuy" />
+                            <TextBlock
+                                x:Name="VersionText"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <HyperlinkButton
+                                Padding="0"
+                                Content="github.com/dinhanhthi/PopGuy"
+                                NavigateUri="https://github.com/dinhanhthi/PopGuy" />
+                        </StackPanel>
+                    </StackPanel>
+                </controls:SettingsCard>
+
+                <TextBlock
+                    Margin="1,8,0,0"
+                    Style="{StaticResource CaptionStyle}"
+                    Text="Free and open source (AGPLv3)." />
+
+                <!--
+                    Why Windows warned at install (no macOS counterpart: the Mac app is signed and notarized). Microsoft's
+                    signing service for individual developers is open only in the US and Canada.
+                -->
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Windows Security Warning" />
+
+                <controls:SettingsCard
+                    Description="PopGuy for Windows is not code-signed yet: Microsoft's signing service for individual developers is only open to developers in the US and Canada. That is why Windows may have shown &#8220;Windows protected your PC&#8221; when you installed or first opened it. PopGuy is open source, and every release is built by GitHub Actions from its public code."
+                    Header="Why Windows warned you">
+                    <controls:SettingsCard.HeaderIcon>
+                        <FontIcon Glyph="&#xE83D;" />
+                    </controls:SettingsCard.HeaderIcon>
+                    <HyperlinkButton Content="How releases are built" NavigateUri="https://github.com/dinhanhthi/PopGuy/blob/main/.github/workflows/windows-release.yml" />
+                </controls:SettingsCard>
+
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Updates" />
+
+                <controls:SettingsCard Header="Automatically check for updates">
+                    <ToggleSwitch x:Name="AutoCheckToggle" AutomationProperties.Name="Automatically check for updates" />
+                </controls:SettingsCard>
+                <controls:SettingsCard Header="Check for Updates">
+                    <controls:SettingsCard.Description>
+                        <TextBlock x:Name="UpdateStatusText" TextWrapping="Wrap" />
+                    </controls:SettingsCard.Description>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button
+                            x:Name="UpdateNowButton"
+                            Content="Update now"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Visibility="Collapsed" />
+                        <Button x:Name="CheckButton" Content="Check for Updates…" />
+                    </StackPanel>
+                </controls:SettingsCard>
+
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Info" />
+
+                <controls:SettingsCard Header="Author">
+                    <HyperlinkButton Content="Anh-Thi DINH" NavigateUri="https://dinhanhthi.com" />
+                </controls:SettingsCard>
+                <controls:SettingsCard Header="Website">
+                    <HyperlinkButton Content="pg.dinhanhthi.com" NavigateUri="https://pg.dinhanhthi.com" />
+                </controls:SettingsCard>
+                <controls:SettingsCard Header="Contact">
+                    <HyperlinkButton Content="me@dinhanhthi.com" NavigateUri="mailto:me@dinhanhthi.com" />
+                </controls:SettingsCard>
+                <controls:SettingsCard Header="Discussions">
+                    <HyperlinkButton Content="GitHub Discussions" NavigateUri="https://github.com/dinhanhthi/PopGuy/discussions" />
+                </controls:SettingsCard>
+                <controls:SettingsCard Description="The open source software PopGuy is built with, and its licenses." Header="Acknowledgements">
+                    <HyperlinkButton x:Name="AcknowledgementsButton" Content="Third-party notices" />
+                </controls:SettingsCard>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</Page>

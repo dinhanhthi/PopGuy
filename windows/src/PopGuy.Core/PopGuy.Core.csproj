@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Portable: no Windows API, so it builds and tests on the Mac. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PopGuy.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PopGuy.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- PopClip Config.yaml: parsed as events into plain dictionaries and lists, never into typed objects. -->
+    <PackageReference Include="YamlDotNet" />
+    <!-- Babylon .bgl indexes; ships the native SQLite library for every runtime. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    A lookup's result in the toolbar (macOS DictionaryEntryView.swift and the dictionary branch of ToolbarView.swift):
+    the provider tabs when several providers found a definition, "No definition found", or the entry (headword,
+    pronunciations, source, then the definitions, built in code), and Listen below a divider. Every button has
+    AllowFocusOnInteraction="False" and the selectable text has no context or selection flyout, as in ToolbarView.
+-->
+<UserControl
+    x:Class="PopGuy.Toolbar.LookupView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    IsTabStop="False">
+
+    <StackPanel Spacing="8">
+        <!-- One toggle per provider (macOS segmented picker), built in code; checked states are set in code. -->
+        <StackPanel
+            x:Name="ProviderTabs"
+            HorizontalAlignment="Left"
+            Orientation="Horizontal"
+            Spacing="2"
+            Visibility="Collapsed" />
+
+        <TextBlock
+            x:Name="NotFoundText"
+            Margin="0,24,0,24"
+            HorizontalAlignment="Center"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="No definition found"
+            Visibility="Collapsed" />
+
+        <StackPanel
+            x:Name="EntryPanel"
+            Spacing="12"
+            Visibility="Collapsed">
+            <StackPanel Spacing="6">
+                <TextBlock
+                    x:Name="HeadwordText"
+                    ContextFlyout="{x:Null}"
+                    FontSize="18"
+                    FontWeight="SemiBold"
+                    IsTextSelectionEnabled="True"
+                    SelectionFlyout="{x:Null}"
+                    TextWrapping="Wrap" />
+                <RichTextBlock
+                    x:Name="PronunciationBlock"
+                    ContextFlyout="{x:Null}"
+                    IsTextSelectionEnabled="True"
+                    SelectionFlyout="{x:Null}"
+                    TextWrapping="Wrap" />
+                <TextBlock
+                    x:Name="SourceText"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+            <ScrollViewer MaxHeight="220">
+                <RichTextBlock
+                    x:Name="ContentBlock"
+                    ContextFlyout="{x:Null}"
+                    IsTextSelectionEnabled="True"
+                    SelectionFlyout="{x:Null}"
+                    TextWrapping="Wrap" />
+            </ScrollViewer>
+        </StackPanel>
+
+        <!-- Listen (macOS dictionary footer): follows the speech state (spinner while loading, Stop while playing). -->
+        <StackPanel
+            x:Name="ListenRow"
+            Spacing="9"
+            Visibility="Collapsed">
+            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+            <Button
+                x:Name="ListenButton"
+                AutomationProperties.Name="Listen"
+                AllowFocusOnInteraction="False">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Grid>
+                        <FontIcon
+                            x:Name="ListenIcon"
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            FontSize="14"
+                            Glyph="&#xE767;" />
+                        <ProgressRing
+                            x:Name="ListenRing"
+                            Width="14"
+                            Height="14"
+                            IsActive="False"
+                            Visibility="Collapsed" />
+                    </Grid>
+                    <TextBlock x:Name="ListenLabel" Text="Listen" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

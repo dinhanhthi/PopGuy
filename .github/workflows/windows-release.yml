@@ -1,0 +1,77 @@
+name: Windows release
+
+# Builds the PopGuy for Windows release packages on a windows-v<version> tag: a Release publish per architecture,
+# packed by Velopack into Setup.exe, the portable zip, the full nupkg and the update feed (releases.win-<arch>.json).
+# Artifacts only: windows/scripts/release.sh downloads them and makes the GitHub release as a draft, which is published
+# by hand. Unsigned. A tag that contains -dev (QA) builds with UPDATE_URL_OVERRIDE, so the app reads its update feed
+# from POPGUY_UPDATE_URL.
+
+on:
+  push:
+    tags: ['windows-v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  pack:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    env:
+      ARCH: ${{ matrix.arch }}
+      PLATFORM_NAME: ${{ matrix.arch == 'arm64' && 'ARM64' || 'x64' }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # Pinned, as in windows.yml (SDK release days).
+          dotnet-version: 10.0.402
+
+      # windows-v0.1.0 → 0.1.0. Only digits, dots and a -suffix of letters, digits and dots, so the value is safe to
+      # pass on: the tag comes from a push, not from this repository's files.
+      - name: Version
+        run: |
+          $version = $env:TAG -replace '^windows-v', ''
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "Tag $env:TAG is not windows-v<major>.<minor>.<patch>[-suffix]" }
+          "VERSION=$version" >> $env:GITHUB_ENV
+          "OVERRIDE=$(if ($version -like '*-dev*') { 'true' } else { 'false' })" >> $env:GITHUB_ENV
+
+      - name: Publish
+        working-directory: windows
+        run: |
+          dotnet publish src/PopGuy.App/PopGuy.App.csproj -c Release -r "win-$env:ARCH" "-p:Platform=$env:PLATFORM_NAME" "-p:Version=$env:VERSION" "-p:PopGuyUpdateOverride=$env:OVERRIDE" -o publish
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # vcredist143-<arch>: Setup.exe installs the MSVC runtime the llama.cpp natives need (a clean PC has none; the
+      # runners do, so the tests can't catch its absence).
+      - name: Pack
+        working-directory: windows
+        run: |
+          dotnet tool install -g vpk --version 1.2.161
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          vpk pack --packId PopGuy --packVersion $env:VERSION --packDir publish --mainExe PopGuy.exe --packTitle PopGuy `
+            --icon src/PopGuy.App/Assets/PopGuy.ico --channel "win-$env:ARCH" --runtime "win-$env:ARCH" `
+            --framework "vcredist143-$env:ARCH" --outputDir releases
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem releases | ForEach-Object { '{0,-50} {1,12:N0}' -f $_.Name, $_.Length }
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PopGuy-release-win-${{ matrix.arch }}
+          path: windows/releases/
+          if-no-files-found: error

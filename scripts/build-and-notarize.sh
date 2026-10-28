@@ -29,8 +29,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-PBXPROJ="PopGuy.xcodeproj/project.pbxproj"
-INFO_PLIST="PopGuy/Info.plist"
+PBXPROJ="macos/PopGuy.xcodeproj/project.pbxproj"
+INFO_PLIST="macos/PopGuy/Info.plist"
 ARCHIVE="build/PopGuy.xcarchive"
 EXPORT_DIR="build/export"
 APP="$EXPORT_DIR/PopGuy.app"
@@ -103,7 +103,7 @@ fi
 # MACOSX_DEPLOYMENT_TARGET → $(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET) (14.0 on Xcode 27 — drops
 # macOS 13 users silently). Check, don't override: a command-line override would apply to every
 # target, including PopGuyMLXHelper (intentionally 14.6) and the SPM packages.
-APP_SETTINGS="$(xcodebuild -project PopGuy.xcodeproj -target PopGuy -configuration Release -showBuildSettings 2>/dev/null)"
+APP_SETTINGS="$(xcodebuild -project macos/PopGuy.xcodeproj -target PopGuy -configuration Release -showBuildSettings 2>/dev/null)"
 APP_SIGN_ID="$(sed -n 's/^ *CODE_SIGN_IDENTITY = //p' <<<"$APP_SETTINGS" | head -1)"
 APP_MIN_OS="$(sed -n 's/^ *MACOSX_DEPLOYMENT_TARGET = //p' <<<"$APP_SETTINGS" | head -1)"
 [[ "$APP_SIGN_ID" == "Developer ID Application" ]] \
@@ -115,7 +115,7 @@ APP_MIN_OS="$(sed -n 's/^ *MACOSX_DEPLOYMENT_TARGET = //p' <<<"$APP_SETTINGS" | 
 # -skipMacroValidation: mlx-swift-lm's MLXHuggingFace uses a Swift macro that otherwise needs
 # a one-time GUI "Trust & Enable"; skip the fingerprint check so the build never blocks.
 rm -rf "$ARCHIVE" "$EXPORT_DIR"
-xcodebuild -project PopGuy.xcodeproj -scheme PopGuy \
+xcodebuild -project macos/PopGuy.xcodeproj -scheme PopGuy \
   -configuration Release \
   -skipMacroValidation \
   -archivePath "$ARCHIVE" archive

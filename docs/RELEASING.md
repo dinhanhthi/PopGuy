@@ -20,7 +20,7 @@ stable URL and lists each build with an EdDSA signature.
 | --------------------------------------------- | --------------------------------------------------------------------------------- |
 | Repo                                          | `https://github.com/dinhanhthi/PopGuy`                                            |
 | Apple Team ID                                 | `86H6CNLN4C`                                                                      |
-| Feed URL (`SUFeedURL` in `PopGuy/Info.plist`) | `https://dinhanhthi.github.io/PopGuy/appcast.xml`                                 |
+| Feed URL (`SUFeedURL` in `macos/PopGuy/Info.plist`) | `https://dinhanhthi.github.io/PopGuy/appcast.xml`                                 |
 | Sparkle compare key                           | `CFBundleVersion` (= `CURRENT_PROJECT_VERSION`) — **must increase every release** |
 | Marketing version                             | `CFBundleShortVersionString` (= `MARKETING_VERSION`) — user-facing                |
 
@@ -126,7 +126,7 @@ Generate the keypair once:
 ```
 
 - It stores the **private** key in your **login Keychain** (never on disk, never in git).
-- It prints the **public** key. Copy it into `PopGuy/Info.plist`, replacing the
+- It prints the **public** key. Copy it into `macos/PopGuy/Info.plist`, replacing the
 placeholder `REPLACE_WITH_generate_keys_OUTPUT` (and delete the `TODO` comment above it).
 
 > **Until the real public key replaces the placeholder, the updater is inert** — that
@@ -207,7 +207,7 @@ bundles) are set to the same numbers — test-bundle versions are cosmetic.
 Confirm and commit the bump:
 
 ```sh
-git diff PopGuy.xcodeproj/project.pbxproj
+git diff macos/PopGuy.xcodeproj/project.pbxproj
 ```
 
 ---
@@ -223,7 +223,7 @@ git diff PopGuy.xcodeproj/project.pbxproj
 Archive the Release build:
 
 ```sh
-xcodebuild -project PopGuy.xcodeproj -scheme PopGuy -configuration Release \
+xcodebuild -project macos/PopGuy.xcodeproj -scheme PopGuy -configuration Release \
   -archivePath build/PopGuy.xcarchive archive
 ```
 
@@ -294,7 +294,7 @@ spctl -a -vv -t exec PopGuy.app    # should report: accepted, source=Notarized D
 
 ## 3. Write the changelog entry
 
-`CHANGELOG.md` (repo root, tracked) is the **single source of truth**
+`macos/CHANGELOG.md` (tracked) is the **single source of truth**
 for release notes: the same
 section feeds both the GitHub release body and the Sparkle appcast notes. Add a section
 for this version in [Keep a Changelog](https://keepachangelog.com/) format:
@@ -337,7 +337,7 @@ It:
 - derives `VERSION` from `MARKETING_VERSION` → `TAG=vVERSION` (tag always == app version),
 - checks you are on `main`, the zip filename contains `VERSION`, `gh` is authenticated,
 and the tag does not already exist (local + origin),
-- extracts the `## [VERSION]` section from `CHANGELOG.md` (repo root; fails if missing/empty),
+- extracts the `## [VERSION]` section from `macos/CHANGELOG.md` (fails if missing/empty),
 - writes it to `PopGuy-VERSION.md` next to the zip — the notes file `generate_appcast`
 embeds into the appcast in §5,
 - after a `[y/N]` confirm, creates + pushes the annotated tag and runs
@@ -412,10 +412,49 @@ curl -fsSL https://dinhanhthi.github.io/PopGuy/appcast.xml | head
 ## Quick checklist
 
 - [ ] `Developer ID Application` signing + notarized + stapled (`spctl` accepted)
-- [ ] Real `SUPublicEDKey` in `PopGuy/Info.plist` (placeholder removed)
+- [ ] Real `SUPublicEDKey` in `macos/PopGuy/Info.plist` (placeholder removed)
 - [ ] `CFBundleVersion` strictly greater than the last shipped build
-- [ ] `CHANGELOG.md` (repo root) has a `## [X.Y.Z]` section matching `MARKETING_VERSION`
+- [ ] `macos/CHANGELOG.md` has a `## [X.Y.Z]` section matching `MARKETING_VERSION`
 - [ ] `scripts/publish-release.sh <zip>` ran → tag `vX.Y.Z` pushed + GitHub Release created
 - [ ] `appcast.xml` regenerated (EdDSA-signed) and hosted at `SUFeedURL`
 - [ ] GitHub Release `.zip` URL matches the appcast enclosure
 - [ ] End-to-end update verified from the previous build
+
+---
+
+## Windows releases (Velopack)
+
+PopGuy for Windows has its own version (`<Version>` in `windows/src/PopGuy.App/PopGuy.App.csproj`), its own changelog
+(`windows/CHANGELOG.md`) and its own tags (`windows-v<version>`). It is built on GitHub Actions only
+(`.github/workflows/windows-release.yml`), packed by Velopack and not code-signed. The macOS release always stays the
+repository's **latest** release: the README's and the website's macOS download links point at `/releases/latest`.
+
+### Per release
+
+`/cf-ship` does all of this after the macOS release, without asking (`.coding-friend/skills/cf-ship-custom/SKILL.md`).
+
+1. Bump `<Version>` in the App csproj and add a `## [<version>]` section to `windows/CHANGELOG.md`; commit them on the
+   branch you release from, without pushing the branch yet (step 3).
+2. Run `bash windows/scripts/release.sh` on the Mac (`--yes` answers both of its questions). It pushes only the tag
+   `windows-v<version>`, waits for the release run, downloads and checks both architectures' packages
+   (`PopGuy-win-<arch>-Setup.exe`, `PopGuy-win-<arch>-Portable.zip`, the full nupkg, `releases.win-<arch>.json`),
+   creates the GitHub release as a draft (the changelog section, then how to install and why SmartScreen warns about
+   the unsigned files), then publishes it with `--latest=false`. If you publish from the web UI instead, untick **Set
+   as the latest release** first.
+3. Publish the release **before** the version bump reaches `main`, then push the branch: the website builds its
+   Windows download links from the csproj version (`windows-v<Version>/PopGuy-win-<arch>-Setup.exe` and
+   `…-Portable.zip`), so a site deployed from `main` with an unpublished version links to a 404. For the **first** Windows release: run `release.sh` from the `windows` branch
+   and publish `windows-v0.1.0` before merging `windows` into `main` (the merge deploys the site with the Windows
+   buttons).
+4. A push to `main` that changes the App csproj redeploys the site by itself (`deploy-pages.yml` watches it). If that
+   deploy did not run, start it with `gh workflow run deploy-pages.yml --ref main`.
+5. Installed copies check GitHub once a day (or at once with Check for Updates) and offer **Update now**.
+
+Never publish a `-dev` tag's packages: those QA builds read their update feed from the `POPGUY_UPDATE_URL` environment
+variable, and the app's update check skips `-dev` tags.
+
+### Rollback
+
+Unpublish (back to draft) or delete the bad `windows-v<version>` release. Velopack's check then finds the newest
+remaining Windows release; copies that already updated stay on the bad version until a newer one is published (Velopack
+does not downgrade), so fix forward with a new version.

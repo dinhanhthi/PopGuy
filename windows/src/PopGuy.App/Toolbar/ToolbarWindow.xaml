@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The floating toolbar's window: it hosts ToolbarView, the toolbar's content. The view sizes to its content inside a
+    Canvas, so its size is the window's (top edge fixed). The zoom is a scale on the view's card: the window is sized to
+    the scaled card.
+-->
+<Window
+    x:Class="PopGuy.Toolbar.ToolbarWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:toolbar="using:PopGuy.Toolbar"
+    Title="PopGuy toolbar">
+
+    <!-- No background: the acrylic backdrop shows through. -->
+    <Canvas x:Name="RootCanvas">
+        <toolbar:ToolbarView x:Name="View" />
+    </Canvas>
+</Window>

@@ -96,3 +96,8 @@ docs/warm/
 **/node_modules/
 .xcode-cache/
 website/.hallmark/
+
+# Windows port build output
+windows/**/bin/
+windows/**/obj/
+windows/**/publish/

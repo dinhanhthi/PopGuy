@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Portable managed code: it builds on the Mac, where the llama.cpp natives are never loaded. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PopGuy.LocalLLM</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PopGuy.Core\PopGuy.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LLamaSharp" />
+    <!-- The backend's build props copy the llama.cpp natives: only the RuntimeIdentifier's when the project has one,
+         every platform's otherwise. Its build assets flow to the App (PrivateAssets without "build"), which imports
+         them with its RuntimeIdentifier, so the App gets only its architecture's natives. -->
+    <PackageReference Include="LLamaSharp.Backend.Cpu" PrivateAssets="contentfiles;analyzers" />
+  </ItemGroup>
+
+  <!-- This RID-less library would copy every platform's natives (about 110 MB), and copied files flow to the App
+       through the project reference: drop them here (package props are imported before this body). -->
+  <ItemGroup>
+    <Content Remove="$(NuGetPackageRoot)llamasharp.backend.cpu\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PopGuy.Tests" />
+  </ItemGroup>
+</Project>

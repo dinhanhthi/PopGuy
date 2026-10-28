@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.22000.0</TargetPlatformMinVersion>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <!-- Unpackaged: no MSIX. MSIX tooling stays on only to generate resources.pri. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <SelfContained>true</SelfContained>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <AssemblyName>PopGuy</AssemblyName>
+    <RootNamespace>PopGuy</RootNamespace>
+    <Version>0.1.0</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\PopGuy.ico</ApplicationIcon>
+    <!-- Program.cs is the entry point (single instance); the XAML compiler must not generate a Main. -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <!-- The -dev release tags (QA): the update feed may come from POPGUY_UPDATE_URL (Services/UpdateService). Appended
+         here, never passed as -p:DefineConstants, which would replace DISABLE_XAML_GENERATED_MAIN. -->
+    <DefineConstants Condition="'$(PopGuyUpdateOverride)' == 'true'">$(DefineConstants);UPDATE_URL_OVERRIDE</DefineConstants>
+    <!-- Never PublishTrimmed or NativeAOT: Platform's CsWin32 classic COM interop breaks under trimming and AOT. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WASDK component packages, not the metapackage (see Directory.Packages.props). -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.Base" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.DWrite" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
+    <!-- SettingsCard and SettingsExpander for the Settings window (Phase 12 on). -->
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" />
+    <!-- Install, update and uninstall (Phase 23). -->
+    <PackageReference Include="Velopack" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Also brings LLamaSharp.Backend.Cpu's build props, which copy this RuntimeIdentifier's llama.cpp natives. -->
+    <ProjectReference Include="..\PopGuy.LocalLLM\PopGuy.LocalLLM.csproj" />
+    <ProjectReference Include="..\PopGuy.Platform\PopGuy.Platform.csproj" />
+  </ItemGroup>
+
+  <!-- Unpackaged: assets the app loads from disk (ms-appx:/// or a file path) must be copied next to PopGuy.exe. -->
+  <ItemGroup>
+    <Content Remove="Assets\AppIcon.png;Assets\ToolbarLogo.png;Assets\PopGuy.ico" />
+    <Content Include="Assets\AppIcon.png;Assets\ToolbarLogo.png;Assets\PopGuy.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Settings → About → Acknowledgements opens it from next to PopGuy.exe. -->
+    <Content Include="Licenses\ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- The Phase 3 spike toolbar is a DEBUG harness (like Debug/Probes.cs): left out of every other build. -->
+  <ItemGroup Condition="'$(Configuration)' != 'Debug'">
+    <Page Remove="Debug\SpikeToolbarWindow.xaml" />
+    <Compile Remove="Debug\SpikeToolbarWindow.xaml.cs" />
+  </ItemGroup>
+</Project>

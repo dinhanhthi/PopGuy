@@ -15,6 +15,8 @@ on:
     paths:
       - 'appcast.xml'
       - 'website/**'
+      # A Windows version bump changes the site's Windows download links (website/vite.config.js reads it).
+      - 'windows/src/PopGuy.App/PopGuy.App.csproj'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 

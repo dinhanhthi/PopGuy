@@ -22,9 +22,11 @@ ZIP="${1:-}"
 VERSION="$(basename "$ZIP" .zip | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
 [[ -n "$VERSION" ]] || { echo "error: cannot derive version from zip name: $ZIP" >&2; exit 1; }
 
-# Find generate_appcast in DerivedData (built as part of the Sparkle SPM package)
-GA="$(find ~/Library/Developer/Xcode/DerivedData/PopGuy-*/SourcePackages/artifacts \
-  -name generate_appcast 2>/dev/null | head -1)"
+# Find generate_appcast in DerivedData (built as part of the Sparkle SPM package).
+# Use the newest PopGuy-* match: moving the project to macos/ left a stale PopGuy-<hash> folder.
+ARTIFACTS="$(ls -td ~/Library/Developer/Xcode/DerivedData/PopGuy-*/SourcePackages/artifacts \
+  2>/dev/null | head -1)"
+GA="$(find "$ARTIFACTS" -name generate_appcast 2>/dev/null | head -1)"
 [[ -n "$GA" ]] || {
   echo "error: generate_appcast not found in DerivedData." >&2
   echo "       Build the project first (build-and-notarize.sh runs a full archive)." >&2
@@ -45,7 +47,7 @@ cp build/appcast-archives/appcast.xml appcast.xml
 
 echo "==> Committing and pushing appcast.xml"
 git add appcast.xml
-git commit -m "release: appcast v$VERSION"
+git commit -m "release: appcast v$VERSION" -- appcast.xml
 git push
 
 echo

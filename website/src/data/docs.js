@@ -1,5 +1,8 @@
+import { WINDOWS_DOWNLOAD_ARM64, WINDOWS_DOWNLOAD_X64, WINDOWS_PORTABLE_ARM64, WINDOWS_PORTABLE_X64 } from "../constants";
+
 export const docsSections = [
   "Installation",
+  "Windows",
   "Action Types",
   "Create an Action",
   "Create a Plugin",
@@ -24,6 +27,49 @@ export const docsContent = {
       {
         title: "Requirements",
         bullets: ["macOS 13+", "Apple Silicon or Intel"]
+      }
+    ]
+  },
+  Windows: {
+    summary: "PopGuy for Windows: the same toolbar, actions and providers, built natively for Windows 11.",
+    sections: [
+      {
+        title: "Download",
+        steps: [
+          "Download `PopGuy-win-x64-Setup.exe` for most PCs.",
+          "Or `PopGuy-win-arm64-Setup.exe` for Snapdragon and other Arm PCs.",
+          "Run it. It installs for your user only, no administrator rights needed, and adds PopGuy to the Start menu.",
+          "PopGuy starts in the notification area (system tray) and opens a short setup guide."
+        ],
+        stepLinks: [WINDOWS_DOWNLOAD_X64, WINDOWS_DOWNLOAD_ARM64]
+      },
+      {
+        title: "Portable",
+        steps: [
+          "Download `PopGuy-win-x64-Portable.zip` for most PCs.",
+          "Or `PopGuy-win-arm64-Portable.zip` for Snapdragon and other Arm PCs.",
+          "Unzip it anywhere, for example on a USB drive, and run `PopGuy.exe`. Nothing is installed."
+        ],
+        stepLinks: [WINDOWS_PORTABLE_X64, WINDOWS_PORTABLE_ARM64]
+      },
+      {
+        title: "Windows protected your PC",
+        body: "PopGuy for Windows is not code-signed yet: Microsoft's signing service for individual developers is only open to developers in the US and Canada. So the first time you open the installer or `PopGuy.exe`, Microsoft Defender SmartScreen stops it with \"Windows protected your PC\". Click More info, then Run anyway. PopGuy is open source, and every release is built by GitHub Actions from its public code. Updates install without this prompt: PopGuy checks for a new version once a day and offers Update now."
+      },
+      {
+        title: "Requirements",
+        bullets: ["Windows 11 (build 22000 or later)", "x64 or ARM64", "No permission to grant: PopGuy reads selected text through UI Automation"]
+      },
+      {
+        title: "Differences from the Mac",
+        bullets: [
+          "Ctrl+C+C instead of Cmd+C+C; API keys stay in Windows Credential Manager",
+          "Shell scripts run in PowerShell, with the text in `$env:POPGUY_TEXT`; AppleScript and Shortcuts actions don't run",
+          "No macOS Dictionary: minhqnd, Free Dictionary and Babylon .bgl files instead",
+          "Apps running as administrator are out of reach: PopGuy can't read or paste into them",
+          "In apps that don't share their selected text, use Ctrl+C+C or a shortcut instead of Show on Text Selection",
+          "Local models run with llama.cpp and need the Visual C++ Runtime, which the installer adds"
+        ]
       }
     ]
   },

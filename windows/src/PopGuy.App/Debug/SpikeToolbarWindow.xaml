@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Phase 3 spike toolbar (DEBUG harness, "spike" in Probes.cs): checks that a WinUI window can sit at the pointer
+    without taking the foreground from the app whose text is selected. The bar sizes to its content inside a Canvas,
+    so its size is the window's. Its buttons never take the focus (AllowFocusOnInteraction): focus would activate the
+    window. Only the Prompt box activates it, for typing (its bounds are the window's activation region). The bar's
+    background is Transparent, never unset: an unset background does not hit-test, and the padding is the drag handle.
+    The one tooltip is a custom Popup (never the built-in tooltips), unconstrained, so it opens below the window as its
+    own window.
+-->
+<Window
+    x:Class="PopGuy.Debug.SpikeToolbarWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="PopGuy toolbar">
+
+    <!-- No background: the acrylic backdrop shows through. -->
+    <Canvas x:Name="RootCanvas">
+        <StackPanel
+            x:Name="Bar"
+            Padding="8,6,8,6"
+            Background="Transparent"
+            Orientation="Horizontal"
+            Spacing="4">
+            <Button
+                x:Name="ImproveButton"
+                VerticalAlignment="Center"
+                AllowFocusOnInteraction="False"
+                Tag="improve">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon
+                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                        FontSize="14"
+                        Glyph="&#xE70F;" />
+                    <TextBlock Text="Improve" />
+                </StackPanel>
+            </Button>
+            <Button
+                x:Name="CopyButton"
+                VerticalAlignment="Center"
+                AllowFocusOnInteraction="False"
+                Tag="copy">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon
+                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                        FontSize="14"
+                        Glyph="&#xE8C8;" />
+                    <TextBlock Text="Copy" />
+                </StackPanel>
+            </Button>
+            <Button
+                x:Name="PasteButton"
+                VerticalAlignment="Center"
+                AllowFocusOnInteraction="False"
+                Tag="paste">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon
+                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                        FontSize="14"
+                        Glyph="&#xE77F;" />
+                    <TextBlock Text="Paste" />
+                </StackPanel>
+            </Button>
+            <TextBox
+                x:Name="PromptBox"
+                Width="160"
+                VerticalAlignment="Center"
+                PlaceholderText="Prompt" />
+        </StackPanel>
+
+        <Popup
+            x:Name="TooltipPopup"
+            IsLightDismissEnabled="False"
+            ShouldConstrainToRootBounds="False">
+            <Border
+                Padding="8,5,8,7"
+                Background="{ThemeResource ToolTipBackground}"
+                BorderBrush="{ThemeResource ToolTipBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="{ThemeResource OverlayCornerRadius}"
+                IsHitTestVisible="False">
+                <TextBlock
+                    Foreground="{ThemeResource ToolTipForeground}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Improve the selected text" />
+            </Border>
+        </Popup>
+    </Canvas>
+</Window>

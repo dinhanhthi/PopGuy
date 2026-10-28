@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The Look up rows of an action card on Settings → Actions (macOS ActionsView.swift DictionaryConfigFields, for Look up
+    and a custom Dictionary action): the default target language, then the pronunciation settings (speech engine,
+    accent, system voice, dictionary audio, speed, pitch). Look up only: the providers it asks, then the Babylon (BGL)
+    files (macOS: the Babylon card of the Providers tab) with the enable-all switch, Load, and one row per file built in
+    code. ActionCard moves these rows into its expander (DictionaryCard.TakeRows), so they take the expander's row
+    style. The styles below give the code-built file rows their theme colours.
+-->
+<UserControl
+    x:Class="PopGuy.Settings.Controls.DictionaryCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    IsTabStop="False">
+
+    <UserControl.Resources>
+        <!-- One .bgl file (macOS BabylonDictionarySettingsRow: a faint rounded box). -->
+        <Style x:Key="FileRowStyle" TargetType="Border">
+            <Setter Property="Padding" Value="10,8,10,8" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style x:Key="CaptionStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="CriticalIconStyle" TargetType="FontIcon">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+        </Style>
+        <Style x:Key="CautionIconStyle" TargetType="FontIcon">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCautionBrush}" />
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel x:Name="RowsPanel">
+
+        <!-- The definition language the online providers answer in. -->
+        <controls:SettingsCard x:Name="LanguageCard" Header="Default target language">
+            <ComboBox
+                x:Name="LanguageBox"
+                MinWidth="200"
+                AutomationProperties.Name="Default target language" />
+        </controls:SettingsCard>
+
+        <!-- Pronunciation (the Listen button): System voice, then each cloud provider with a saved key (and the saved one). -->
+        <controls:SettingsCard
+            x:Name="EngineCard"
+            Description="Pronunciation / speech of the looked-up word."
+            Header="Speech engine">
+            <ComboBox
+                x:Name="EngineBox"
+                MinWidth="200"
+                AutomationProperties.Name="Speech engine" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard Header="Accent">
+            <ComboBox
+                x:Name="AccentBox"
+                MinWidth="160"
+                AutomationProperties.Name="Accent" />
+        </controls:SettingsCard>
+
+        <!-- The system voices of the accent's language (OneCore voices). -->
+        <controls:SettingsCard Header="System voice">
+            <controls:SettingsCard.Description>
+                <TextBlock
+                    x:Name="NoVoicesNote"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="No voices installed. Add voices in Windows Settings → Time &amp; language → Speech."
+                    TextWrapping="Wrap"
+                    Visibility="Collapsed" />
+            </controls:SettingsCard.Description>
+            <ComboBox
+                x:Name="SystemVoiceBox"
+                MinWidth="240"
+                AutomationProperties.Name="System voice" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard x:Name="AudioCard" Header="Use dictionary audio before TTS">
+            <ToggleSwitch x:Name="AudioToggle" AutomationProperties.Name="Use dictionary audio before TTS" />
+        </controls:SettingsCard>
+
+        <!-- Speed and pitch, 1-10 (5 is the natural rate). No thumb tooltip: the app shows HoverTooltip only. -->
+        <controls:SettingsCard Header="Speed">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Slider
+                    x:Name="SpeedSlider"
+                    Width="200"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Speed"
+                    IsThumbToolTipEnabled="False"
+                    Maximum="10"
+                    Minimum="1"
+                    SnapsTo="StepValues"
+                    StepFrequency="1" />
+                <TextBlock
+                    x:Name="SpeedValue"
+                    MinWidth="44"
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard Header="Pitch">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Slider
+                    x:Name="PitchSlider"
+                    Width="200"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Pitch"
+                    IsThumbToolTipEnabled="False"
+                    Maximum="10"
+                    Minimum="1"
+                    SnapsTo="StepValues"
+                    StepFrequency="1" />
+                <TextBlock
+                    x:Name="PitchValue"
+                    MinWidth="44"
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+        </controls:SettingsCard>
+
+        <!-- Look up only: the providers it asks, in the order their results show (the macOS Dictionary is not on Windows). -->
+        <controls:SettingsCard
+            x:Name="ProvidersCard"
+            HorizontalContentAlignment="Stretch"
+            ContentAlignment="Vertical"
+            Description="Look up asks every provider at once and shows their results in this order."
+            Header="Providers">
+            <StackPanel Spacing="4">
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="minhqnd: online, Vietnamese-focused (VI / EN / ZH)."
+                    TextWrapping="Wrap" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Free Dictionary API: online, Wiktionary-based (EN / FR / ES)."
+                    TextWrapping="Wrap" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Babylon (BGL): offline, the .bgl files below, while one is enabled."
+                    TextWrapping="Wrap" />
+            </StackPanel>
+        </controls:SettingsCard>
+
+        <!-- Look up only: the enable-all switch and Load (a spinner and "Indexing" while the picked files are indexed). -->
+        <controls:SettingsCard
+            x:Name="BabylonCard"
+            Description="Your own Babylon .bgl dictionaries, looked up offline."
+            Header="Babylon (BGL)">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <!-- The transparent wrapper takes the pointer, so the tooltip still shows while the switch is locked. -->
+                <Grid
+                    x:Name="EnableAllHost"
+                    VerticalAlignment="Center"
+                    Background="Transparent">
+                    <ToggleSwitch x:Name="EnableAllToggle" AutomationProperties.Name="Enable or disable all Babylon dictionaries" />
+                </Grid>
+                <Button
+                    x:Name="LoadButton"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Load"
+                    Style="{StaticResource AccentButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Grid Width="16" Height="16">
+                            <FontIcon
+                                x:Name="LoadIcon"
+                                FontSize="14"
+                                Glyph="&#xE710;" />
+                            <ProgressRing
+                                x:Name="LoadRing"
+                                Width="16"
+                                Height="16"
+                                IsActive="False"
+                                Visibility="Collapsed" />
+                        </Grid>
+                        <TextBlock x:Name="LoadLabel" Text="Load" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </controls:SettingsCard>
+
+        <!-- Look up only: the import error, "No dictionaries loaded", or one row per file (built in code). -->
+        <controls:SettingsCard
+            x:Name="FilesCard"
+            HorizontalContentAlignment="Stretch"
+            ContentAlignment="Vertical">
+            <StackPanel Spacing="8">
+                <Grid
+                    x:Name="ImportErrorLine"
+                    ColumnSpacing="6"
+                    Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon
+                        Margin="0,2,0,0"
+                        VerticalAlignment="Top"
+                        FontSize="12"
+                        Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                        Glyph="&#xE7BA;" />
+                    <TextBlock
+                        x:Name="ImportErrorText"
+                        Grid.Column="1"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        IsTextSelectionEnabled="True"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        TextWrapping="Wrap" />
+                </Grid>
+                <StackPanel
+                    x:Name="EmptyLine"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <FontIcon
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Glyph="&#xE7B8;" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="No dictionaries loaded" />
+                </StackPanel>
+                <StackPanel x:Name="FilesPanel" Spacing="8" />
+            </StackPanel>
+        </controls:SettingsCard>
+    </StackPanel>
+</UserControl>

@@ -11,6 +11,10 @@ or run a **custom AI action** on it. Think PopClip, with a configurable AI backe
 &nbsp;·&nbsp; **[▶ Watch the demo](https://www.youtube.com/watch?v=-ctYYSC4bWM)**
 &nbsp;·&nbsp; macOS 13+ &nbsp;·&nbsp; signed &amp; notarized
 
+**[⬇ Download for Windows](https://github.com/dinhanhthi/PopGuy/releases?q=windows-v&expanded=true)**
+&nbsp;·&nbsp; Windows 11 (x64 &amp; ARM64) &nbsp;·&nbsp; installer or portable &nbsp;·&nbsp; not code-signed yet
+([why Windows warns](#windows))
+
 </div>
 
 ## Features
@@ -46,19 +50,42 @@ plaintext.
 - macOS 13.0 or later
 - Xcode 26.x (only to build from source)
 
+## Windows
+
+PopGuy for Windows is a native port with the same features (C# .NET 10 + WinUI 3).
+
+- **Requirements:** Windows 11 (build 22000 or later), x64 or ARM64.
+- **Install:** download `PopGuy-win-x64-Setup.exe` (most PCs) or `PopGuy-win-arm64-Setup.exe`
+  (Snapdragon and other Arm PCs) from the latest `windows-v…` release on the
+  [Releases page](https://github.com/dinhanhthi/PopGuy/releases?q=windows-v&expanded=true) and
+  run it. It installs for your user only (no administrator rights), then checks for updates daily and offers to
+  install them.
+- **Portable:** or download `PopGuy-win-x64-Portable.zip` / `PopGuy-win-arm64-Portable.zip` from the same release,
+  unzip it anywhere and run `PopGuy.exe`. Nothing is installed.
+- **"Windows protected your PC":** PopGuy for Windows is not code-signed yet. Microsoft's signing
+  service for individual developers (Azure Trusted Signing) is only open to developers in the US
+  and Canada, so Microsoft Defender SmartScreen warns the first time you open the installer or
+  `PopGuy.exe`. Click **More info → Run anyway**. PopGuy is open source, and every Windows
+  release is built by GitHub Actions from this repository's public code
+  ([`windows-release.yml`](.github/workflows/windows-release.yml)).
+- No permission is needed to read selected text. API keys are stored in **Windows Credential
+  Manager**. Apps running as administrator are out of reach.
+- **Building:** the Windows app is built on GitHub Actions only; on a Mac you can run its Core
+  tests. See **[windows/README.md](windows/README.md)**.
+
 ## Build from source
 
 ```sh
 git clone https://github.com/dinhanhthi/PopGuy.git
 cd PopGuy
-open PopGuy.xcodeproj      # press ▶ to run
+open macos/PopGuy.xcodeproj      # press ▶ to run
 ```
 
 Headless build / test:
 
 ```sh
-xcodebuild build -scheme PopGuy -destination 'platform=macOS'
-xcodebuild test  -scheme PopGuy -destination 'platform=macOS'
+xcodebuild build -project macos/PopGuy.xcodeproj -scheme PopGuy -destination 'platform=macOS'
+xcodebuild test  -project macos/PopGuy.xcodeproj -scheme PopGuy -destination 'platform=macOS'
 ```
 
 Then grant **Accessibility** (above) and add your provider API keys in **PopGuy → Settings**.
@@ -76,6 +103,14 @@ time. To make it stick, sign with a stable local certificate:
 
 This is a local development cert only — **not** a Developer ID, and no Apple Developer
 Program membership is required.
+
+## Repository layout
+
+- `macos/` — the macOS app (Xcode project, sources, tests, `CHANGELOG.md`)
+- `windows/` — the Windows port (C# .NET 10 + WinUI 3, `CHANGELOG.md`, release scripts)
+- `website/` — the landing page and docs site
+- `scripts/` — macOS release scripts
+- `assets/` — logos and artwork (app icon, README images)
 
 ## Contributing
 

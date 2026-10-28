@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The wizard's provider step body (macOS OnboardingProviderPage.swift): the Local AI and Cloud API key cards, then the
+    chosen one's card. Built in code (OnboardingProviderPage.xaml.cs) with the wizard window's styles.
+-->
+<UserControl
+    x:Class="PopGuy.Onboarding.OnboardingProviderPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <StackPanel x:Name="Root" Spacing="16" />
+</UserControl>

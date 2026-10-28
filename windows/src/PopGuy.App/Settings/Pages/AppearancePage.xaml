@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Settings → Appearance (macOS SettingsView.swift AppearanceView): a live toolbar preview at the top, then toolbar
+    zoom, Hide logo and the system buttons gap, result font size with a sample, and formatting, as Windows 11 Settings
+    cards under the macOS section headers. WinUI has no segmented picker: a SelectorBar stands in. The preview is the
+    Actions page's layout editor in preview-only mode (macOS reuses ToolbarPreviewView in both). The header is the
+    window's.
+-->
+<Page
+    x:Class="PopGuy.Settings.Pages.AppearancePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:settings="using:PopGuy.Settings.Controls">
+
+    <Page.Resources>
+        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
+            <Setter Property="Margin" Value="1,24,0,4" />
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer>
+        <StackPanel
+            MaxWidth="1000"
+            Margin="24,16,24,24"
+            Spacing="4">
+
+            <!-- The toolbar at its real size for the zoom, from the saved settings (macOS ToolbarPreviewView). -->
+            <settings:ToolbarLayoutEditor x:Name="ToolbarPreview" />
+
+            <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Toolbar Zoom" />
+
+            <controls:SettingsCard
+                Description="Zoom level scales the entire floating toolbar — buttons, icons, and spacing — making it easier to see and click. 1× is the default size; higher levels make everything proportionally larger."
+                Header="Zoom level">
+                <SelectorBar x:Name="ZoomBar" AutomationProperties.Name="Zoom level">
+                    <SelectorBarItem Text="1×" />
+                    <SelectorBarItem Text="1.2×" />
+                    <SelectorBarItem Text="1.3×" />
+                </SelectorBar>
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
+                Description="Turn off to keep the result text at its chosen size while everything else grows."
+                Header="Include font size in zoom">
+                <ToggleSwitch x:Name="ZoomFontToggle" AutomationProperties.Name="Include font size in zoom" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard Description="Hide the PopGuy logo to save space on the toolbar." Header="Hide logo">
+                <ToggleSwitch x:Name="HideLogoToggle" AutomationProperties.Name="Hide logo" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
+                Description="Show the Ignore and Settings buttons right after the actions, separated by dividers like any other action, instead of after a gap."
+                Header="Remove gap before system buttons">
+                <ToggleSwitch x:Name="InlineSystemButtonsToggle" AutomationProperties.Name="Remove gap before system buttons" />
+            </controls:SettingsCard>
+
+            <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Result Text" />
+
+            <controls:SettingsCard Header="Font size">
+                <controls:SettingsCard.Description>
+                    <StackPanel Spacing="4">
+                        <TextBlock
+                            x:Name="SampleText"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="The quick brown fox jumps over the lazy dog."
+                            TextWrapping="Wrap" />
+                        <TextBlock Text="Applies to the result shown in the toolbar after an action runs." TextWrapping="Wrap" />
+                    </StackPanel>
+                </controls:SettingsCard.Description>
+                <SelectorBar x:Name="FontSizeBar" AutomationProperties.Name="Font size">
+                    <SelectorBarItem Text="Small" />
+                    <SelectorBarItem Text="Normal" />
+                    <SelectorBarItem Text="Big" />
+                </SelectorBar>
+            </controls:SettingsCard>
+
+            <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Formatting" />
+
+            <controls:SettingsCard
+                Description="Render Markdown text styles and lists in the result. Bold, italic, strikethrough, inline code, and lists are supported."
+                Header="Preserve &amp; render formatting">
+                <ToggleSwitch x:Name="FormattingToggle" AutomationProperties.Name="Preserve &amp; render formatting" />
+            </controls:SettingsCard>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

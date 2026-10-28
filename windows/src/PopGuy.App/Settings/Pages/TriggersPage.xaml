@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Settings → Triggers (macOS TriggersView.swift): the text-selection and double-click triggers, the Ctrl+C+C chord and
+    its replacement shortcut, and Screen Text Capture (OCR) with its shortcut, as Windows 11 Settings cards under the
+    macOS section headers. macOS's Screen Recording row has no Windows counterpart (no such permission). The header is
+    the window's.
+-->
+<Page
+    x:Class="PopGuy.Settings.Pages.TriggersPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:popguy="using:PopGuy.Controls">
+
+    <Page.Resources>
+        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
+            <Setter Property="Margin" Value="1,24,0,4" />
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer>
+        <StackPanel
+            MaxWidth="1000"
+            Margin="24,16,24,24"
+            Spacing="4">
+
+            <TextBlock
+                Margin="1,0,0,4"
+                Style="{StaticResource SectionHeaderStyle}"
+                Text="On Text Selection" />
+
+            <controls:SettingsCard Header="Show toolbar when text is selected">
+                <controls:SettingsCard.Description>
+                    <StackPanel Spacing="4">
+                        <TextBlock
+                            Text="When on, selecting text shows the toolbar — in editable fields only, or in any app when the option below is off."
+                            TextWrapping="Wrap" />
+                        <Grid ColumnSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon
+                                Grid.Column="0"
+                                Margin="0,2,0,0"
+                                VerticalAlignment="Top"
+                                FontSize="12"
+                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                Glyph="&#xE7BA;" />
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="This feature may not work well with some editors (e.g., Cursor, VS Code, Notion), especially when you select a large amount of text. Use the Ctrl+C+C shortcut in those apps instead."
+                                TextWrapping="Wrap" />
+                        </Grid>
+                    </StackPanel>
+                </controls:SettingsCard.Description>
+                <ToggleSwitch x:Name="OnSelectToggle" AutomationProperties.Name="Show toolbar when text is selected" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
+                x:Name="EditableOnlyCard"
+                Description="When on, the toolbar appears only for text selected inside a field you can type in (text boxes, editors, compose areas). Selecting read-only text — web page content, chat messages — does nothing, so other apps' own selection features are not interrupted. Ctrl+C+C and hotkeys still work on any text."
+                Header="Only in editable text">
+                <ToggleSwitch x:Name="EditableOnlyToggle" AutomationProperties.Name="Only in editable text" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
+                Description="When on, double-clicking a word shows the toolbar — handy for quickly checking a word's meaning or hearing it. Use it on its own, or alongside &quot;Show toolbar when text is selected&quot;: a double-click shows the toolbar once (even on read-only text), while selecting a range of text still follows the options above."
+                Header="Show toolbar on double-click (single word)">
+                <ToggleSwitch x:Name="DoubleClickToggle" AutomationProperties.Name="Show toolbar on double-click (single word)" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
+                x:Name="DefaultActionCard"
+                Description="When assigned, double-clicking a word runs this action directly instead of showing the toolbar."
+                Header="Default action"
+                Visibility="Collapsed">
+                <ComboBox
+                    x:Name="DefaultActionBox"
+                    MinWidth="200"
+                    AutomationProperties.Name="Default action" />
+            </controls:SettingsCard>
+
+            <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Keyboard Shortcut" />
+
+            <controls:SettingsCard Header="Show toolbar with Ctrl+C+C">
+                <ToggleSwitch x:Name="ChordToggle" AutomationProperties.Name="Show toolbar with Ctrl+C+C" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard x:Name="ReplacementCard" Header="Use a different shortcut">
+                <controls:SettingsCard.Description>
+                    <StackPanel Spacing="2">
+                        <TextBlock
+                            x:Name="ReplacementStatusText"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            TextWrapping="Wrap"
+                            Visibility="Collapsed" />
+                        <TextBlock
+                            Text="Replaces Ctrl+C+C with a single key combo (e.g. Ctrl+Shift+Space). A repeated-key chord like Ctrl+C+C cannot be recorded — use one modifier + a key."
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </controls:SettingsCard.Description>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <popguy:ShortcutRecorder
+                        x:Name="Recorder"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Replacement shortcut" />
+                    <Button
+                        x:Name="ClearButton"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Clear — revert to Ctrl+C+C"
+                        Style="{StaticResource SubtleButtonStyle}">
+                        <FontIcon FontSize="14" Glyph="&#xE894;" />
+                    </Button>
+                    <Button
+                        x:Name="RecordButton"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Record a replacement shortcut"
+                        Style="{StaticResource SubtleButtonStyle}">
+                        <FontIcon FontSize="14" Glyph="&#xE7C8;" />
+                    </Button>
+                </StackPanel>
+            </controls:SettingsCard>
+
+            <!-- The tray's Capture Screen Text… scrolls here while the feature is off (SettingsWindow.SelectSection). -->
+            <TextBlock
+                x:Name="OcrHeader"
+                Style="{StaticResource SectionHeaderStyle}"
+                Text="Screen Text Capture (OCR)" />
+
+            <controls:SettingsCard
+                Description="Select any region of the screen and PopGuy recognizes the text in it, then hands it to the toolbar to copy. Useful for text you can't select normally — images, PDFs, video captions."
+                Header="Enable Screen Text Capture">
+                <ToggleSwitch x:Name="OcrToggle" AutomationProperties.Name="Enable Screen Text Capture" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard x:Name="OcrShortcutCard" Header="Keyboard shortcut">
+                <controls:SettingsCard.Description>
+                    <StackPanel Spacing="2">
+                        <TextBlock
+                            x:Name="OcrStatusText"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            TextWrapping="Wrap"
+                            Visibility="Collapsed" />
+                        <TextBlock
+                            Text="Assign a shortcut to start a capture from anywhere (e.g. Ctrl+Shift+2). Also available from the tray icon."
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </controls:SettingsCard.Description>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <popguy:ShortcutRecorder
+                        x:Name="OcrRecorder"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Screen Text Capture shortcut" />
+                    <Button
+                        x:Name="OcrClearButton"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Remove shortcut"
+                        Style="{StaticResource SubtleButtonStyle}">
+                        <FontIcon FontSize="14" Glyph="&#xE894;" />
+                    </Button>
+                    <Button
+                        x:Name="OcrRecordButton"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Record shortcut"
+                        Style="{StaticResource SubtleButtonStyle}">
+                        <FontIcon FontSize="14" Glyph="&#xE7C8;" />
+                    </Button>
+                </StackPanel>
+            </controls:SettingsCard>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

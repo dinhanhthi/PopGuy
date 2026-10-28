@@ -1,0 +1,888 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		67371C126C704661A587 /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 650B6D4AF28B434E9D1C /* HuggingFace */; };
+		903BE62C47B3A159E67B114F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B605796E047F0B1A8CAEB221 /* Sparkle */; };
+		A043BAE1603803A839C0CB52 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = A5534EA92B26FA8ADC30543F /* Yams */; };
+		A6F3C8D429E54B1F8D7C6A5B /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = B7E4D9C52AF64C2E9B8D7A6C /* LICENSE */; };
+		D3132B4DA6DB4860A6AC /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = 946417FD3A4347A6B0AB /* Tokenizers */; };
+		D3BD085B2FED9B1800078DEB /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = D3BD085A2FED9B1800078DEB /* MLXHuggingFace */; };
+		D3BD085D2FED9B1800078DEB /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = D3BD085C2FED9B1800078DEB /* MLXLLM */; };
+		D3BD085F2FED9B1800078DEB /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = D3BD085E2FED9B1800078DEB /* MLXLMCommon */; };
+		D3BD08632FED9C1200078DEB /* PopGuyMLXHelper in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3BD084C2FED962E00078DEB /* PopGuyMLXHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D34244542FD4A56D001600A8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D342443E2FD4A56C001600A8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D34244452FD4A56C001600A8;
+			remoteInfo = PopGuy;
+		};
+		D342445E2FD4A56D001600A8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D342443E2FD4A56C001600A8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D34244452FD4A56C001600A8;
+			remoteInfo = PopGuy;
+		};
+		D3BD08642FED9C3700078DEB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D342443E2FD4A56C001600A8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D3BD084B2FED962E00078DEB;
+			remoteInfo = PopGuyMLXHelper;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D3BD084A2FED962E00078DEB /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		D3BD08622FED9BE700078DEB /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				D3BD08632FED9C1200078DEB /* PopGuyMLXHelper in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		B7E4D9C52AF64C2E9B8D7A6C /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE; path = ../LICENSE; sourceTree = SOURCE_ROOT; };
+		D34244462FD4A56C001600A8 /* PopGuy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PopGuy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D34244532FD4A56D001600A8 /* PopGuyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PopGuyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D342445D2FD4A56D001600A8 /* PopGuyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PopGuyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D3BD084C2FED962E00078DEB /* PopGuyMLXHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = PopGuyMLXHelper; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A99279284E0B475FBA19027D /* Exceptions for "PopGuy" folder in "PopGuy" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D34244452FD4A56C001600A8 /* PopGuy */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		D34244482FD4A56C001600A8 /* PopGuy */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A99279284E0B475FBA19027D /* Exceptions for "PopGuy" folder in "PopGuy" target */,
+			);
+			path = PopGuy;
+			sourceTree = "<group>";
+		};
+		D34244562FD4A56D001600A8 /* PopGuyTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PopGuyTests;
+			sourceTree = "<group>";
+		};
+		D34244602FD4A56D001600A8 /* PopGuyUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PopGuyUITests;
+			sourceTree = "<group>";
+		};
+		D3BD084D2FED962E00078DEB /* PopGuyMLXHelper */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PopGuyMLXHelper;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D34244432FD4A56C001600A8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				903BE62C47B3A159E67B114F /* Sparkle in Frameworks */,
+				A043BAE1603803A839C0CB52 /* Yams in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D34244502FD4A56D001600A8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D342445A2FD4A56D001600A8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D3BD08492FED962E00078DEB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D3BD085D2FED9B1800078DEB /* MLXLLM in Frameworks */,
+				D3BD085F2FED9B1800078DEB /* MLXLMCommon in Frameworks */,
+				D3BD085B2FED9B1800078DEB /* MLXHuggingFace in Frameworks */,
+				67371C126C704661A587 /* HuggingFace in Frameworks */,
+				D3132B4DA6DB4860A6AC /* Tokenizers in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D342443D2FD4A56C001600A8 = {
+			isa = PBXGroup;
+			children = (
+				B7E4D9C52AF64C2E9B8D7A6C /* LICENSE */,
+				D34244482FD4A56C001600A8 /* PopGuy */,
+				D34244562FD4A56D001600A8 /* PopGuyTests */,
+				D34244602FD4A56D001600A8 /* PopGuyUITests */,
+				D3BD084D2FED962E00078DEB /* PopGuyMLXHelper */,
+				D34244472FD4A56C001600A8 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D34244472FD4A56C001600A8 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D34244462FD4A56C001600A8 /* PopGuy.app */,
+				D34244532FD4A56D001600A8 /* PopGuyTests.xctest */,
+				D342445D2FD4A56D001600A8 /* PopGuyUITests.xctest */,
+				D3BD084C2FED962E00078DEB /* PopGuyMLXHelper */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D34244452FD4A56C001600A8 /* PopGuy */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D34244672FD4A56D001600A8 /* Build configuration list for PBXNativeTarget "PopGuy" */;
+			buildPhases = (
+				D34244422FD4A56C001600A8 /* Sources */,
+				D34244432FD4A56C001600A8 /* Frameworks */,
+				D34244442FD4A56C001600A8 /* Resources */,
+				D3BD08622FED9BE700078DEB /* CopyFiles */,
+				D3BD18CB2FEE958200078DEB /* ShellScript */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D3BD08652FED9C3700078DEB /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D34244482FD4A56C001600A8 /* PopGuy */,
+			);
+			name = PopGuy;
+			packageProductDependencies = (
+				B605796E047F0B1A8CAEB221 /* Sparkle */,
+				A5534EA92B26FA8ADC30543F /* Yams */,
+			);
+			productName = PopGuy;
+			productReference = D34244462FD4A56C001600A8 /* PopGuy.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D34244522FD4A56D001600A8 /* PopGuyTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D342446A2FD4A56D001600A8 /* Build configuration list for PBXNativeTarget "PopGuyTests" */;
+			buildPhases = (
+				D342444F2FD4A56D001600A8 /* Sources */,
+				D34244502FD4A56D001600A8 /* Frameworks */,
+				D34244512FD4A56D001600A8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D34244552FD4A56D001600A8 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D34244562FD4A56D001600A8 /* PopGuyTests */,
+			);
+			name = PopGuyTests;
+			packageProductDependencies = (
+			);
+			productName = PopGuyTests;
+			productReference = D34244532FD4A56D001600A8 /* PopGuyTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		D342445C2FD4A56D001600A8 /* PopGuyUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D342446D2FD4A56D001600A8 /* Build configuration list for PBXNativeTarget "PopGuyUITests" */;
+			buildPhases = (
+				D34244592FD4A56D001600A8 /* Sources */,
+				D342445A2FD4A56D001600A8 /* Frameworks */,
+				D342445B2FD4A56D001600A8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D342445F2FD4A56D001600A8 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D34244602FD4A56D001600A8 /* PopGuyUITests */,
+			);
+			name = PopGuyUITests;
+			packageProductDependencies = (
+			);
+			productName = PopGuyUITests;
+			productReference = D342445D2FD4A56D001600A8 /* PopGuyUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		D3BD084B2FED962E00078DEB /* PopGuyMLXHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D3BD08522FED962F00078DEB /* Build configuration list for PBXNativeTarget "PopGuyMLXHelper" */;
+			buildPhases = (
+				D3BD08482FED962E00078DEB /* Sources */,
+				D3BD08492FED962E00078DEB /* Frameworks */,
+				D3BD084A2FED962E00078DEB /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D3BD084D2FED962E00078DEB /* PopGuyMLXHelper */,
+			);
+			name = PopGuyMLXHelper;
+			packageProductDependencies = (
+				D3BD085A2FED9B1800078DEB /* MLXHuggingFace */,
+				D3BD085C2FED9B1800078DEB /* MLXLLM */,
+				D3BD085E2FED9B1800078DEB /* MLXLMCommon */,
+				650B6D4AF28B434E9D1C /* HuggingFace */,
+				946417FD3A4347A6B0AB /* Tokenizers */,
+			);
+			productName = PopGuyMLXHelper;
+			productReference = D3BD084C2FED962E00078DEB /* PopGuyMLXHelper */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D342443E2FD4A56C001600A8 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2650;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					D34244452FD4A56C001600A8 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					D34244522FD4A56D001600A8 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = D34244452FD4A56C001600A8;
+					};
+					D342445C2FD4A56D001600A8 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = D34244452FD4A56C001600A8;
+					};
+					D3BD084B2FED962E00078DEB = {
+						CreatedOnToolsVersion = 26.5;
+					};
+				};
+			};
+			buildConfigurationList = D34244412FD4A56C001600A8 /* Build configuration list for PBXProject "PopGuy" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D342443D2FD4A56C001600A8;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DC0B6AE01890AE6FBF496F23 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				F511D9CB8F68D9D9B0341314 /* XCRemoteSwiftPackageReference "Yams" */,
+				D3BD08532FED9B1800078DEB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+				BE6B9CF0E16F4CD6A403 /* XCRemoteSwiftPackageReference "swift-huggingface" */,
+				16E1B0DC95B9477BAB71 /* XCRemoteSwiftPackageReference "swift-transformers" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D34244472FD4A56C001600A8 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D34244452FD4A56C001600A8 /* PopGuy */,
+				D34244522FD4A56D001600A8 /* PopGuyTests */,
+				D342445C2FD4A56D001600A8 /* PopGuyUITests */,
+				D3BD084B2FED962E00078DEB /* PopGuyMLXHelper */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D34244442FD4A56C001600A8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A6F3C8D429E54B1F8D7C6A5B /* LICENSE in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D34244512FD4A56D001600A8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D342445B2FD4A56D001600A8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		D3BD18CB2FEE958200078DEB /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Embed the MLX Metal shader bundle next to the helper so MLX can load its\n# default.metallib at runtime (the helper searches its own directory). Copy the\n# whole resource bundle (a proper, signable nested bundle) and code-sign it so the\n# app's outer code-signing accepts it.\nset -e\nSRC=\"${BUILT_PRODUCTS_DIR}/mlx-swift_Cmlx.bundle\"\nDEST_DIR=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers\"\nDEST=\"${DEST_DIR}/mlx-swift_Cmlx.bundle\"\nif [ -d \"$SRC\" ]; then\n  mkdir -p \"$DEST_DIR\"\n  rm -rf \"$DEST\"\n  # -L dereferences the symlink Xcode plants in BUILT_PRODUCTS_DIR during ARCHIVE (a\n  # relative link into UninstalledProducts/). Copying it verbatim (cp -R) leaves DEST a\n  # dangling link from the deeper Helpers/ path, so codesign fails 'No such file or\n  # directory' and the archive dies. -L copies the real bundle bytes instead.\n  cp -RL \"$SRC\" \"$DEST\"\n  # Remove the stale loose copy from earlier attempts, if present.\n  rm -f \"${DEST_DIR}/mlx.metallib\"\n  # Release builds need a secure timestamp on the nested bundle for notarization.\n  SIGN_TS=\"\"\n  if [ \"${CONFIGURATION}\" = \"Release\" ]; then SIGN_TS=\"--timestamp\"; fi\n  if [ -n \"${EXPANDED_CODE_SIGN_IDENTITY:-}\" ] && [ \"${EXPANDED_CODE_SIGN_IDENTITY}\" != \"-\" ]; then\n    codesign --force ${SIGN_TS} --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" \"$DEST\"\n  else\n    codesign --force --sign - \"$DEST\"\n  fi\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D34244422FD4A56C001600A8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D342444F2FD4A56D001600A8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D34244592FD4A56D001600A8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D3BD08482FED962E00078DEB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D34244552FD4A56D001600A8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D34244452FD4A56C001600A8 /* PopGuy */;
+			targetProxy = D34244542FD4A56D001600A8 /* PBXContainerItemProxy */;
+		};
+		D342445F2FD4A56D001600A8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D34244452FD4A56C001600A8 /* PopGuy */;
+			targetProxy = D342445E2FD4A56D001600A8 /* PBXContainerItemProxy */;
+		};
+		D3BD08652FED9C3700078DEB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D3BD084B2FED962E00078DEB /* PopGuyMLXHelper */;
+			targetProxy = D3BD08642FED9C3700078DEB /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		D34244652FD4A56D001600A8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 86H6CNLN4C;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		D34244662FD4A56D001600A8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 86H6CNLN4C;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		D34244682FD4A56D001600A8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = logo;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = PopGuy/PopGuy.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 30;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 86H6CNLN4C;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PopGuy/Info.plist;
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Anh-Thi DINH. Licensed under GNU AGPLv3.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.3.2;
+				PRODUCT_BUNDLE_IDENTIFIER = dinh.thi.PopGuy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		D34244692FD4A56D001600A8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = logo;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = PopGuy/PopGuy.entitlements;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 30;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 86H6CNLN4C;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PopGuy/Info.plist;
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Anh-Thi DINH. Licensed under GNU AGPLv3.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.3.2;
+				PRODUCT_BUNDLE_IDENTIFIER = dinh.thi.PopGuy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		D342446B2FD4A56D001600A8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 30;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 86H6CNLN4C;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.3.2;
+				PRODUCT_BUNDLE_IDENTIFIER = dinh.thi.PopGuyTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PopGuy.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PopGuy";
+			};
+			name = Debug;
+		};
+		D342446C2FD4A56D001600A8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 30;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 86H6CNLN4C;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.3.2;
+				PRODUCT_BUNDLE_IDENTIFIER = dinh.thi.PopGuyTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PopGuy.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PopGuy";
+			};
+			name = Release;
+		};
+		D342446E2FD4A56D001600A8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 30;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 86H6CNLN4C;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.3.2;
+				PRODUCT_BUNDLE_IDENTIFIER = dinh.thi.PopGuyUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = PopGuy;
+			};
+			name = Debug;
+		};
+		D342446F2FD4A56D001600A8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 30;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 86H6CNLN4C;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.3.2;
+				PRODUCT_BUNDLE_IDENTIFIER = dinh.thi.PopGuyUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = PopGuy;
+			};
+			name = Release;
+		};
+		D3BD08502FED962F00078DEB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 86H6CNLN4C;
+				ENABLE_HARDENED_RUNTIME = YES;
+				EXCLUDED_ARCHS = "";
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				PRODUCT_BUNDLE_IDENTIFIER = dinh.thi.PopGuy.MLXHelper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		D3BD08512FED962F00078DEB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 86H6CNLN4C;
+				ENABLE_HARDENED_RUNTIME = YES;
+				EXCLUDED_ARCHS = "";
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				PRODUCT_BUNDLE_IDENTIFIER = dinh.thi.PopGuy.MLXHelper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		D34244412FD4A56C001600A8 /* Build configuration list for PBXProject "PopGuy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D34244652FD4A56D001600A8 /* Debug */,
+				D34244662FD4A56D001600A8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D34244672FD4A56D001600A8 /* Build configuration list for PBXNativeTarget "PopGuy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D34244682FD4A56D001600A8 /* Debug */,
+				D34244692FD4A56D001600A8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D342446A2FD4A56D001600A8 /* Build configuration list for PBXNativeTarget "PopGuyTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D342446B2FD4A56D001600A8 /* Debug */,
+				D342446C2FD4A56D001600A8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D342446D2FD4A56D001600A8 /* Build configuration list for PBXNativeTarget "PopGuyUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D342446E2FD4A56D001600A8 /* Debug */,
+				D342446F2FD4A56D001600A8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D3BD08522FED962F00078DEB /* Build configuration list for PBXNativeTarget "PopGuyMLXHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D3BD08502FED962F00078DEB /* Debug */,
+				D3BD08512FED962F00078DEB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		16E1B0DC95B9477BAB71 /* XCRemoteSwiftPackageReference "swift-transformers" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-transformers";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.3.3;
+			};
+		};
+		BE6B9CF0E16F4CD6A403 /* XCRemoteSwiftPackageReference "swift-huggingface" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-huggingface.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
+		D3BD08532FED9B1800078DEB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.31.4;
+			};
+		};
+		DC0B6AE01890AE6FBF496F23 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.3;
+			};
+		};
+		F511D9CB8F68D9D9B0341314 /* XCRemoteSwiftPackageReference "Yams" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/jpsim/Yams";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		650B6D4AF28B434E9D1C /* HuggingFace */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BE6B9CF0E16F4CD6A403 /* XCRemoteSwiftPackageReference "swift-huggingface" */;
+			productName = HuggingFace;
+		};
+		946417FD3A4347A6B0AB /* Tokenizers */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 16E1B0DC95B9477BAB71 /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Tokenizers;
+		};
+		A5534EA92B26FA8ADC30543F /* Yams */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F511D9CB8F68D9D9B0341314 /* XCRemoteSwiftPackageReference "Yams" */;
+			productName = Yams;
+		};
+		B605796E047F0B1A8CAEB221 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC0B6AE01890AE6FBF496F23 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+		D3BD085A2FED9B1800078DEB /* MLXHuggingFace */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D3BD08532FED9B1800078DEB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXHuggingFace;
+		};
+		D3BD085C2FED9B1800078DEB /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D3BD08532FED9B1800078DEB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLLM;
+		};
+		D3BD085E2FED9B1800078DEB /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D3BD08532FED9B1800078DEB /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLMCommon;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = D342443E2FD4A56C001600A8 /* Project object */;
+}

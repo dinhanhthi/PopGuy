@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The toolbar layout editor at the top of Settings → Actions (macOS ToolbarLayoutEditorView.swift). Row 1 is the real
+    toolbar (ToolbarView, not hit-testable) on its card, row 2 the editor's own More actions card; both are built in
+    code (ToolbarLayoutEditor.xaml.cs). The surface takes the pointer for both rows (drag to reorder or move between
+    them); the overlay holds the hover targets over the toolbar's actions and the drag ghost. The soft width warning shows below. The backdrop is a mid-tone "wallpaper" that both card
+    themes stand out on (macOS ToolbarPreviewBackdrop). Settings → Appearance uses it preview-only (Initialize): row 1
+    alone, centered, with no drag, hover names or warning (macOS ToolbarPreviewView).
+-->
+<UserControl
+    x:Class="PopGuy.Settings.Controls.ToolbarLayoutEditor"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    IsTabStop="False">
+
+    <StackPanel Spacing="8">
+        <Border CornerRadius="12">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Offset="0" Color="#FF6B73AD" />
+                    <GradientStop Offset="1" Color="#FF9E7A9E" />
+                </LinearGradientBrush>
+            </Border.Background>
+            <ScrollViewer
+                HorizontalScrollBarVisibility="Hidden"
+                HorizontalScrollMode="Enabled"
+                VerticalScrollBarVisibility="Disabled"
+                VerticalScrollMode="Disabled">
+                <Grid
+                    x:Name="Surface"
+                    HorizontalAlignment="Left"
+                    Background="Transparent">
+                    <StackPanel x:Name="SurfaceContent" Padding="12,8,12,16">
+                        <!-- The toolbar's card: the preview sits in a Canvas sized to its zoomed card in code. -->
+                        <Border
+                            HorizontalAlignment="Left"
+                            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                            <Canvas x:Name="PreviewHost" />
+                        </Border>
+                        <!-- More actions: the title, then one chip per action (or an empty slot), built in code. -->
+                        <Border
+                            x:Name="MoreCard"
+                            Margin="0,6,0,0"
+                            Padding="4"
+                            HorizontalAlignment="Left"
+                            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                            <StackPanel Spacing="4">
+                                <StackPanel
+                                    Margin="5,2,5,0"
+                                    Orientation="Horizontal"
+                                    Spacing="3">
+                                    <TextBlock
+                                        x:Name="MoreTitle"
+                                        VerticalAlignment="Center"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="More actions" />
+                                    <FontIcon
+                                        x:Name="MoreChevron"
+                                        VerticalAlignment="Center"
+                                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Glyph="&#xE70D;" />
+                                </StackPanel>
+                                <StackPanel
+                                    x:Name="MoreRow"
+                                    Orientation="Horizontal"
+                                    Spacing="4" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                    <Canvas x:Name="Overlay" />
+                </Grid>
+            </ScrollViewer>
+        </Border>
+
+        <!-- A soft warning, never a cap (ToolbarLimits.ToolbarWidthWarningThreshold). -->
+        <Grid x:Name="WidthWarning" ColumnSpacing="6" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <FontIcon
+                VerticalAlignment="Top"
+                FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                FontSize="12"
+                Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                Glyph="&#xE7BA;" />
+            <TextBlock
+                Grid.Column="1"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Your toolbar is getting wide and may cover more of your work. Consider moving some actions to More actions or turning off labels."
+                TextWrapping="Wrap" />
+        </Grid>
+    </StackPanel>
+</UserControl>
