@@ -431,15 +431,19 @@ repository's **latest** release: the README's and the website's macOS download l
 
 ### Per release
 
+`/cf-ship` does all of this after the macOS release, without asking (`.coding-friend/skills/cf-ship-custom/SKILL.md`).
+
 1. Bump `<Version>` in the App csproj and add a `## [<version>]` section to `windows/CHANGELOG.md`; commit them on the
-   branch you release from.
-2. Run `bash windows/scripts/release.sh` on the Mac. It pushes `windows-v<version>`, waits for the release run, downloads
-   and checks both architectures' packages (`PopGuy-win-<arch>-Setup.exe`, the full nupkg, `releases.win-<arch>.json`),
-   creates the GitHub release as a draft, then asks and publishes it with `--latest=false`. If you publish from the web
-   UI instead, untick **Set as the latest release** first.
-3. Publish the release **before** the version bump reaches `main`: the website builds its Windows download links from
-   the csproj version (`windows-v<Version>/PopGuy-win-<arch>-Setup.exe`), so a site deployed from `main` with an
-   unpublished version links to a 404. For the **first** Windows release: run `release.sh` from the `windows` branch
+   branch you release from, without pushing the branch yet (step 3).
+2. Run `bash windows/scripts/release.sh` on the Mac (`--yes` answers both of its questions). It pushes only the tag
+   `windows-v<version>`, waits for the release run, downloads and checks both architectures' packages
+   (`PopGuy-win-<arch>-Setup.exe`, `PopGuy-win-<arch>-Portable.zip`, the full nupkg, `releases.win-<arch>.json`),
+   creates the GitHub release as a draft (the changelog section, then how to install and why SmartScreen warns about
+   the unsigned files), then publishes it with `--latest=false`. If you publish from the web UI instead, untick **Set
+   as the latest release** first.
+3. Publish the release **before** the version bump reaches `main`, then push the branch: the website builds its
+   Windows download links from the csproj version (`windows-v<Version>/PopGuy-win-<arch>-Setup.exe` and
+   `…-Portable.zip`), so a site deployed from `main` with an unpublished version links to a 404. For the **first** Windows release: run `release.sh` from the `windows` branch
    and publish `windows-v0.1.0` before merging `windows` into `main` (the merge deploys the site with the Windows
    buttons).
 4. A push to `main` that changes the App csproj redeploys the site by itself (`deploy-pages.yml` watches it). If that

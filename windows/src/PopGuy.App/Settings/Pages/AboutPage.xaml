@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Settings → About (macOS AboutView.swift, spec-3 §5.8): the PopGuy card (logo, name, version, GitHub link) and the
-    Updates card (automatic checks, Check for Updates… and the last result) and the Info card (Author, Website, Contact,
-    Discussions, Acknowledgements), as Windows 11 Settings cards under the macOS card titles. The header is the window's.
+    Settings → About (macOS AboutView.swift, spec-3 §5.8): the PopGuy card (logo, name, version, GitHub link), why
+    Windows warns about the unsigned app (Windows only), the Updates card (automatic checks, Check for Updates… and the
+    last result) and the Info card (Author, Website, Contact, Discussions, Acknowledgements), as Windows 11 Settings
+    cards under the macOS card titles. The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.AboutPage"
@@ -71,6 +72,21 @@
                     Margin="1,8,0,0"
                     Style="{StaticResource CaptionStyle}"
                     Text="Free and open source (AGPLv3)." />
+
+                <!--
+                    Why Windows warned at install (no macOS counterpart: the Mac app is signed and notarized). Microsoft's
+                    signing service for individual developers is open only in the US and Canada.
+                -->
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Windows Security Warning" />
+
+                <controls:SettingsCard
+                    Description="PopGuy for Windows is not code-signed yet: Microsoft's signing service for individual developers is only open to developers in the US and Canada. That is why Windows may have shown &#8220;Windows protected your PC&#8221; when you installed or first opened it. PopGuy is open source, and every release is built by GitHub Actions from its public code."
+                    Header="Why Windows warned you">
+                    <controls:SettingsCard.HeaderIcon>
+                        <FontIcon Glyph="&#xE83D;" />
+                    </controls:SettingsCard.HeaderIcon>
+                    <HyperlinkButton Content="How releases are built" NavigateUri="https://github.com/dinhanhthi/PopGuy/blob/main/.github/workflows/windows-release.yml" />
+                </controls:SettingsCard>
 
                 <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Updates" />
 

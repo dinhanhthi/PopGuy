@@ -16,3 +16,4 @@ All notable changes to PopGuy for Windows are documented in this file. The forma
 - Settings for actions, providers, triggers, appearance, ignored apps and sites, history and the action library,
   plus a first-run setup guide.
 - Updates through Velopack: PopGuy checks GitHub once a day and restarts into a new version when you choose.
+- A portable zip for each architecture next to the installer: unzip it anywhere and run `PopGuy.exe`.

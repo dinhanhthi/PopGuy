@@ -1,5 +1,12 @@
 import { ButtonLink } from "../components/ButtonLink";
-import { DOWNLOAD_URL, GITHUB_URL, WINDOWS_DOWNLOAD_ARM64, WINDOWS_DOWNLOAD_X64 } from "../constants";
+import {
+  DOWNLOAD_URL,
+  GITHUB_URL,
+  WINDOWS_DOWNLOAD_ARM64,
+  WINDOWS_DOWNLOAD_X64,
+  WINDOWS_PORTABLE_ARM64,
+  WINDOWS_PORTABLE_X64
+} from "../constants";
 
 const steps = [
   "Select text in any app, or capture text from the screen.",
@@ -40,7 +47,14 @@ export function HomePage() {
           <ButtonLink href={WINDOWS_DOWNLOAD_X64} icon="download" variant="secondary">Windows (x64)</ButtonLink>
           <ButtonLink href={WINDOWS_DOWNLOAD_ARM64} icon="download" variant="secondary">Windows (ARM64)</ButtonLink>
         </div>
-        <p className="note">Windows 11. Keys stay in Credential Manager.</p>
+        <p className="note">
+          Windows 11. Keys stay in Credential Manager. Portable, no install:{" "}
+          <a href={WINDOWS_PORTABLE_X64}>x64</a> · <a href={WINDOWS_PORTABLE_ARM64}>ARM64</a>
+        </p>
+        <p className="note">
+          Not code-signed yet, so Windows may say &ldquo;Windows protected your PC&rdquo;: click More info, then Run
+          anyway. <a href="/docs#windows">Why?</a>
+        </p>
       </section>
 
       <div className="video-frame">

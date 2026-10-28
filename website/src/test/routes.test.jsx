@@ -73,6 +73,16 @@ describe("website routes", () => {
         )
       );
     }
+    // The same release's Velopack Portable.zip per architecture.
+    for (const arch of ["x64", "arm64"]) {
+      expect(screen.getByRole("link", { name: arch === "x64" ? "x64" : "ARM64" })).toHaveAttribute(
+        "href",
+        expect.stringMatching(
+          new RegExp(`^https://github\\.com/dinhanhthi/PopGuy/releases/download/windows-v\\d+\\.\\d+\\.\\d+/PopGuy-win-${arch}-Portable\\.zip$`)
+        )
+      );
+    }
+    expect(screen.getByText(/Windows protected your PC/)).toBeInTheDocument();
     expect(
       screen.queryByText(["Get", "Pro"].join(" "))
     ).not.toBeInTheDocument();

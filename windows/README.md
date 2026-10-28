@@ -95,8 +95,10 @@ Update tests: push two temporary `windows-v0.0.9xx-dev` tags (deleting each afte
 
 ## Releasing
 
-1. Bump `<Version>` in `src/PopGuy.App/PopGuy.App.csproj` and add its `## [<version>]` section to `CHANGELOG.md`; commit.
-2. Run `bash windows/scripts/release.sh` on the Mac: it pushes the tag `windows-v<version>`, waits for `windows-release.yml`, downloads and checks both architectures' packages, creates the GitHub release as a draft, then asks and publishes it as **not** the latest release (the macOS release stays "latest" for the website and README links).
+`/cf-ship` runs these steps after the macOS release (`.coding-friend/skills/cf-ship-custom/SKILL.md`).
+
+1. Bump `<Version>` in `src/PopGuy.App/PopGuy.App.csproj` and add its `## [<version>]` section to `CHANGELOG.md`; commit, but push only the tag (next step) until the release is public.
+2. Run `bash windows/scripts/release.sh` on the Mac (`--yes` answers its two questions): it pushes the tag `windows-v<version>`, waits for `windows-release.yml`, downloads and checks both architectures' Setup.exe, Portable.zip, full nupkg and feed, creates the GitHub release as a draft (the changelog section plus install notes and why Windows warns about the unsigned files), then publishes it as **not** the latest release (the macOS release stays "latest" for the website and README links). Then push the branch.
 3. Installed copies find the release within a day (or at once with Check for Updates). See `docs/RELEASING.md` for the website step and rollback.
 
 ## Constraints

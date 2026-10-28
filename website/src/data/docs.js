@@ -1,4 +1,4 @@
-import { WINDOWS_DOWNLOAD_ARM64, WINDOWS_DOWNLOAD_X64 } from "../constants";
+import { WINDOWS_DOWNLOAD_ARM64, WINDOWS_DOWNLOAD_X64, WINDOWS_PORTABLE_ARM64, WINDOWS_PORTABLE_X64 } from "../constants";
 
 export const docsSections = [
   "Installation",
@@ -44,8 +44,17 @@ export const docsContent = {
         stepLinks: [WINDOWS_DOWNLOAD_X64, WINDOWS_DOWNLOAD_ARM64]
       },
       {
+        title: "Portable",
+        steps: [
+          "Download `PopGuy-win-x64-Portable.zip` for most PCs.",
+          "Or `PopGuy-win-arm64-Portable.zip` for Snapdragon and other Arm PCs.",
+          "Unzip it anywhere, for example on a USB drive, and run `PopGuy.exe`. Nothing is installed."
+        ],
+        stepLinks: [WINDOWS_PORTABLE_X64, WINDOWS_PORTABLE_ARM64]
+      },
+      {
         title: "Windows protected your PC",
-        body: "The installer is not code-signed, so Microsoft Defender SmartScreen stops it with \"Windows protected your PC\". Click More info, then Run anyway. Updates install without this prompt: PopGuy checks for a new version once a day and offers Update now."
+        body: "PopGuy for Windows is not code-signed yet: Microsoft's signing service for individual developers is only open to developers in the US and Canada. So the first time you open the installer or `PopGuy.exe`, Microsoft Defender SmartScreen stops it with \"Windows protected your PC\". Click More info, then Run anyway. PopGuy is open source, and every release is built by GitHub Actions from its public code. Updates install without this prompt: PopGuy checks for a new version once a day and offers Update now."
       },
       {
         title: "Requirements",
