@@ -79,6 +79,8 @@ public sealed partial class ToolbarLayoutEditor : UserControl
         if (!isEditable)
         {
             MoreCard.Visibility = Visibility.Collapsed;
+            // The toolbar alone, the same space on every side.
+            SurfaceContent.Padding = new Thickness(12);
             Surface.HorizontalAlignment = HorizontalAlignment.Center;
         }
         _session = new ToolbarSession(new ActionEngine(services.Providers, _ => null), services.History, () => model.Current);

@@ -18,17 +18,18 @@ namespace PopGuy.Settings;
 
 /// <summary>
 /// The Settings window (spec-3 §5, macOS SettingsView.swift): one at a time, made by the App when it opens and let go
-/// when it closes (the tray keeps PopGuy running). It opens at its saved frame (<see cref="FrameFile"/>), else 760×520
-/// centered on its display, never below 680×460 (DIPs, in physical pixels at the window's DPI). A sidebar pick switches
+/// when it closes (the tray keeps PopGuy running). It opens at its saved frame (<see cref="FrameFile"/>), else 960×520
+/// centered on its display, never below 900×460 (DIPs, in physical pixels at the window's DPI). A sidebar pick switches
 /// the selection and the header at once; its page is made on a later dispatcher turn, so the click never waits for it.
 /// Pages get the <see cref="AppServices"/> as their navigation parameter; a page shows a panel over the window through
 /// its <see cref="SlideOverPanel"/>. UI thread only.
 /// </summary>
 public sealed partial class SettingsWindow : Window
 {
-    private const double MinWidth = 680;
+    // Wide enough that the Actions cards' text does not wrap word by word.
+    private const double MinWidth = 900;
     private const double MinHeight = 460;
-    private const double DefaultWidth = 760;
+    private const double DefaultWidth = 960;
     private const double DefaultHeight = 520;
 
     /// <summary>The pages by sidebar item Tag, with their header glyph (Segoe Fluent Icons); a phase adds its page here.</summary>
@@ -71,7 +72,9 @@ public sealed partial class SettingsWindow : Window
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
-        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
+        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Standard;
+        // Alt+Tab and the taskbar's window icon.
+        AppWindow.SetIcon(App.IconPath);
         ApplyCaptionButtonColors();
         RootGrid.ActualThemeChanged += OnActualThemeChanged;
 
@@ -215,10 +218,11 @@ public sealed partial class SettingsWindow : Window
         Closed -= OnClosed;
     }
 
-    // First show (README Follow-ups, Phase 2 QA): on the first launch of a new build the window can show Mica and the
-    // caption buttons but no XAML text until the next layout. A text element makes its glyphs again only when it leaves
-    // the tree and enters it again (EchoDiar's VM finding), so everything below the title bar is taken out and put back
-    // in the same tick: 300 ms after the first presented frame, and once more 1.5 s after the window first shows.
+    // First show (README Follow-ups, Phase 2 QA): on the first launch of a new build the window can show its background
+    // and the caption buttons but no XAML text until the next layout. A text element makes its glyphs again only when
+    // it leaves the tree and enters it again (EchoDiar's VM finding), so everything below the title bar is taken out
+    // and put back in the same tick: 300 ms after the first presented frame, and once more 1.5 s after the window first
+    // shows.
 
     private void OnFirstActivated(object sender, WindowActivatedEventArgs args)
     {

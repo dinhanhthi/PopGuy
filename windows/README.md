@@ -107,7 +107,7 @@ Update tests: push two temporary `windows-v0.0.9xx-dev` tags (deleting each afte
 - **CsWin32:** generated types stay `internal`. List enum types in `NativeMethods.txt`, never enum members. APIs whose signature differs per architecture (`Shell_NotifyIcon`, `SHGetFileInfo`, `*Ptr` functions) are hand-declared, because Platform is AnyCPU.
 - **API keys** go only in Windows Credential Manager, never in settings files.
 - **Clipboard:** a synthetic copy (Ctrl+Insert) is used only when UI Automation can't read the selection and the target allows it; the user's clipboard is always restored.
-- **Fluent UI:** English-only strings; WinUI default controls, `{ThemeResource}` brushes and the type ramp, Segoe Fluent Icons, no hex colours in views. Mica for Settings and Onboarding, DesktopAcrylic for the toolbar. Light/Dark and accent follow Windows. Tooltips only through the custom fast hover tooltip, never `ToolTipService`'s default delay; controls that attach default tooltips by themselves (AppBarButton, CommandBar, compact NavigationView) are not used or have them removed.
+- **Fluent UI:** English-only strings; WinUI default controls, `{ThemeResource}` brushes and the type ramp, Segoe Fluent Icons, no hex colours in views. Settings and Onboarding use the solid base background of Windows 11 apps (no Mica, which tints with the wallpaper), the toolbar DesktopAcrylic. Light/Dark and accent follow Windows. Tooltips only through the custom fast hover tooltip, never `ToolTipService`'s default delay; controls that attach default tooltips by themselves (AppBarButton, CommandBar, compact NavigationView) are not used or have them removed.
 
 ## Toolbar host
 

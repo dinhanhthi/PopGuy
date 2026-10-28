@@ -21,6 +21,9 @@ public partial class App : Application
     internal static string Version { get; } =
         typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
 
+    /// <summary>The app icon, copied next to PopGuy.exe: the tray icon and the windows' title bar icon.</summary>
+    internal static string IconPath { get; } = Path.Combine(AppContext.BaseDirectory, "Assets", "PopGuy.ico");
+
     private SettingsWindow? _settingsWindow;
     private OnboardingWindow? _onboardingWindow;
     private AppServices? _services;

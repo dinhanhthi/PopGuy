@@ -9,6 +9,8 @@
     icon-only button, whose automation name is its title), never the default ones; the selectable text blocks and the
     text boxes have no context or selection flyout (their command bars attach default tooltips). The zoom is a scale on
     the card: its layout size stays unscaled. The control itself never takes focus (IsTabStop, the default, kept explicit).
+    The text areas' scroll bars show only when the text overflows (Auto): an always-visible bar grows when the pointer
+    expands it, which pushed the buttons below a short result down.
 -->
 <UserControl
     x:Class="PopGuy.Toolbar.ToolbarView"
@@ -16,6 +18,29 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:PopGuy.Toolbar"
     IsTabStop="False">
+
+    <!--
+        The buttons' borders (at rest and under the pointer): one step stronger than Fluent's default elevation border,
+        which is barely visible on the card. High Contrast keeps the system's.
+    -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <StaticResource x:Key="ButtonBorderBrush" ResourceKey="ControlStrokeColorSecondaryBrush" />
+                    <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="ControlStrokeColorSecondaryBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrush" ResourceKey="ControlStrokeColorSecondaryBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrushPointerOver" ResourceKey="ControlStrokeColorSecondaryBrush" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <StaticResource x:Key="ButtonBorderBrush" ResourceKey="ControlStrokeColorSecondaryBrush" />
+                    <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="ControlStrokeColorSecondaryBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrush" ResourceKey="ControlStrokeColorSecondaryBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrushPointerOver" ResourceKey="ControlStrokeColorSecondaryBrush" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
 
     <StackPanel x:Name="Card" Background="Transparent">
         <StackPanel.RenderTransform>
@@ -58,6 +83,12 @@
             MinHeight="44"
             Padding="8,6,8,6"
             HorizontalAlignment="Left">
+            <!-- The bar's buttons, also those built in code: less side padding than Fluent's 11 (a square icon button). -->
+            <Grid.Resources>
+                <Style TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                    <Setter Property="Padding" Value="8,5,8,6" />
+                </Style>
+            </Grid.Resources>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition x:Name="GapColumn" Width="Auto" />
@@ -238,7 +269,10 @@
                     HorizontalAlignment="Center"
                     IsActive="{x:Bind ViewModel.ShowsSpinner, Mode=OneWay}"
                     Visibility="{x:Bind ViewModel.ShowsSpinner, Mode=OneWay}" />
-                <ScrollViewer MaxHeight="280" Visibility="{x:Bind ViewModel.ShowsProgressText, Mode=OneWay}">
+                <ScrollViewer
+                    MaxHeight="280"
+                    VerticalScrollBarVisibility="Auto"
+                    Visibility="{x:Bind ViewModel.ShowsProgressText, Mode=OneWay}">
                     <TextBlock
                         FontSize="{x:Bind ViewModel.ResultFontSize, Mode=OneWay}"
                         Foreground="{ThemeResource TextFillColorPrimaryBrush}"
@@ -291,7 +325,10 @@
                         AllowFocusOnInteraction="False"
                         Content="Text" />
                 </StackPanel>
-                <ScrollViewer MaxHeight="280" Visibility="{x:Bind ViewModel.ShowsReadView, Mode=OneWay}">
+                <ScrollViewer
+                    MaxHeight="280"
+                    VerticalScrollBarVisibility="Auto"
+                    Visibility="{x:Bind ViewModel.ShowsReadView, Mode=OneWay}">
                     <StackPanel>
                         <TextBlock
                             ContextFlyout="{x:Null}"
@@ -569,7 +606,10 @@
                         Glyph="&#xE767;" />
                     <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Speaking…" />
                 </StackPanel>
-                <ScrollViewer MaxHeight="280" Visibility="{x:Bind ViewModel.ShowsSpokenText, Mode=OneWay}">
+                <ScrollViewer
+                    MaxHeight="280"
+                    VerticalScrollBarVisibility="Auto"
+                    Visibility="{x:Bind ViewModel.ShowsSpokenText, Mode=OneWay}">
                     <TextBlock
                         ContextFlyout="{x:Null}"
                         FontSize="{x:Bind ViewModel.ResultFontSize, Mode=OneWay}"

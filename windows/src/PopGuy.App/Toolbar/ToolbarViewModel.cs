@@ -121,7 +121,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     private bool _showsSettingsButton;
     private bool _inlineSystemButtons;
     private bool _confirmingIgnore;
-    private double _zoom = 1;
+    private double _zoom = ZoomScale(ToolbarZoom.X1);
     private ResultFontSize _resultFontSize = Core.Settings.ResultFontSize.Normal;
     private bool _zoomIncludesFontSize = true;
     private TargetLanguage _targetLanguage = TargetLanguages.English;
@@ -243,6 +243,14 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     /// <summary>The toolbar zoom (toolbarZoom): the whole card scales, and the window with it.</summary>
     public double Zoom => _zoom;
+
+    /// <summary>The scale of a zoom level: 1× is 0.9 of the card's layout size, 1.2× its layout size, 1.3× 1.2.</summary>
+    internal static double ZoomScale(ToolbarZoom zoom) => zoom switch
+    {
+        ToolbarZoom.X1_2 => 1.0,
+        ToolbarZoom.X1_3 => 1.2,
+        _ => 0.9,
+    };
 
     /// <summary>
     /// The result text's font size (resultFontSize: the Caption, Body and Body Large sizes). With zoomIncludesFontSize
@@ -473,12 +481,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         _canIgnoreApp = canIgnoreApp;
         _showsSettingsButton = settings.ShowToolbarSettingsButton;
         _inlineSystemButtons = settings.InlineToolbarSystemButtons;
-        _zoom = settings.ToolbarZoom switch
-        {
-            ToolbarZoom.X1_2 => 1.2,
-            ToolbarZoom.X1_3 => 1.3,
-            _ => 1,
-        };
+        _zoom = ZoomScale(settings.ToolbarZoom);
         _resultFontSize = settings.ResultFontSize;
         _zoomIncludesFontSize = settings.ZoomIncludesFontSize;
         _targetLanguage = TargetLanguages.FromCode(settings.DefaultTargetLanguage);

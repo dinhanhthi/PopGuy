@@ -74,6 +74,8 @@ public sealed partial class OnboardingWindow : Window
         _services = services;
         _openSettings = openSettings;
         InitializeComponent();
+        // The title bar's icon (an unpackaged app's windows have none of their own).
+        AppWindow.SetIcon(App.IconPath);
 
         _steps =
         [
@@ -566,9 +568,10 @@ public sealed partial class OnboardingWindow : Window
         Closed -= OnClosed;
     }
 
-    // First show: on a cold launch the window can show Mica but no XAML text until the next layout, and the wizard is the
-    // first window of a first launch. As SettingsWindow (its comment has the finding): everything is taken out and put back
-    // in one tick, 300 ms after the first presented frame and once more 1.5 s after the window first shows.
+    // First show: on a cold launch the window can show its background but no XAML text until the next layout, and the
+    // wizard is the first window of a first launch. As SettingsWindow (its comment has the finding): everything is
+    // taken out and put back in one tick, 300 ms after the first presented frame and once more 1.5 s after the window
+    // first shows.
 
     private void OnFirstActivated(object sender, WindowActivatedEventArgs args)
     {

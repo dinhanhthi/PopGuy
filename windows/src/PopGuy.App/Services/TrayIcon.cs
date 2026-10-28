@@ -9,9 +9,8 @@ namespace PopGuy.Services;
 /// Selection, Show on Double-Click, Capture Screen Text…, Settings…, History…, About PopGuy…, Setup Guide…, Check for
 /// Updates… and Quit PopGuy, with Update to vX… first while an update is ready; rebuilt each time it opens. The macOS
 /// Accessibility items have no Windows counterpart. Capture Screen Text… is always enabled (macOS): with Screen Text
-/// Capture off it opens Settings › Triggers at the OCR section instead of capturing. The icon follows the taskbar's
-/// theme (a dark glyph on a light taskbar, a white one on a dark taskbar) and dims while PopGuy is disabled. A left
-/// click opens Settings.
+/// Capture off it opens Settings › Triggers at the OCR section instead of capturing. The icon is the app's colour logo
+/// (PopGuy.ico), on a light or dark taskbar alike, and dims while PopGuy is disabled. A left click opens Settings.
 /// <para>
 /// Toggles save through <see cref="SettingsStore.Update"/>, whose <see cref="SettingsStore.Changed"/> also re-applies
 /// the triggers (ToolbarController). Create, use and dispose on the UI thread.
@@ -55,10 +54,9 @@ internal sealed class TrayIcon : IDisposable
         _openSetupGuide = openSetupGuide;
         _quit = quit;
         _log = log;
-        _icon = new NotifyIcon(IconPath(), !settings.Current.PopGuyEnabled, "PopGuy", log);
+        _icon = new NotifyIcon(App.IconPath, !settings.Current.PopGuyEnabled, "PopGuy", log);
         _icon.MenuItems = MenuItems;
         _icon.Clicked += OnClicked;
-        _icon.TaskbarThemeChanged += Refresh;
         _settings.Changed += OnSettingsChanged;
     }
 
@@ -74,14 +72,9 @@ internal sealed class TrayIcon : IDisposable
     {
         _settings.Changed -= OnSettingsChanged;
         _icon.Clicked -= OnClicked;
-        _icon.TaskbarThemeChanged -= Refresh;
         _captureTimer?.Stop();
         _icon.Dispose();
     }
-
-    /// <summary>The icon for the taskbar's theme: <c>TrayIcon-light.ico</c> (dark glyph) on a light taskbar.</summary>
-    private static string IconPath() => Path.Combine(
-        AppContext.BaseDirectory, "Assets", NotifyIcon.TaskbarUsesLightTheme() ? "TrayIcon-light.ico" : "TrayIcon-dark.ico");
 
     private IReadOnlyList<NotifyIconMenuItem> MenuItems()
     {
@@ -175,6 +168,6 @@ internal sealed class TrayIcon : IDisposable
     /// <summary>Queued: a change may be saved from any thread, and the icon is UI thread only.</summary>
     private void OnSettingsChanged(object? sender, EventArgs e) => _dispatcher.TryEnqueue(Refresh);
 
-    /// <summary>The icon for the current taskbar theme, dimmed while PopGuy is disabled. A disposed icon ignores it.</summary>
-    private void Refresh() => _icon.SetIcon(IconPath(), !_settings.Current.PopGuyEnabled);
+    /// <summary>The icon, dimmed while PopGuy is disabled. A disposed icon ignores it.</summary>
+    private void Refresh() => _icon.SetIcon(App.IconPath, !_settings.Current.PopGuyEnabled);
 }

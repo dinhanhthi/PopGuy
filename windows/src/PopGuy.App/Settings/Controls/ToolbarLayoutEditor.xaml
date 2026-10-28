@@ -30,7 +30,7 @@
                     x:Name="Surface"
                     HorizontalAlignment="Left"
                     Background="Transparent">
-                    <StackPanel Padding="12,8,12,16">
+                    <StackPanel x:Name="SurfaceContent" Padding="12,8,12,16">
                         <!-- The toolbar's card: the preview sits in a Canvas sized to its zoomed card in code. -->
                         <Border
                             HorizontalAlignment="Left"

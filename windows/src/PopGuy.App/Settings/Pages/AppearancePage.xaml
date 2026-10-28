@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Settings → Appearance (macOS SettingsView.swift AppearanceView): toolbar zoom, Hide logo and the system buttons gap
-    with a live toolbar preview, result font size with a sample, and formatting, as Windows 11 Settings cards under the
-    macOS section headers. WinUI has no segmented picker: a SelectorBar stands in. The preview is the Actions page's
-    layout editor in preview-only mode (macOS reuses ToolbarPreviewView in both). The header is the window's.
+    Settings → Appearance (macOS SettingsView.swift AppearanceView): a live toolbar preview at the top, then toolbar
+    zoom, Hide logo and the system buttons gap, result font size with a sample, and formatting, as Windows 11 Settings
+    cards under the macOS section headers. WinUI has no segmented picker: a SelectorBar stands in. The preview is the
+    Actions page's layout editor in preview-only mode (macOS reuses ToolbarPreviewView in both). The header is the
+    window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.AppearancePage"
@@ -24,10 +25,10 @@
             Margin="24,16,24,24"
             Spacing="4">
 
-            <TextBlock
-                Margin="1,0,0,4"
-                Style="{StaticResource SectionHeaderStyle}"
-                Text="Toolbar Zoom" />
+            <!-- The toolbar at its real size for the zoom, from the saved settings (macOS ToolbarPreviewView). -->
+            <settings:ToolbarLayoutEditor x:Name="ToolbarPreview" />
+
+            <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Toolbar Zoom" />
 
             <controls:SettingsCard
                 Description="Zoom level scales the entire floating toolbar — buttons, icons, and spacing — making it easier to see and click. 1× is the default size; higher levels make everything proportionally larger."
@@ -54,9 +55,6 @@
                 Header="Remove gap before system buttons">
                 <ToggleSwitch x:Name="InlineSystemButtonsToggle" AutomationProperties.Name="Remove gap before system buttons" />
             </controls:SettingsCard>
-
-            <!-- The toolbar at its real size for the zoom, from the saved settings (macOS ToolbarPreviewView). -->
-            <settings:ToolbarLayoutEditor x:Name="ToolbarPreview" Margin="0,8,0,0" />
 
             <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Result Text" />
 

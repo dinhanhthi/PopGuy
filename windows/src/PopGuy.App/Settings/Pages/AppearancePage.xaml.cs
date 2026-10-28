@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Navigation;
 using PopGuy.Core.Settings;
 using PopGuy.Services;
 using PopGuy.Settings.ViewModels;
+using PopGuy.Toolbar;
 
 namespace PopGuy.Settings.Pages;
 
@@ -125,7 +126,7 @@ public sealed partial class AppearancePage : Page
 
     /// <summary>
     /// The sample at the result text's on-screen size: the toolbar's font sizes (ToolbarViewModel.ResultFontSize:
-    /// 12 / 14 / 18), times its zoom when the zoom includes the font size.
+    /// 12 / 14 / 18), times its zoom's scale (ToolbarViewModel.ZoomScale) when the zoom includes the font size.
     /// </summary>
     private void UpdateSample()
     {
@@ -135,12 +136,8 @@ public sealed partial class AppearancePage : Page
             2 => 18,
             _ => 14,
         };
-        var zoom = ZoomBar.Items.IndexOf(ZoomBar.SelectedItem) switch
-        {
-            1 => 1.2,
-            2 => 1.3,
-            _ => 1.0,
-        };
+        var index = ZoomBar.Items.IndexOf(ZoomBar.SelectedItem);
+        var zoom = ToolbarViewModel.ZoomScale(index < 0 ? ToolbarZoom.X1 : (ToolbarZoom)index);
         SampleText.FontSize = ZoomFontToggle.IsOn ? size * zoom : size;
     }
 }

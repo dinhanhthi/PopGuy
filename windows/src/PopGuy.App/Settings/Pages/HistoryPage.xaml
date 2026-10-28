@@ -60,8 +60,8 @@
         <Border
             Grid.Row="0"
             MaxWidth="1000"
-            Margin="24,16,24,0"
-            Padding="16,12,16,12"
+            Margin="24,12,24,0"
+            Padding="16,6,16,12"
             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
             BorderThickness="1"

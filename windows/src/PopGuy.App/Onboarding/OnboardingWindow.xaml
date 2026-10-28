@@ -10,12 +10,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Welcome to PopGuy">
 
-    <Window.SystemBackdrop>
-        <MicaBackdrop />
-    </Window.SystemBackdrop>
-
-    <!-- No background: Mica shows through. -->
-    <Grid x:Name="RootGrid">
+    <!-- The solid base background, as the Settings window (never Mica, which takes a tint from the wallpaper). -->
+    <Grid x:Name="RootGrid" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
         <Grid.Resources>
             <Style x:Key="CardStyle" TargetType="Border">
                 <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />

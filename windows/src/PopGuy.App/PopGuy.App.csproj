@@ -46,8 +46,8 @@
 
   <!-- Unpackaged: assets the app loads from disk (ms-appx:/// or a file path) must be copied next to PopGuy.exe. -->
   <ItemGroup>
-    <Content Remove="Assets\AppIcon.png;Assets\ToolbarLogo.png;Assets\TrayIcon-light.ico;Assets\TrayIcon-dark.ico" />
-    <Content Include="Assets\AppIcon.png;Assets\ToolbarLogo.png;Assets\TrayIcon-light.ico;Assets\TrayIcon-dark.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Remove="Assets\AppIcon.png;Assets\ToolbarLogo.png;Assets\PopGuy.ico" />
+    <Content Include="Assets\AppIcon.png;Assets\ToolbarLogo.png;Assets\PopGuy.ico" CopyToOutputDirectory="PreserveNewest" />
     <!-- Settings → About → Acknowledgements opens it from next to PopGuy.exe. -->
     <Content Include="Licenses\ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

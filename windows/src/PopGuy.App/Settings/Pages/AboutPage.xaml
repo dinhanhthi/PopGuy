@@ -22,6 +22,15 @@
             <Setter Property="Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
+        <!-- Compact cards: the toolkit's 68 high, 16 padded cards leave most of a one-line card empty. -->
+        <Style TargetType="controls:SettingsCard">
+            <Setter Property="MinHeight" Value="48" />
+            <Setter Property="Padding" Value="16,8,16,8" />
+        </Style>
+        <!-- The links end near the card's padding, as switches and buttons do (Fluent's link padding is 11 a side). -->
+        <Style TargetType="HyperlinkButton">
+            <Setter Property="Padding" Value="4,2,4,2" />
+        </Style>
     </Page.Resources>
 
     <ScrollViewer>
