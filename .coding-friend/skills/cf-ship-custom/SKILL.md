@@ -28,7 +28,13 @@ the changelog, do not ask before pushing or before `ship.sh`. Decide with the ru
 keep going. These overrides beat the generic cf-ship rules:
 
 - Pushing the `release: vX.Y.Z` commit straight to `main` is expected (this repo releases
-  from `main`); skip cf-ship's "never push to main" warning and its PR step.
+  from `main`); skip cf-ship's "never push to main" warning.
+- **Never create a PR, on any branch** — skip cf-ship's PR step everywhere. On a branch other
+  than `main` (e.g. `windows` before its first merge) the flow only releases Windows; merging
+  that branch is the user's call.
+- On a branch other than `main`, cf-ship's own commit/push steps have nothing to do before
+  Step A2 (the tree is clean, the branch already pushed): the branch is pushed in W6, after the
+  Windows release is public.
 - A version in the hint (e.g. `/cf-ship 1.4.0`) is used as-is, skipping Step B2's classification.
 - The only stops are hard failures you cannot fix: a test that still fails after one re-run,
   a build/notarize/publish script exiting non-zero, or no user-facing commits (Step B1).
