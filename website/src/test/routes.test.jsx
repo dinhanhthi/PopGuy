@@ -64,17 +64,15 @@ describe("website routes", () => {
       "href",
       "https://github.com/dinhanhthi/PopGuy/releases/latest"
     );
-    // A public download contract: the windows-v<csproj Version> release's Velopack Setup.exe. jsdom is not a Windows
-    // PC, so the button takes x64; every other build is on the release page.
+    // A public download contract: the Latest release (macOS and Windows share it) holds the Velopack Setup.exe. jsdom
+    // is not a Windows PC, so the button takes x64; every other build is on the release page.
     expect(screen.getByRole("link", { name: /Download for Windows/ })).toHaveAttribute(
       "href",
-      expect.stringMatching(
-        /^https:\/\/github\.com\/dinhanhthi\/PopGuy\/releases\/download\/windows-v\d+\.\d+\.\d+\/PopGuy-win-x64-Setup\.exe$/
-      )
+      "https://github.com/dinhanhthi/PopGuy/releases/latest/download/PopGuy-win-x64-Setup.exe"
     );
     expect(screen.getByRole("link", { name: "other downloads" })).toHaveAttribute(
       "href",
-      expect.stringMatching(/^https:\/\/github\.com\/dinhanhthi\/PopGuy\/releases\/tag\/windows-v\d+\.\d+\.\d+$/)
+      "https://github.com/dinhanhthi/PopGuy/releases/latest"
     );
     expect(screen.getByText(/not code-signed yet/)).toBeInTheDocument();
     expect(
@@ -137,8 +135,8 @@ describe("website routes", () => {
       .map((link) => link.getAttribute("href"))
       .filter((href) => href?.endsWith("-Portable.zip"));
     expect(portable).toEqual([
-      expect.stringMatching(/PopGuy-win-x64-Portable\.zip$/),
-      expect.stringMatching(/PopGuy-win-arm64-Portable\.zip$/)
+      "https://github.com/dinhanhthi/PopGuy/releases/latest/download/PopGuy-win-x64-Portable.zip",
+      "https://github.com/dinhanhthi/PopGuy/releases/latest/download/PopGuy-win-arm64-Portable.zip"
     ]);
   });
 

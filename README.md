@@ -10,7 +10,7 @@ or run a **custom AI action** on it. Think PopClip, with a configurable AI backe
 **[⬇ Download for macOS](https://github.com/dinhanhthi/PopGuy/releases/latest)**
 &nbsp;·&nbsp; macOS 13+ · Apple Silicon &amp; Intel
 
-**[⬇ Download for Windows](https://github.com/dinhanhthi/PopGuy/releases?q=windows-v&expanded=true)**
+**[⬇ Download for Windows](https://github.com/dinhanhthi/PopGuy/releases/latest)**
 &nbsp;·&nbsp; Windows 11 · x64 &amp; ARM64 · not code-signed yet ([why](#windows))
 
 **[▶ Watch the demo](https://www.youtube.com/watch?v=-ctYYSC4bWM)**
@@ -57,8 +57,8 @@ PopGuy for Windows is a native port with the same features (C# .NET 10 + WinUI 3
 
 - **Requirements:** Windows 11 (build 22000 or later), x64 or ARM64.
 - **Install:** download `PopGuy-win-x64-Setup.exe` (most PCs) or `PopGuy-win-arm64-Setup.exe`
-  (Snapdragon and other Arm PCs) from the latest `windows-v…` release on the
-  [Releases page](https://github.com/dinhanhthi/PopGuy/releases?q=windows-v&expanded=true) and
+  (Snapdragon and other Arm PCs) from the
+  [latest release](https://github.com/dinhanhthi/PopGuy/releases/latest) (macOS and Windows share it) and
   run it. It installs for your user only (no administrator rights), then checks for updates daily and offers to
   install them.
 - **Portable:** or download `PopGuy-win-x64-Portable.zip` / `PopGuy-win-arm64-Portable.zip` from the same release,
@@ -110,7 +110,7 @@ Program membership is required.
 - `macos/` — the macOS app (Xcode project, sources, tests, `CHANGELOG.md`)
 - `windows/` — the Windows port (C# .NET 10 + WinUI 3, `CHANGELOG.md`, release scripts)
 - `website/` — the landing page and docs site
-- `scripts/` — macOS release scripts
+- `scripts/` — release scripts (one release for macOS and Windows)
 - `assets/` — logos and artwork (app icon, README images)
 
 ## Contributing

@@ -3,12 +3,16 @@
 This is the manual checklist for cutting a signed, notarized PopGuy release that
 the in-app Sparkle updater can deliver to existing users.
 
-> **Releases are built locally only — there is no CI release workflow.** After the
-> one-time setup (§0), a release is: bump + changelog (§1, §3), commit + push, then
-> `scripts/ship.sh`, which chains `build-and-notarize.sh` (§2) → `publish-release.sh`
-> (§4) → `publish-appcast.sh` (§5). `/cf-ship` drives this end to end. §2–§5 below
-> explain what each script does. On a new machine only §0 needs redoing (restore the
-> Developer ID cert, the `popguy-notary` profile and the Sparkle private key).
+> **macOS and Windows ship as one version and one GitHub release (`vX.Y.Z`, Latest).**
+> The macOS app is built on this Mac only; the Windows app on GitHub Actions only
+> (`windows-release.yml`, started by the tag push). After the one-time setup (§0), a
+> release is: bump + both changelogs (§1, §3), commit + push to `main`, then
+> `scripts/ship.sh`, which pushes the tag, then chains `build-and-notarize.sh` (§2) →
+> `windows/scripts/fetch-release.sh` → `publish-release.sh --windows` (§4) →
+> `publish-appcast.sh` (§5) (see [Windows and the shared release](#windows-and-the-shared-release)).
+> `/cf-ship` drives this end to end. §2–§5 below explain what each script does. On a new
+> machine only §0 needs redoing (restore the Developer ID cert, the `popguy-notary` profile
+> and the Sparkle private key).
 
 PopGuy uses **Sparkle 2.x** (added via Swift Package Manager). Sparkle does **not**
 read the GitHub API — it polls a hosted `appcast.xml` feed. GitHub Releases host the
@@ -192,12 +196,14 @@ signs against it.
 From the repo root, use the helper script:
 
 ```sh
-scripts/bump-version.sh 1.1.0     # set marketing version 1.1.0, build number +1
+scripts/bump-version.sh 1.1.0     # set marketing version 1.1.0 (macOS + Windows), build number +1
 scripts/bump-version.sh           # keep marketing version, build number +1 only
 ```
 
 It edits `MARKETING_VERSION` (CFBundleShortVersionString) and increments
-`CURRENT_PROJECT_VERSION` (CFBundleVersion) directly in `project.pbxproj`, prints
+`CURRENT_PROJECT_VERSION` (CFBundleVersion) directly in `project.pbxproj`, sets the
+same marketing version as `<Version>` in `windows/src/PopGuy.App/PopGuy.App.csproj`
+(one product version; `ship.sh` refuses to run when the two differ), prints
 the change, and leaves the working tree for you to review. All targets (app + test
 bundles) are set to the same numbers — test-bundle versions are cosmetic.
 
@@ -207,7 +213,7 @@ bundles) are set to the same numbers — test-bundle versions are cosmetic.
 Confirm and commit the bump:
 
 ```sh
-git diff macos/PopGuy.xcodeproj/project.pbxproj
+git diff macos/PopGuy.xcodeproj/project.pbxproj windows/src/PopGuy.App/PopGuy.App.csproj
 ```
 
 ---
@@ -292,12 +298,15 @@ spctl -a -vv -t exec PopGuy.app    # should report: accepted, source=Notarized D
 
 ---
 
-## 3. Write the changelog entry
+## 3. Write the changelog entries
 
-`macos/CHANGELOG.md` (tracked) is the **single source of truth**
-for release notes: the same
-section feeds both the GitHub release body and the Sparkle appcast notes. Add a section
-for this version in [Keep a Changelog](https://keepachangelog.com/) format:
+`macos/CHANGELOG.md` and `windows/CHANGELOG.md` (tracked) are the **single source of truth**
+for release notes. Each gets a section for this version with the **same heading**: the
+macOS section feeds the Sparkle appcast notes, and the GitHub release body holds both
+(`## macOS` + the macOS section, `## Windows` + the Windows section + the install notes from
+`windows/scripts/install-notes.md`). A platform without changes gets one `### Changed`
+entry ("No changes on Windows; this version ships with the macOS update."). Add the
+sections in [Keep a Changelog](https://keepachangelog.com/) format:
 
 ```markdown
 ## [1.1.0] - 2026-06-22
@@ -312,10 +321,10 @@ for this version in [Keep a Changelog](https://keepachangelog.com/) format:
 
 > The header version **must match `MARKETING_VERSION` exactly** (the value
 > `bump-version.sh` set in §1). `publish-release.sh` derives the version from the
-> project and extracts `## [<that version>]`; if the header doesn't match (e.g. project
-> is `1.1.0` but the header says `1.1`), it fails. Use the same number in both.
+> project and extracts `## [<that version>]` from both files; if a header doesn't match (e.g. project
+> is `1.1.0` but the header says `1.1`), it fails. Use the same number everywhere.
 
-Commit the changelog (you commit; the script never does).
+Commit the changelogs (you commit; the script never does).
 
 ---
 
@@ -345,6 +354,13 @@ embeds into the appcast in §5,
 
 If `gh release create` fails *after* the tag was pushed, the script prints how to undo
 the tag (`git push origin :refs/tags/vVERSION && git tag -d vVERSION`) so you can re-run.
+
+`ship.sh` runs it as `publish-release.sh --yes --windows build/windows-release/VERSION <zip>`
+(the shared release, see [Windows and the shared release](#windows-and-the-shared-release)). Then
+it also needs the `## [VERSION]` section of `windows/CHANGELOG.md`, reuses the tag `ship.sh`
+already pushed (only if it points at HEAD, locally and on origin), creates the release as a
+**draft**, uploads the DMG and every Windows package, and only then publishes it as **Latest**.
+A failed upload leaves an unpublished draft; the script prints how to finish or delete it.
 
 ---
 
@@ -414,47 +430,71 @@ curl -fsSL https://dinhanhthi.github.io/PopGuy/appcast.xml | head
 - [ ] `Developer ID Application` signing + notarized + stapled (`spctl` accepted)
 - [ ] Real `SUPublicEDKey` in `macos/PopGuy/Info.plist` (placeholder removed)
 - [ ] `CFBundleVersion` strictly greater than the last shipped build
-- [ ] `macos/CHANGELOG.md` has a `## [X.Y.Z]` section matching `MARKETING_VERSION`
-- [ ] `scripts/publish-release.sh <zip>` ran → tag `vX.Y.Z` pushed + GitHub Release created
+- [ ] App csproj `<Version>` == `MARKETING_VERSION` (`bump-version.sh` writes both)
+- [ ] `macos/CHANGELOG.md` and `windows/CHANGELOG.md` have a `## [X.Y.Z]` section matching `MARKETING_VERSION`
+- [ ] `scripts/ship.sh` ran → tag `vX.Y.Z` pushed + GitHub Release published as Latest with the zip, DMG and both
+      architectures' Windows packages
 - [ ] `appcast.xml` regenerated (EdDSA-signed) and hosted at `SUFeedURL`
 - [ ] GitHub Release `.zip` URL matches the appcast enclosure
 - [ ] End-to-end update verified from the previous build
 
 ---
 
-## Windows releases (Velopack)
+## Windows and the shared release
 
-PopGuy for Windows has its own version (`<Version>` in `windows/src/PopGuy.App/PopGuy.App.csproj`), its own changelog
-(`windows/CHANGELOG.md`) and its own tags (`windows-v<version>`). It is built on GitHub Actions only
-(`.github/workflows/windows-release.yml`), packed by Velopack and not code-signed. The macOS release always stays the
-repository's **latest** release: the README's and the website's macOS download links point at `/releases/latest`.
+PopGuy for Windows shares the macOS app's version and release: one `vX.Y.Z` tag and one GitHub release, published as
+the repository's **Latest** release, holding the macOS zip + DMG and, for x64 and ARM64, `PopGuy-win-<arch>-Setup.exe`,
+`PopGuy-win-<arch>-Portable.zip`, `PopGuy-<version>-win-<arch>-full.nupkg` and the Velopack feed
+`releases.win-<arch>.json`. The Windows app is built on GitHub Actions only (`.github/workflows/windows-release.yml`, on
+the tag push), packed by Velopack and not code-signed. The README's and the website's download links all point at
+`/releases/latest` (the Windows buttons at `/releases/latest/download/PopGuy-win-<arch>-Setup.exe`), so every release
+ships both platforms.
 
 ### Per release
 
-`/cf-ship` does all of this after the macOS release, without asking (`.coding-friend/skills/cf-ship-custom/SKILL.md`).
+`/cf-ship` does all of this without asking (`.coding-friend/skills/cf-ship-custom/SKILL.md`).
 
-1. Bump `<Version>` in the App csproj and add a `## [<version>]` section to `windows/CHANGELOG.md`; commit them on the
-   branch you release from, without pushing the branch yet (step 3).
-2. Run `bash windows/scripts/release.sh` on the Mac (`--yes` answers both of its questions). It pushes only the tag
-   `windows-v<version>`, waits for the release run, downloads and checks both architectures' packages
-   (`PopGuy-win-<arch>-Setup.exe`, `PopGuy-win-<arch>-Portable.zip`, the full nupkg, `releases.win-<arch>.json`),
-   creates the GitHub release as a draft (the changelog section, then how to install and why SmartScreen warns about
-   the unsigned files), then publishes it with `--latest=false`. If you publish from the web UI instead, untick **Set
-   as the latest release** first.
-3. Publish the release **before** the version bump reaches `main`, then push the branch: the website builds its
-   Windows download links from the csproj version (`windows-v<Version>/PopGuy-win-<arch>-Setup.exe` and
-   `…-Portable.zip`), so a site deployed from `main` with an unpublished version links to a 404. For the **first** Windows release: run `release.sh` from the `windows` branch
-   and publish `windows-v0.1.0` before merging `windows` into `main` (the merge deploys the site with the Windows
-   buttons).
-4. A push to `main` that changes the App csproj redeploys the site by itself (`deploy-pages.yml` watches it). If that
-   deploy did not run, start it with `gh workflow run deploy-pages.yml --ref main`.
-5. Installed copies check GitHub once a day (or at once with Check for Updates) and offer **Update now**.
+1. `scripts/bump-version.sh X.Y.Z` sets the pbxproj and the App csproj (`<Version>`) to the same version (§1). Add a
+   `## [X.Y.Z] - YYYY-MM-DD` section to `macos/CHANGELOG.md` **and** `windows/CHANGELOG.md` (§3); a platform without
+   changes gets "No changes on <platform>; this version ships with the <other> update." Commit them as
+   `release: vX.Y.Z` and push `main`.
+2. Run `scripts/ship.sh` on the Mac. It checks the tree, the two versions and both changelog sections, then:
+   - creates the annotated tag `vX.Y.Z` at HEAD and pushes it, which starts `windows-release.yml` (both architectures
+     build on GitHub Actions while the Mac builds),
+   - builds, signs and notarizes the macOS zip + DMG (§2),
+   - runs `windows/scripts/fetch-release.sh vX.Y.Z build/windows-release/X.Y.Z`: waits for the run of the tag's
+     commit, downloads both architectures' packages and checks each has its Setup.exe, Portable.zip, full nupkg and a
+     feed naming this version's nupkg,
+   - runs `publish-release.sh --windows` (§4): a draft release with the zip, the notes (both changelog sections, then
+     `windows/scripts/install-notes.md`: how to install and why SmartScreen warns about the unsigned files), the DMG
+     and the Windows packages, then publishes it as **Latest**,
+   - runs `publish-appcast.sh` (§5), whose `appcast.xml` push redeploys the website.
 
-Never publish a `-dev` tag's packages: those QA builds read their update feed from the `POPGUY_UPDATE_URL` environment
-variable, and the app's update check skips `-dev` tags.
+   A failure after the tag push prints what to do, by stage:
+   - **Before the release is published** (a failed Windows CI run, notarization, fetch, or the draft's upload or
+     publish): delete the tag, and the draft if one exists (check `gh release view vX.Y.Z --json isDraft` before any
+     `gh release delete`), then fix the cause and run `ship.sh` again.
+   - **After `publish-release.sh` has published** (only `publish-appcast.sh` failed): the release is public, so re-run
+     `scripts/publish-appcast.sh build/export/PopGuy-X.Y.Z.zip` once; if it fails again, stop and fix the cause. Never
+     delete the published release or its tag to get past this (see Rollback).
+
+   Never use `--force` or `--clobber`, or re-tag another commit, to get a release through: stop and fix the cause.
+3. Installed Windows copies check GitHub once a day (or at once with Check for Updates) and offer **Update now**. The
+   update check reads the published releases that carry a `releases.win-<arch>.json` feed, so the older macOS-only
+   releases are skipped.
+
+QA builds keep their own tags, `windows-v<x.y.z>-dev…` (see `windows/README.md`): they build on GitHub Actions with
+`UPDATE_URL_OVERRIDE`, read their update feed from the `POPGUY_UPDATE_URL` environment variable, and are never
+published (the app's update check skips `-dev` tags).
+
+Installs of `windows-v0.1.0`, the only Windows release before the shared version (1.4.0), do not update by themselves:
+their update check reads only `windows-v` releases. Reinstall once from the Latest release.
 
 ### Rollback
 
-Unpublish (back to draft) or delete the bad `windows-v<version>` release. Velopack's check then finds the newest
-remaining Windows release; copies that already updated stay on the bad version until a newer one is published (Velopack
-does not downgrade), so fix forward with a new version.
+Rollback is a human decision to pull a bad release; an autonomous run (`/cf-ship`) may only delete an unpublished draft
+and its tag, never a published release. Unpublish (back to draft), or delete the bad release and its tag
+(`gh release delete vX.Y.Z --yes && git push origin :refs/tags/vX.Y.Z && git tag -d vX.Y.Z`). That takes both platforms'
+assets away: Velopack's check then finds the newest remaining release with a feed, and the Sparkle appcast still lists
+the version until the next appcast push. Copies that already updated stay on the bad version until a newer one is
+published (neither Velopack nor Sparkle downgrades), so fix forward with a new version.

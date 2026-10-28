@@ -3,10 +3,12 @@
 All notable changes to PopGuy are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-This file is the **single source of truth** for release notes: `scripts/publish-release.sh`
+This file is the **single source of truth** for the macOS release notes: `scripts/publish-release.sh`
 extracts the section matching the version being released and uses it for both the GitHub
-release body and the Sparkle appcast notes. Each released version needs a section whose
-header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format).
+release body (under `## macOS`) and the Sparkle appcast notes. Each released version needs a section whose
+header is exactly `## [X.Y.Z] - YYYY-MM-DD` (the script matches on that format). From 1.4.0, macOS and
+Windows share one version and one GitHub release: `windows/CHANGELOG.md` has a section with the same
+heading, which the release body shows under `## Windows`.
 
 ## [Unreleased]
 

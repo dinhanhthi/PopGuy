@@ -16,9 +16,10 @@ The Windows port of PopGuy: C# on .NET 10 with WinUI 3 (Windows App SDK), for Wi
 | `src/PopGuy.App` | The WinUI 3 app (assembly `PopGuy`, root namespace `PopGuy`, so App code uses `namespace PopGuy.<Folder>`). |
 | `tests/PopGuy.Tests` | xUnit v3 tests for Core and LocalLLM. |
 | `tests/PopGuy.Platform.Tests` | xUnit v3 tests for Platform (Windows only, run on CI). |
-| `CHANGELOG.md` | The Windows release notes (Keep a Changelog); `scripts/release.sh` publishes a version's section. |
+| `CHANGELOG.md` | The Windows release notes (Keep a Changelog), one section per shared version; `../scripts/publish-release.sh` puts it in the release body. |
 | `scripts/vm-install.ps1` | Installs a CI build (`-Folder`) or a release installer (`-Setup`) in the QA VM. |
-| `scripts/release.sh` | Releases a version from the Mac (see Releasing). |
+| `scripts/fetch-release.sh` | Waits for a tag's `windows-release.yml` run and downloads and checks its packages (`../scripts/ship.sh` runs it; see Releasing). |
+| `scripts/install-notes.md` | How to install, and why SmartScreen warns, appended to every release's notes. |
 | `scripts/serve-update.sh` | Serves a local update feed to the QA VM (update tests only). |
 | `tools/make-icon.py` | Regenerates `src/PopGuy.App/Assets/PopGuy.ico`. |
 
@@ -62,7 +63,7 @@ Regenerate on macOS, not Windows, so the files keep LF line endings.
 - `native-smoke` (windows-latest and windows-11-arm): loads a small GGUF model through LLamaSharp and streams an answer (the model is cached by its SHA-256).
 - `package` (matrix `x64`, `arm64`): `dotnet publish` of the App (Debug, self-contained, version `0.0.<run number>`), then checks the PE machine type (the llama.cpp natives too), the PRI resources and the embedded manifest's WinRT activatable classes. Uploads the artifact `PopGuy-win-<arch>`.
 
-`.github/workflows/windows-release.yml` runs on `windows-v*` tags: a Release publish per architecture, packed by Velopack (`vpk pack`, with the VC++ runtime as a framework the installer adds) into `PopGuy-win-<arch>-Setup.exe`, `PopGuy-win-<arch>-Portable.zip`, `PopGuy-<version>-win-<arch>-full.nupkg` and the feed `releases.win-<arch>.json`. A tag with `-dev` builds with `UPDATE_URL_OVERRIDE`, so that build reads its update feed from `POPGUY_UPDATE_URL` (QA only; never publish a `-dev` release).
+`.github/workflows/windows-release.yml` runs on `v*` tags (the shared macOS + Windows release that `../scripts/ship.sh` pushes) and on every `windows-v*` tag (QA builds use `windows-v*-dev` ones): a Release publish per architecture, packed by Velopack (`vpk pack`, with the VC++ runtime as a framework the installer adds) into `PopGuy-win-<arch>-Setup.exe`, `PopGuy-win-<arch>-Portable.zip`, `PopGuy-<version>-win-<arch>-full.nupkg` and the feed `releases.win-<arch>.json`. A tag with `-dev` builds with `UPDATE_URL_OVERRIDE`, so that build reads its update feed from `POPGUY_UPDATE_URL` (QA only; never publish a `-dev` release).
 
 Download a build:
 
@@ -95,11 +96,11 @@ Update tests: push two temporary `windows-v0.0.9xx-dev` tags (deleting each afte
 
 ## Releasing
 
-`/cf-ship` runs these steps after the macOS release (`.coding-friend/skills/cf-ship-custom/SKILL.md`).
+macOS and Windows ship as one version and one GitHub release (`vX.Y.Z`, Latest); `/cf-ship` runs these steps (`.coding-friend/skills/cf-ship-custom/SKILL.md`).
 
-1. Bump `<Version>` in `src/PopGuy.App/PopGuy.App.csproj` and add its `## [<version>]` section to `CHANGELOG.md`; commit, but push only the tag (next step) until the release is public.
-2. Run `bash windows/scripts/release.sh` on the Mac (`--yes` answers its two questions): it pushes the tag `windows-v<version>`, waits for `windows-release.yml`, downloads and checks both architectures' Setup.exe, Portable.zip, full nupkg and feed, creates the GitHub release as a draft (the changelog section plus install notes and why Windows warns about the unsigned files), then publishes it as **not** the latest release (the macOS release stays "latest" for the website and README links). Then push the branch.
-3. Installed copies find the release within a day (or at once with Check for Updates). See `docs/RELEASING.md` for the website step and rollback.
+1. `../scripts/bump-version.sh X.Y.Z` sets `<Version>` in `src/PopGuy.App/PopGuy.App.csproj` and the macOS version together. Add a `## [X.Y.Z] - YYYY-MM-DD` section to `CHANGELOG.md` and the same one to `../macos/CHANGELOG.md` (a platform without changes gets "No changes on <platform>; this version ships with the <other> update."), commit them as `release: vX.Y.Z` and push `main`.
+2. Run `../scripts/ship.sh` on the Mac: it pushes the tag `vX.Y.Z` first, so `windows-release.yml` builds both architectures while the Mac builds and notarizes macOS, then `scripts/fetch-release.sh` waits for that run and downloads and checks both architectures' Setup.exe, Portable.zip, full nupkg and feed, and `../scripts/publish-release.sh --windows` creates the release as a draft (both changelog sections plus `scripts/install-notes.md`), uploads the macOS and Windows files and publishes it as Latest.
+3. Installed copies find the release within a day (or at once with Check for Updates): the update check reads the published releases that carry a `releases.win-<arch>.json` feed. Installs of `windows-v0.1.0` (before the shared version) do not update by themselves; reinstall once. See `docs/RELEASING.md` for rollback.
 
 ## Constraints
 

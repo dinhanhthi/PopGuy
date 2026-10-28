@@ -2,7 +2,10 @@
 
 All notable changes to PopGuy for Windows are documented in this file. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html). Windows versions are independent of the macOS app's.
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html). From 1.4.0, macOS and Windows share one version and one
+GitHub release: each version has a section here and one with the same `## [X.Y.Z] - YYYY-MM-DD` heading in
+`macos/CHANGELOG.md`, and `scripts/publish-release.sh` puts both in the release body (this one under `## Windows`).
+Before 1.4.0 Windows had its own versions (0.1.0).
 
 ## [0.1.0]
 
