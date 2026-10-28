@@ -10,7 +10,7 @@ namespace PopGuy.Services;
 internal enum UpdateState { Idle, Checking, Downloading, Ready, UpToDate, Failed }
 
 /// <summary>
-/// Updates through Velopack (spec-3 §7, macOS Sparkle): the GitHub releases of PopGuy, the <c>windows-v…</c> ones only
+/// Updates through Velopack (spec-3 §7, macOS Sparkle): the GitHub releases of PopGuy that carry a Windows feed only
 /// (<see cref="WindowsReleasesSource"/>). Only an installed copy (Setup.exe) can update; a build run from a folder
 /// shows Check for Updates disabled. With <see cref="AppSettings.AutomaticallyChecksForUpdates"/> on, it checks 10 s
 /// after launch and once a day; a found update downloads in the background, then waits (Sparkle's gentle reminder): the
@@ -211,9 +211,9 @@ internal sealed class UpdateService : IDisposable
 }
 
 /// <summary>
-/// Velopack's GitHub source over the Windows releases only (<see cref="ReleaseSelector"/>): Velopack's own reads the 10
-/// newest releases, which the macOS releases of the shared repository can fill. Anonymous (the public API), so assets
-/// come by their browser download URLs, as in Velopack.
+/// Velopack's GitHub source over the releases that carry a Windows feed only (<see cref="ReleaseSelector"/>):
+/// Velopack's own reads the 10 newest releases, which the older macOS-only releases of the shared repository can fill.
+/// Anonymous (the public API), so assets come by their browser download URLs, as in Velopack.
 /// </summary>
 internal sealed class WindowsReleasesSource(string repoUrl) : GithubSource(repoUrl, accessToken: null, prerelease: false)
 {

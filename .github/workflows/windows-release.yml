@@ -1,14 +1,15 @@
 name: Windows release
 
-# Builds the PopGuy for Windows release packages on a windows-v<version> tag: a Release publish per architecture,
-# packed by Velopack into Setup.exe, the portable zip, the full nupkg and the update feed (releases.win-<arch>.json).
-# Artifacts only: windows/scripts/release.sh downloads them and makes the GitHub release as a draft, which is published
-# by hand. Unsigned. A tag that contains -dev (QA) builds with UPDATE_URL_OVERRIDE, so the app reads its update feed
-# from POPGUY_UPDATE_URL.
+# Builds the PopGuy for Windows release packages on a tag: a Release publish per architecture, packed by Velopack into
+# Setup.exe, the portable zip, the full nupkg and the update feed (releases.win-<arch>.json). A v<version> tag is the
+# shared macOS + Windows product release: the Mac's scripts/ship.sh pushes it, downloads these artifacts
+# (windows/scripts/fetch-release.sh) and uploads them to the GitHub release with the macOS assets. A
+# windows-v<version>-dev tag is a QA build, never published: it builds with UPDATE_URL_OVERRIDE, so the app reads its
+# update feed from POPGUY_UPDATE_URL. Artifacts only. Unsigned.
 
 on:
   push:
-    tags: ['windows-v*']
+    tags: ['v*', 'windows-v*']
 
 permissions:
   contents: read
@@ -42,12 +43,12 @@ jobs:
           # Pinned, as in windows.yml (SDK release days).
           dotnet-version: 10.0.402
 
-      # windows-v0.1.0 → 0.1.0. Only digits, dots and a -suffix of letters, digits and dots, so the value is safe to
-      # pass on: the tag comes from a push, not from this repository's files.
+      # v1.4.0 → 1.4.0, windows-v0.0.902-dev → 0.0.902-dev. Only digits, dots and a -suffix of letters, digits and
+      # dots, so the value is safe to pass on: the tag comes from a push, not from this repository's files.
       - name: Version
         run: |
-          $version = $env:TAG -replace '^windows-v', ''
-          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "Tag $env:TAG is not windows-v<major>.<minor>.<patch>[-suffix]" }
+          $version = $env:TAG -replace '^(windows-)?v', ''
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "Tag $env:TAG is not [windows-]v<major>.<minor>.<patch>[-suffix]" }
           "VERSION=$version" >> $env:GITHUB_ENV
           "OVERRIDE=$(if ($version -like '*-dev*') { 'true' } else { 'false' })" >> $env:GITHUB_ENV
 
