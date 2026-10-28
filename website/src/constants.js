@@ -6,6 +6,7 @@ export const DOWNLOAD_URL = `${RELEASES_URL}/latest`;
 // PopGuy for Windows: its own windows-v<version> releases (the macOS release stays "latest"), one Setup.exe and one
 // Portable.zip per architecture, named by Velopack (vpk pack --channel win-<arch>).
 // Written out in full, so the built site holds each link as one literal.
+export const WINDOWS_RELEASE_URL = `${GITHUB_URL}/releases/tag/windows-v${__WINDOWS_VERSION__}`;
 export const WINDOWS_DOWNLOAD_X64 =
   `${GITHUB_URL}/releases/download/windows-v${__WINDOWS_VERSION__}/PopGuy-win-x64-Setup.exe`;
 export const WINDOWS_DOWNLOAD_ARM64 =

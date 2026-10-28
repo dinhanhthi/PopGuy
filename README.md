@@ -7,18 +7,11 @@
 Select text in any app — a floating toolbar pops up so you can **improve**, **translate**,
 or run a **custom AI action** on it. Think PopClip, with a configurable AI backend.
 
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <b><a href="https://github.com/dinhanhthi/PopGuy/releases/latest">⬇ Download for macOS</a></b><br />
-      <sub>macOS 13+ · Apple Silicon &amp; Intel<br />signed &amp; notarized</sub>
-    </td>
-    <td align="center" width="50%">
-      <b><a href="https://github.com/dinhanhthi/PopGuy/releases?q=windows-v&amp;expanded=true">⬇ Download for Windows</a></b><br />
-      <sub>Windows 11 · x64 &amp; ARM64 · installer or portable<br />not code-signed yet (<a href="#windows">why Windows warns</a>)</sub>
-    </td>
-  </tr>
-</table>
+**[⬇ Download for macOS](https://github.com/dinhanhthi/PopGuy/releases/latest)**
+&nbsp;·&nbsp; macOS 13+ · Apple Silicon &amp; Intel
+
+**[⬇ Download for Windows](https://github.com/dinhanhthi/PopGuy/releases?q=windows-v&expanded=true)**
+&nbsp;·&nbsp; Windows 11 · x64 &amp; ARM64 · not code-signed yet ([why](#windows))
 
 **[▶ Watch the demo](https://www.youtube.com/watch?v=-ctYYSC4bWM)**
 

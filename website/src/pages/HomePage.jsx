@@ -5,8 +5,7 @@ import {
   GITHUB_URL,
   WINDOWS_DOWNLOAD_ARM64,
   WINDOWS_DOWNLOAD_X64,
-  WINDOWS_PORTABLE_ARM64,
-  WINDOWS_PORTABLE_X64
+  WINDOWS_RELEASE_URL
 } from "../constants";
 import { detectOs, detectWindowsArch } from "../platform";
 
@@ -38,14 +37,16 @@ const providers = [
 ];
 
 /**
- * One download per system, the visitor's first (and primary). The Windows button takes the installer for the PC's
- * chip; the other chip's installer and the portable zips are linked below it.
+ * One line per system: its download button and a short note. The visitor's system comes first, as the primary
+ * button. On a Windows PC the button takes the installer for its chip; the other builds are on the release page.
  */
 function Downloads() {
   const os = detectOs();
   const [arch, setArch] = useState("x64");
 
   useEffect(() => {
+    // Only a Windows PC's chip matters: a Mac's (Apple Silicon reports "arm") must not pick the ARM64 build.
+    if (os !== "windows") return undefined;
     let live = true;
     detectWindowsArch().then((found) => {
       if (live) setArch(found);
@@ -53,9 +54,8 @@ function Downloads() {
     return () => {
       live = false;
     };
-  }, []);
+  }, [os]);
 
-  const other = arch === "arm64" ? "x64" : "arm64";
   const windowsFirst = os === "windows";
 
   const mac = (
@@ -63,7 +63,7 @@ function Downloads() {
       <ButtonLink href={DOWNLOAD_URL} icon="download" variant={windowsFirst ? "secondary" : "primary"}>
         Download for macOS
       </ButtonLink>
-      <p className="note">macOS 13+ · Apple Silicon &amp; Intel · signed &amp; notarized</p>
+      <p className="note">macOS 13+ · Apple Silicon &amp; Intel</p>
     </div>
   );
   const windows = (
@@ -72,13 +72,8 @@ function Downloads() {
         Download for Windows
       </ButtonLink>
       <p className="note">
-        Windows 11 · {archLabel[arch]} installer{windowsFirst ? " for this PC" : ""}. Also:{" "}
-        <a href={windowsSetup[other]}>{archLabel[other]} installer</a> · portable{" "}
-        <a href={WINDOWS_PORTABLE_X64}>x64</a> · <a href={WINDOWS_PORTABLE_ARM64}>ARM64</a>
-      </p>
-      <p className="note">
-        Not code-signed yet: if Windows says &ldquo;Windows protected your PC&rdquo;, click More info, then Run
-        anyway. <a href="/docs#windows">Why?</a>
+        Windows 11 · {archLabel[arch]} · not code-signed yet (<a href="/docs#windows">why</a>) ·{" "}
+        <a href={WINDOWS_RELEASE_URL}>other downloads</a>
       </p>
     </div>
   );
@@ -94,8 +89,7 @@ export function HomePage() {
         <p>Select text in any app on your Mac or PC, pick an action, and get the result right there.</p>
         <Downloads />
         <p className="note">
-          Free and open source on <a href={GITHUB_URL}>GitHub</a>. Keys stay on your device: Keychain on Mac,
-          Credential Manager on Windows.
+          Free and open source on <a href={GITHUB_URL}>GitHub</a>.
         </p>
       </section>
 

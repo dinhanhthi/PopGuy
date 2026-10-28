@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { AppRoutes } from "../App";
@@ -64,26 +64,19 @@ describe("website routes", () => {
       "href",
       "https://github.com/dinhanhthi/PopGuy/releases/latest"
     );
-    // A public download contract: the windows-v<csproj Version> release's Velopack Setup.exe per architecture. jsdom
-    // tells no chip, so the button takes x64 and the ARM64 installer is linked below it.
-    for (const [name, arch] of [[/Download for Windows/, "x64"], ["ARM64 installer", "arm64"]]) {
-      expect(screen.getByRole("link", { name })).toHaveAttribute(
-        "href",
-        expect.stringMatching(
-          new RegExp(`^https://github\\.com/dinhanhthi/PopGuy/releases/download/windows-v\\d+\\.\\d+\\.\\d+/PopGuy-win-${arch}-Setup\\.exe$`)
-        )
-      );
-    }
-    // The same release's Velopack Portable.zip per architecture.
-    for (const arch of ["x64", "arm64"]) {
-      expect(screen.getByRole("link", { name: arch === "x64" ? "x64" : "ARM64" })).toHaveAttribute(
-        "href",
-        expect.stringMatching(
-          new RegExp(`^https://github\\.com/dinhanhthi/PopGuy/releases/download/windows-v\\d+\\.\\d+\\.\\d+/PopGuy-win-${arch}-Portable\\.zip$`)
-        )
-      );
-    }
-    expect(screen.getByText(/Windows protected your PC/)).toBeInTheDocument();
+    // A public download contract: the windows-v<csproj Version> release's Velopack Setup.exe. jsdom is not a Windows
+    // PC, so the button takes x64; every other build is on the release page.
+    expect(screen.getByRole("link", { name: /Download for Windows/ })).toHaveAttribute(
+      "href",
+      expect.stringMatching(
+        /^https:\/\/github\.com\/dinhanhthi\/PopGuy\/releases\/download\/windows-v\d+\.\d+\.\d+\/PopGuy-win-x64-Setup\.exe$/
+      )
+    );
+    expect(screen.getByRole("link", { name: "other downloads" })).toHaveAttribute(
+      "href",
+      expect.stringMatching(/^https:\/\/github\.com\/dinhanhthi\/PopGuy\/releases\/tag\/windows-v\d+\.\d+\.\d+$/)
+    );
+    expect(screen.getByText(/not code-signed yet/)).toBeInTheDocument();
     expect(
       screen.queryByText(["Get", "Pro"].join(" "))
     ).not.toBeInTheDocument();
@@ -102,11 +95,51 @@ describe("website routes", () => {
       const downloads = screen.getAllByRole("link", { name: /^Download for/ });
       expect(downloads.map((link) => link.textContent)).toEqual(["Download for Windows", "Download for macOS"]);
       expect(downloads[0]).toHaveClass("button--primary");
-      expect(screen.getByText(/x64 installer for this PC/)).toBeInTheDocument();
     } finally {
       if (userAgent) Object.defineProperty(window.navigator, "userAgent", userAgent);
       else delete window.navigator.userAgent;
     }
+  });
+
+  it("keeps the x64 Windows installer on a Mac whose chip is Arm", async () => {
+    const userAgent = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0"
+    });
+    Object.defineProperty(window.navigator, "userAgentData", {
+      configurable: true,
+      value: { getHighEntropyValues: async () => ({ architecture: "arm" }) }
+    });
+    try {
+      renderAt("/");
+      // Let the chip detection settle (an async hint read, then a state update).
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(screen.getByRole("link", { name: /Download for macOS/ })).toHaveClass("button--primary");
+      expect(screen.getByRole("link", { name: /Download for Windows/ }).getAttribute("href")).toMatch(
+        /PopGuy-win-x64-Setup\.exe$/
+      );
+    } finally {
+      if (userAgent) Object.defineProperty(window.navigator, "userAgent", userAgent);
+      else delete window.navigator.userAgent;
+      delete window.navigator.userAgentData;
+    }
+  });
+
+  it("lists the portable Windows builds on the docs page", () => {
+    renderAt("/docs");
+
+    const portable = screen
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href"))
+      .filter((href) => href?.endsWith("-Portable.zip"));
+    expect(portable).toEqual([
+      expect.stringMatching(/PopGuy-win-x64-Portable\.zip$/),
+      expect.stringMatching(/PopGuy-win-arm64-Portable\.zip$/)
+    ]);
   });
 
   it("links the AGPLv3 license and GitHub releases in the footer", () => {
