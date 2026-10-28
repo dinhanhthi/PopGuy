@@ -219,11 +219,15 @@ section p {
   margin-top: var(--space-sm);
 }
 
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
+.downloads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--space-md);
   margin-top: var(--space-lg);
+}
+
+.download .note {
+  margin-top: var(--space-xs);
 }
 
 .button {

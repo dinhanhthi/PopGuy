@@ -64,8 +64,9 @@ describe("website routes", () => {
       "href",
       "https://github.com/dinhanhthi/PopGuy/releases/latest"
     );
-    // A public download contract: the windows-v<csproj Version> release's Velopack Setup.exe per architecture.
-    for (const [name, arch] of [["Windows (x64)", "x64"], ["Windows (ARM64)", "arm64"]]) {
+    // A public download contract: the windows-v<csproj Version> release's Velopack Setup.exe per architecture. jsdom
+    // tells no chip, so the button takes x64 and the ARM64 installer is linked below it.
+    for (const [name, arch] of [[/Download for Windows/, "x64"], ["ARM64 installer", "arm64"]]) {
       expect(screen.getByRole("link", { name })).toHaveAttribute(
         "href",
         expect.stringMatching(
@@ -87,6 +88,25 @@ describe("website routes", () => {
       screen.queryByText(["Get", "Pro"].join(" "))
     ).not.toBeInTheDocument();
     expect(screen.queryByText("$10")).not.toBeInTheDocument();
+  });
+
+  it("puts the Windows download first for a Windows visitor", () => {
+    const userAgent = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"
+    });
+    try {
+      renderAt("/");
+
+      const downloads = screen.getAllByRole("link", { name: /^Download for/ });
+      expect(downloads.map((link) => link.textContent)).toEqual(["Download for Windows", "Download for macOS"]);
+      expect(downloads[0]).toHaveClass("button--primary");
+      expect(screen.getByText(/x64 installer for this PC/)).toBeInTheDocument();
+    } finally {
+      if (userAgent) Object.defineProperty(window.navigator, "userAgent", userAgent);
+      else delete window.navigator.userAgent;
+    }
   });
 
   it("links the AGPLv3 license and GitHub releases in the footer", () => {

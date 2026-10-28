@@ -7,13 +7,20 @@
 Select text in any app — a floating toolbar pops up so you can **improve**, **translate**,
 or run a **custom AI action** on it. Think PopClip, with a configurable AI backend.
 
-**[⬇ Download for macOS](https://github.com/dinhanhthi/PopGuy/releases/latest)**
-&nbsp;·&nbsp; **[▶ Watch the demo](https://www.youtube.com/watch?v=-ctYYSC4bWM)**
-&nbsp;·&nbsp; macOS 13+ &nbsp;·&nbsp; signed &amp; notarized
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <b><a href="https://github.com/dinhanhthi/PopGuy/releases/latest">⬇ Download for macOS</a></b><br />
+      <sub>macOS 13+ · Apple Silicon &amp; Intel<br />signed &amp; notarized</sub>
+    </td>
+    <td align="center" width="50%">
+      <b><a href="https://github.com/dinhanhthi/PopGuy/releases?q=windows-v&amp;expanded=true">⬇ Download for Windows</a></b><br />
+      <sub>Windows 11 · x64 &amp; ARM64 · installer or portable<br />not code-signed yet (<a href="#windows">why Windows warns</a>)</sub>
+    </td>
+  </tr>
+</table>
 
-**[⬇ Download for Windows](https://github.com/dinhanhthi/PopGuy/releases?q=windows-v&expanded=true)**
-&nbsp;·&nbsp; Windows 11 (x64 &amp; ARM64) &nbsp;·&nbsp; installer or portable &nbsp;·&nbsp; not code-signed yet
-([why Windows warns](#windows))
+**[▶ Watch the demo](https://www.youtube.com/watch?v=-ctYYSC4bWM)**
 
 </div>
 
@@ -35,9 +42,10 @@ or run a **custom AI action** on it. Think PopClip, with a configurable AI backe
 
 ## Install
 
-- **Download the app:** grab the latest signed &amp; notarized build from the
+- **macOS:** grab the latest signed &amp; notarized build from the
   [Releases page](https://github.com/dinhanhthi/PopGuy/releases/latest). It auto-updates
   itself after that.
+- **Windows:** see [Windows](#windows) below.
 - **Or build from source:** see below.
 
 ☝️ PopGuy needs **Accessibility** permission to read selected text and detect the `Cmd+C+C`

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { ButtonLink } from "../components/ButtonLink";
 import {
   DOWNLOAD_URL,
@@ -7,6 +8,10 @@ import {
   WINDOWS_PORTABLE_ARM64,
   WINDOWS_PORTABLE_X64
 } from "../constants";
+import { detectOs, detectWindowsArch } from "../platform";
+
+const windowsSetup = { x64: WINDOWS_DOWNLOAD_X64, arm64: WINDOWS_DOWNLOAD_ARM64 };
+const archLabel = { x64: "x64", arm64: "ARM64" };
 
 const steps = [
   "Select text in any app, or capture text from the screen.",
@@ -32,28 +37,65 @@ const providers = [
   ["Dictionary", "macOS Dictionary (Mac), Wiktionary, and more."]
 ];
 
+/**
+ * One download per system, the visitor's first (and primary). The Windows button takes the installer for the PC's
+ * chip; the other chip's installer and the portable zips are linked below it.
+ */
+function Downloads() {
+  const os = detectOs();
+  const [arch, setArch] = useState("x64");
+
+  useEffect(() => {
+    let live = true;
+    detectWindowsArch().then((found) => {
+      if (live) setArch(found);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const other = arch === "arm64" ? "x64" : "arm64";
+  const windowsFirst = os === "windows";
+
+  const mac = (
+    <div className="download" key="mac">
+      <ButtonLink href={DOWNLOAD_URL} icon="download" variant={windowsFirst ? "secondary" : "primary"}>
+        Download for macOS
+      </ButtonLink>
+      <p className="note">macOS 13+ · Apple Silicon &amp; Intel · signed &amp; notarized</p>
+    </div>
+  );
+  const windows = (
+    <div className="download" key="windows">
+      <ButtonLink href={windowsSetup[arch]} icon="download" variant={windowsFirst ? "primary" : "secondary"}>
+        Download for Windows
+      </ButtonLink>
+      <p className="note">
+        Windows 11 · {archLabel[arch]} installer{windowsFirst ? " for this PC" : ""}. Also:{" "}
+        <a href={windowsSetup[other]}>{archLabel[other]} installer</a> · portable{" "}
+        <a href={WINDOWS_PORTABLE_X64}>x64</a> · <a href={WINDOWS_PORTABLE_ARM64}>ARM64</a>
+      </p>
+      <p className="note">
+        Not code-signed yet: if Windows says &ldquo;Windows protected your PC&rdquo;, click More info, then Run
+        anyway. <a href="/docs#windows">Why?</a>
+      </p>
+    </div>
+  );
+
+  return <div className="downloads">{windowsFirst ? [windows, mac] : [mac, windows]}</div>;
+}
+
 export function HomePage() {
   return (
     <main>
       <section className="hero">
         <h1>A guy pops up from your selected text with magic.</h1>
         <p>Select text in any app on your Mac or PC, pick an action, and get the result right there.</p>
-        <div className="actions">
-          <ButtonLink href={DOWNLOAD_URL} icon="download">Download for macOS</ButtonLink>
-          <ButtonLink href={GITHUB_URL} icon="github" variant="secondary">GitHub</ButtonLink>
-        </div>
-        <p className="note">Free and open source. macOS 13+. Keys stay in Keychain.</p>
-        <div className="actions">
-          <ButtonLink href={WINDOWS_DOWNLOAD_X64} icon="download" variant="secondary">Windows (x64)</ButtonLink>
-          <ButtonLink href={WINDOWS_DOWNLOAD_ARM64} icon="download" variant="secondary">Windows (ARM64)</ButtonLink>
-        </div>
+        <Downloads />
         <p className="note">
-          Windows 11. Keys stay in Credential Manager. Portable, no install:{" "}
-          <a href={WINDOWS_PORTABLE_X64}>x64</a> · <a href={WINDOWS_PORTABLE_ARM64}>ARM64</a>
-        </p>
-        <p className="note">
-          Not code-signed yet, so Windows may say &ldquo;Windows protected your PC&rdquo;: click More info, then Run
-          anyway. <a href="/docs#windows">Why?</a>
+          Free and open source on <a href={GITHUB_URL}>GitHub</a>. Keys stay on your device: Keychain on Mac,
+          Credential Manager on Windows.
         </p>
       </section>
 
