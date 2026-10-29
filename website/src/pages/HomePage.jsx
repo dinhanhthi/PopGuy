@@ -37,8 +37,8 @@ const providers = [
 ];
 
 /**
- * One line per system: its download button and a short note. The visitor's system comes first, as the primary
- * button. On a Windows PC the button takes the installer for its chip; the other builds are on the release page.
+ * The two download buttons on one line, their notes on the line below. The visitor's system comes first, as the
+ * primary button. On a Windows PC the button takes the installer for its chip; the other builds are on the release page.
  */
 function Downloads() {
   const os = detectOs();
@@ -58,27 +58,32 @@ function Downloads() {
 
   const windowsFirst = os === "windows";
 
-  const mac = (
-    <div className="download" key="mac">
-      <ButtonLink href={DOWNLOAD_URL} icon="download" variant={windowsFirst ? "secondary" : "primary"}>
-        Download for macOS
-      </ButtonLink>
-      <p className="note">macOS 13+ · Apple Silicon &amp; Intel</p>
-    </div>
+  const macButton = (
+    <ButtonLink href={DOWNLOAD_URL} icon="download" variant={windowsFirst ? "secondary" : "primary"} key="mac">
+      Download for macOS
+    </ButtonLink>
   );
-  const windows = (
-    <div className="download" key="windows">
-      <ButtonLink href={windowsSetup[arch]} icon="download" variant={windowsFirst ? "primary" : "secondary"}>
-        Download for Windows
-      </ButtonLink>
+  const windowsButton = (
+    <ButtonLink href={windowsSetup[arch]} icon="download" variant={windowsFirst ? "primary" : "secondary"} key="windows">
+      Download for Windows
+    </ButtonLink>
+  );
+  const macNote = <span key="mac">macOS 13+, Apple Silicon &amp; Intel</span>;
+  const windowsNote = (
+    <span key="windows">
+      Windows 11, {archLabel[arch]}, not code-signed yet (<a href="/docs#windows">why</a>)
+    </span>
+  );
+  const notes = windowsFirst ? [windowsNote, macNote] : [macNote, windowsNote];
+
+  return (
+    <div className="downloads">
+      <div className="download-buttons">{windowsFirst ? [windowsButton, macButton] : [macButton, windowsButton]}</div>
       <p className="note">
-        Windows 11 · {archLabel[arch]} · not code-signed yet (<a href="/docs#windows">why</a>) ·{" "}
-        <a href={WINDOWS_RELEASE_URL}>other downloads</a>
+        {notes[0]} · {notes[1]} · <a href={WINDOWS_RELEASE_URL}>other downloads</a>
       </p>
     </div>
   );
-
-  return <div className="downloads">{windowsFirst ? [windows, mac] : [mac, windows]}</div>;
 }
 
 export function HomePage() {

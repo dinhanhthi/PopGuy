@@ -220,20 +220,22 @@ section p {
 }
 
 .downloads {
-  display: grid;
-  gap: var(--space-sm);
   margin-top: var(--space-lg);
 }
 
-.download {
+.download-buttons {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-xs) var(--space-sm);
+  gap: var(--space-sm);
 }
 
-/* The same width for both buttons, so the two notes start in line. */
-.download .button {
+/* The same width for both buttons. */
+.download-buttons .button {
+  min-width: 13.5rem;
+  justify-content: center;
+}
+
+.button {
   min-width: 13.5rem;
   justify-content: center;
 }
