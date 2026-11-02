@@ -630,16 +630,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         menu.addItem(.separator())
 
-        // Settings…
+        // Settings
         menu.addItem(NSMenuItem(
-            title: "Settings\u{2026}",
+            title: "Settings",
             action: #selector(openSettings),
             keyEquivalent: ","
         ))
 
         // History — opens Settings directly on the History tab.
         let historyItem = NSMenuItem(
-            title: "History\u{2026}",
+            title: "History",
             action: #selector(openHistory),
             keyEquivalent: ""
         )
@@ -651,7 +651,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         // About PopGuy — opens Settings directly on the About tab.
         let aboutItem = NSMenuItem(
-            title: "About PopGuy\u{2026}",
+            title: "About PopGuy",
             action: #selector(openAbout),
             keyEquivalent: ""
         )
@@ -662,7 +662,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         menu.addItem(aboutItem)
 
         menu.addItem(NSMenuItem(
-            title: "Setup Guide\u{2026}",
+            title: "Setup Guide",
             action: #selector(presentOnboarding),
             keyEquivalent: ""
         ))
@@ -671,7 +671,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         // Check for Updates — always present; enabled only when Sparkle allows it.
         let checkItem = NSMenuItem(
-            title: "Check for Updates\u{2026}",
+            title: "Check for Updates",
             action: #selector(performUpdateCheck),
             keyEquivalent: ""
         )
