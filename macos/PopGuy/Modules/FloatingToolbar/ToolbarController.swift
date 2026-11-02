@@ -639,7 +639,8 @@ final class ToolbarController {
             near: appKitRect,
             within: screenFrame,
             cursor: cursor,
-            grewDownward: event.selectionGrewDownward
+            grewDownward: event.selectionGrewDownward,
+            mouse: mouse
         )
 
         ToolbarController.positionLog.debug("pos: pointer=\(String(describing: cursor)) grewDownward=\(String(describing: event.selectionGrewDownward)) axRect=\(NSStringFromRect(appKitRect)) origin=\(NSStringFromPoint(origin))")

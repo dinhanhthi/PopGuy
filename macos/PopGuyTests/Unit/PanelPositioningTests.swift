@@ -187,6 +187,44 @@ struct PanelPositioningTests {
         #expect(origin.y == selection.minY - panelVerticalGap - panelSize.height)
     }
 
+    @Test("nil cursor centres on the mouse when it sits inside an over-wide AX rect")
+    func nilCursorCentresOnMouseInsideOverWideRect() {
+        // Cursor (Monaco) reports a one-line rect spanning the whole editor width,
+        // past the screen edge; ⌘C+C carries no release point (measured values).
+        let screen = CGRect(x: 0, y: 58, width: 1800, height: 1072)
+        let size = CGSize(width: 369, height: 66)
+        let selection = CGRect(x: 471, y: 743, width: 1474, height: 19)
+        let mouse = CGPoint(x: 549, y: 747)
+        let origin = panelOrigin(panelSize: size, near: selection, within: screen,
+                                 cursor: nil, mouse: mouse)
+
+        #expect(origin.x == mouse.x - size.width / 2)
+        // Vertical placement is unchanged: just below the AX rect.
+        #expect(origin.y == selection.minY - panelVerticalGap - size.height)
+    }
+
+    @Test("nil cursor centres on a mouse a few points above an over-wide AX rect")
+    func nilCursorCentresOnMouseJustAboveOverWideRect() {
+        // Measured in Cursor: the AX rect sits a few points below the pointer's line.
+        let screen = CGRect(x: 0, y: 58, width: 1800, height: 1072)
+        let size = CGSize(width: 369, height: 66)
+        let selection = CGRect(x: 471, y: 311, width: 2620, height: 43)
+        let mouse = CGPoint(x: 670.6, y: 360.1)
+        let origin = panelOrigin(panelSize: size, near: selection, within: screen,
+                                 cursor: nil, mouse: mouse)
+
+        #expect(origin.x == mouse.x - size.width / 2)
+    }
+
+    @Test("nil cursor ignores a mouse parked outside the selection")
+    func nilCursorIgnoresMouseOutsideSelection() {
+        let selection = CGRect(x: 600, y: 400, width: 200, height: 20)
+        let origin = panelOrigin(panelSize: panelSize, near: selection, within: screenFrame,
+                                 cursor: nil, mouse: CGPoint(x: 100, y: 800))
+
+        #expect(origin.x == selection.midX - panelSize.width / 2)
+    }
+
     @Test("nil cursor flips above the selection when there is no room below")
     func nilCursorFlipsAboveWhenNoRoomBelow() {
         // Selection whose bottom edge sits near the screen bottom — no room below.

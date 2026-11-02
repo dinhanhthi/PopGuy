@@ -29,6 +29,11 @@ let pointerVerticalGap: CGFloat = 16
 /// Minimum inset from any screen edge before the panel is clamped (points).
 let panelEdgeInset: CGFloat = 4
 
+/// How far above/below the selection rect the mouse may sit and still count as
+/// "on the selection" (points, about one text line). Some apps' AX rects sit a
+/// few points off the line the pointer is on.
+let mouseOnSelectionTolerance: CGFloat = 16
+
 // MARK: - Pure positioning function
 
 /// Computes the bottom-left origin for the floating panel, kept just outside the
@@ -48,7 +53,9 @@ let panelEdgeInset: CGFloat = 4
 ///     purely to the pointer never covers the selected text.
 ///   • `cursor == nil` — keyboard selection or chord (mouse parked elsewhere).
 ///     The panel is centred on the selection and placed just below it (near the
-///     end), flipping above when there is no room below. AX rect used here.
+///     end), flipping above when there is no room below. AX rect used here,
+///     except that a `mouse` inside the rect gives the horizontal centre: some
+///     apps (Cursor) report a rect spanning the whole editor width.
 ///
 /// - Parameters:
 ///   - panelSize:     Desired panel size.
@@ -60,6 +67,10 @@ let panelEdgeInset: CGFloat = 4
 ///                    upward drag; nil when direction is unknown (e.g. double-
 ///                    click with no movement, or keyboard selection). Ignored
 ///                    when `cursor` is nil.
+///   - mouse:         Current mouse location in AppKit screen coordinates, or nil.
+///                    Used only when `cursor` is nil, and only when it lies
+///                    inside `selectionRect` (within `mouseOnSelectionTolerance`
+///                    vertically).
 /// - Returns: The clamped bottom-left origin for the panel.
 ///
 /// Nonisolated: all inputs/outputs are value types from CoreGraphics.
@@ -68,11 +79,16 @@ func panelOrigin(
     near selectionRect: CGRect,
     within screenFrame: CGRect,
     cursor: CGPoint? = nil,
-    grewDownward: Bool? = nil
+    grewDownward: Bool? = nil,
+    mouse: CGPoint? = nil
 ) -> CGPoint {
     // Horizontal anchor: cursor X when available (keeps the panel near where the
-    // user released on wide selections), else the selection midpoint.
-    let anchorX = cursor?.x ?? selectionRect.midX
+    // user released on wide selections), else the mouse X when it sits on the
+    // selection (an over-wide AX rect would push the midpoint far away), else
+    // the selection midpoint.
+    let mouseZone = selectionRect.insetBy(dx: 0, dy: -mouseOnSelectionTolerance)
+    let mouseOnSelection = mouse.flatMap { mouseZone.contains($0) ? $0.x : nil }
+    let anchorX = cursor?.x ?? mouseOnSelection ?? selectionRect.midX
     let minX = screenFrame.minX + panelEdgeInset
     let maxX = screenFrame.maxX - panelSize.width - panelEdgeInset
     let clampedX = min(max(anchorX - panelSize.width / 2, minX), maxX)
