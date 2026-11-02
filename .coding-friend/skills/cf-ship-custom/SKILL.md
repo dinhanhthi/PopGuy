@@ -26,7 +26,8 @@ keep going. These overrides beat the generic cf-ship rules:
 - A version in the hint (e.g. `/cf-ship 1.5.0`) is used as-is, skipping Step B2's classification.
 - The only stops are hard failures you cannot fix: a test that still fails after one re-run,
   a build/notarize/publish script exiting non-zero, a failed Windows CI run, the branch is not
-  `main`, or no user-facing commits on either platform (Step B1).
+  `main`, no user-facing commits on either platform (Step B1), or a feature/fix that exists
+  on only one platform (the parity gate in Step B1).
   A test that fails once and passes on re-run is flaky: record it with `capture-later.sh`
   and continue.
 
@@ -93,6 +94,19 @@ If **neither platform** has user-facing app commits after filtering, stop with
 `"No user-facing changes since $LAST_TAG — nothing to ship."`. If only one platform has them,
 the release still ships both apps (every release carries both platforms' assets, so the
 website's and the updaters' links to the Latest release never break).
+
+**Parity gate (blocks the release).** Every user-facing feature or fix must exist on **both**
+macOS and Windows before it ships. For each `feat`/`fix` in the macOS list, find its
+equivalent in the Windows list (and in Windows code already on `main`), and vice versa.
+Stop **before** bumping anything when one is missing, with
+`"Parity gap: <feature> exists on <platform> only — implement it on <other platform> before releasing."`,
+listing every gap. "Only one platform has user-facing commits" above is never an excuse for
+a gap. The only exceptions, which do not stop the release:
+- The user explicitly said, in this session or a durable rule, to skip that platform for it.
+- The change cannot apply there: a quirk of one OS or one source app (e.g. a Cursor/AX
+  positioning fix, a macOS TCC limit, a Windows UIA quirk) or an OS-specific API. Name it in
+  the summary.
+When in doubt whether it applies, treat it as a gap and stop.
 
 ### Step B2: Determine version bump level
 
