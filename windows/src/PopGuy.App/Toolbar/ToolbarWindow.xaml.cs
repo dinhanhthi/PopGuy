@@ -69,6 +69,15 @@ public sealed partial class ToolbarWindow : Window
     /// <summary>The card's last laid-out size in DIPs; the start size before the first layout.</summary>
     private Windows.Foundation.Size _cardSize = new(StartWidth, StartHeight);
 
+    /// <summary>
+    /// The last show's bar placement (<see cref="ShowAt"/>'s pointer, drag direction, selection rect and scale): a pick
+    /// in the "Menu" style places the card with them, as Bar style would have (<see cref="OnMenuPicked"/>).
+    /// </summary>
+    private DrawingPoint? _barPointer;
+    private bool? _barGrewDownward;
+    private DrawingRectangle _barSelection;
+    private double _barScale = 1;
+
     public ToolbarWindow(ToolbarSession session)
     {
         ViewModel = new ToolbarViewModel(session, DispatcherQueue.GetForCurrentThread());
@@ -100,6 +109,7 @@ public sealed partial class ToolbarWindow : Window
         View.MenuOpened += OnMenuOpened;
         View.MenuClosed += OnMenuClosed;
         ViewModel.PropertyChanged += OnViewModelChanged;
+        ViewModel.MenuPicked += OnMenuPicked;
 
         // Every press and release on the card, the buttons' (handled) too: the foreground hand-back.
         View.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnAnyPointerPressed), true);
@@ -129,10 +139,11 @@ public sealed partial class ToolbarWindow : Window
 
     /// <summary>
     /// Shows the toolbar for <paramref name="source"/> without activating it, placed by
-    /// <see cref="PanelPositioning.PanelOrigin"/> (spec-1 §3.2) in the work area of the monitor holding the selection.
-    /// Call <see cref="ToolbarViewModel.Present"/> first, so the toolbar is sized for the new content. Also re-presents
-    /// a toolbar that is already showing: the position is recomputed, unless the user dragged the toolbar since it was
-    /// shown (a drag disables auto-reposition until the next show; the size still follows the content).
+    /// <see cref="PanelPositioning.PanelOrigin"/> (spec-1 §3.2) in the work area of the monitor holding the selection; the
+    /// "Menu" style's menu by <see cref="MenuOrigin"/>. Call <see cref="ToolbarViewModel.Present"/> first, so the toolbar
+    /// is sized for the new content. Also re-presents a toolbar that is already showing: the position is recomputed,
+    /// unless the user dragged the toolbar since it was shown (a drag disables auto-reposition until the next show; the
+    /// size still follows the content).
     /// </summary>
     /// <param name="pointer">The gesture's release point; null for the chord and the hotkeys (placed below the selection).</param>
     /// <param name="grewDownward">The drag direction; null when unknown.</param>
@@ -157,15 +168,15 @@ public sealed partial class ToolbarWindow : Window
         var work = MonitorInfo.WorkArea(midpoint);
         _workArea = work.IsEmpty ? FallbackWorkArea : work;
 
-        // The new content's size now, not after the show (layout runs on this thread).
-        View.UpdateBindings();
-        View.UpdateLayout();
-        if (View.ActualWidth > 0 && View.ActualHeight > 0) _cardSize = new(View.ActualWidth, View.ActualHeight);
         var scale = MonitorInfo.Scale(midpoint);
-        var frame = ToolbarWindowStyle.FrameExtent(Hwnd);
-        var size = new DrawingSize(
-            Pixels(_cardSize.Width * ViewModel.Zoom, scale) + frame.Width, Pixels(_cardSize.Height * ViewModel.Zoom, scale) + frame.Height);
-        var origin = PanelPositioning.PanelOrigin(size, selectionRect, _workArea, pointer, grewDownward);
+        var size = LaidOutWindowSize(scale);
+        _barPointer = pointer;
+        _barGrewDownward = grewDownward;
+        _barSelection = selectionRect;
+        _barScale = scale;
+        var origin = ViewModel.ShowsMenu
+            ? MenuOrigin(size, pointer, grewDownward, selectionRect)
+            : PanelPositioning.PanelOrigin(size, selectionRect, _workArea, pointer, grewDownward);
         ToolbarWindowStyle.SetBounds(Hwnd, new DrawingRectangle(origin, size));
 
         // Never Activate(): it would take the foreground from the source app.
@@ -185,6 +196,63 @@ public sealed partial class ToolbarWindow : Window
                 // Tier 1 goes on without the subclass lever (WS_EX_NOACTIVATE and the hand-back still hold).
             }
         });
+    }
+
+    /// <summary>
+    /// The window's size for the new content, now, not after the show (layout runs on this thread): the zoomed card plus
+    /// the frame Windows keeps around the client area, as <see cref="FitToCard"/> computes it.
+    /// </summary>
+    private DrawingSize LaidOutWindowSize(double scale)
+    {
+        View.UpdateBindings();
+        View.UpdateLayout();
+        if (View.ActualWidth > 0 && View.ActualHeight > 0) _cardSize = new(View.ActualWidth, View.ActualHeight);
+        var frame = ToolbarWindowStyle.FrameExtent(Hwnd);
+        return new DrawingSize(
+            Pixels(_cardSize.Width * ViewModel.Zoom, scale) + frame.Width, Pixels(_cardSize.Height * ViewModel.Zoom, scale) + frame.Height);
+    }
+
+    /// <summary>
+    /// The "Menu" style's top-left (macOS showMenu, <see cref="PanelPositioning.MenuOrigin"/>): beside the pointer,
+    /// opening upward after an upward drag; below the selection for a keyboard selection, the chord and the hotkeys
+    /// (above when there is no room), at the bar's anchor x (the selection's centre); beside the cursor when there is no
+    /// usable selection rect (<paramref name="selection"/> is then a zero-size rect at the cursor). The gaps are pixels,
+    /// as in <see cref="PanelPositioning.PanelOrigin"/>.
+    /// </summary>
+    private DrawingPoint MenuOrigin(DrawingSize size, DrawingPoint? pointer, bool? grewDownward, DrawingRectangle selection)
+    {
+        DrawingRectangle anchor;
+        var preferUp = false;
+        if (pointer is { } point)
+        {
+            anchor = PanelPositioning.PointerAnchor(point, PanelPositioning.PointerVerticalGap);
+            preferUp = grewDownward == false;
+        }
+        else if (selection.Width > 0 && selection.Height > 0)
+        {
+            var gap = PanelPositioning.PanelVerticalGap;
+            anchor = new DrawingRectangle(selection.Left + selection.Width / 2, selection.Top - gap, 0, selection.Height + 2 * gap);
+        }
+        else
+        {
+            anchor = PanelPositioning.PointerAnchor(selection.Location, PanelPositioning.PointerVerticalGap);
+        }
+        return PanelPositioning.MenuOrigin(size, anchor, preferUp, _workArea);
+    }
+
+    /// <summary>
+    /// A pick turned the menu into the bar (macOS switchMenuToBar), before the action runs: the card goes where Bar style
+    /// would have put it for this show. Not after a drag (or during one): the card then keeps its top-left, as for any
+    /// resize (<see cref="FitToCard"/>). As in <see cref="ShowAt"/>: the layout's SizeChanged may run
+    /// <see cref="FitToCard"/> first (the menu's top-left kept), then the bounds set here win; a later one finds the
+    /// window at the card's size and does nothing.
+    /// </summary>
+    private void OnMenuPicked()
+    {
+        if (_closed || !IsShown || UserDragged || _dragging) return;
+        var size = LaidOutWindowSize(_barScale);
+        var origin = PanelPositioning.PanelOrigin(size, _barSelection, _workArea, _barPointer, _barGrewDownward);
+        ToolbarWindowStyle.SetBounds(Hwnd, new DrawingRectangle(origin, size));
     }
 
     /// <summary>
@@ -517,6 +585,7 @@ public sealed partial class ToolbarWindow : Window
         View.MenuClosed -= OnMenuClosed;
         View.Detach();
         ViewModel.PropertyChanged -= OnViewModelChanged;
+        ViewModel.MenuPicked -= OnMenuPicked;
         ViewModel.Detach();
         View.PointerPressed -= OnBackgroundPressed;
         View.PointerMoved -= OnPointerMoved;

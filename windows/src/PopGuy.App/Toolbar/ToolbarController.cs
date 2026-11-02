@@ -349,6 +349,8 @@ internal sealed class ToolbarController : IDisposable
         if (!ToolbarLayout.IsEnabled(settings, id)) return;
         if (_window.IsShown && _current is { Blocked: false, Text.Length: > 0 })
         {
+            // The menu turns into the bar first, as for a pick in it (macOS: the hotkey shows its card).
+            _viewModel.LeaveMenu();
             RunAction(id);
             return;
         }
@@ -573,7 +575,10 @@ internal sealed class ToolbarController : IDisposable
         _pasting = false;
         // A new selection: the previous one's speech stops and its "Listen again" goes (macOS update).
         _speak.ClearReplay();
-        _viewModel.Present(settings, capture.IsEditable, CanIgnore(capture.Source), capture.Host);
+        // Only a show without an action (a passive selection, the chord, its replacement) may open the "Menu" style; a
+        // per-action hotkey, an assigned double-click, OCR and an error show the bar (macOS).
+        _viewModel.Present(settings, capture.IsEditable, CanIgnore(capture.Source), capture.Host,
+            opensMenu: autoRun is null && !capture.IsOcr && !capture.Blocked);
         // After Present (which clears it), before the show (which sizes the window for the content).
         if (thumbnail is not null) _viewModel.ShowOcrThumbnail(thumbnail);
         // No pointer (the chord, the hotkeys, a keyboard selection): placed below the selection rect, or at the cursor

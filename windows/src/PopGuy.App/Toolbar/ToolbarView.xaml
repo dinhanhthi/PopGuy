@@ -82,7 +82,8 @@
             x:Name="Bar"
             MinHeight="44"
             Padding="8,6,8,6"
-            HorizontalAlignment="Left">
+            HorizontalAlignment="Left"
+            Visibility="{x:Bind ViewModel.ShowsBar, Mode=OneWay}">
             <!-- The bar's buttons, also those built in code: less side padding than Fluent's 11 (a square icon button). -->
             <Grid.Resources>
                 <Style TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
@@ -213,6 +214,53 @@
                 </Button>
             </StackPanel>
         </Grid>
+
+        <!--
+            The "Menu" style (macOS ToolbarMenuList), instead of the bar until an action is picked: the inline actions,
+            More actions (its menu opens beside the row on hover), then a separator and the system rows. The rows are
+            built in code from the view model (like the action row); they never take focus. Under the pointer a row
+            takes Fluent's subtle fill, with no border; High Contrast keeps the system's.
+        -->
+        <StackPanel
+            x:Name="MenuList"
+            Padding="5"
+            HorizontalAlignment="Left"
+            Visibility="{x:Bind ViewModel.ShowsMenu, Mode=OneWay}">
+            <StackPanel.Resources>
+                <ResourceDictionary>
+                    <ResourceDictionary.ThemeDictionaries>
+                        <ResourceDictionary x:Key="Light">
+                            <StaticResource x:Key="ButtonBackground" ResourceKey="SubtleFillColorTransparentBrush" />
+                            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
+                            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
+                            <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="SubtleFillColorTransparentBrush" />
+                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SubtleFillColorTransparentBrush" />
+                            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="SubtleFillColorTransparentBrush" />
+                            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="SubtleFillColorTransparentBrush" />
+                            <StaticResource x:Key="ButtonBorderBrushDisabled" ResourceKey="SubtleFillColorTransparentBrush" />
+                        </ResourceDictionary>
+                        <ResourceDictionary x:Key="Dark">
+                            <StaticResource x:Key="ButtonBackground" ResourceKey="SubtleFillColorTransparentBrush" />
+                            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
+                            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
+                            <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="SubtleFillColorTransparentBrush" />
+                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SubtleFillColorTransparentBrush" />
+                            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="SubtleFillColorTransparentBrush" />
+                            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="SubtleFillColorTransparentBrush" />
+                            <StaticResource x:Key="ButtonBorderBrushDisabled" ResourceKey="SubtleFillColorTransparentBrush" />
+                        </ResourceDictionary>
+                    </ResourceDictionary.ThemeDictionaries>
+                    <!-- The rows, built in code: as wide as the widest (200 to 300), the content across the whole row. -->
+                    <Style TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                        <Setter Property="MinWidth" Value="200" />
+                        <Setter Property="MaxWidth" Value="300" />
+                        <Setter Property="HorizontalAlignment" Value="Stretch" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Padding" Value="8,6,8,6" />
+                    </Style>
+                </ResourceDictionary>
+            </StackPanel.Resources>
+        </StackPanel>
 
         <!-- Body: its width is set in code (the bar's width, at least 340), so the text wraps. -->
         <StackPanel x:Name="Body" Visibility="{x:Bind ViewModel.ShowsBody, Mode=OneWay}">

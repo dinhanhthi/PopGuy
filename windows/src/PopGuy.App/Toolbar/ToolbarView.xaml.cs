@@ -41,6 +41,13 @@ public sealed partial class ToolbarView : UserControl
     /// <summary>The Speak button's glyph while playing (macOS stop.fill; the Stop button's glyph).</summary>
     private const string StopGlyph = "\uE71A";
 
+    /// <summary>The menu's glyphs: More actions (the bar's More button), its chevron, and the system buttons'.</summary>
+    private const string MoreGlyph = "\uE700";
+    private const string ChevronGlyph = "\uE76C";
+    private const string IgnoreSiteGlyph = "\uE733";
+    private const string IgnoreAppGlyph = "\uED1A";
+    private const string SettingsGlyph = "\uE713";
+
     private readonly DispatcherQueueTimer _copiedTimer;
     private readonly DiffView _diffView;
     private readonly MarkdownView _markdownView;
@@ -58,6 +65,9 @@ public sealed partial class ToolbarView : UserControl
     private sealed record SpeakButtonParts(Button Button, FrameworkElement Icon, ProgressRing Ring, TextBlock? Label);
 
     private readonly List<SpeakButtonParts> _speakButtons = [];
+
+    /// <summary>The "Menu" style's rows (actions, More actions, system rows), while the menu is built.</summary>
+    private readonly List<Button> _menuButtons = [];
 
     /// <summary>The Translate picker's menu and code, while Translate is on the row.</summary>
     private MenuFlyout? _languageMenu;
@@ -107,6 +117,8 @@ public sealed partial class ToolbarView : UserControl
         Lookup.ListenRequested += OnLookupListen;
         MoreMenu.Opening += OnMoreMenuOpening;
         MoreMenu.Closed += OnMenuClosed;
+        // Opened beside the menu's More actions row: hovering another row still reaches it (and closes the menu).
+        MoreMenu.OverlayInputPassThroughElement = MenuList;
         // The icon-only buttons' titles (the actions get theirs with the row); macOS toolbarTooltip.
         HoverTooltip.SetText(MoreButton, "More actions");
         HoverTooltip.SetText(IgnoreSiteButton, "Ignore this site");
@@ -143,6 +155,7 @@ public sealed partial class ToolbarView : UserControl
             _viewModel.PropertyChanged += OnViewModelChanged;
             SyncDiffMode();
             RebuildActionRow();
+            RebuildMenuList();
             SyncLookup();
             Lookup.SetSpeakState(_viewModel.SpeakPhase, _viewModel.CanReplaySpeak);
             UpdateBindings();
@@ -224,6 +237,7 @@ public sealed partial class ToolbarView : UserControl
         PromptBox.PreviewKeyDown -= OnInputPreviewKeyDown;
         RefineBox.PreviewKeyDown -= OnInputPreviewKeyDown;
         foreach (var button in _rowButtons) button.Click -= OnActionClick;
+        ClearMenuList();
         if (_languageMenu is not null)
         {
             _languageMenu.Opening -= OnLanguageMenuOpening;
@@ -411,6 +425,161 @@ public sealed partial class ToolbarView : UserControl
         Fill = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
     };
 
+    // The "Menu" style (macOS ToolbarMenuList): rebuilt each time it shows, from the view model's items. A pick runs
+    // through the same click as the bar's buttons (the view model leaves the menu first); More actions opens the
+    // bar's More actions menu beside its row.
+
+    private void RebuildMenuList()
+    {
+        ClearMenuList();
+        if (!ViewModel.ShowsMenu) return;
+        foreach (var item in ViewModel.Actions)
+        {
+            var (title, glyph) = MenuTitleAndGlyph(item);
+            var row = MenuRow(Icon(item with { Glyph = glyph }), title, chevron: false, OnActionClick);
+            row.Tag = item;
+            row.IsEnabled = item.IsSpeech || ViewModel.ActionsEnabled;
+        }
+        if (ViewModel.HasOverflow)
+        {
+            var more = MenuRow(GlyphIcon(MoreGlyph), "More actions", chevron: true, OnMoreRowClick);
+            more.PointerEntered -= OnMenuRowPointerEntered;
+            more.PointerEntered += OnMoreRowPointerEntered;
+        }
+        if (!ViewModel.ShowsIgnoreSite && !ViewModel.ShowsIgnoreApp && !ViewModel.ShowsSettingsButton) return;
+        if (MenuList.Children.Count > 0)
+        {
+            MenuList.Children.Add(new Rectangle
+            {
+                Height = 1,
+                Margin = new Thickness(8, 4, 8, 4),
+                Fill = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
+            });
+        }
+        if (ViewModel.ShowsIgnoreSite) MenuRow(GlyphIcon(IgnoreSiteGlyph), "Ignore this site", chevron: false, OnIgnoreSiteClick);
+        if (ViewModel.ShowsIgnoreApp)
+        {
+            // Disabled without the source app's exe name, as the bar's button.
+            MenuRow(GlyphIcon(IgnoreAppGlyph), "Ignore this app", chevron: false, OnIgnoreAppMenuClick).IsEnabled =
+                ViewModel.CanIgnoreApp;
+        }
+        if (ViewModel.ShowsSettingsButton) MenuRow(GlyphIcon(SettingsGlyph), "Settings", chevron: false, OnSettingsClick);
+    }
+
+    /// <summary>
+    /// A menu row, added to the list: the icon, the title (one line, trimmed) and an optional chevron at the trailing
+    /// edge. Its title shows, so no tooltip; hovering it closes More actions.
+    /// </summary>
+    private Button MenuRow(FrameworkElement icon, string title, bool chevron, RoutedEventHandler click)
+    {
+        var content = new Grid { ColumnSpacing = 8 };
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        icon.HorizontalAlignment = HorizontalAlignment.Center;
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        content.Children.Add(icon);
+        var label = new TextBlock
+        {
+            Text = title,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            TextWrapping = TextWrapping.NoWrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(label, 1);
+        content.Children.Add(label);
+        if (chevron)
+        {
+            var mark = new FontIcon
+            {
+                FontFamily = SymbolFont,
+                FontSize = 10,
+                Glyph = ChevronGlyph,
+                Margin = new Thickness(16, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Grid.SetColumn(mark, 2);
+            content.Children.Add(mark);
+        }
+        var row = new Button { Content = content, AllowFocusOnInteraction = false };
+        AutomationProperties.SetName(row, title);
+        row.Click += click;
+        row.PointerEntered += OnMenuRowPointerEntered;
+        _menuButtons.Add(row);
+        MenuList.Children.Add(row);
+        return row;
+    }
+
+    private static FontIcon GlyphIcon(string glyph) => new() { FontFamily = SymbolFont, FontSize = 14, Glyph = glyph };
+
+    private void ClearMenuList()
+    {
+        foreach (var row in _menuButtons)
+        {
+            row.Click -= OnActionClick;
+            row.Click -= OnMoreRowClick;
+            row.Click -= OnIgnoreSiteClick;
+            row.Click -= OnIgnoreAppMenuClick;
+            row.Click -= OnSettingsClick;
+            row.PointerEntered -= OnMenuRowPointerEntered;
+            row.PointerEntered -= OnMoreRowPointerEntered;
+        }
+        _menuButtons.Clear();
+        MenuList.Children.Clear();
+    }
+
+    /// <summary>
+    /// More actions beside its row (macOS: the submenu on hover, or on a click), aligned with the row's top; WinUI
+    /// moves it to the other side at a screen edge. Transient: it opens without taking the keyboard focus.
+    /// </summary>
+    private void OpenMoreBesideRow(Button row)
+    {
+        if (_closed || !ViewModel.ShowsMenu || MoreMenu.IsOpen) return;
+        MoreMenu.ShowAt(row, new FlyoutShowOptions
+        {
+            Placement = FlyoutPlacementMode.RightEdgeAlignedTop,
+            ShowMode = FlyoutShowMode.Transient,
+        });
+    }
+
+    private void OnMoreRowPointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Button row) OpenMoreBesideRow(row);
+    }
+
+    private void OnMoreRowClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button row) OpenMoreBesideRow(row);
+    }
+
+    /// <summary>Another row is hovered: More actions closes (macOS: any other row closes the submenu).</summary>
+    private void OnMenuRowPointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_closed && MoreMenu.IsOpen) MoreMenu.Hide();
+    }
+
+    /// <summary>
+    /// "Ignore this app" in the menu: its confirmation shows below the bar, so the menu turns into the bar first (macOS
+    /// keeps the menu: there the confirmation is a dialog).
+    /// </summary>
+    private void OnIgnoreAppMenuClick(object sender, RoutedEventArgs e)
+    {
+        if (_closed) return;
+        ViewModel.LeaveMenu();
+        ViewModel.RequestIgnoreApp();
+    }
+
+    /// <summary>
+    /// An action's title and glyph in a menu (macOS overflowMenuTitleAndSymbol): Speak and a Speech action read Stop
+    /// while loading or playing; only Speak takes the stop glyph while playing.
+    /// </summary>
+    private (string Title, string? Glyph) MenuTitleAndGlyph(ToolbarActionItem item)
+    {
+        var phase = item.IsSpeech ? ViewModel.SpeakPhase : SpeakPhase.Idle;
+        var stopGlyph = phase == SpeakPhase.Playing && item.Id.Type == ActionIdentifierType.Speak;
+        return (phase == SpeakPhase.Idle ? item.Label : "Stop", stopGlyph ? StopGlyph : item.Glyph);
+    }
+
     // The menus: built when they open, so they show the current actions and target. The window follows them
     // (MenuOpened, MenuClosed).
 
@@ -421,17 +590,15 @@ public sealed partial class ToolbarView : UserControl
         ClearMenu(MoreMenu);
         foreach (var item in ViewModel.OverflowActions)
         {
-            // Speak and a Speech action are never disabled and read Stop while loading or playing; only Speak takes the
-            // stop glyph while playing (macOS overflowMenuTitleAndSymbol).
-            var phase = item.IsSpeech ? ViewModel.SpeakPhase : SpeakPhase.Idle;
-            var stopGlyph = phase == SpeakPhase.Playing && item.Id.Type == ActionIdentifierType.Speak;
+            // Speak and a Speech action are never disabled.
+            var (title, glyph) = MenuTitleAndGlyph(item);
             var entry = new MenuFlyoutItem
             {
-                Text = phase == SpeakPhase.Idle ? item.Label : "Stop",
+                Text = title,
                 Tag = item,
                 Icon = item.Emoji is { } emoji
                     ? new FontIcon { FontFamily = new FontFamily("Segoe UI Emoji"), Glyph = emoji }
-                    : new FontIcon { FontFamily = SymbolFont, Glyph = stopGlyph ? StopGlyph : item.Glyph ?? "" },
+                    : new FontIcon { FontFamily = SymbolFont, Glyph = glyph ?? "" },
                 IsEnabled = item.IsSpeech || ViewModel.ActionsEnabled,
                 AllowFocusOnInteraction = false,
             };
@@ -490,6 +657,14 @@ public sealed partial class ToolbarView : UserControl
             case nameof(ToolbarViewModel.ActionsEnabled):
                 foreach (var button in _rowButtons)
                     button.IsEnabled = button.Tag is ToolbarActionItem { IsSpeech: true } || ViewModel.ActionsEnabled;
+                foreach (var row in _menuButtons)
+                {
+                    if (row.Tag is ToolbarActionItem item) row.IsEnabled = item.IsSpeech || ViewModel.ActionsEnabled;
+                }
+                break;
+            case nameof(ToolbarViewModel.ShowsMenu):
+                // Built for each presentation in the menu style (the layout is current: it is raised after it).
+                if (ViewModel.ShowsMenu) RebuildMenuList();
                 break;
             case nameof(ToolbarViewModel.SpeakPhase):
                 SyncSpeakButtons();

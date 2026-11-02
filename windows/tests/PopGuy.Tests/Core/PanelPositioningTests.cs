@@ -61,4 +61,35 @@ public sealed class PanelPositioningTests
         Assert.True(inset.Contains(new Rectangle(origin, Panel)), $"panel at {origin} leaves {inset}");
         Assert.Equal(secondary.Left + 4, origin.X);
     }
+
+    // Menu style: the menu attaches beside the pointer, down-right by default.
+    private static readonly Size Menu = new(220, 300);
+
+    [Fact]
+    public void MenuOpensDownRightOfThePointer()
+    {
+        var pointer = new Point(650, 400);
+
+        var origin = PanelPositioning.MenuOrigin(Menu, PanelPositioning.PointerAnchor(pointer, 16), preferUp: false, WorkArea);
+
+        Assert.Equal(new Point(650, 416), origin);
+    }
+
+    [Fact]
+    public void MenuOpensUpForAnUpDragOrWhenThereIsNoRoomBelow()
+    {
+        var upDrag = PanelPositioning.MenuOrigin(Menu, PanelPositioning.PointerAnchor(new Point(650, 400), 16), preferUp: true, WorkArea);
+        Assert.Equal(new Point(650, 400 - 16 - Menu.Height), upDrag);
+
+        var nearBottom = PanelPositioning.MenuOrigin(Menu, PanelPositioning.PointerAnchor(new Point(650, 800), 16), preferUp: false, WorkArea);
+        Assert.Equal(800 - 16 - Menu.Height, nearBottom.Y);
+    }
+
+    [Fact]
+    public void MenuOpensLeftOfThePointerNearTheRightEdge()
+    {
+        var origin = PanelPositioning.MenuOrigin(Menu, PanelPositioning.PointerAnchor(new Point(1400, 400), 16), preferUp: false, WorkArea);
+
+        Assert.Equal(new Point(1400 - Menu.Width, 416), origin);
+    }
 }

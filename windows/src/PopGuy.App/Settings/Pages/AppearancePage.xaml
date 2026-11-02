@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Settings → Appearance (macOS SettingsView.swift AppearanceView): a live toolbar preview at the top, then toolbar
-    zoom, Hide logo and the system buttons gap, result font size with a sample, and formatting, as Windows 11 Settings
-    cards under the macOS section headers. WinUI has no segmented picker: a SelectorBar stands in. The preview is the
-    Actions page's layout editor in preview-only mode (macOS reuses ToolbarPreviewView in both). The header is the
-    window's.
+    Settings → Appearance (macOS SettingsView.swift AppearanceView): a live toolbar preview at the top, then the toolbar
+    style (Bar / Menu), toolbar zoom, Hide logo and the system buttons gap, result font size with a sample, and
+    formatting, as Windows 11 Settings cards under the macOS section headers. WinUI has no segmented picker: a
+    SelectorBar stands in. The preview is the Actions page's layout editor in preview-only mode (macOS reuses
+    ToolbarPreviewView in both); it always shows the bar. The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.AppearancePage"
@@ -27,6 +27,16 @@
 
             <!-- The toolbar at its real size for the zoom, from the saved settings (macOS ToolbarPreviewView). -->
             <settings:ToolbarLayoutEditor x:Name="ToolbarPreview" />
+
+            <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Toolbar Style" />
+
+            <!-- The description is the selected style's caption, set in code. -->
+            <controls:SettingsCard x:Name="ToolbarStyleCard" Header="Toolbar style">
+                <SelectorBar x:Name="ToolbarStyleBar" AutomationProperties.Name="Toolbar style">
+                    <SelectorBarItem Text="Bar" />
+                    <SelectorBarItem Text="Menu" />
+                </SelectorBar>
+            </controls:SettingsCard>
 
             <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Toolbar Zoom" />
 

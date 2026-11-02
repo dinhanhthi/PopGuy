@@ -69,6 +69,19 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void ToolbarStyleDefaultsToBarAndSavesTheMacOSRawValue()
+    {
+        var store = new SettingsStore(_paths);
+        Assert.Equal(ToolbarStyle.Bar, store.Current.ToolbarStyle);
+
+        store.Update(s => s with { ToolbarStyle = ToolbarStyle.Menu });
+
+        var saved = JsonNode.Parse(File.ReadAllText(_paths.SettingsFile))!;
+        Assert.Equal("menu", saved["toolbarStyle"]!.GetValue<string>());
+        Assert.Equal(ToolbarStyle.Menu, new SettingsStore(_paths).Current.ToolbarStyle);
+    }
+
+    [Fact]
     public void UnknownKeySurvivesASave()
     {
         WriteSettingsFile("""{ "triggerChord": false, "futureKey": { "nested": [1, 2] } }""");

@@ -28,6 +28,7 @@ public sealed partial class AppearancePage : Page
     public AppearancePage()
     {
         InitializeComponent();
+        ToolbarStyleBar.SelectionChanged += (_, _) => OnToolbarStyleChanged();
         ZoomBar.SelectionChanged += (_, _) => OnZoomChanged();
         FontSizeBar.SelectionChanged += (_, _) => OnFontSizeChanged();
         ZoomFontToggle.Toggled += (_, _) =>
@@ -80,6 +81,7 @@ public sealed partial class AppearancePage : Page
         var current = _services.Settings.Current;
         _syncing = true;
         // The bars' items are in the enums' order (here, in the change handlers and in UpdateSample).
+        ToolbarStyleBar.SelectedItem = ToolbarStyleBar.Items[(int)current.ToolbarStyle];
         ZoomBar.SelectedItem = ZoomBar.Items[(int)current.ToolbarZoom];
         FontSizeBar.SelectedItem = FontSizeBar.Items[(int)current.ResultFontSize];
         ZoomFontToggle.IsOn = current.ZoomIncludesFontSize;
@@ -88,8 +90,23 @@ public sealed partial class AppearancePage : Page
         FormattingToggle.IsOn = current.PreserveFormatting;
         _syncing = false;
         ToolbarPreview.Refresh();
+        UpdateToolbarStyleCaption();
         UpdateSample();
     }
+
+    private void OnToolbarStyleChanged()
+    {
+        var index = ToolbarStyleBar.Items.IndexOf(ToolbarStyleBar.SelectedItem);
+        if (index < 0) return;
+        UpdateToolbarStyleCaption();
+        Save("toolbarStyle", s => s with { ToolbarStyle = (ToolbarStyle)index });
+    }
+
+    /// <summary>The selected style's caption (macOS AppearanceView's).</summary>
+    private void UpdateToolbarStyleCaption() =>
+        ToolbarStyleCard.Description = ToolbarStyleBar.Items.IndexOf(ToolbarStyleBar.SelectedItem) == (int)ToolbarStyle.Menu
+            ? "Actions appear in a list like a context menu; extra actions open from More actions."
+            : "Actions appear in a horizontal toolbar.";
 
     private void OnZoomChanged()
     {

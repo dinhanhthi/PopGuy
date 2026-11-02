@@ -59,4 +59,39 @@ public static class PanelPositioning
 
         return new Point(x, y);
     }
+
+    /// <summary>
+    /// The Menu style's menu top-left (macOS <c>menuCardOrigin</c>), clamped into <paramref name="workArea"/>.
+    /// <paramref name="anchor"/> is the rect the menu attaches to: vertically the menu sits outside it (dropping down
+    /// puts its top at <c>anchor.Bottom</c>, dropping up puts its bottom at <c>anchor.Top</c>); horizontally it aligns
+    /// inside it (going right puts its left at <c>anchor.Left</c>, going left puts its right at <c>anchor.Right</c>).
+    /// Prefers down (up when <paramref name="preferUp"/>); flips when the preferred side lacks room and the other side
+    /// has it, else takes the side with more room. Prefers right; flips left when there is no room on the right. When
+    /// the menu is larger than the work area it keeps the top/left edge.
+    /// </summary>
+    /// <param name="anchor">
+    /// A pointer: <see cref="PointerAnchor"/>. A keyboard selection: the selection padded vertically by
+    /// <see cref="PanelVerticalGap"/>, zero width at the bar's anchor x.
+    /// </param>
+    public static Point MenuOrigin(Size menu, Rectangle anchor, bool preferUp, Rectangle workArea)
+    {
+        var minX = workArea.Left + PanelEdgeInset;
+        var maxX = workArea.Right - PanelEdgeInset - menu.Width;
+        var minTop = workArea.Top + PanelEdgeInset;
+        var maxTop = workArea.Bottom - PanelEdgeInset - menu.Height;
+
+        var roomBelow = workArea.Bottom - PanelEdgeInset - anchor.Bottom;
+        var roomAbove = anchor.Top - minTop;
+        var goUp = preferUp
+            ? roomAbove >= menu.Height || (roomBelow < menu.Height && roomAbove >= roomBelow)
+            : roomBelow < menu.Height && (roomAbove >= menu.Height || roomAbove > roomBelow);
+        var y = goUp ? anchor.Top - menu.Height : anchor.Bottom;
+        var x = anchor.Left <= maxX ? anchor.Left : anchor.Right - menu.Width;
+
+        // Min then Max, so a menu larger than the work area keeps its top/left edge.
+        return new Point(Math.Max(Math.Min(x, maxX), minX), Math.Max(Math.Min(y, maxTop), minTop));
+    }
+
+    /// <summary>The menu anchor for a pointer: the point padded vertically by <paramref name="gap"/>, zero width.</summary>
+    public static Rectangle PointerAnchor(Point pointer, int gap) => new(pointer.X, pointer.Y - gap, 0, 2 * gap);
 }

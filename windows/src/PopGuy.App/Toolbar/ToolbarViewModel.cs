@@ -89,7 +89,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         nameof(ShowsIgnoreSite), nameof(ShowsIgnoreSiteDivider), nameof(ShowsIgnoreApp), nameof(CanIgnoreApp),
         nameof(ShowsIgnoreDivider), nameof(ShowsSettingsButton),
         nameof(ShowsSettingsDivider), nameof(ShowsSystemGap), nameof(ShowsSystemGroup), nameof(Zoom),
-        nameof(ResultFontSize), nameof(ResultLineHeight), nameof(TargetLanguage),
+        nameof(ResultFontSize), nameof(ResultLineHeight), nameof(TargetLanguage), nameof(ShowsMenu), nameof(ShowsBar),
     ];
 
     /// <summary>
@@ -115,6 +115,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     private IReadOnlyList<ToolbarActionItem> _actions = [];
     private IReadOnlyList<ToolbarActionItem> _overflow = [];
     private bool _showsLogo = true;
+    private bool _showsMenu;
     private bool _showsIgnoreSite;
     private bool _showsIgnoreApp;
     private bool _canIgnoreApp;
@@ -193,6 +194,13 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// <summary>The Settings button (macOS: opens Settings and closes the toolbar).</summary>
     public event Action? SettingsRequested;
 
+    /// <summary>
+    /// The menu turned into the bar (<see cref="LeaveMenu"/>: a pick in the menu or in its More actions), after
+    /// <see cref="ShowsMenu"/> was raised and before the picked action runs: the window re-places the card for the bar
+    /// (lay the view out first, as <c>ShowAt</c> does, to read the bar's size).
+    /// </summary>
+    public event Action? MenuPicked;
+
     /// <summary>"Listen again" was clicked (macOS replaySpeak: the cached audio, no new request, no history).</summary>
     public event Action? ReplayRequested;
 
@@ -212,6 +220,15 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     public bool ShowsMoreDivider => HasOverflow && _actions.Count > 0;
 
     public bool ShowsLogo => _showsLogo;
+
+    /// <summary>
+    /// The "Menu" toolbar style (macOS showsMenu): the idle toolbar is a vertical menu instead of the bar, until an
+    /// action is picked (<see cref="LeaveMenu"/>). Set by <see cref="Present"/>.
+    /// </summary>
+    public bool ShowsMenu => _showsMenu;
+
+    /// <summary>The action bar shows (every time but while <see cref="ShowsMenu"/>).</summary>
+    public bool ShowsBar => !_showsMenu;
 
     /// <summary>"Ignore this site": the selection is in a browser tab whose host was read (macOS sourceDomain != nil)
     /// and ShowToolbarIgnoreSiteButton is on.</summary>
@@ -467,7 +484,11 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// </summary>
     /// <param name="canIgnoreApp">The source app's exe name is known, so "Ignore this app" can add it.</param>
     /// <param name="sourceHost">The browser tab's host, if read: "Ignore this site" shows (never in the Settings preview).</param>
-    public void Present(AppSettings settings, bool isEditable, bool canIgnoreApp, string? sourceHost = null)
+    /// <param name="opensMenu">
+    /// This presentation may open the "Menu" style (macOS: a passive selection or the show-toolbar shortcut, not a
+    /// per-action hotkey, an OCR capture or an error); the bar otherwise, and always in the Settings preview.
+    /// </param>
+    public void Present(AppSettings settings, bool isEditable, bool canIgnoreApp, string? sourceHost = null, bool opensMenu = false)
     {
         _session.Stop();
         // Only the OCR path shows a thumbnail, after this (macOS update).
@@ -482,6 +503,9 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         _canIgnoreApp = canIgnoreApp;
         _showsSettingsButton = settings.ShowToolbarSettingsButton;
         _inlineSystemButtons = settings.InlineToolbarSystemButtons;
+        // A menu with no rows at all falls back to the bar (macOS menuHasRows).
+        _showsMenu = opensMenu && settings.ToolbarStyle == ToolbarStyle.Menu
+            && (_actions.Count > 0 || HasOverflow || _showsIgnoreSite || _showsIgnoreApp || _showsSettingsButton);
         _zoom = ZoomScale(settings.ToolbarZoom);
         _resultFontSize = settings.ResultFontSize;
         _zoomIncludesFontSize = settings.ZoomIncludesFontSize;
@@ -524,10 +548,11 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         foreach (var name in OcrThumbnailProperties) Raise(name);
     }
 
-    /// <summary>Cancels any run and returns to idle (every hide calls it).</summary>
+    /// <summary>Cancels any run and returns to idle (every hide calls it); the menu goes too (macOS reset).</summary>
     public void Stop()
     {
         _session.Stop();
+        SetShowsMenu(false);
         ClearOcrThumbnail();
         PromptDraft = "";
         RefineDraft = "";
@@ -595,7 +620,23 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     // Window → view model (the clicks).
 
-    public void Invoke(ActionIdentifier id) => ActionInvoked?.Invoke(id);
+    /// <summary>An action button, menu row or More actions item: a pick in the menu leaves it first.</summary>
+    public void Invoke(ActionIdentifier id)
+    {
+        LeaveMenu();
+        ActionInvoked?.Invoke(id);
+    }
+
+    /// <summary>
+    /// The menu turns into the bar (macOS switchMenuToBar), then <see cref="MenuPicked"/>; nothing when it is not shown.
+    /// Called on a pick, before the action runs.
+    /// </summary>
+    public void LeaveMenu()
+    {
+        if (!_showsMenu) return;
+        SetShowsMenu(false);
+        MenuPicked?.Invoke();
+    }
 
     public void RequestStop() => StopRequested?.Invoke();
 
@@ -733,6 +774,14 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         _ocrThumbnailHeight = 0;
         foreach (var name in OcrThumbnailProperties) Raise(name);
         old.Dispose();
+    }
+
+    private void SetShowsMenu(bool shows)
+    {
+        if (_showsMenu == shows) return;
+        _showsMenu = shows;
+        Raise(nameof(ShowsMenu));
+        Raise(nameof(ShowsBar));
     }
 
     private void ClearMessages()

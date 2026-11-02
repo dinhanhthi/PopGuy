@@ -126,6 +126,7 @@ public sealed record AppSettings
     /// <summary>Hides only the toolbar's "Ignore this site" button; the ignored-sites list keeps applying.</summary>
     [JsonPropertyName("showToolbarIgnoreSiteButton")] public bool ShowToolbarIgnoreSiteButton { get; init; } = true;
 
+    [JsonPropertyName("toolbarStyle")] public ToolbarStyle ToolbarStyle { get; init; } = ToolbarStyle.Bar;
     [JsonPropertyName("hideToolbarLogo")] public bool HideToolbarLogo { get; init; }
     [JsonPropertyName("inlineToolbarSystemButtons")] public bool InlineToolbarSystemButtons { get; init; }
 
@@ -198,4 +199,15 @@ public enum ToolbarZoom
     [JsonStringEnumMemberName("x1")] X1,
     [JsonStringEnumMemberName("x1_2")] X1_2,
     [JsonStringEnumMemberName("x1_3")] X1_3,
+}
+
+/// <summary>
+/// How the toolbar first shows (macOS <c>ToolbarStyle</c>): <see cref="Bar"/> is the horizontal row of buttons,
+/// <see cref="Menu"/> a vertical context menu that turns into the bar's result card once an action is picked.
+/// </summary>
+[JsonConverter(typeof(RawValueEnumConverter<ToolbarStyle>))]
+public enum ToolbarStyle
+{
+    [JsonStringEnumMemberName("bar")] Bar,
+    [JsonStringEnumMemberName("menu")] Menu,
 }

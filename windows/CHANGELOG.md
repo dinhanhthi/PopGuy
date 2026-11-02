@@ -7,6 +7,12 @@ GitHub release: each version has a section here and one with the same `## [X.Y.Z
 `macos/CHANGELOG.md`, and `scripts/publish-release.sh` puts both in the release body (this one under `## Windows`).
 Before 1.4.0 Windows had its own versions (0.1.0).
 
+## [Unreleased]
+
+### Added
+
+- Toolbar style: Menu. Settings → Appearance can show the toolbar as a list like a context menu, with an icon and a label for each action. Hovering "More actions" opens the extra actions beside it. The menu opens away from the screen edges, and picking an action shows the usual toolbar with the result. Action shortcuts and screen text capture still open the usual toolbar.
+
 ## [1.4.2] - 2026-11-02
 
 ### Changed
