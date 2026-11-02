@@ -119,6 +119,13 @@ public sealed record AppSettings
     [JsonPropertyName("toolbarZoom")] public ToolbarZoom ToolbarZoom { get; init; } = ToolbarZoom.X1;
     [JsonPropertyName("zoomIncludesFontSize")] public bool ZoomIncludesFontSize { get; init; } = true;
     [JsonPropertyName("showToolbarSettingsButton")] public bool ShowToolbarSettingsButton { get; init; } = true;
+
+    /// <summary>Hides only the toolbar's "Ignore this app" button; the ignored-apps list keeps applying.</summary>
+    [JsonPropertyName("showToolbarIgnoreAppButton")] public bool ShowToolbarIgnoreAppButton { get; init; } = true;
+
+    /// <summary>Hides only the toolbar's "Ignore this site" button; the ignored-sites list keeps applying.</summary>
+    [JsonPropertyName("showToolbarIgnoreSiteButton")] public bool ShowToolbarIgnoreSiteButton { get; init; } = true;
+
     [JsonPropertyName("hideToolbarLogo")] public bool HideToolbarLogo { get; init; }
     [JsonPropertyName("inlineToolbarSystemButtons")] public bool InlineToolbarSystemButtons { get; init; }
 

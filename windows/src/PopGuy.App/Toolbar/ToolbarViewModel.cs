@@ -213,10 +213,11 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public bool ShowsLogo => _showsLogo;
 
-    /// <summary>"Ignore this site": the selection is in a browser tab whose host was read (macOS sourceDomain != nil).</summary>
+    /// <summary>"Ignore this site": the selection is in a browser tab whose host was read (macOS sourceDomain != nil)
+    /// and ShowToolbarIgnoreSiteButton is on.</summary>
     public bool ShowsIgnoreSite => _showsIgnoreSite;
 
-    /// <summary>"Ignore this app" (ignoredAppsEnabled).</summary>
+    /// <summary>"Ignore this app" (ignoredAppsEnabled and ShowToolbarIgnoreAppButton).</summary>
     public bool ShowsIgnoreApp => _showsIgnoreApp;
 
     /// <summary>The source app is known (its exe name): "Ignore this app" can add it, else the button is disabled.</summary>
@@ -476,8 +477,8 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         _actions = Items(settings, ToolbarLayout.PrincipalOrdered(settings));
         _overflow = Items(settings, ToolbarLayout.OverflowOrdered(settings));
         _showsLogo = !settings.HideToolbarLogo;
-        _showsIgnoreSite = sourceHost is not null;
-        _showsIgnoreApp = settings.IgnoredAppsEnabled;
+        _showsIgnoreSite = sourceHost is not null && settings.ShowToolbarIgnoreSiteButton;
+        _showsIgnoreApp = settings.IgnoredAppsEnabled && settings.ShowToolbarIgnoreAppButton;
         _canIgnoreApp = canIgnoreApp;
         _showsSettingsButton = settings.ShowToolbarSettingsButton;
         _inlineSystemButtons = settings.InlineToolbarSystemButtons;

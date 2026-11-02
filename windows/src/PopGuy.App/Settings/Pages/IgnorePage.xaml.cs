@@ -21,7 +21,8 @@ namespace PopGuy.Settings.Pages;
 
 /// <summary>
 /// Settings → Ignore (macOS AppsView.swift, spec-3 §5.7 Ignored Apps). The navigation parameter is the AppServices.
-/// "Enable Ignored Apps" gates the list (the saved list is kept). An app is its lowercase exe name
+/// "Enable Ignored Apps" gates the list (the saved list is kept); under it, a toggle hides just the toolbar's "Ignore this
+/// app" button (the list still applies), and likewise "Ignore this site" under "Enable Ignored Domains". An app is its lowercase exe name
 /// (<see cref="IgnoredApps"/>, the gate's rule); a row shows the exe's icon and FileDescription when it can be found
 /// (a running process, or the path picked this session), else the generic icon and the exe name. "Add App…" opens a
 /// picker of the running apps with a window (<see cref="AppIcons.RunningApps"/>) with Browse… for an .exe. Rows show at
@@ -71,6 +72,10 @@ public sealed partial class IgnorePage : Page
         AddButton.Click += (_, _) => _ = PickAsync();
         DomainsToggle.Toggled += (_, _) =>
             Save("ignoredDomainsEnabled", s => s with { IgnoredDomainsEnabled = DomainsToggle.IsOn });
+        AppButtonToggle.Toggled += (_, _) =>
+            Save("showToolbarIgnoreAppButton", s => s with { ShowToolbarIgnoreAppButton = AppButtonToggle.IsOn });
+        SiteButtonToggle.Toggled += (_, _) =>
+            Save("showToolbarIgnoreSiteButton", s => s with { ShowToolbarIgnoreSiteButton = SiteButtonToggle.IsOn });
         AddDomainButton.Click += (_, _) => AddDomain();
         DomainBox.PreviewKeyDown += (_, e) =>
         {
@@ -116,6 +121,8 @@ public sealed partial class IgnorePage : Page
         _syncing = true;
         EnabledToggle.IsOn = current.IgnoredAppsEnabled;
         DomainsToggle.IsOn = current.IgnoredDomainsEnabled;
+        AppButtonToggle.IsOn = current.ShowToolbarIgnoreAppButton;
+        SiteButtonToggle.IsOn = current.ShowToolbarIgnoreSiteButton;
         _syncing = false;
         RefreshDomains(current);
         AppsPanel.Visibility = current.IgnoredAppsEnabled ? Visibility.Visible : Visibility.Collapsed;

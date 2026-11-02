@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Settings → Ignore (macOS AppsView.swift): the Ignored Apps and Ignored Domains toggles and lists, as Windows 11
-    Settings cards under the macOS section headers. The rows (one card per app or domain) and the Add App… picker are
+    Settings cards under the macOS section headers. Under each Enable toggle, a toggle hides just the toolbar's "Ignore
+    this app" / "Ignore this site" button (the list still applies). The rows (one card per app or domain) and the Add App… picker are
     built in code. The header is the window's.
 -->
 <Page
@@ -45,6 +46,9 @@
                 </controls:SettingsCard>
 
                 <StackPanel x:Name="AppsPanel" Spacing="4">
+                    <controls:SettingsCard Description="Hides only the toolbar button; the ignored list keeps working." Header="Show &quot;Ignore this app&quot; button on toolbar">
+                        <ToggleSwitch x:Name="AppButtonToggle" AutomationProperties.Name="Show Ignore this app button on toolbar" />
+                    </controls:SettingsCard>
                     <TextBlock
                         x:Name="EmptyText"
                         Margin="1,8,0,8"
@@ -71,6 +75,9 @@
                 </controls:SettingsCard>
 
                 <StackPanel x:Name="DomainsPanel" Spacing="4">
+                    <controls:SettingsCard Description="Hides only the toolbar button; the ignored list keeps working." Header="Show &quot;Ignore this site&quot; button on toolbar">
+                        <ToggleSwitch x:Name="SiteButtonToggle" AutomationProperties.Name="Show Ignore this site button on toolbar" />
+                    </controls:SettingsCard>
                     <Grid Margin="1,8,0,4" ColumnSpacing="6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />

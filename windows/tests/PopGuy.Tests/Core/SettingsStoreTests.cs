@@ -53,6 +53,21 @@ public sealed class SettingsStoreTests : IDisposable
             Assert.True(expected.Equals(actual), $"{setting}: expected {expected}, got {actual}");
     }
 
+    // Shared with macOS: hiding the toolbar's ignore buttons is button-only, on by default.
+    [Fact]
+    public void IgnoreButtonSettingsDefaultOnAndLoadFromTheMacOSKeys()
+    {
+        var fresh = new SettingsStore(_paths).Current;
+        Assert.True(fresh.ShowToolbarIgnoreAppButton);
+        Assert.True(fresh.ShowToolbarIgnoreSiteButton);
+
+        WriteSettingsFile("""{ "showToolbarIgnoreAppButton": false, "showToolbarIgnoreSiteButton": false }""");
+
+        var loaded = new SettingsStore(_paths).Current;
+        Assert.False(loaded.ShowToolbarIgnoreAppButton);
+        Assert.False(loaded.ShowToolbarIgnoreSiteButton);
+    }
+
     [Fact]
     public void UnknownKeySurvivesASave()
     {
