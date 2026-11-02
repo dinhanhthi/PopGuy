@@ -709,6 +709,9 @@ final class ToolbarController {
     func hide() {
         guard isShowing else { return }
         isShowing = false
+        // A tooltip child panel would otherwise reappear with the toolbar:
+        // orderOut does not fire the SwiftUI hover/disappear teardown.
+        HoverTooltipPanelPresenter.shared.hide(anchor: nil)
         panel.orderOut(nil)
         panel.resetMoveTracking()
         currentScreenFrame = nil

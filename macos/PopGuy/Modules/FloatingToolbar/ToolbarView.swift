@@ -219,9 +219,8 @@ struct ToolbarView: View {
             toolbarCard
         }
         // Transparent space around the content: sides/top give the card shadow
-        // room to draw (the panel itself has no window shadow); the larger bottom
-        // inset additionally hosts the utility tooltips, which are overlay content
-        // and would otherwise be clipped by the hosting panel.
+        // room to draw (the panel itself has no window shadow). Tooltips draw in
+        // their own child panel, so they never depend on this inset.
         .padding(.top, z(8))
         .padding(.horizontal, z(12))
         .padding(.bottom, z(24))
@@ -476,9 +475,8 @@ struct ToolbarView: View {
     }
 
     /// Tooltip alignment for an action-bar control. The control at the bar's
-    /// leading edge (nothing before it) left-aligns its tooltip: the default
-    /// trailing alignment would push a wider tooltip past the panel's left edge,
-    /// where the hosting panel clips it.
+    /// leading edge (nothing before it) left-aligns its tooltip, so a wider
+    /// tooltip reads from the button rather than hanging off the bar's left side.
     private func tooltipAlignment(isFirst: Bool) -> Alignment {
         isFirst && !viewModel.showsLogo ? .bottomLeading : .bottomTrailing
     }
@@ -1692,24 +1690,26 @@ private struct AccentPicker: View {
 
 // MARK: - ToolbarTooltipModifier
 
-/// Shared hover-tooltip overlay used by action buttons (compact mode) and
-/// utility buttons. Appears ~120 ms after the cursor enters — fast enough to
-/// feel instant but slow enough to avoid flickering on a passing cursor.
+/// Shared hover tooltip used by action buttons (compact mode) and utility
+/// buttons. Appears ~120 ms after the cursor enters — fast enough to feel
+/// instant but slow enough to avoid flickering on a passing cursor.
 ///
-/// Placement is below the button so it doesn't obscure the icon, trailing-aligned
-/// by default; the bar's leading-edge control switches to leading alignment via
-/// `toolbarTooltipAlignment` so the tooltip isn't clipped by the panel edge.
-/// Uses the same `regularMaterial` pill as the rest of the toolbar chrome.
+/// Drawn in a child panel (`HoverTooltipPanelPresenter`, shared with Settings),
+/// not as an overlay: the hosting panel hugs the bar, so an overlay wider than a
+/// short bar (e.g. a single action) was clipped by the panel edge. Placement is
+/// below the button, trailing-aligned by default; the bar's leading-edge control
+/// switches to leading alignment via `toolbarTooltipAlignment`. The presenter
+/// clamps the tooltip to the screen.
 ///
-/// When `text` is empty the modifier is a no-op — no hover tracking, no overlay.
+/// When `text` is empty the modifier is a no-op — no hover tracking, no tooltip.
 private struct ToolbarTooltipModifier: ViewModifier {
     let text: String
     let controlRadius: CGFloat
 
     @Environment(\.toolbarTooltipAlignment) private var alignment
     @State private var isHovered = false
-    @State private var showTooltip = false
     @State private var hoverTask: Task<Void, Never>?
+    @State private var anchorView: NSView?
     @State private var clickMonitor: Any?
 
     @ViewBuilder
@@ -1727,31 +1727,23 @@ private struct ToolbarTooltipModifier: ViewModifier {
                         hoverTask = Task { @MainActor in
                             try? await Task.sleep(nanoseconds: ToolbarMetrics.tooltipDelay)
                             guard !Task.isCancelled else { return }
-                            if isHovered { showTooltip = true }
+                            if isHovered, let anchorView {
+                                HoverTooltipPanelPresenter.shared.show(
+                                    text: text,
+                                    anchor: anchorView,
+                                    cornerRadius: controlRadius,
+                                    leadingAligned: alignment.horizontal == .leading
+                                )
+                            }
                         }
                     } else {
                         teardown()
                     }
                 }
-                .onDisappear { teardown() }
-                .overlay(alignment: alignment) {
-                    if showTooltip {
-                        Text(text)
-                            .font(.body)
-                            .fixedSize()
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                RoundedRectangle(cornerRadius: controlRadius, style: .continuous)
-                                    .fill(.regularMaterial)
-                                    .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
-                            )
-                            .offset(y: 28)
-                            .zIndex(1)
-                            .transition(.opacity)
-                    }
+                .background {
+                    HoverTooltipAnchorView { anchorView = $0 }
                 }
-                .animation(ToolbarMetrics.hoverAnimation, value: showTooltip)
+                .onDisappear { teardown() }
         }
     }
 
@@ -1765,7 +1757,7 @@ private struct ToolbarTooltipModifier: ViewModifier {
         ) { event in
             hoverTask?.cancel()
             hoverTask = nil
-            showTooltip = false
+            HoverTooltipPanelPresenter.shared.hide(anchor: anchorView)
             return event
         }
     }
@@ -1773,11 +1765,11 @@ private struct ToolbarTooltipModifier: ViewModifier {
     private func teardown() {
         hoverTask?.cancel()
         hoverTask = nil
-        showTooltip = false
         if let clickMonitor {
             NSEvent.removeMonitor(clickMonitor)
             self.clickMonitor = nil
         }
+        HoverTooltipPanelPresenter.shared.hide(anchor: anchorView)
     }
 }
 

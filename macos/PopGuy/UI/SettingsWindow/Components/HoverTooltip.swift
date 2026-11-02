@@ -91,6 +91,7 @@ private struct HoverTooltipModifier: ViewModifier {
 
 private struct HoverTooltipBubble: View {
     let text: String
+    let cornerRadius: CGFloat
 
     var body: some View {
         Text(text)
@@ -100,14 +101,16 @@ private struct HoverTooltipBubble: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(.regularMaterial)
                     .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
             )
     }
 }
 
-private struct HoverTooltipAnchorView: NSViewRepresentable {
+/// Zero-size AppKit view placed behind a SwiftUI control so the tooltip panel
+/// can read the control's on-screen frame. Shared with the floating toolbar.
+struct HoverTooltipAnchorView: NSViewRepresentable {
     let onResolve: (NSView) -> Void
 
     func makeNSView(context: Context) -> NSView {
@@ -121,8 +124,10 @@ private struct HoverTooltipAnchorView: NSViewRepresentable {
     }
 }
 
+/// Shows tooltips in a borderless child panel so they are never clipped by the
+/// window that hosts the control. Shared by Settings and the floating toolbar.
 @MainActor
-private final class HoverTooltipPanelPresenter {
+final class HoverTooltipPanelPresenter {
     static let shared = HoverTooltipPanelPresenter()
 
     private var panel: NSPanel?
@@ -131,11 +136,13 @@ private final class HoverTooltipPanelPresenter {
 
     private init() {}
 
-    func show(text: String, anchor: NSView) {
+    /// `leadingAligned` lines the tooltip up with the anchor's leading edge
+    /// instead of its trailing edge. The result is clamped to the screen.
+    func show(text: String, anchor: NSView, cornerRadius: CGFloat = 6, leadingAligned: Bool = false) {
         guard let parentWindow = anchor.window else { return }
 
         let panel = panel ?? makePanel()
-        let hostingController = NSHostingController(rootView: HoverTooltipBubble(text: text))
+        let hostingController = NSHostingController(rootView: HoverTooltipBubble(text: text, cornerRadius: cornerRadius))
         hostingController.view.frame = NSRect(origin: .zero, size: hostingController.view.fittingSize)
 
         self.panel = panel
@@ -144,7 +151,7 @@ private final class HoverTooltipPanelPresenter {
 
         panel.contentView = hostingController.view
         panel.setContentSize(hostingController.view.fittingSize)
-        position(panel, near: anchor)
+        position(panel, near: anchor, leadingAligned: leadingAligned)
 
         if panel.parent !== parentWindow {
             panel.parent?.removeChildWindow(panel)
@@ -174,19 +181,20 @@ private final class HoverTooltipPanelPresenter {
         panel.hasShadow = false
         panel.ignoresMouseEvents = true
         panel.level = .floating
-        panel.collectionBehavior = [.transient, .ignoresCycle]
+        // Mirror the toolbar panel so its tooltips also show over fullscreen apps.
+        panel.collectionBehavior = [.transient, .ignoresCycle, .canJoinAllSpaces, .fullScreenAuxiliary]
         panel.animationBehavior = .none
         return panel
     }
 
-    private func position(_ panel: NSPanel, near anchor: NSView) {
+    private func position(_ panel: NSPanel, near anchor: NSView, leadingAligned: Bool) {
         guard let parentWindow = anchor.window else { return }
 
         let anchorInWindow = anchor.convert(anchor.bounds, to: nil)
         let anchorOnScreen = parentWindow.convertToScreen(anchorInWindow)
         let tooltipSize = panel.frame.size
         var origin = NSPoint(
-            x: anchorOnScreen.maxX - tooltipSize.width,
+            x: leadingAligned ? anchorOnScreen.minX : anchorOnScreen.maxX - tooltipSize.width,
             y: anchorOnScreen.minY - 28
         )
 
