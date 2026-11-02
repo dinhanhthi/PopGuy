@@ -400,7 +400,7 @@ struct ToolbarView: View {
                 Spacer(minLength: z(16))
             }
 
-            if viewModel.sourceDomain != nil {
+            if viewModel.showsIgnoreSite {
                 if viewModel.inlineSystemButtons && hasActionControls {
                     toolbarDivider
                 }
@@ -416,7 +416,7 @@ struct ToolbarView: View {
             }
 
             if viewModel.showsIgnoreAppButton {
-                if viewModel.inlineSystemButtons && (hasActionControls || viewModel.sourceDomain != nil) {
+                if viewModel.inlineSystemButtons && (hasActionControls || viewModel.showsIgnoreSite) {
                     toolbarDivider
                 }
                 ToolbarUtilityButton(
@@ -429,11 +429,11 @@ struct ToolbarView: View {
                 )
                 .opacity(viewModel.sourceBundleID == nil ? 0.4 : 1.0)
                 .disabled(viewModel.sourceBundleID == nil)
-                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && viewModel.sourceDomain == nil))
+                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && !viewModel.showsIgnoreSite))
             }
 
             if viewModel.showsSettingsButton {
-                if viewModel.inlineSystemButtons && (hasActionControls || viewModel.sourceDomain != nil || viewModel.showsIgnoreAppButton) {
+                if viewModel.inlineSystemButtons && (hasActionControls || viewModel.showsIgnoreSite || viewModel.showsIgnoreAppButton) {
                     toolbarDivider
                 }
                 ToolbarUtilityButton(
@@ -444,7 +444,7 @@ struct ToolbarView: View {
                     zoom: zoom,
                     action: onOpenSettings
                 )
-                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && viewModel.sourceDomain == nil && !viewModel.showsIgnoreAppButton))
+                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && !viewModel.showsIgnoreSite && !viewModel.showsIgnoreAppButton))
             }
         }
         .padding(metrics.cardPadding)

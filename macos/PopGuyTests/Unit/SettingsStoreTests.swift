@@ -1041,6 +1041,42 @@ struct SettingsStoreTests {
         #expect(suite.object(forKey: "settings.showToolbarSettingsButton") as? Bool == false)
     }
 
+    @Test("showToolbarIgnoreApp/SiteButton default to true and round-trip through UserDefaults")
+    func showToolbarIgnoreButtonsDefaultAndRoundTrip() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store1 = SettingsStore(defaults: suite)
+        #expect(store1.showToolbarIgnoreAppButton == true)
+        #expect(store1.showToolbarIgnoreSiteButton == true)
+        store1.showToolbarIgnoreAppButton = false
+        store1.showToolbarIgnoreSiteButton = false
+
+        let store2 = SettingsStore(defaults: suite)
+        #expect(store2.showToolbarIgnoreAppButton == false)
+        #expect(store2.showToolbarIgnoreSiteButton == false)
+        #expect(suite.object(forKey: "settings.showToolbarIgnoreAppButton") as? Bool == false)
+        #expect(suite.object(forKey: "settings.showToolbarIgnoreSiteButton") as? Bool == false)
+    }
+
+    @Test("Hiding the ignore buttons keeps the ignored apps and sites applied")
+    func hidingIgnoreButtonsKeepsIgnoreListsApplied() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        store.addIgnoredApp(bundleID: "com.example.listed")
+        store.ignoredDomainsEnabled = true
+        store.addIgnoredDomain("example.com")
+
+        store.showToolbarIgnoreAppButton = false
+        store.showToolbarIgnoreSiteButton = false
+
+        #expect(store.ignoredAppsEnabled == true)
+        #expect(store.isIgnored(bundleID: "com.example.listed") == true)
+        #expect(store.isIgnoredDomain(host: "example.com") == true)
+    }
+
     @Test("isIgnored(bundleID:) applies the list only while ignoredAppsEnabled is on; the list is kept")
     func isIgnoredRespectsIgnoredAppsEnabled() {
         let (suite, name) = makeSuite()

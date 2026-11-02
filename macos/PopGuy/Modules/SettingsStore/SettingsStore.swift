@@ -143,6 +143,8 @@ final class SettingsStore: ObservableObject {
         static let ignoredDomainsEnabled      = "settings.ignoredDomainsEnabled"
         static let ignoredAppsEnabled         = "settings.ignoredAppsEnabled"
         static let showToolbarSettingsButton  = "settings.showToolbarSettingsButton"
+        static let showToolbarIgnoreAppButton = "settings.showToolbarIgnoreAppButton"
+        static let showToolbarIgnoreSiteButton = "settings.showToolbarIgnoreSiteButton"
         static let popGuyEnabled              = "settings.popGuyEnabled"
         static let triggerOnSelect            = "settings.triggerOnSelect"
         static let triggerOnSelectEditableOnly = "settings.triggerOnSelectEditableOnly"
@@ -420,6 +422,18 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(showToolbarSettingsButton, forKey: Keys.showToolbarSettingsButton) }
     }
 
+    /// Whether the floating toolbar shows its "Ignore this app" button (default: true).
+    /// Hides only the button; the ignored-apps list keeps applying.
+    @Published var showToolbarIgnoreAppButton: Bool {
+        didSet { defaults.set(showToolbarIgnoreAppButton, forKey: Keys.showToolbarIgnoreAppButton) }
+    }
+
+    /// Whether the floating toolbar shows its "Ignore this site" button (default: true).
+    /// Hides only the button; the ignored-sites list keeps applying.
+    @Published var showToolbarIgnoreSiteButton: Bool {
+        didSet { defaults.set(showToolbarIgnoreSiteButton, forKey: Keys.showToolbarIgnoreSiteButton) }
+    }
+
     /// Master kill switch (default: true). When false, every trigger — text
     /// selection, double-click, the Cmd+C+C chord (and its replacement shortcut),
     /// and custom-action hotkeys — is suppressed and PopGuy stays idle until
@@ -660,6 +674,8 @@ final class SettingsStore: ObservableObject {
         ignoredDomainsEnabled    = defaults.object(forKey: Keys.ignoredDomainsEnabled) as? Bool ?? false
         ignoredAppsEnabled       = defaults.object(forKey: Keys.ignoredAppsEnabled) as? Bool ?? true
         showToolbarSettingsButton = defaults.object(forKey: Keys.showToolbarSettingsButton) as? Bool ?? true
+        showToolbarIgnoreAppButton = defaults.object(forKey: Keys.showToolbarIgnoreAppButton) as? Bool ?? true
+        showToolbarIgnoreSiteButton = defaults.object(forKey: Keys.showToolbarIgnoreSiteButton) as? Bool ?? true
         popGuyEnabled            = defaults.object(forKey: Keys.popGuyEnabled) as? Bool ?? true
         triggerOnSelectEnabled   = defaults.object(forKey: Keys.triggerOnSelect) as? Bool ?? false
         triggerOnSelectEditableOnly = defaults.object(forKey: Keys.triggerOnSelectEditableOnly) as? Bool ?? false

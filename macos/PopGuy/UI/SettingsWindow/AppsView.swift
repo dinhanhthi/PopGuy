@@ -9,10 +9,12 @@
 //     app" button is hidden (the saved list is kept). When on, a list of bundle IDs
 //     with friendly name + icon; remove button. An "Add App…" button opens
 //     NSOpenPanel to pick a .app bundle.
+//     When on, a toggle can hide just the toolbar's "Ignore this app" button (list still applies).
 //   • Ignored Domains: an "Enable Ignored Domains" toggle (default off) gates the
 //     whole feature — while off, PopGuy never reads any browser URL and macOS
 //     never prompts for Automation permission. When on, a permission warning plus
 //     a domain list + text-field/Add button are shown.
+//     When on, a toggle can hide just the toolbar's "Ignore this site" button (list still applies).
 //     Works in Safari, Chrome, Brave, Edge, Arc. Desktop apps use Ignored Apps instead.
 //
 // Bundle-ID resolution (UI concern only — not in SettingsStore):
@@ -43,6 +45,14 @@ struct AppsView: View {
                     .padding(.vertical, 2)
 
                 if settings.ignoredAppsEnabled {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle("Show \"Ignore this app\" button on toolbar", isOn: $settings.showToolbarIgnoreAppButton)
+                        Text("Hides only the toolbar button; the ignored list keeps working.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
+
                     if settings.ignoredAppBundleIDs.isEmpty {
                         Text("No ignored apps.")
                             .foregroundStyle(.secondary)
@@ -75,6 +85,14 @@ struct AppsView: View {
                     .padding(.vertical, 2)
 
                 if settings.ignoredDomainsEnabled {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle("Show \"Ignore this site\" button on toolbar", isOn: $settings.showToolbarIgnoreSiteButton)
+                        Text("Hides only the toolbar button; the ignored list keeps working.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
+
                     HStack(alignment: .top, spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)

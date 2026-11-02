@@ -112,7 +112,8 @@ struct ToolbarPreviewView: View {
             viewModel.ttsConfig = .default
         }
         viewModel.showsLogo = !settings.hideToolbarLogo
-        viewModel.showsIgnoreAppButton = settings.ignoredAppsEnabled
+        viewModel.showsIgnoreAppButton = settings.ignoredAppsEnabled && settings.showToolbarIgnoreAppButton
+        viewModel.showsIgnoreSiteButton = settings.showToolbarIgnoreSiteButton
         viewModel.showsSettingsButton = settings.showToolbarSettingsButton
         viewModel.inlineSystemButtons = settings.inlineToolbarSystemButtons
         viewModel.orderedActions = principal

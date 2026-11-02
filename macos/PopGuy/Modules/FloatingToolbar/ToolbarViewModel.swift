@@ -328,8 +328,17 @@ final class ToolbarViewModel: ObservableObject {
     @Published var showsLogo: Bool = true
 
     /// Whether the "Ignore this app" button is shown. Set by ToolbarController
-    /// (and ToolbarPreviewView) on each presentation from SettingsStore.ignoredAppsEnabled.
+    /// (and ToolbarPreviewView) on each presentation from SettingsStore.ignoredAppsEnabled
+    /// && SettingsStore.showToolbarIgnoreAppButton.
     @Published var showsIgnoreAppButton: Bool = true
+
+    /// Whether the "Ignore this site" button may be shown. Set by ToolbarController
+    /// (and ToolbarPreviewView) on each presentation from SettingsStore.showToolbarIgnoreSiteButton.
+    @Published var showsIgnoreSiteButton: Bool = true
+
+    /// True when the "Ignore this site" button is visible: a source domain is known
+    /// and the button is not hidden in Settings.
+    var showsIgnoreSite: Bool { sourceDomain != nil && showsIgnoreSiteButton }
 
     /// Whether the Settings (gear) button is shown. Set by ToolbarController
     /// (and ToolbarPreviewView) on each presentation from SettingsStore.showToolbarSettingsButton.
@@ -337,7 +346,7 @@ final class ToolbarViewModel: ObservableObject {
 
     /// True when at least one system button ("Ignore this site", "Ignore this app",
     /// Settings) is visible; the gap before them exists only in that case.
-    var hasSystemButtons: Bool { sourceDomain != nil || showsIgnoreAppButton || showsSettingsButton }
+    var hasSystemButtons: Bool { showsIgnoreSite || showsIgnoreAppButton || showsSettingsButton }
 
     /// Whether the system buttons sit inline with the actions (dividers, no gap).
     /// Set by ToolbarController (and ToolbarPreviewView) on each presentation from

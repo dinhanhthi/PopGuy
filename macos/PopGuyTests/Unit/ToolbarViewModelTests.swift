@@ -82,6 +82,19 @@ struct ToolbarViewModelTests {
         vm.update(text: "x", sourceElement: ref, screenRect: nil, sourceBundleID: nil, sourceDomain: "example.com")
         #expect(vm.hasSystemButtons == true)
     }
+
+    @Test("Ignore this site is hidden when its toolbar button setting is off, even with a source domain")
+    func ignoreSiteHiddenWhenButtonSettingOff() {
+        let vm = ToolbarViewModel()
+        vm.showsIgnoreAppButton = false
+        vm.showsSettingsButton = false
+        vm.showsIgnoreSiteButton = false
+        let ref = SourceElementRef(element: AXUIElementCreateSystemWide())
+        vm.update(text: "x", sourceElement: ref, screenRect: nil, sourceBundleID: nil, sourceDomain: "example.com")
+        #expect(vm.sourceDomain == "example.com")
+        #expect(vm.showsIgnoreSite == false)
+        #expect(vm.hasSystemButtons == false)
+    }
 }
 
 // MARK: - Edit buffer invariants
