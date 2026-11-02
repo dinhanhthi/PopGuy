@@ -265,6 +265,30 @@ struct SettingsStoreTests {
         #expect(store2.showLogoOnly == true)
     }
 
+    // MARK: - toolbarStyle
+
+    @Test("toolbarStyle defaults to bar on a fresh suite")
+    func toolbarStyleDefaultsBar() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        #expect(store.toolbarStyle == .bar)
+    }
+
+    @Test("toolbarStyle round-trips through UserDefaults")
+    func toolbarStyleRoundTrip() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store1 = SettingsStore(defaults: suite)
+        store1.toolbarStyle = .menu
+
+        // Re-load from the same suite — simulates app restart.
+        let store2 = SettingsStore(defaults: suite)
+        #expect(store2.toolbarStyle == .menu)
+    }
+
     // MARK: - globalPrompt
 
     @Test("globalPrompt defaults to empty on a fresh suite")

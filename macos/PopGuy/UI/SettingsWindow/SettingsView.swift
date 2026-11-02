@@ -1308,7 +1308,8 @@ struct VoiceTestButton: View {
 /// Settings tab for visual preferences of the floating toolbar.
 ///
 /// Sections:
-///   • Toolbar Style: "Show logo only" (a trigger shows just the logo; click to expand).
+///   • Toolbar Style: Bar / Menu layout, and "Show logo only" (a trigger shows
+///     just the logo; click to expand).
 ///   • Toolbar Zoom: global scale for chrome and optionally the result font.
 ///   • Result text: font size of the result body (small / normal / big).
 private struct AppearanceView: View {
@@ -1326,10 +1327,32 @@ private struct AppearanceView: View {
     @State private var hideLogo: Bool = false
     @State private var inlineSystemButtons: Bool = false
     @State private var showLogoOnly: Bool = false
+    @State private var toolbarStyle: ToolbarStyle = .bar
 
     var body: some View {
         Form {
             Section(header: Text("Toolbar Style")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    LabeledContent("Toolbar style") {
+                        CapsuleSegmentedPicker(
+                            selection: $toolbarStyle,
+                            segments: ToolbarStyle.allCases.map { .init(value: $0, label: $0.displayName) }
+                        )
+                        .onChange(of: toolbarStyle) { newValue in
+                            settings.toolbarStyle = newValue
+                        }
+                        .onChange(of: settings.toolbarStyle) { newValue in
+                            toolbarStyle = newValue
+                        }
+                    }
+
+                    Text(toolbarStyle == .menu
+                         ? "Actions appear in a list like a context menu; extra actions open from More actions."
+                         : "Actions appear in a horizontal toolbar.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Show logo only", isOn: $showLogoOnly)
                         .onChange(of: showLogoOnly) { newValue in
@@ -1340,7 +1363,9 @@ private struct AppearanceView: View {
                             showLogoOnly = newValue
                         }
 
-                    Text("When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the full toolbar.")
+                    Text(toolbarStyle == .menu
+                         ? "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the menu."
+                         : "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the full toolbar.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1458,6 +1483,7 @@ private struct AppearanceView: View {
             hideLogo = settings.hideToolbarLogo
             inlineSystemButtons = settings.inlineToolbarSystemButtons
             showLogoOnly = settings.showLogoOnly
+            toolbarStyle = settings.toolbarStyle
         }
     }
 }

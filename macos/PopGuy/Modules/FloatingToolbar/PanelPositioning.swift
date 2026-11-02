@@ -6,7 +6,8 @@
 // The pure math function `panelOrigin(panelSize:near:within:cursor:)` operates
 // only over CGRect/CGSize/CGPoint — no AppKit types — so it is nonisolated and
 // can be called from unit tests without an @MainActor context. The logo-only mode
-// helpers `collapsedPanelOrigin` and `logoExpandsLeading` are pure math too.
+// helpers `collapsedPanelOrigin` and `logoExpandsLeading`, and the Menu style
+// helpers `menuCardOrigin` and `submenuCardOrigin`, are pure math too.
 //
 // The @MainActor helper `visibleFrameForSelection(_:)` wraps NSScreen (AppKit)
 // and must be called from the main actor.
@@ -207,6 +208,109 @@ func logoExpandsLeading(
         return true
     }
     return logoCardFrame.maxX - screenFrame.minX > screenFrame.maxX - logoCardFrame.minX
+}
+
+// MARK: - Menu style
+
+/// How far the submenu card overlaps the main menu card horizontally (points),
+/// so the pointer crosses no gap moving from the More actions row into it.
+let submenuHorizontalOverlap: CGFloat = 2
+
+/// How far the submenu card's top sits above the More actions row's top
+/// (points). Matches the menu card's inner vertical padding, so the submenu's
+/// first row lines up with the More actions row.
+let submenuTopOffset: CGFloat = 5
+
+/// Computes the bottom-left origin for the Menu style's main menu card.
+///
+/// Coordinate system: AppKit screen coordinates (Y up, origin bottom-left). All
+/// frames are visible card frames; the caller converts to the panel origin.
+///
+/// `anchor` is the rect the menu attaches to. Vertically the card sits outside
+/// it: dropping down puts the card's top at `anchor.minY`, dropping up puts its
+/// bottom at `anchor.maxY`. With `coversAnchor` the card aligns inside it
+/// instead: top at `anchor.maxY` down, bottom at `anchor.minY` up. Horizontally
+/// the card always aligns inside it: going right puts its left at `anchor.minX`,
+/// going left puts its right at `anchor.maxX`.
+///
+/// Intended anchors:
+///   • pointer release point `p`: `p` padded vertically by `pointerVerticalGap`
+///     (zero width), so the menu opens beside the pointer.
+///   • keyboard selection: the selection rect padded vertically by
+///     `panelVerticalGap`, with the bar's anchor x (zero width).
+///   • logo card: the logo card frame with `coversAnchor`, so the menu replaces
+///     the logo in place (top-left on the logo's top-left; right- or
+///     bottom-aligned with the logo when flipped).
+///
+/// Prefers down (up when `preferUp`); flips when the preferred side lacks room
+/// and the other side has it, else takes the side with more room. Prefers
+/// right; flips left when there is no room on the right. Finally clamps into
+/// `visibleFrame` minus `panelEdgeInset`, preferring the top/left edge when the
+/// card is larger than the screen.
+///
+/// Pure: CoreGraphics value types only; main-actor isolated (target default).
+func menuCardOrigin(
+    cardSize: CGSize,
+    anchor: CGRect,
+    preferUp: Bool,
+    within visibleFrame: CGRect,
+    coversAnchor: Bool = false
+) -> CGPoint {
+    let minX = visibleFrame.minX + panelEdgeInset
+    let maxX = visibleFrame.maxX - cardSize.width - panelEdgeInset
+    let minY = visibleFrame.minY + panelEdgeInset
+    let maxY = visibleFrame.maxY - cardSize.height - panelEdgeInset
+
+    let downTop = coversAnchor ? anchor.maxY : anchor.minY
+    let upBottom = coversAnchor ? anchor.minY : anchor.maxY
+    let roomBelow = downTop - minY
+    let roomAbove = visibleFrame.maxY - panelEdgeInset - upBottom
+    let goUp: Bool
+    if preferUp {
+        goUp = roomAbove >= cardSize.height || (roomBelow < cardSize.height && roomAbove >= roomBelow)
+    } else {
+        goUp = roomBelow < cardSize.height && (roomAbove >= cardSize.height || roomAbove > roomBelow)
+    }
+    let y = goUp ? upBottom : downTop - cardSize.height
+
+    let x = anchor.minX <= maxX ? anchor.minX : anchor.maxX - cardSize.width
+
+    return CGPoint(
+        x: maxX >= minX ? min(max(x, minX), maxX) : minX,
+        y: maxY >= minY ? min(max(y, minY), maxY) : maxY
+    )
+}
+
+/// Computes the bottom-left origin for the Menu style's More actions submenu
+/// card, shown beside the main menu card.
+///
+/// Coordinate system: AppKit screen coordinates (Y up, origin bottom-left);
+/// `rowFrame` (the More actions row) and `menuCardFrame` are visible frames.
+///
+/// The card opens right of the menu card, overlapping it by
+/// `submenuHorizontalOverlap`, with its top `topOffset` (default
+/// `submenuTopOffset`; pass it scaled by the toolbar zoom) above the row's top.
+/// When it does not fit on the right it opens left of the menu card
+/// instead (same overlap). It then shifts vertically to stay inside
+/// `visibleFrame` minus `panelEdgeInset`: up near the bottom edge, down near the
+/// top edge.
+///
+/// Pure: CoreGraphics value types only; main-actor isolated (target default).
+func submenuCardOrigin(
+    cardSize: CGSize,
+    rowFrame: CGRect,
+    menuCardFrame: CGRect,
+    within visibleFrame: CGRect,
+    topOffset: CGFloat = submenuTopOffset
+) -> CGPoint {
+    let rightX = menuCardFrame.maxX - submenuHorizontalOverlap
+    let fitsRight = rightX + cardSize.width <= visibleFrame.maxX - panelEdgeInset
+    let x = fitsRight ? rightX : menuCardFrame.minX + submenuHorizontalOverlap - cardSize.width
+
+    let minY = visibleFrame.minY + panelEdgeInset
+    let maxY = visibleFrame.maxY - cardSize.height - panelEdgeInset
+    let y = rowFrame.maxY + topOffset - cardSize.height
+    return CGPoint(x: x, y: maxY >= minY ? min(max(y, minY), maxY) : maxY)
 }
 
 // MARK: - Screen lookup

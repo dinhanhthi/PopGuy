@@ -429,3 +429,81 @@ struct CollapsedPanelPositioningTests {
                                    within: screenFrame) == true)
     }
 }
+
+@Suite("PanelPositioning — menu style")
+@MainActor
+struct MenuPanelPositioningTests {
+
+    let screenFrame = CGRect(x: 0, y: 0, width: 1440, height: 900)
+    let menuSize = CGSize(width: 220, height: 300)
+    let submenuSize = CGSize(width: 200, height: 160)
+
+    /// The pointer anchor the controller builds: the release point padded
+    /// vertically by `pointerVerticalGap`.
+    func pointerAnchor(_ p: CGPoint) -> CGRect {
+        CGRect(x: p.x, y: p.y - pointerVerticalGap, width: 0, height: 2 * pointerVerticalGap)
+    }
+
+    @Test("menu opens down-right of the pointer")
+    func menuOpensDownRight() {
+        let p = CGPoint(x: 600, y: 600)
+        let origin = menuCardOrigin(cardSize: menuSize, anchor: pointerAnchor(p),
+                                    preferUp: false, within: screenFrame)
+
+        #expect(origin.x == p.x)
+        #expect(origin.y + menuSize.height == p.y - pointerVerticalGap)
+    }
+
+    @Test("menu opens above the pointer for an up-drag or when there is no room below")
+    func menuOpensAbove() {
+        let p = CGPoint(x: 600, y: 400)
+        let up = menuCardOrigin(cardSize: menuSize, anchor: pointerAnchor(p),
+                                preferUp: true, within: screenFrame)
+        #expect(up.y == p.y + pointerVerticalGap)
+
+        let low = CGPoint(x: 600, y: 120)
+        let flipped = menuCardOrigin(cardSize: menuSize, anchor: pointerAnchor(low),
+                                     preferUp: false, within: screenFrame)
+        #expect(flipped.y == low.y + pointerVerticalGap)
+    }
+
+    @Test("menu opens leftward near the right screen edge")
+    func menuOpensLeftNearRightEdge() {
+        let p = CGPoint(x: screenFrame.maxX - 50, y: 600)
+        let origin = menuCardOrigin(cardSize: menuSize, anchor: pointerAnchor(p),
+                                    preferUp: false, within: screenFrame)
+
+        #expect(origin.x + menuSize.width == p.x)
+    }
+
+    @Test("submenu opens right of the menu, aligned to the row")
+    func submenuOpensRightAlignedToRow() {
+        let menu = CGRect(x: 600, y: 300, width: 220, height: 300)
+        let row = CGRect(x: 606, y: 420, width: 208, height: 24)
+        let origin = submenuCardOrigin(cardSize: submenuSize, rowFrame: row,
+                                       menuCardFrame: menu, within: screenFrame)
+
+        #expect(origin.x == menu.maxX - submenuHorizontalOverlap)
+        #expect(origin.y + submenuSize.height == row.maxY + submenuTopOffset)
+    }
+
+    @Test("submenu flips to the left of the menu near the right screen edge")
+    func submenuFlipsLeftNearRightEdge() {
+        let menu = CGRect(x: screenFrame.maxX - 300, y: 300, width: 220, height: 300)
+        let row = CGRect(x: menu.minX + 6, y: 420, width: 208, height: 24)
+        let origin = submenuCardOrigin(cardSize: submenuSize, rowFrame: row,
+                                       menuCardFrame: menu, within: screenFrame)
+
+        #expect(origin.x + submenuSize.width == menu.minX + submenuHorizontalOverlap)
+    }
+
+    @Test("submenu shifts up to stay on screen near the bottom edge")
+    func submenuShiftsUpNearBottom() {
+        let menu = CGRect(x: 600, y: 10, width: 220, height: 300)
+        let row = CGRect(x: 606, y: 40, width: 208, height: 24)
+        let origin = submenuCardOrigin(cardSize: submenuSize, rowFrame: row,
+                                       menuCardFrame: menu, within: screenFrame)
+
+        #expect(origin.y == screenFrame.minY + panelEdgeInset)
+    }
+}

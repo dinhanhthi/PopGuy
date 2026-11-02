@@ -92,9 +92,40 @@ final class ToolbarController {
     /// position itself from `panel.frame.size`.
     private var panelHoldsCollapsedSize = false
 
-    /// Set when expandFromLogo pre-sizes the panel; until the expanded layout
-    /// reports in, a stale logo-card-sized report must not shrink the panel back.
-    private var awaitingExpandedLayout = false
+    /// True while the panel has the Menu style's menu size. Like
+    /// `panelHoldsCollapsedSize`, the next bar presentation measures the bar
+    /// instead of positioning itself from `panel.frame.size`.
+    private var panelHoldsMenuSize = false
+
+    /// Set when the panel is pre-sized for content that has not laid out yet
+    /// (logo → bar, logo → menu, menu → bar, a fresh menu): the hosting view's
+    /// size before the switch. Layout reports of that stale size are skipped
+    /// until a different size arrives, so they never resize the panel back.
+    private var staleLayoutSize: CGSize?
+
+    /// The inputs Bar style would pass to `panelOrigin` for the current
+    /// presentation. Saved when the menu (or its logo card) shows, so a menu pick
+    /// lands the horizontal card exactly where Bar style would have put it.
+    private struct BarPlacement {
+        let selectionRect: CGRect
+        let cursor: CGPoint?
+        let grewDownward: Bool?
+        let mouse: CGPoint
+        let screenFrame: CGRect
+    }
+    private var savedBarPlacement: BarPlacement?
+
+    /// True once an action was picked from the menu (the card switched to the
+    /// bar). Guards the picked card against trailing same-text events, like an
+    /// expanded logo card.
+    private var pickedFromMenu = false
+
+    /// The toolbar's hosting view (the More actions row frame is reported in
+    /// its space). Owned by the panel's content view.
+    private weak var toolbarHostingView: NSView?
+
+    /// Menu style: the More actions submenu in a child panel.
+    private let submenuPresenter: ToolbarSubmenuPresenter
 
     /// The hosting view is pinned top-leading, or top-trailing after a leftward
     /// expansion from the logo card, so the logo stays put while the panel grows.
@@ -122,6 +153,7 @@ final class ToolbarController {
         self.outputHandler = OutputHandler()
         self.speakCoordinator = SpeakCoordinator(keychain: keychain)
         self.scriptActionEngine = ScriptActionEngine()
+        self.submenuPresenter = ToolbarSubmenuPresenter(viewModel: viewModel)
 
         // Build the panel.
         let initialFrame = CGRect(origin: .zero, size: ToolbarController.initialPanelSize)
@@ -184,6 +216,7 @@ final class ToolbarController {
         hostingView.layer?.backgroundColor = .clear
         hostingView.sizingOptions = [.intrinsicContentSize]
         hostingView.translatesAutoresizingMaskIntoConstraints = false
+        toolbarHostingView = hostingView
         // Resize the panel to the content whenever the hosting view re-sizes
         // itself. Deferred to the next runloop tick so we never mutate the window
         // frame in the middle of its own layout pass.
@@ -222,7 +255,16 @@ final class ToolbarController {
         // "Show logo only" mode: a click on the logo card expands the full toolbar
         // out of the logo. Pure state + layout work, so the click reacts at once.
         viewModel.onExpandFromLogo = { [weak self] in
-            self?.expandFromLogo(animated: true)
+            self?.expandFromLogo(animated: true, opensMenu: true)
+        }
+
+        // "Menu" toolbar style: a menu (or submenu) row runs its action in the
+        // horizontal card; hovering More actions opens the submenu beside the menu.
+        viewModel.onMenuPick = { [weak self] id in
+            self?.handleMenuPick(id)
+        }
+        viewModel.onMenuSubmenuHover = { [weak self] rowFrame in
+            self?.updateSubmenu(moreRowFrame: rowFrame)
         }
     }
 
@@ -400,8 +442,10 @@ final class ToolbarController {
     /// shown (because some OTHER action is enabled). Custom actions re-check isEnabled.
     private func dispatchAction(for id: ActionIdentifier, customActions: [CustomAction]) {
         // A per-action hotkey always shows the full toolbar: if only the logo card
-        // is showing ("Show logo only" mode), it expands first.
+        // is showing ("Show logo only" mode), it expands first. Likewise an open
+        // menu ("Menu" style) turns into the bar before the action runs.
         expandFromLogo(animated: false)
+        if viewModel.showsMenu { switchMenuToBar() }
         switch id {
         case .builtin(.improve):
             guard settings.improveEnabled else { return }
@@ -502,9 +546,12 @@ final class ToolbarController {
         // In "Show logo only" mode, a toolbar the user already expanded also counts
         // as in progress: the mouse-up from the logo click must not re-collapse it.
         let expandedFromLogo = settings.showLogoOnly && isShowing && !viewModel.isCollapsed
+        // "Menu" style: an open menu, and the card an action was picked into,
+        // count as in progress too, so a trailing event never re-presents them.
+        let menuInProgress = isShowing && (viewModel.showsMenu || pickedFromMenu)
         if shouldIgnoreReentrantSelection(
             isShowing: isShowing,
-            actionInProgress: viewModel.actionState != .idle || speakInProgress || expandedFromLogo,
+            actionInProgress: viewModel.actionState != .idle || speakInProgress || expandedFromLogo || menuInProgress,
             newText: event.text,
             currentText: viewModel.capturedText
         ) {
@@ -628,6 +675,12 @@ final class ToolbarController {
         viewModel.orderedActions = filterVisible(settings.principalOrderedIdentifiers)
         viewModel.overflowActions = filterVisible(settings.overflowOrderedIdentifiers)
         viewModel.labeledActions = settings.labeledActionIDs
+        // "Menu" style replaces the full bar only for the passive triggers and the
+        // show-toolbar shortcut (per-action hotkeys and OCR keep the bar). With
+        // "Show logo only" the logo card shows first; its click opens the menu.
+        // A menu with no rows at all falls back to the bar.
+        viewModel.showsMenu = settings.toolbarStyle == .menu && startsCollapsed
+            && !settings.showLogoOnly && menuHasRows
 
         // If already showing, reposition; otherwise show fresh.
         show(for: event)
@@ -638,10 +691,9 @@ final class ToolbarController {
     /// Position the panel near the selection and make it visible.
     func show(for event: SelectionEvent) {
         pinHostingView(toTrailing: false)
-        if viewModel.isCollapsed {
-            showCollapsed(for: event)
-            return
-        }
+        // A (re-)presentation starts without a submenu or a picked menu card.
+        submenuPresenter.hide()
+        pickedFromMenu = false
 
         // Derive a screen rect in AppKit coordinates.
         // AX/Quartz coordinates use Y=0 at the top-left of the MAIN screen,
@@ -660,20 +712,36 @@ final class ToolbarController {
             appKitRect = CGRect(origin: mouse, size: .zero)
         }
 
+        if viewModel.isCollapsed {
+            showCollapsed(for: event, selectionRect: appKitRect)
+            return
+        }
+        if viewModel.showsMenu {
+            if showMenu(for: event, selectionRect: appKitRect, mouse: mouse) { return }
+            // The menu could not be measured: show the bar instead.
+            viewModel.showsMenu = false
+        }
+
         // Panel size after SwiftUI layout — use intrinsic content size if known.
         // After a logo card the panel still has the card's size: measure the full
         // toolbar instead, or panelOrigin would centre a logo-sized panel.
         var panelSize = panel.frame.size == .zero
             ? ToolbarController.initialPanelSize
             : panel.frame.size
-        if panelHoldsCollapsedSize {
+        // Same after a Menu-style menu, which is usually much taller than the bar.
+        if panelHoldsCollapsedSize || panelHoldsMenuSize {
             let measured = expandedPanelSize()
             if measured.width > 0, measured.height > 0 {
                 panelSize = measured
+                // Drop a stale logo-card- or menu-sized report until the full layout arrives.
+                if panelHoldsCollapsedSize {
+                    staleLayoutSize = ToolbarView.collapsedPanelSize(zoom: settings.toolbarZoom.scale)
+                } else {
+                    markStaleLayout(switchingTo: measured)
+                }
                 panel.setContentSize(measured)
                 panelHoldsCollapsedSize = false
-                // Drop a stale logo-card-sized report until the full layout arrives.
-                awaitingExpandedLayout = true
+                panelHoldsMenuSize = false
             }
         }
 
@@ -709,12 +777,21 @@ final class ToolbarController {
     /// "Show logo only" mode: place the logo card right next to the mouse pointer.
     /// The size comes from the toolbar metrics, not `panel.frame.size`, which
     /// still holds the last (expanded) presentation's size.
-    private func showCollapsed(for event: SelectionEvent) {
+    private func showCollapsed(for event: SelectionEvent, selectionRect: CGRect) {
         let zoom = settings.toolbarZoom.scale
         let panelSize = ToolbarView.collapsedPanelSize(zoom: zoom)
         let mouse = event.mouseReleasePoint ?? NSEvent.mouseLocation
         let screenFrame = visibleFrameForSelection(CGRect(origin: mouse, size: .zero))
         currentScreenFrame = screenFrame
+        // "Menu" style: the logo click opens the menu; a pick from it places the
+        // card as Bar style would, anchored on the pointer the logo used.
+        savedBarPlacement = BarPlacement(
+            selectionRect: selectionRect,
+            cursor: mouse,
+            grewDownward: event.selectionGrewDownward,
+            mouse: mouse,
+            screenFrame: screenFrame
+        )
 
         let origin = collapsedPanelOrigin(
             panelSize: panelSize,
@@ -732,6 +809,207 @@ final class ToolbarController {
         panelHoldsCollapsedSize = true
         panel.setFrameOriginProgrammatically(origin)
         orderFrontIfHidden()
+    }
+
+    // MARK: - Menu style
+
+    /// "Menu" style: show the menu beside the pointer release point, or below the
+    /// selection for keyboard/chord triggers (above when there is no room), or
+    /// beside the mouse when there is no usable selection rect. Saves the bar's
+    /// placement inputs for the card shown after a pick. Returns false when the
+    /// menu cannot be measured.
+    private func showMenu(for event: SelectionEvent, selectionRect: CGRect, mouse: CGPoint) -> Bool {
+        let screenFrame = visibleFrameForSelection(selectionRect)
+        let anchor: CGRect
+        let preferUp: Bool
+        if let pointer = event.mouseReleasePoint {
+            anchor = pointerMenuAnchor(pointer)
+            preferUp = event.selectionGrewDownward == false
+        } else if let axRect = event.screenRect, !axRect.isEmpty {
+            // Same x rule as the bar: the mouse x when it sits on the selection
+            // (some apps report an over-wide rect), else the selection's left edge.
+            let mouseZone = selectionRect.insetBy(dx: 0, dy: -mouseOnSelectionTolerance)
+            let anchorX = mouseZone.contains(mouse) ? mouse.x : selectionRect.minX
+            anchor = CGRect(
+                x: anchorX,
+                y: selectionRect.minY - panelVerticalGap,
+                width: 0,
+                height: selectionRect.height + 2 * panelVerticalGap
+            )
+            preferUp = false
+        } else {
+            anchor = pointerMenuAnchor(mouse)
+            preferUp = false
+        }
+
+        panel.resetMoveTracking()
+        guard placeMenu(anchor: anchor, preferUp: preferUp, coversAnchor: false, within: screenFrame) else {
+            return false
+        }
+        currentScreenFrame = screenFrame
+        savedBarPlacement = BarPlacement(
+            selectionRect: selectionRect,
+            cursor: event.mouseReleasePoint,
+            grewDownward: event.selectionGrewDownward,
+            mouse: mouse,
+            screenFrame: screenFrame
+        )
+        orderFrontIfHidden()
+        return true
+    }
+
+    /// The menu anchor for a pointer: the point padded vertically by
+    /// `pointerVerticalGap`, zero width, so the menu opens beside the pointer.
+    private func pointerMenuAnchor(_ point: CGPoint) -> CGRect {
+        CGRect(x: point.x, y: point.y - pointerVerticalGap, width: 0, height: 2 * pointerVerticalGap)
+    }
+
+    /// Sizes the panel for the menu (measured offscreen) and places its card
+    /// against `anchor` with `menuCardOrigin`. Returns false when unmeasurable.
+    private func placeMenu(anchor: CGRect, preferUp: Bool, coversAnchor: Bool, within screenFrame: CGRect) -> Bool {
+        let zoom = settings.toolbarZoom.scale
+        let size = expandedPanelSize(forceMenu: true)
+        guard size.width > 0, size.height > 0 else { return false }
+        let cardSize = CGSize(
+            width: size.width - 2 * ToolbarView.outerHorizontalPadding * zoom,
+            height: size.height - (ToolbarView.outerTopPadding + ToolbarView.outerBottomPadding) * zoom
+        )
+        let cardOrigin = menuCardOrigin(
+            cardSize: cardSize,
+            anchor: anchor,
+            preferUp: preferUp,
+            within: screenFrame,
+            coversAnchor: coversAnchor
+        )
+        let origin = CGPoint(
+            x: cardOrigin.x - ToolbarView.outerHorizontalPadding * zoom,
+            y: cardOrigin.y - ToolbarView.outerBottomPadding * zoom
+        )
+
+        ToolbarController.positionLog.debug("pos (menu): anchor=\(NSStringFromRect(anchor)) preferUp=\(preferUp) coversAnchor=\(coversAnchor) size=\(NSStringFromSize(size)) origin=\(NSStringFromPoint(origin))")
+
+        // A programmatic resize must never count as a user drag.
+        let userHasMoved = panel.userHasMoved
+        markStaleLayout(switchingTo: size)
+        panel.setContentSize(size)
+        panel.setFrameOriginProgrammatically(origin)
+        if !userHasMoved { panel.resetMoveTracking() }
+        panelHoldsCollapsedSize = false
+        panelHoldsMenuSize = true
+        return true
+    }
+
+    /// Opens the menu in place of the logo card ("Show logo only" + "Menu"
+    /// style): top-left on the logo's top-left, flipped right-/bottom-aligned
+    /// with it when there is no room. Returns false when unmeasurable.
+    private func openMenuFromLogo() -> Bool {
+        let screenFrame = currentScreenFrame ?? visibleFrameForSelection(panel.frame)
+        viewModel.expandsLeading = false
+        pinHostingView(toTrailing: false)
+        guard placeMenu(anchor: visibleCardFrame(), preferUp: false, coversAnchor: true, within: screenFrame) else {
+            return false
+        }
+        // A short fade, no spring: the menu replaces the logo in place.
+        withAnimation(.easeOut(duration: 0.15)) {
+            viewModel.showsMenu = true
+            viewModel.isCollapsed = false
+        }
+        return true
+    }
+
+    /// Turns the open menu into the horizontal card: closes the submenu and,
+    /// unless the user dragged the panel, re-places it where Bar style would
+    /// have put the bar for this presentation.
+    private func switchMenuToBar() {
+        submenuPresenter.hide()
+        pickedFromMenu = true
+        let size = expandedPanelSize()
+        if size.width > 0, size.height > 0 {
+            let oldFrame = panel.frame
+            // A dragged panel keeps its top-left edge, like any content resize.
+            var origin = CGPoint(x: oldFrame.minX, y: oldFrame.maxY - size.height)
+            if !panel.userHasMoved, let placement = savedBarPlacement {
+                origin = panelOrigin(
+                    panelSize: size,
+                    near: placement.selectionRect,
+                    within: placement.screenFrame,
+                    cursor: placement.cursor,
+                    grewDownward: placement.grewDownward,
+                    mouse: placement.mouse
+                )
+            }
+            ToolbarController.positionLog.debug("pos (menu pick): moved=\(self.panel.userHasMoved) size=\(NSStringFromSize(size)) origin=\(NSStringFromPoint(origin))")
+            markStaleLayout(switchingTo: size)
+            panel.setContentSize(size)
+            panel.setFrameOriginProgrammatically(origin)
+            let screenFrame = currentScreenFrame ?? visibleFrameForSelection(panel.frame)
+            let clamped = clampOnScreen(panel.frame, within: screenFrame)
+            if clamped != panel.frame.origin {
+                panel.setFrameOriginProgrammatically(clamped)
+            }
+        }
+        panelHoldsMenuSize = false
+        viewModel.showsMenu = false
+    }
+
+    /// A menu or submenu row was clicked: run its action in the horizontal card.
+    private func handleMenuPick(_ id: ActionIdentifier) {
+        guard isShowing, viewModel.showsMenu else { return }
+        // A click on a submenu row made the submenu panel key; it closes below,
+        // so the main panel takes key back (as after a click on the bar).
+        // A pick is a click, so the pointer tells which panel was clicked.
+        let pickedInSubmenu = submenuPresenter.visibleFrame?.contains(NSEvent.mouseLocation) ?? false
+        switchMenuToBar()
+        viewModel.triggerAction(id)
+        // Prompt needs the panel key for its text field.
+        if id == .builtin(.prompt) || pickedInSubmenu {
+            activatePromptInput()
+        }
+    }
+
+    /// Opens (or re-places) the More actions submenu beside the menu card, or
+    /// closes it when `moreRowFrame` is nil (another row is hovered).
+    private func updateSubmenu(moreRowFrame: CGRect?) {
+        guard let rowFrame = moreRowFrame, rowFrame.width > 0, rowFrame.height > 0,
+              isShowing, viewModel.showsMenu,
+              let hostView = toolbarHostingView else {
+            submenuPresenter.hide()
+            return
+        }
+        submenuPresenter.show(
+            moreRowFrameInHost: rowFrame,
+            hostView: hostView,
+            menuCardFrameOnScreen: visibleCardFrame(),
+            zoom: settings.toolbarZoom.scale
+        )
+    }
+
+    /// True when the menu has at least one row (actions, More actions, or a
+    /// system row); an empty menu falls back to the bar.
+    private var menuHasRows: Bool {
+        !viewModel.orderedActions.isEmpty || viewModel.hasOverflow || viewModel.hasSystemButtons
+    }
+
+    /// The visible card's frame on screen: the panel frame minus the outer paddings.
+    private func visibleCardFrame() -> CGRect {
+        let zoom = settings.toolbarZoom.scale
+        return CGRect(
+            x: panel.frame.minX + ToolbarView.outerHorizontalPadding * zoom,
+            y: panel.frame.minY + ToolbarView.outerBottomPadding * zoom,
+            width: panel.frame.width - 2 * ToolbarView.outerHorizontalPadding * zoom,
+            height: panel.frame.height - (ToolbarView.outerTopPadding + ToolbarView.outerBottomPadding) * zoom
+        )
+    }
+
+    /// Before pre-sizing the panel for content that has not laid out yet:
+    /// remember the hosting view's current size, so `reposition(forContentSize:)`
+    /// skips reports of it until the new layout arrives. Nothing to skip when
+    /// the sizes already match.
+    private func markStaleLayout(switchingTo newSize: CGSize) {
+        let current = toolbarHostingView?.bounds.size ?? panel.frame.size
+        staleLayoutSize = abs(current.width - newSize.width) < 0.5 && abs(current.height - newSize.height) < 0.5
+            ? nil
+            : current
     }
 
     /// Pins the hosting view to the container's leading (default) or trailing edge.
@@ -758,8 +1036,14 @@ final class ToolbarController {
     /// trailing end, the panel keeps its right edge fixed). The expanded card
     /// width is measured synchronously by laying out an offscreen hosting view of
     /// the same toolbar forced expanded; pure layout work on the main thread.
-    private func expandFromLogo(animated: Bool) {
+    ///
+    /// - Parameter opensMenu: true for the logo click: in "Menu" style the menu
+    ///   replaces the logo instead of the bar. Per-action hotkeys pass false.
+    private func expandFromLogo(animated: Bool, opensMenu: Bool = false) {
         guard viewModel.isCollapsed else { return }
+        if opensMenu, settings.toolbarStyle == .menu, menuHasRows, openMenuFromLogo() {
+            return
+        }
 
         let zoom = settings.toolbarZoom.scale
         let logoCardFrame = CGRect(
@@ -789,7 +1073,7 @@ final class ToolbarController {
                 y: oldFrame.maxY - newSize.height
             ))
             panelHoldsCollapsedSize = false
-            awaitingExpandedLayout = true
+            staleLayoutSize = ToolbarView.collapsedPanelSize(zoom: zoom)
             // A bar that fits on neither side of the logo is clamped on-screen here:
             // reposition(forContentSize:) skips the matching expanded layout report.
             let clamped = clampOnScreen(panel.frame, within: screenFrame)
@@ -811,9 +1095,10 @@ final class ToolbarController {
     }
 
     /// Size of the panel for the expanded toolbar (outer padding included),
-    /// measured from an offscreen hosting view of the toolbar forced expanded.
+    /// measured from an offscreen hosting view of the toolbar forced expanded
+    /// (the bar), or forced to the Menu-style menu with `forceMenu`.
     /// Zero when unmeasurable.
-    private func expandedPanelSize() -> CGSize {
+    private func expandedPanelSize(forceMenu: Bool = false) -> CGSize {
         let measuringView = NSHostingView(rootView: ToolbarView(
             viewModel: viewModel,
             outputHandler: outputHandler,
@@ -824,7 +1109,8 @@ final class ToolbarController {
             onDismiss: {},
             onDisableCloseConfirmation: {},
             onActivatePromptInput: {},
-            forceExpanded: true
+            forceExpanded: true,
+            forceMenu: forceMenu
         ))
         return measuringView.fittingSize
     }
@@ -848,12 +1134,11 @@ final class ToolbarController {
         // Skip when nothing changed — the hosting view reports its size on every
         // layout pass, and resizing the panel triggers another layout, so without
         // this guard the two would ping-pong.
-        if awaitingExpandedLayout {
-            let card = ToolbarView.collapsedPanelSize(zoom: settings.toolbarZoom.scale)
-            if abs(contentSize.width - card.width) < 0.5, abs(contentSize.height - card.height) < 0.5 {
+        if let stale = staleLayoutSize {
+            if abs(contentSize.width - stale.width) < 0.5, abs(contentSize.height - stale.height) < 0.5 {
                 return
             }
-            awaitingExpandedLayout = false
+            staleLayoutSize = nil
         }
         guard contentSize != panel.frame.size else { return }
 
@@ -866,6 +1151,7 @@ final class ToolbarController {
         )
         panel.setContentSize(contentSize)
         if !viewModel.isCollapsed { panelHoldsCollapsedSize = false }
+        if !viewModel.showsMenu { panelHoldsMenuSize = false }
         panel.setFrameOriginProgrammatically(newOrigin)
 
         // Clamp on-screen. Use the cached screen frame (the selection's display).
@@ -896,10 +1182,13 @@ final class ToolbarController {
         // A tooltip child panel would otherwise reappear with the toolbar:
         // orderOut does not fire the SwiftUI hover/disappear teardown.
         HoverTooltipPanelPresenter.shared.hide(anchor: nil)
+        submenuPresenter.hide()
         panel.orderOut(nil)
         panel.resetMoveTracking()
         currentScreenFrame = nil
-        awaitingExpandedLayout = false
+        staleLayoutSize = nil
+        pickedFromMenu = false
+        savedBarPlacement = nil
         removeEventMonitors()
         // I-E: cancel any in-flight stream before resetting view state.
         actionHandler?.cancel()
@@ -996,7 +1285,9 @@ final class ToolbarController {
                 // global monitors (no associated window means locationInWindow
                 // is unreliable).
                 let screenPoint = NSEvent.mouseLocation
-                if !self.panel.frame.contains(screenPoint) {
+                // The Menu style's submenu panel counts as inside too.
+                let inSubmenu = self.submenuPresenter.visibleFrame?.contains(screenPoint) ?? false
+                if !self.panel.frame.contains(screenPoint), !inSubmenu {
                     self.handleDismissRequest()
                 }
             }

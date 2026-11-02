@@ -337,6 +337,17 @@ final class ToolbarViewModel: ObservableObject {
     /// fixed for the rest of the presentation. Decided by ToolbarController.
     @Published var expandsLeading = false
 
+    /// "Menu" toolbar style: true while the idle toolbar shows as the
+    /// context-menu list instead of the horizontal bar. Set only by
+    /// ToolbarController at presentation time; cleared when an action is picked
+    /// from the menu and by `reset()`.
+    @Published var showsMenu = false
+
+    /// "Menu" toolbar style: true while the More actions submenu panel is open.
+    /// Set only by ToolbarController; keeps the More actions row highlighted.
+    /// Cleared by `reset()`.
+    @Published var isMenuSubmenuOpen = false
+
     /// Whether the "Ignore this app" button is shown. Set by ToolbarController
     /// (and ToolbarPreviewView) on each presentation from SettingsStore.ignoredAppsEnabled
     /// && SettingsStore.showToolbarIgnoreAppButton.
@@ -487,6 +498,17 @@ final class ToolbarViewModel: ObservableObject {
     /// Called by the collapsed logo button. Set by `ToolbarController`; nil-safe
     /// when unset (e.g. in previews and tests).
     var onExpandFromLogo: (() -> Void)?
+
+    /// Called when a row of the Menu-style toolbar (or its More actions submenu)
+    /// is clicked. Set by `ToolbarController`; nil-safe when unset (e.g. in
+    /// previews and tests).
+    var onMenuPick: ((ActionIdentifier) -> Void)?
+
+    /// Called when the pointer enters the Menu-style "More actions" row, with
+    /// that row's frame in SwiftUI global space of the panel's hosting view
+    /// (points, top-left origin). nil = the pointer moved to another row or the
+    /// submenu should close. Set by `ToolbarController`; nil-safe when unset.
+    var onMenuSubmenuHover: ((CGRect?) -> Void)?
 
     // MARK: Speak seam
 
@@ -916,6 +938,75 @@ final class ToolbarViewModel: ObservableObject {
         handler.prompt(promptText: promptText, text: capturedText, viewModel: self)
     }
 
+    // MARK: - Menu helpers (burger More actions menu, Menu toolbar style)
+
+    /// Run the action behind a menu row. For Prompt this only opens the inline
+    /// input; callers that need the panel to become key call the view's
+    /// prompt-activation hook themselves.
+    func triggerAction(_ id: ActionIdentifier) {
+        switch id {
+        case .builtin(.improve):   triggerImprove()
+        case .builtin(.shorten):   triggerShorten()
+        case .builtin(.proofread): triggerProofread()
+        case .builtin(.prompt):    triggerPromptInput()
+        case .builtin(.translate): triggerTranslate()
+        case .dictionary:          triggerDictionary()
+        case .speak:                triggerSpeak(accent: nil)
+        case .custom(let uuid):
+            if let action = customActions.first(where: { $0.id == uuid }) {
+                triggerCustomAction(action)
+            }
+        }
+    }
+
+    /// Title and SF Symbol name shown for an action in a menu row.
+    func menuTitleAndSymbol(for id: ActionIdentifier) -> (String, String) {
+        switch id {
+        case .builtin(.improve):   return ("Improve", "wand.and.stars")
+        case .builtin(.shorten):   return ("Shorten", "text.badge.minus")
+        case .builtin(.proofread): return ("Proofread", "checkmark.bubble")
+        case .builtin(.prompt):    return ("Prompt", "bubble.and.pencil")
+        case .builtin(.translate): return ("Translate", "character.bubble")
+        case .speak:
+            let title = speakPhase == .idle ? "Speak" : "Stop"
+            let symbol = speakPhase == .playing ? "stop.fill" : "speaker.wave.2"
+            return (title, symbol)
+        case .dictionary:          return ("Look up", "character.book.closed")
+        case .custom(let uuid):
+            if let action = customActions.first(where: { $0.id == uuid }) {
+                if action.type == .speech {
+                    let title = speakPhase == .idle ? action.title : "Stop"
+                    return (title, "speaker.wave.2")
+                }
+                return (action.title, "sparkles")
+            }
+            return ("Custom", "sparkles")
+        }
+    }
+
+    /// Whether a menu row is disabled: every action except Speak (and speech
+    /// custom actions, which double as Stop) is disabled while an action runs.
+    func isMenuItemDisabled(for id: ActionIdentifier) -> Bool {
+        switch id {
+        case .speak:
+            return false
+        case .custom(let uuid):
+            if let action = customActions.first(where: { $0.id == uuid }),
+               action.type == .speech {
+                return false
+            }
+            return isActionRunning
+        default:
+            return isActionRunning
+        }
+    }
+
+    /// True while any action is executing.
+    private var isActionRunning: Bool {
+        if case .running = actionState { return true }
+        return false
+    }
+
     // MARK: - Regenerate / Refine
 
     /// The custom action that produced the current state, if any.
@@ -1213,6 +1304,8 @@ final class ToolbarViewModel: ObservableObject {
         ocrPreviewImage = nil
         isCollapsed = false
         expandsLeading = false
+        showsMenu = false
+        isMenuSubmenuOpen = false
         speakCoordinator?.clearReplay()
     }
 

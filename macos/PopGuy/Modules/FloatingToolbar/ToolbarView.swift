@@ -70,7 +70,7 @@ extension ResultFontSize {
 /// Dimensional properties are instance vars that scale by `zoom`; non-dimensional
 /// constants (opacities, animations, delays) remain static so sibling structs
 /// can reference them without needing a metrics instance.
-private struct ToolbarMetrics {
+struct ToolbarMetrics {
     let zoom: CGFloat
 
     // MARK: Dimensional (instance — scale with zoom)
@@ -88,6 +88,33 @@ private struct ToolbarMetrics {
     /// Delay before a hover tooltip becomes visible (~120 ms feels instant but avoids
     /// flicker when the cursor just passes through).
     static let tooltipDelay: UInt64 = 120_000_000 // nanoseconds
+}
+
+// MARK: - ToolbarCardBackground
+
+/// The toolbar card's chrome: opaque fill, shadow and hairline border. Shared by
+/// the toolbar card and the Menu style's More actions submenu card.
+struct ToolbarCardBackground: ViewModifier {
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    // Opaque window-background fill (not translucent material): the
+                    // toolbar floats over arbitrary app content, so a vibrancy
+                    // material let bright backgrounds bleed through and washed out
+                    // the text. Solid fill keeps contrast and still tracks light/dark.
+                    .fill(Color(nsColor: .windowBackgroundColor))
+                    .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 3)
+            )
+            // Hairline edge so the material card stays defined on light backgrounds
+            // (mimics the standard macOS floating-panel border).
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+            )
+    }
 }
 
 // MARK: - ToolbarControlStyle
@@ -169,6 +196,11 @@ struct ToolbarView: View {
     /// Renders the bar as expanded even while `viewModel.isCollapsed` is true.
     /// Used only by ToolbarController's offscreen width measurement.
     var forceExpanded: Bool = false
+
+    /// Renders the Menu-style list regardless of `viewModel.showsMenu` and the
+    /// collapsed state. Used only by ToolbarController's offscreen menu
+    /// measurement.
+    var forceMenu: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -300,8 +332,17 @@ struct ToolbarView: View {
     /// card floats as its own element, left-aligned under the thumbnail.
     private var toolbarCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            actionBar
-                .zIndex(1)
+            if (viewModel.showsMenu && !isCollapsed && !forceExpanded) || forceMenu {
+                ToolbarMenuList(
+                    viewModel: viewModel,
+                    onIgnoreSite: onIgnoreDomain,
+                    onIgnoreApp: { isShowingIgnoreConfirmation = true },
+                    onOpenSettings: onOpenSettings
+                )
+            } else {
+                actionBar
+                    .zIndex(1)
+            }
             if viewModel.isPromptInputActive {
                 Divider().padding(.horizontal, z(8))
                 promptInputArea
@@ -320,21 +361,7 @@ struct ToolbarView: View {
                 speakArea
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: metrics.cardRadius, style: .continuous)
-                // Opaque window-background fill (not translucent material): the
-                // toolbar floats over arbitrary app content, so a vibrancy
-                // material let bright backgrounds bleed through and washed out
-                // the text. Solid fill keeps contrast and still tracks light/dark.
-                .fill(Color(nsColor: .windowBackgroundColor))
-                .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 3)
-        )
-        // Hairline edge so the material card stays defined on light backgrounds
-        // (mimics the standard macOS floating-panel border).
-        .overlay(
-            RoundedRectangle(cornerRadius: metrics.cardRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
-        )
+        .modifier(ToolbarCardBackground(cornerRadius: metrics.cardRadius))
         // Keep the card at its intrinsic width regardless of the (wider) thumbnail.
         .fixedSize()
     }
@@ -761,74 +788,18 @@ struct ToolbarView: View {
     @ViewBuilder
     private func overflowMenuItem(for id: ActionIdentifier) -> some View {
         Button {
-            triggerOverflowAction(for: id)
+            viewModel.triggerAction(id)
+            if id == .builtin(.prompt) { onActivatePromptInput() }
         } label: {
             overflowMenuLabel(for: id)
         }
-        .disabled(overflowMenuItemDisabled(for: id))
+        .disabled(viewModel.isMenuItemDisabled(for: id))
     }
 
     @ViewBuilder
     private func overflowMenuLabel(for id: ActionIdentifier) -> some View {
-        let (title, symbol) = overflowMenuTitleAndSymbol(for: id)
+        let (title, symbol) = viewModel.menuTitleAndSymbol(for: id)
         Label(title, systemImage: symbol)
-    }
-
-    private func overflowMenuTitleAndSymbol(for id: ActionIdentifier) -> (String, String) {
-        switch id {
-        case .builtin(.improve):   return ("Improve", "wand.and.stars")
-        case .builtin(.shorten):   return ("Shorten", "text.badge.minus")
-        case .builtin(.proofread): return ("Proofread", "checkmark.bubble")
-        case .builtin(.prompt):    return ("Prompt", "bubble.and.pencil")
-        case .builtin(.translate): return ("Translate", "character.bubble")
-        case .speak:
-            let title = viewModel.speakPhase == .idle ? "Speak" : "Stop"
-            let symbol = viewModel.speakPhase == .playing ? "stop.fill" : "speaker.wave.2"
-            return (title, symbol)
-        case .dictionary:          return ("Look up", "character.book.closed")
-        case .custom(let uuid):
-            if let action = viewModel.customActions.first(where: { $0.id == uuid }) {
-                if action.type == .speech {
-                    let title = viewModel.speakPhase == .idle ? action.title : "Stop"
-                    return (title, "speaker.wave.2")
-                }
-                return (action.title, "sparkles")
-            }
-            return ("Custom", "sparkles")
-        }
-    }
-
-    private func overflowMenuItemDisabled(for id: ActionIdentifier) -> Bool {
-        switch id {
-        case .speak:
-            return false
-        case .custom(let uuid):
-            if let action = viewModel.customActions.first(where: { $0.id == uuid }),
-               action.type == .speech {
-                return false
-            }
-            return isActionRunning
-        default:
-            return isActionRunning
-        }
-    }
-
-    private func triggerOverflowAction(for id: ActionIdentifier) {
-        switch id {
-        case .builtin(.improve):   viewModel.triggerImprove()
-        case .builtin(.shorten):   viewModel.triggerShorten()
-        case .builtin(.proofread): viewModel.triggerProofread()
-        case .builtin(.prompt):
-            viewModel.triggerPromptInput()
-            onActivatePromptInput()
-        case .builtin(.translate): viewModel.triggerTranslate()
-        case .dictionary:          viewModel.triggerDictionary()
-        case .speak:                viewModel.triggerSpeak(accent: nil)
-        case .custom(let uuid):
-            if let action = viewModel.customActions.first(where: { $0.id == uuid }) {
-                viewModel.triggerCustomAction(action)
-            }
-        }
     }
 
     /// Consistent group separator — one height everywhere, with a little

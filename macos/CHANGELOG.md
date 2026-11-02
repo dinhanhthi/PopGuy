@@ -18,6 +18,7 @@ heading, which the release body shows under `## Windows`.
 ### Added
 
 - New "Show logo only" option, first in Settings → Appearance and in the menu bar menu. When it is on, selecting text or pressing the show-toolbar shortcut shows only the PopGuy logo next to the pointer, so the toolbar no longer pops up over every selection. Click the logo to open the full toolbar, which expands out of the logo (to the left when there is no room on the right). Action shortcuts and screen text capture still open the full toolbar right away.
+- Toolbar style: Menu — Settings → Appearance can show the toolbar as a context-menu-like list (icon + label per action, More actions opens a submenu on hover); it opens away from screen edges, and picking an action shows the usual toolbar with the result.
 
 ### Changed
 

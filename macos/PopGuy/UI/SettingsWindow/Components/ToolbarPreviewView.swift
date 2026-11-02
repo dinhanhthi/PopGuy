@@ -31,37 +31,58 @@ struct ToolbarPreviewView: View {
             overflow: settings.overflowOrderedIdentifiers
         )
 
+        // Menu style shows the menu list. Set here, not in seed(): the Actions
+        // editor shares seed() and always shows the bar. No onMenuPick /
+        // onMenuSubmenuHover, so rows and More actions are inert here. Like the
+        // controller, a menu with no rows falls back to the bar.
+        let showsMenu = settings.toolbarStyle == .menu
+            && (!viewModel.orderedActions.isEmpty || viewModel.hasOverflow || viewModel.hasSystemButtons)
+        viewModel.showsMenu = showsMenu
+
         // The preview renders the toolbar at its real on-screen size, so the
         // backdrop and optical-centering nudge scale with the configured zoom
         // to keep the larger bar from clipping at 1.2x / 1.3x.
         let scale = settings.toolbarZoom.scale
 
-        return GeometryReader { geo in
-            ScrollView(.horizontal, showsIndicators: false) {
-                ToolbarView(
-                    viewModel: viewModel,
-                    outputHandler: OutputHandler(),
-                    onContentResize: { _ in },
-                    onOpenSettings: {},
-                    onIgnoreApp: {},
-                    onIgnoreDomain: {},
-                    onDismiss: {},
-                    onDisableCloseConfirmation: {},
-                    onActivatePromptInput: {}
-                )
-                .allowsHitTesting(false)
-                .frame(
-                    minWidth: geo.size.width,
-                    minHeight: geo.size.height,
-                    alignment: .center
-                )
-                // ToolbarView's own padding is asymmetric (8pt top, 24pt bottom for
-                // shadow/tooltip room); centering it leaves the visible bar sitting
-                // ~8pt high. Nudge down by half that difference to optically center it.
-                .offset(y: 8 * scale)
+        let toolbar = ToolbarView(
+            viewModel: viewModel,
+            outputHandler: OutputHandler(),
+            onContentResize: { _ in },
+            onOpenSettings: {},
+            onIgnoreApp: {},
+            onIgnoreDomain: {},
+            onDismiss: {},
+            onDisableCloseConfirmation: {},
+            onActivatePromptInput: {}
+        )
+        .allowsHitTesting(false)
+
+        return Group {
+            if showsMenu {
+                // The list is taller than the bar: size the preview to it.
+                // ToolbarView's padding is 8pt top, 24pt bottom; adding 16pt on
+                // top balances the visible card vertically.
+                toolbar
+                    .padding(.top, 16 * scale)
+                    .frame(maxWidth: .infinity)
+            } else {
+                GeometryReader { geo in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        toolbar
+                            .frame(
+                                minWidth: geo.size.width,
+                                minHeight: geo.size.height,
+                                alignment: .center
+                            )
+                            // ToolbarView's own padding is asymmetric (8pt top, 24pt bottom for
+                            // shadow/tooltip room); centering it leaves the visible bar sitting
+                            // ~8pt high. Nudge down by half that difference to optically center it.
+                            .offset(y: 8 * scale)
+                    }
+                }
+                .frame(height: 84 * scale)
             }
         }
-        .frame(height: 84 * scale)
         .frame(maxWidth: .infinity)
         .background(ToolbarPreviewBackdrop())
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))

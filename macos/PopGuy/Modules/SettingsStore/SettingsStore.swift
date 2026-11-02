@@ -92,6 +92,25 @@ nonisolated enum ToolbarZoom: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+// MARK: - ToolbarStyle
+
+/// Layout of the floating toolbar when it opens: Bar = horizontal toolbar;
+/// Menu = context-menu-style vertical list.
+nonisolated enum ToolbarStyle: String, CaseIterable, Identifiable, Codable {
+    case bar
+    case menu
+
+    var id: String { rawValue }
+
+    /// User-facing label for the Appearance picker.
+    var displayName: String {
+        switch self {
+        case .bar:  return "Bar"
+        case .menu: return "Menu"
+        }
+    }
+}
+
 // MARK: - LocalModelAvailability
 
 /// Decision returned by `SettingsStore.availability(for:)`.
@@ -151,6 +170,7 @@ final class SettingsStore: ObservableObject {
         static let triggerDoubleClick         = "settings.triggerDoubleClick"
         static let hideToolbarLogo            = "settings.hideToolbarLogo"
         static let showLogoOnly               = "settings.showLogoOnly"
+        static let toolbarStyle               = "settings.toolbarStyle"
         static let inlineToolbarSystemButtons = "settings.inlineToolbarSystemButtons"
         static let doubleClickAssignedAction  = "settings.doubleClickAssignedAction"
         static let triggerChord               = "settings.triggerChord"
@@ -467,6 +487,12 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(showLogoOnly, forKey: Keys.showLogoOnly) }
     }
 
+    /// Layout of the toolbar when it opens: horizontal bar or context-menu-style
+    /// vertical list (default: .bar).
+    @Published var toolbarStyle: ToolbarStyle {
+        didSet { defaults.set(toolbarStyle.rawValue, forKey: Keys.toolbarStyle) }
+    }
+
     /// Places the system buttons (Ignore this site/app, Settings) right after the
     /// action buttons, separated by dividers like any other action, instead of
     /// after a gap (default: false — keep the gap).
@@ -689,6 +715,7 @@ final class SettingsStore: ObservableObject {
         triggerDoubleClickEnabled = defaults.object(forKey: Keys.triggerDoubleClick) as? Bool ?? false
         hideToolbarLogo = defaults.object(forKey: Keys.hideToolbarLogo) as? Bool ?? false
         showLogoOnly = defaults.object(forKey: Keys.showLogoOnly) as? Bool ?? false
+        toolbarStyle = defaults.string(forKey: Keys.toolbarStyle).flatMap(ToolbarStyle.init(rawValue:)) ?? .bar
         inlineToolbarSystemButtons = defaults.object(forKey: Keys.inlineToolbarSystemButtons) as? Bool ?? false
         doubleClickAssignedAction = Self.load(ActionIdentifier.self, key: Keys.doubleClickAssignedAction, from: defaults)
         triggerChordEnabled      = defaults.object(forKey: Keys.triggerChord)    as? Bool ?? true
