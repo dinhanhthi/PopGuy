@@ -9,6 +9,8 @@ Before 1.4.0 Windows had its own versions (0.1.0).
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-11-02
+
 ### Added
 
 - Toolbar style: Menu. Settings → Appearance can show the toolbar as a list like a context menu, with an icon and a label for each action. Hovering "More actions" opens the extra actions beside it. The menu opens away from the screen edges, and picking an action shows the usual toolbar with the result. Action shortcuts and screen text capture still open the usual toolbar.
