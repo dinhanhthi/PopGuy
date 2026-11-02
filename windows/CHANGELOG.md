@@ -9,6 +9,8 @@ Before 1.4.0 Windows had its own versions (0.1.0).
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-11-02
+
 ### Added
 
 - New "Show logo only" option, in Settings → Appearance and in the tray menu. When it is on, selecting text or pressing the show-toolbar shortcut shows only the PopGuy logo next to the pointer, so the toolbar no longer pops up over every selection. Click the logo to open the full toolbar, which expands out of the logo (to the left when there is no room on the right); with the Menu toolbar style, the menu opens in place of the logo. Action shortcuts and screen text capture still open the full toolbar right away.
