@@ -15,6 +15,11 @@ heading, which the release body shows under `## Windows`.
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.4.1] - 2026-11-02
+
+### Added
+- Settings → Ignore has two new toggles, "Show "Ignore this app" button on toolbar" and "Show "Ignore this site" button on toolbar". Turning one off hides that button on the toolbar while its ignored list keeps working. Before, the only way to hide a button was to turn off Ignored Apps or Ignored Domains, which also stopped the feature.
+
 ## [1.4.0] - 2026-10-28
 
 ### Changed

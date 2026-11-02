@@ -7,6 +7,12 @@ GitHub release: each version has a section here and one with the same `## [X.Y.Z
 `macos/CHANGELOG.md`, and `scripts/publish-release.sh` puts both in the release body (this one under `## Windows`).
 Before 1.4.0 Windows had its own versions (0.1.0).
 
+## [1.4.1] - 2026-11-02
+
+### Added
+
+- Settings → Ignore has two new toggles, "Show "Ignore this app" button on toolbar" and "Show "Ignore this site" button on toolbar". Turning one off hides that button on the toolbar while its ignored list keeps working. Before, the only way to hide a button was to turn off Ignored Apps or Ignored Domains, which also stopped the feature.
+
 ## [1.4.0] - 2026-10-28
 
 ### Changed
