@@ -216,7 +216,21 @@ Use `release: vX.Y.Z` as the commit message.
 
 Run the release **after** the `release: vX.Y.Z` commit is on `main` (Step B5 pushed it).
 Prereqs (one-time, `docs/RELEASING.md §0`): Developer ID cert in the login Keychain, the
-`popguy-notary` notarytool profile, Xcode 26+, Metal Toolchain, `gh` CLI authenticated.
+`apple-notary` notarytool profile, Xcode 26+, Metal Toolchain, `gh` CLI authenticated.
+
+### Step A0: Check the notary profile (before the tag push)
+
+The notarytool Keychain profile is **`apple-notary`**, never the old `popguy-notary`. Check it
+before `ship.sh`, because a bad profile fails only after the tag push and the 15-min archive,
+and silently (the script exits right after "App icon compiled OK"):
+
+```bash
+xcrun notarytool history --keychain-profile apple-notary
+```
+
+On `HTTP status code: 401` stop **before** `ship.sh` and report it: the user re-stores the
+app-specific password with `xcrun notarytool store-credentials apple-notary ...`. Never switch
+to another profile on your own.
 
 ### Step A1: Ship (one command)
 

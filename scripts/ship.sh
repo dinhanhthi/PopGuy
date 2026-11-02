@@ -18,7 +18,7 @@
 #
 # Prereqs (one-time — RELEASING.md §0):
 #   - "Developer ID Application" cert in the login Keychain
-#   - notarytool credential profile (default "popguy-notary")
+#   - notarytool credential profile (default "apple-notary")
 #   - Xcode 26+ selected (required for Icon Composer .icon)
 #   - Metal Toolchain installed (Xcode → Settings → Components)
 #   - gh CLI authenticated

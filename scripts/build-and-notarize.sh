@@ -13,7 +13,7 @@
 #
 # Prereqs (one-time — see RELEASING.md §0):
 #   - "Developer ID Application" cert in the login Keychain                  (§0.1)
-#   - notarytool credential profile (default "popguy-notary")               (§0.1 step 6)
+#   - notarytool credential profile (default "apple-notary")               (§0.1 step 6)
 #   - Xcode 26+ selected — REQUIRED to compile the Icon Composer .icon icon  (blank-icon guard, §5)
 #   - Metal Toolchain installed (already present if you build MLX locally; otherwise run
 #     `xcodebuild -downloadComponent MetalToolchain` once — it links the PopGuyMLXHelper).
@@ -35,7 +35,7 @@ ARCHIVE="build/PopGuy.xcarchive"
 EXPORT_DIR="build/export"
 APP="$EXPORT_DIR/PopGuy.app"
 MIN_MACOS="13.0"   # PopGuy's hard minimum (CLAUDE.md) — guarded below
-NOTARY_PROFILE="${POPGUY_NOTARY_PROFILE:-popguy-notary}"
+NOTARY_PROFILE="${POPGUY_NOTARY_PROFILE:-apple-notary}"
 
 # Submit to Apple and FAIL the script on anything other than "Accepted". notarytool exits 0
 # even when the status is Invalid, so without this an Invalid result sails on into stapler and

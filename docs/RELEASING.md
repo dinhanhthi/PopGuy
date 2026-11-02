@@ -11,7 +11,7 @@ the in-app Sparkle updater can deliver to existing users.
 > `windows/scripts/fetch-release.sh` → `publish-release.sh --windows` (§4) →
 > `publish-appcast.sh` (§5) (see [Windows and the shared release](#windows-and-the-shared-release)).
 > `/cf-ship` drives this end to end. §2–§5 below explain what each script does. On a new
-> machine only §0 needs redoing (restore the Developer ID cert, the `popguy-notary` profile
+> machine only §0 needs redoing (restore the Developer ID cert, the `apple-notary` profile
 > and the Sparkle private key).
 
 PopGuy uses **Sparkle 2.x** (added via Swift Package Manager). Sparkle does **not**
@@ -102,7 +102,7 @@ silently fails.
    continuing — a release that captures nothing is worse than no release.
 6. Store a notarization credential profile in Keychain once:
   ```sh
-   xcrun notarytool store-credentials "popguy-notary" \
+   xcrun notarytool store-credentials "apple-notary" \
      --apple-id "<your-apple-id-email>" \
      --team-id 86H6CNLN4C \
      --password "<app-specific-password>"   # appleid.apple.com → App-Specific Passwords
@@ -268,7 +268,7 @@ Notarize, staple the ticket onto the `.app` (you staple the **bundle**, not the 
 then **re-zip the stapled app** — this re-zipped file is the one you publish:
 
 ```sh
-xcrun notarytool submit PopGuy-1.1.0.zip --keychain-profile "popguy-notary" --wait
+xcrun notarytool submit PopGuy-1.1.0.zip --keychain-profile "apple-notary" --wait
 xcrun stapler staple PopGuy.app
 ditto -c -k --keepParent PopGuy.app PopGuy-1.1.0.zip   # overwrite throwaway with the stapled build
 ```
@@ -291,7 +291,7 @@ spctl -a -vv -t exec PopGuy.app    # should report: accepted, source=Notarized D
 > mkdir dmg-stage && cp -R PopGuy.app dmg-stage/ && ln -s /Applications dmg-stage/Applications
 > hdiutil create -volname "PopGuy" -srcfolder dmg-stage -ov -format UDZO PopGuy-1.1.0.dmg
 > codesign --force --timestamp --sign "Developer ID Application" PopGuy-1.1.0.dmg
-> xcrun notarytool submit PopGuy-1.1.0.dmg --keychain-profile "popguy-notary" --wait
+> xcrun notarytool submit PopGuy-1.1.0.dmg --keychain-profile "apple-notary" --wait
 > xcrun stapler staple PopGuy-1.1.0.dmg
 > spctl -a -t open --context context:primary-signature -v PopGuy-1.1.0.dmg   # accepted
 > ```
