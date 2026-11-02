@@ -7,6 +7,12 @@ GitHub release: each version has a section here and one with the same `## [X.Y.Z
 `macos/CHANGELOG.md`, and `scripts/publish-release.sh` puts both in the release body (this one under `## Windows`).
 Before 1.4.0 Windows had its own versions (0.1.0).
 
+## [1.4.2] - 2026-11-02
+
+### Changed
+
+- No changes on Windows; this version ships with the macOS update.
+
 ## [1.4.1] - 2026-11-02
 
 ### Added

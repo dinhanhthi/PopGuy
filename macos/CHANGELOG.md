@@ -15,6 +15,12 @@ heading, which the release body shows under `## Windows`.
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.4.2] - 2026-11-02
+
+### Fixed
+
+- Toolbar tooltips are no longer cut off when the toolbar is small, for example with a single action button. They now show in full, whatever the toolbar's width or the length of the action's name.
+
 ## [1.4.1] - 2026-11-02
 
 ### Added
