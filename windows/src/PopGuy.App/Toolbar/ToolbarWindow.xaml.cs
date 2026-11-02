@@ -110,6 +110,7 @@ public sealed partial class ToolbarWindow : Window
         View.MenuClosed += OnMenuClosed;
         ViewModel.PropertyChanged += OnViewModelChanged;
         ViewModel.MenuPicked += OnMenuPicked;
+        ViewModel.LogoExpanded += OnLogoExpanded;
 
         // Every press and release on the card, the buttons' (handled) too: the foreground hand-back.
         View.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnAnyPointerPressed), true);
@@ -140,10 +141,10 @@ public sealed partial class ToolbarWindow : Window
     /// <summary>
     /// Shows the toolbar for <paramref name="source"/> without activating it, placed by
     /// <see cref="PanelPositioning.PanelOrigin"/> (spec-1 §3.2) in the work area of the monitor holding the selection; the
-    /// "Menu" style's menu by <see cref="MenuOrigin"/>. Call <see cref="ToolbarViewModel.Present"/> first, so the toolbar
-    /// is sized for the new content. Also re-presents a toolbar that is already showing: the position is recomputed,
-    /// unless the user dragged the toolbar since it was shown (a drag disables auto-reposition until the next show; the
-    /// size still follows the content).
+    /// "Menu" style's menu by <see cref="MenuOrigin"/>, the "Show logo only" card by <see cref="CollapsedOrigin"/>. Call
+    /// <see cref="ToolbarViewModel.Present"/> first, so the toolbar is sized for the new content. Also re-presents a
+    /// toolbar that is already showing: the position is recomputed, unless the user dragged the toolbar since it was
+    /// shown (a drag disables auto-reposition until the next show; the size still follows the content).
     /// </summary>
     /// <param name="pointer">The gesture's release point; null for the chord and the hotkeys (placed below the selection).</param>
     /// <param name="grewDownward">The drag direction; null when unknown.</param>
@@ -174,9 +175,11 @@ public sealed partial class ToolbarWindow : Window
         _barGrewDownward = grewDownward;
         _barSelection = selectionRect;
         _barScale = scale;
-        var origin = ViewModel.ShowsMenu
-            ? MenuOrigin(size, pointer, grewDownward, selectionRect)
-            : PanelPositioning.PanelOrigin(size, selectionRect, _workArea, pointer, grewDownward);
+        var origin = ViewModel.IsCollapsed
+            ? CollapsedOrigin(size, pointer, grewDownward, selectionRect)
+            : ViewModel.ShowsMenu
+                ? MenuOrigin(size, pointer, grewDownward, selectionRect)
+                : PanelPositioning.PanelOrigin(size, selectionRect, _workArea, pointer, grewDownward);
         ToolbarWindowStyle.SetBounds(Hwnd, new DrawingRectangle(origin, size));
 
         // Never Activate(): it would take the foreground from the source app.
@@ -241,6 +244,21 @@ public sealed partial class ToolbarWindow : Window
     }
 
     /// <summary>
+    /// The "Show logo only" card's top-left (macOS collapsedPanelOrigin, <see cref="PanelPositioning.CollapsedOrigin"/>):
+    /// below the pointer (above after an upward drag); without a pointer (a keyboard selection, the chord, the hotkeys)
+    /// below the selection's bottom centre, the bar's anchor; at the cursor when there is no usable selection rect
+    /// (<paramref name="selection"/> is then a zero-size rect at the cursor).
+    /// </summary>
+    private DrawingPoint CollapsedOrigin(DrawingSize size, DrawingPoint? pointer, bool? grewDownward, DrawingRectangle selection)
+    {
+        if (pointer is { } point) return PanelPositioning.CollapsedOrigin(size, point, grewDownward, _workArea);
+        var anchor = selection.Width > 0 && selection.Height > 0
+            ? new DrawingPoint(selection.Left + selection.Width / 2, selection.Bottom)
+            : selection.Location;
+        return PanelPositioning.CollapsedOrigin(size, anchor, grewDownward: true, _workArea);
+    }
+
+    /// <summary>
     /// A pick turned the menu into the bar (macOS switchMenuToBar), before the action runs: the card goes where Bar style
     /// would have put it for this show. Not after a drag (or during one): the card then keeps its top-left, as for any
     /// resize (<see cref="FitToCard"/>). As in <see cref="ShowAt"/>: the layout's SizeChanged may run
@@ -253,6 +271,40 @@ public sealed partial class ToolbarWindow : Window
         var size = LaidOutWindowSize(_barScale);
         var origin = PanelPositioning.PanelOrigin(size, _barSelection, _workArea, _barPointer, _barGrewDownward);
         ToolbarWindowStyle.SetBounds(Hwnd, new DrawingRectangle(origin, size));
+    }
+
+    /// <summary>
+    /// The logo card turned into the bar or the menu (macOS expandFromLogo, openMenuFromLogo), before any action runs,
+    /// in the click's frame. The menu covers the logo from its top-left (<see cref="PanelPositioning.MenuFromLogoOrigin"/>);
+    /// the bar grows right out of the logo, its left edge on the logo's, or left with its right edge on the logo's when
+    /// it does not fit (<see cref="PanelPositioning.LogoExpandsLeading"/>; the logo then moves to the bar's trailing
+    /// end), top fixed, clamped into the work area. Not after a drag (or during one): the card then keeps its top-left,
+    /// as for any resize (<see cref="FitToCard"/>). The logo's rect is read before the layout: its SizeChanged may run
+    /// <see cref="FitToCard"/> first (the logo's top-left kept, the window already resized), then the bounds set here
+    /// win; a later one finds the window at the card's size and does nothing.
+    /// </summary>
+    private void OnLogoExpanded()
+    {
+        if (_closed || !IsShown || UserDragged || _dragging) return;
+        var logo = ToolbarWindowStyle.WindowRect(Hwnd);
+        if (logo.IsEmpty) return;
+        var size = LaidOutWindowSize(_barScale);
+        if (ViewModel.ShowsMenu)
+        {
+            var menuOrigin = PanelPositioning.MenuFromLogoOrigin(size, logo, _workArea);
+            ToolbarWindowStyle.SetBounds(Hwnd, new DrawingRectangle(menuOrigin, size));
+            return;
+        }
+        var leading = PanelPositioning.LogoExpandsLeading(logo, size.Width, _workArea);
+        ViewModel.SetExpandsLeading(leading);
+        // The logo moved to the other end, with no spacing after it there: a little narrower, so laid out again.
+        size = LaidOutWindowSize(_barScale);
+        var x = leading ? logo.Right - size.Width : logo.Left;
+        // Min then Max, as FitToCard: wider or taller than the work area pins to its left or top edge.
+        var inset = PanelPositioning.PanelEdgeInset;
+        x = Math.Max(Math.Min(x, _workArea.Right - size.Width - inset), _workArea.Left + inset);
+        var y = Math.Max(Math.Min(logo.Top, _workArea.Bottom - size.Height - inset), _workArea.Top + inset);
+        ToolbarWindowStyle.SetBounds(Hwnd, new DrawingRectangle(x, y, size.Width, size.Height));
     }
 
     /// <summary>
@@ -562,9 +614,11 @@ public sealed partial class ToolbarWindow : Window
         var frame = ToolbarWindowStyle.WindowRect(Hwnd);
         if (frame.IsEmpty || (frame.Width == width && frame.Height == height)) return;
 
-        // Keep the top-left, then clamp; wider or taller than the work area pins to its left or top edge (Max last).
+        // Keep the top-left (the top-right after a leftward expansion from the logo card, so the logo stays put: macOS
+        // reposition), then clamp; wider or taller than the work area pins to its left or top edge (Max last).
         var inset = PanelPositioning.PanelEdgeInset;
-        var x = Math.Max(Math.Min(frame.X, _workArea.Right - width - inset), _workArea.Left + inset);
+        var left = ViewModel.ExpandsLeading && !UserDragged ? frame.Right - width : frame.X;
+        var x = Math.Max(Math.Min(left, _workArea.Right - width - inset), _workArea.Left + inset);
         var y = Math.Max(Math.Min(frame.Y, _workArea.Bottom - height - inset), _workArea.Top + inset);
         ToolbarWindowStyle.SetBounds(Hwnd, new DrawingRectangle(x, y, width, height));
     }
@@ -586,6 +640,7 @@ public sealed partial class ToolbarWindow : Window
         View.Detach();
         ViewModel.PropertyChanged -= OnViewModelChanged;
         ViewModel.MenuPicked -= OnMenuPicked;
+        ViewModel.LogoExpanded -= OnLogoExpanded;
         ViewModel.Detach();
         View.PointerPressed -= OnBackgroundPressed;
         View.PointerMoved -= OnPointerMoved;

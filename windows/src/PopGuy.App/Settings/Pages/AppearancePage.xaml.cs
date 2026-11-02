@@ -9,12 +9,13 @@ using PopGuy.Toolbar;
 namespace PopGuy.Settings.Pages;
 
 /// <summary>
-/// Settings → Appearance (macOS SettingsView.swift AppearanceView, spec-3 §5.5, plus macOS's Hide logo and Remove gap
-/// before system buttons toggles, which the spec leaves out). The navigation parameter is the
-/// AppServices. Every control saves through <see cref="SettingsStore.Update"/> at once; the toolbar reads these settings
-/// on each presentation, so the next toolbar shows the change; the toolbar preview (the layout editor, preview-only)
-/// shows it at once. The sample sentence shows the result text's size: the font size, grown by the zoom when "Include
-/// font size in zoom" is on. A change from elsewhere shows while the page is open.
+/// Settings → Appearance (macOS SettingsView.swift AppearanceView, spec-3 §5.5, plus macOS's Show logo only, Hide logo
+/// and Remove gap before system buttons toggles, which the spec leaves out). Hide logo is disabled while Show logo only
+/// is on: the toolbar expands from the logo (macOS). The navigation parameter is the AppServices. Every control saves
+/// through <see cref="SettingsStore.Update"/> at once; the toolbar reads these settings on each presentation, so the
+/// next toolbar shows the change; the toolbar preview (the layout editor, preview-only) shows it at once. The sample
+/// sentence shows the result text's size: the font size, grown by the zoom when "Include font size in zoom" is on. A
+/// change from elsewhere (the tray's Show Logo Only too) shows while the page is open.
 /// </summary>
 public sealed partial class AppearancePage : Page
 {
@@ -31,6 +32,11 @@ public sealed partial class AppearancePage : Page
         ToolbarStyleBar.SelectionChanged += (_, _) => OnToolbarStyleChanged();
         ZoomBar.SelectionChanged += (_, _) => OnZoomChanged();
         FontSizeBar.SelectionChanged += (_, _) => OnFontSizeChanged();
+        ShowLogoOnlyToggle.Toggled += (_, _) =>
+        {
+            UpdateHideLogoState();
+            Save("showLogoOnly", s => s with { ShowLogoOnly = ShowLogoOnlyToggle.IsOn });
+        };
         ZoomFontToggle.Toggled += (_, _) =>
             Save("zoomIncludesFontSize", s => s with { ZoomIncludesFontSize = ZoomFontToggle.IsOn });
         HideLogoToggle.Toggled += (_, _) =>
@@ -82,6 +88,7 @@ public sealed partial class AppearancePage : Page
         _syncing = true;
         // The bars' items are in the enums' order (here, in the change handlers and in UpdateSample).
         ToolbarStyleBar.SelectedItem = ToolbarStyleBar.Items[(int)current.ToolbarStyle];
+        ShowLogoOnlyToggle.IsOn = current.ShowLogoOnly;
         ZoomBar.SelectedItem = ZoomBar.Items[(int)current.ToolbarZoom];
         FontSizeBar.SelectedItem = FontSizeBar.Items[(int)current.ResultFontSize];
         ZoomFontToggle.IsOn = current.ZoomIncludesFontSize;
@@ -91,6 +98,7 @@ public sealed partial class AppearancePage : Page
         _syncing = false;
         ToolbarPreview.Refresh();
         UpdateToolbarStyleCaption();
+        UpdateHideLogoState();
         UpdateSample();
     }
 
@@ -107,6 +115,15 @@ public sealed partial class AppearancePage : Page
         ToolbarStyleCard.Description = ToolbarStyleBar.Items.IndexOf(ToolbarStyleBar.SelectedItem) == (int)ToolbarStyle.Menu
             ? "Actions appear in a list like a context menu; extra actions open from More actions."
             : "Actions appear in a horizontal toolbar.";
+
+    /// <summary>The logo always shows while Show logo only is on (macOS AppearanceView): Hide logo is disabled.</summary>
+    private void UpdateHideLogoState()
+    {
+        HideLogoToggle.IsEnabled = !ShowLogoOnlyToggle.IsOn;
+        HideLogoCard.Description = ShowLogoOnlyToggle.IsOn
+            ? "The logo always shows while Show logo only is on."
+            : "Hide the PopGuy logo to save space on the toolbar.";
+    }
 
     private void OnZoomChanged()
     {

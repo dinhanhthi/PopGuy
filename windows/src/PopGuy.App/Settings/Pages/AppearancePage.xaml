@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Settings → Appearance (macOS SettingsView.swift AppearanceView): a live toolbar preview at the top, then the toolbar
-    style (Bar / Menu), toolbar zoom, Hide logo and the system buttons gap, result font size with a sample, and
-    formatting, as Windows 11 Settings cards under the macOS section headers. WinUI has no segmented picker: a
-    SelectorBar stands in. The preview is the Actions page's layout editor in preview-only mode (macOS reuses
-    ToolbarPreviewView in both); it always shows the bar. The header is the window's.
+    style (Bar / Menu) and Show logo only, toolbar zoom, Hide logo (disabled while Show logo only is on) and the system
+    buttons gap, result font size with a sample, and formatting, as Windows 11 Settings cards under the macOS section
+    headers. WinUI has no segmented picker: a SelectorBar stands in. The preview is the Actions page's layout editor in
+    preview-only mode (macOS reuses ToolbarPreviewView in both); it always shows the bar. The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.AppearancePage"
@@ -38,6 +38,13 @@
                 </SelectorBar>
             </controls:SettingsCard>
 
+            <controls:SettingsCard
+                x:Name="ShowLogoOnlyCard"
+                Description="When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the full toolbar."
+                Header="Show logo only">
+                <ToggleSwitch x:Name="ShowLogoOnlyToggle" AutomationProperties.Name="Show logo only" />
+            </controls:SettingsCard>
+
             <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Toolbar Zoom" />
 
             <controls:SettingsCard
@@ -56,7 +63,8 @@
                 <ToggleSwitch x:Name="ZoomFontToggle" AutomationProperties.Name="Include font size in zoom" />
             </controls:SettingsCard>
 
-            <controls:SettingsCard Description="Hide the PopGuy logo to save space on the toolbar." Header="Hide logo">
+            <!-- The description is set in code: it changes while Show logo only is on. -->
+            <controls:SettingsCard x:Name="HideLogoCard" Header="Hide logo">
                 <ToggleSwitch x:Name="HideLogoToggle" AutomationProperties.Name="Hide logo" />
             </controls:SettingsCard>
 

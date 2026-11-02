@@ -96,7 +96,7 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// The tray icon, its Settings… item, a later launch and the toolbar's Settings button: the one Settings window comes
+    /// The tray icon, its Settings item, a later launch and the toolbar's Settings button: the one Settings window comes
     /// to the front, made first when none is open. UI thread.
     /// </summary>
     private void ShowSettings()
@@ -111,7 +111,7 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// The first-launch wizard, and Setup Guide… (tray, Settings → General): the one wizard comes to the front, made first
+    /// The first-launch wizard, and Setup Guide (tray, Settings → General): the one wizard comes to the front, made first
     /// when none is open. UI thread.
     /// </summary>
     private void ShowOnboarding()
@@ -142,7 +142,7 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// The tray's History…, About PopGuy… and Capture Screen Text… (OCR off): Settings comes to the front on
+    /// The tray's History, About PopGuy and Capture Screen Text… (OCR off): Settings comes to the front on
     /// <paramref name="tag"/>'s page (see <see cref="SettingsWindow.SelectSection"/>). UI thread.
     /// </summary>
     private void ShowSettingsSection(string tag, bool focusOcrSection)

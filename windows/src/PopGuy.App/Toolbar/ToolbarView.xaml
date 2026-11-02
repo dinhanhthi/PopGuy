@@ -69,10 +69,57 @@
         </Rectangle>
 
         <!--
-            Action bar (macOS actionBar): the logo, the inline actions with a divider between each (built in code from
-            the settings), More actions, then the system buttons and Close. The system buttons follow a gap that the
-            gap column widens to the bar's right edge, or sit inline after a divider each (inlineToolbarSystemButtons;
-            the column is then Auto). While a body shows, the bar is at least the body's minimum width (set in code).
+            "Show logo only" (macOS logoControl while collapsed): only the logo, until a click on it opens the bar (or
+            the "Menu" style's menu). The logo sits where the bar's own logo does (8 from the left edge, centred in the
+            bar's 44), so it stays put when the bar grows out of it, either way. The button never takes focus; under the
+            pointer it takes Fluent's subtle fill, with no border (as the menu rows); High Contrast keeps the system's.
+            The padding around it drags the toolbar, like the bar's.
+        -->
+        <Border
+            x:Name="LogoCard"
+            Padding="4,5,4,5"
+            HorizontalAlignment="Left"
+            Visibility="{x:Bind ViewModel.ShowsLogoCard, Mode=OneWay}">
+            <Button
+                x:Name="LogoCardButton"
+                Padding="3"
+                AutomationProperties.Name="Open PopGuy"
+                AllowFocusOnInteraction="False">
+                <Button.Resources>
+                    <ResourceDictionary>
+                        <ResourceDictionary.ThemeDictionaries>
+                            <ResourceDictionary x:Key="Light">
+                                <StaticResource x:Key="ButtonBackground" ResourceKey="SubtleFillColorTransparentBrush" />
+                                <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
+                                <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
+                                <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SubtleFillColorTransparentBrush" />
+                                <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="SubtleFillColorTransparentBrush" />
+                                <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="SubtleFillColorTransparentBrush" />
+                            </ResourceDictionary>
+                            <ResourceDictionary x:Key="Dark">
+                                <StaticResource x:Key="ButtonBackground" ResourceKey="SubtleFillColorTransparentBrush" />
+                                <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
+                                <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
+                                <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SubtleFillColorTransparentBrush" />
+                                <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="SubtleFillColorTransparentBrush" />
+                                <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="SubtleFillColorTransparentBrush" />
+                            </ResourceDictionary>
+                        </ResourceDictionary.ThemeDictionaries>
+                    </ResourceDictionary>
+                </Button.Resources>
+                <Image
+                    Width="26"
+                    Height="26"
+                    Source="ms-appx:///Assets/ToolbarLogo.png" />
+            </Button>
+        </Border>
+
+        <!--
+            Action bar (macOS actionBar): the logo (at the trailing end once the bar grew leftward out of the logo card),
+            the inline actions with a divider between each (built in code from the settings), More actions, then the
+            system buttons and Close. The system buttons follow a gap that the gap column widens to the bar's right edge,
+            or sit inline after a divider each (inlineToolbarSystemButtons; the column is then Auto). While a body shows,
+            the bar is at least the body's minimum width (set in code).
         -->
         <!--
             MinHeight: a labeled button's height (32) plus the padding. The icon-only buttons stretch to the row,
@@ -94,6 +141,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition x:Name="GapColumn" Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" Spacing="4">
                 <Image
@@ -102,7 +150,7 @@
                     Margin="0,0,4,0"
                     VerticalAlignment="Center"
                     Source="ms-appx:///Assets/ToolbarLogo.png"
-                    Visibility="{x:Bind ViewModel.ShowsLogo, Mode=OneWay}" />
+                    Visibility="{x:Bind ViewModel.ShowsLeadingLogo, Mode=OneWay}" />
                 <StackPanel
                     x:Name="ActionRow"
                     Orientation="Horizontal"
@@ -213,6 +261,18 @@
                         Glyph="&#xE711;" />
                 </Button>
             </StackPanel>
+            <!--
+                The logo at the trailing end (macOS expandsLeading): the bar grew leftward out of the logo card, so the logo
+                stays where the card was. Its own column: the system group hides while running without system buttons.
+            -->
+            <Image
+                Grid.Column="3"
+                Width="26"
+                Height="26"
+                Margin="4,0,0,0"
+                VerticalAlignment="Center"
+                Source="ms-appx:///Assets/ToolbarLogo.png"
+                Visibility="{x:Bind ViewModel.ShowsTrailingLogo, Mode=OneWay}" />
         </Grid>
 
         <!--

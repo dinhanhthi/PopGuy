@@ -92,4 +92,55 @@ public sealed class PanelPositioningTests
 
         Assert.Equal(new Point(1400 - Menu.Width, 416), origin);
     }
+
+    // Logo-only mode: a 40 px logo card near the pointer, then the bar or menu opening from it.
+    private static readonly Size Logo = new(40, 40);
+
+    [Fact]
+    public void CollapsedLogoSitsCentredBelowThePointerOrAboveForAnUpDrag()
+    {
+        var pointer = new Point(700, 500);
+
+        var below = PanelPositioning.CollapsedOrigin(Logo, pointer, grewDownward: true, WorkArea);
+        Assert.Equal(new Point(pointer.X - Logo.Width / 2, pointer.Y + 16), below);
+
+        var above = PanelPositioning.CollapsedOrigin(Logo, pointer, grewDownward: false, WorkArea);
+        Assert.Equal(new Point(pointer.X - Logo.Width / 2, pointer.Y - 16 - Logo.Height), above);
+    }
+
+    [Fact]
+    public void CollapsedLogoFlipsAboveAtTheBottomEdgeAndClampsAtASideEdge()
+    {
+        var nearBottom = PanelPositioning.CollapsedOrigin(Logo, new Point(700, 880), grewDownward: true, WorkArea);
+        Assert.Equal(880 - 16 - Logo.Height, nearBottom.Y);
+
+        var nearLeft = PanelPositioning.CollapsedOrigin(Logo, new Point(2, 500), grewDownward: true, WorkArea);
+        Assert.Equal(WorkArea.Left + 4, nearLeft.X);
+    }
+
+    [Fact]
+    public void LogoExpandsRightWhenTheBarFitsElseLeftElseTowardTheRoomierSide()
+    {
+        Assert.False(PanelPositioning.LogoExpandsLeading(new Rectangle(new Point(600, 400), Logo), 320, WorkArea));
+        Assert.True(PanelPositioning.LogoExpandsLeading(new Rectangle(new Point(1380, 400), Logo), 320, WorkArea));
+
+        // Too wide for either side: the side with more room wins.
+        Assert.True(PanelPositioning.LogoExpandsLeading(new Rectangle(new Point(1000, 400), Logo), 1500, WorkArea));
+        Assert.False(PanelPositioning.LogoExpandsLeading(new Rectangle(new Point(300, 400), Logo), 1500, WorkArea));
+    }
+
+    [Fact]
+    public void MenuFromLogoCoversTheLogoAndAlignsToItsFarEdgesNearTheWorkAreaEdges()
+    {
+        var onLogo = PanelPositioning.MenuFromLogoOrigin(Menu, new Rectangle(new Point(600, 400), Logo), WorkArea);
+        Assert.Equal(new Point(600, 400), onLogo);
+
+        var rightEdge = new Rectangle(new Point(1380, 400), Logo);
+        Assert.Equal(new Point(rightEdge.Right - Menu.Width, 400),
+            PanelPositioning.MenuFromLogoOrigin(Menu, rightEdge, WorkArea));
+
+        var bottomEdge = new Rectangle(new Point(600, 800), Logo);
+        Assert.Equal(new Point(600, bottomEdge.Bottom - Menu.Height),
+            PanelPositioning.MenuFromLogoOrigin(Menu, bottomEdge, WorkArea));
+    }
 }

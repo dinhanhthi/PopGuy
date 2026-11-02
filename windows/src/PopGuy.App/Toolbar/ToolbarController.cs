@@ -349,7 +349,9 @@ internal sealed class ToolbarController : IDisposable
         if (!ToolbarLayout.IsEnabled(settings, id)) return;
         if (_window.IsShown && _current is { Blocked: false, Text.Length: > 0 })
         {
-            // The menu turns into the bar first, as for a pick in it (macOS: the hotkey shows its card).
+            // The logo card expands first, to the bar (macOS: a per-action hotkey expands the logo card first); the menu
+            // turns into the bar, as for a pick in it (macOS: the hotkey shows its card).
+            _viewModel.ExpandFromLogo(allowMenu: false);
             _viewModel.LeaveMenu();
             RunAction(id);
             return;
@@ -555,7 +557,10 @@ internal sealed class ToolbarController : IDisposable
             capture.Blocked ? AdminAppMessage : capture.Text,
             IsShowing: _window.IsShown,
             CurrentText: _current?.Text ?? "",
-            ActionInProgress: _session.State is not ToolbarState.IdleState,
+            // A toolbar the user opened from the logo counts as in progress too: a trailing same-text event must not
+            // collapse it again (macOS expandedFromLogo).
+            ActionInProgress: _session.State is not ToolbarState.IdleState
+                || (_window.IsShown && settings.ShowLogoOnly && !_viewModel.IsCollapsed),
             SpeakActive: _session.SpeakPhase != SpeakPhase.Idle,
             CanReplaySpeak: _viewModel.CanReplaySpeak,
             SourceExeName: capture.Source.Exe,
@@ -575,8 +580,9 @@ internal sealed class ToolbarController : IDisposable
         _pasting = false;
         // A new selection: the previous one's speech stops and its "Listen again" goes (macOS update).
         _speak.ClearReplay();
-        // Only a show without an action (a passive selection, the chord, its replacement) may open the "Menu" style; a
-        // per-action hotkey, an assigned double-click, OCR and an error show the bar (macOS).
+        // Only a show without an action (a passive selection, the chord, its replacement) may open the "Menu" style or
+        // start as the "Show logo only" card; a per-action hotkey, an assigned double-click, OCR and an error show the
+        // bar (macOS).
         _viewModel.Present(settings, capture.IsEditable, CanIgnore(capture.Source), capture.Host,
             opensMenu: autoRun is null && !capture.IsOcr && !capture.Blocked);
         // After Present (which clears it), before the show (which sizes the window for the content).

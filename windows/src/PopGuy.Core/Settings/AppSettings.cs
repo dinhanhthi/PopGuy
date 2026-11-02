@@ -128,6 +128,13 @@ public sealed record AppSettings
 
     [JsonPropertyName("toolbarStyle")] public ToolbarStyle ToolbarStyle { get; init; } = ToolbarStyle.Bar;
     [JsonPropertyName("hideToolbarLogo")] public bool HideToolbarLogo { get; init; }
+
+    /// <summary>
+    /// When true, a passive trigger shows only the PopGuy logo near the pointer; a click on it opens the full toolbar
+    /// (macOS <c>showLogoOnly</c>).
+    /// </summary>
+    [JsonPropertyName("showLogoOnly")] public bool ShowLogoOnly { get; init; }
+
     [JsonPropertyName("inlineToolbarSystemButtons")] public bool InlineToolbarSystemButtons { get; init; }
 
     // History (§1.9).

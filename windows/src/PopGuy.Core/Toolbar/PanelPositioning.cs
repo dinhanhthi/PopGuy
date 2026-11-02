@@ -92,6 +92,55 @@ public static class PanelPositioning
         return new Point(Math.Max(Math.Min(x, maxX), minX), Math.Max(Math.Min(y, maxTop), minTop));
     }
 
+    /// <summary>
+    /// The logo-only card's top-left (macOS <c>collapsedPanelOrigin</c>), clamped into <paramref name="workArea"/>:
+    /// centred on the pointer and <see cref="PointerVerticalGap"/> below it, or above it for an up-drag or when below
+    /// would leave the work area. When the card is larger than the work area it keeps the top/left edge.
+    /// </summary>
+    /// <param name="grewDownward">The drag direction (<see cref="GestureAnchor.GrewDownward"/>); below when unknown.</param>
+    public static Point CollapsedOrigin(Size card, Point pointer, bool? grewDownward, Rectangle workArea)
+    {
+        var below = pointer.Y + PointerVerticalGap;
+        var goAbove = grewDownward == false || below + card.Height > workArea.Bottom - PanelEdgeInset;
+        var y = goAbove ? pointer.Y - PointerVerticalGap - card.Height : below;
+        var x = pointer.X - card.Width / 2;
+        return ClampTopLeft(new Point(x, y), card, workArea);
+    }
+
+    /// <summary>
+    /// Whether the bar opened from the logo grows leftward, its right edge on the logo's (macOS
+    /// <c>logoExpandsLeading</c>). Grows right when it fits there, else left when it fits there, else toward the side
+    /// with more room.
+    /// </summary>
+    /// <param name="logo">The logo card's rect on screen.</param>
+    /// <param name="expandedWidth">The full bar's width.</param>
+    public static bool LogoExpandsLeading(Rectangle logo, int expandedWidth, Rectangle workArea)
+    {
+        if (logo.Left + expandedWidth <= workArea.Right - PanelEdgeInset)
+            return false;
+        if (logo.Right - expandedWidth >= workArea.Left + PanelEdgeInset)
+            return true;
+        return logo.Right - workArea.Left > workArea.Right - logo.Left;
+    }
+
+    /// <summary>
+    /// The Menu style's menu top-left when opened from the logo (macOS <c>openMenuFromLogo</c>): the menu covers the
+    /// logo from its top-left, aligning its right or bottom edge to the logo's instead when it would cross that
+    /// work-area edge, then is clamped into <paramref name="workArea"/> (top/left wins when it is too large).
+    /// </summary>
+    /// <param name="logo">The logo card's rect on screen.</param>
+    public static Point MenuFromLogoOrigin(Size menu, Rectangle logo, Rectangle workArea)
+    {
+        var x = logo.Left + menu.Width > workArea.Right - PanelEdgeInset ? logo.Right - menu.Width : logo.Left;
+        var y = logo.Top + menu.Height > workArea.Bottom - PanelEdgeInset ? logo.Bottom - menu.Height : logo.Top;
+        return ClampTopLeft(new Point(x, y), menu, workArea);
+    }
+
+    // Min then Max, so a card larger than the work area keeps its top/left edge.
+    private static Point ClampTopLeft(Point origin, Size size, Rectangle workArea) => new(
+        Math.Max(Math.Min(origin.X, workArea.Right - PanelEdgeInset - size.Width), workArea.Left + PanelEdgeInset),
+        Math.Max(Math.Min(origin.Y, workArea.Bottom - PanelEdgeInset - size.Height), workArea.Top + PanelEdgeInset));
+
     /// <summary>The menu anchor for a pointer: the point padded vertically by <paramref name="gap"/>, zero width.</summary>
     public static Rectangle PointerAnchor(Point pointer, int gap) => new(pointer.X, pointer.Y - gap, 0, 2 * gap);
 }

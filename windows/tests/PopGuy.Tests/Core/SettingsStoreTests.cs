@@ -82,6 +82,19 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void ShowLogoOnlyDefaultsOffAndSavesTheMacOSKey()
+    {
+        var store = new SettingsStore(_paths);
+        Assert.False(store.Current.ShowLogoOnly);
+
+        store.Update(s => s with { ShowLogoOnly = true });
+
+        var saved = JsonNode.Parse(File.ReadAllText(_paths.SettingsFile))!;
+        Assert.True(saved["showLogoOnly"]!.GetValue<bool>());
+        Assert.True(new SettingsStore(_paths).Current.ShowLogoOnly);
+    }
+
+    [Fact]
     public void UnknownKeySurvivesASave()
     {
         WriteSettingsFile("""{ "triggerChord": false, "futureKey": { "nested": [1, 2] } }""");

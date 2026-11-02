@@ -114,6 +114,7 @@ public sealed partial class ToolbarView : UserControl
         IgnoreConfirmButton.Click += OnIgnoreConfirmClick;
         IgnoreCancelButton.Click += OnIgnoreCancelClick;
         ListenAgainButton.Click += OnListenAgainClick;
+        LogoCardButton.Click += OnLogoCardClick;
         Lookup.ListenRequested += OnLookupListen;
         MoreMenu.Opening += OnMoreMenuOpening;
         MoreMenu.Closed += OnMenuClosed;
@@ -125,6 +126,7 @@ public sealed partial class ToolbarView : UserControl
         HoverTooltip.SetText(IgnoreAppButton, "Ignore this app");
         HoverTooltip.SetText(SettingsButton, "Settings");
         HoverTooltip.SetText(CloseButton, "Close");
+        HoverTooltip.SetText(LogoCardButton, "Open PopGuy");
         HoverTooltip.SetText(RegenerateButton, "Regenerate");
         HoverTooltip.SetText(RefineButton, "Refine");
         HoverTooltip.SetText(ListenAgainButton, "Listen again");
@@ -226,6 +228,7 @@ public sealed partial class ToolbarView : UserControl
         IgnoreConfirmButton.Click -= OnIgnoreConfirmClick;
         IgnoreCancelButton.Click -= OnIgnoreCancelClick;
         ListenAgainButton.Click -= OnListenAgainClick;
+        LogoCardButton.Click -= OnLogoCardClick;
         Lookup.ListenRequested -= OnLookupListen;
         Lookup.Detach();
         MoreMenu.Opening -= OnMoreMenuOpening;
@@ -759,6 +762,12 @@ public sealed partial class ToolbarView : UserControl
     private void OnLanguageClick(object sender, RoutedEventArgs e)
     {
         if (!_closed && sender is FrameworkElement { Tag: TargetLanguage language }) ViewModel.SetTargetLanguage(language);
+    }
+
+    /// <summary>The logo card (macOS logoControl): the bar, or the "Menu" style's menu, opens out of it at once.</summary>
+    private void OnLogoCardClick(object sender, RoutedEventArgs e)
+    {
+        if (!_closed) ViewModel.ExpandFromLogo(allowMenu: true);
     }
 
     private void OnSettingsClick(object sender, RoutedEventArgs e)

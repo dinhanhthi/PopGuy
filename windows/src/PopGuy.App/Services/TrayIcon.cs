@@ -6,11 +6,11 @@ namespace PopGuy.Services;
 
 /// <summary>
 /// The tray icon and its menu (spec-3 §5.9, the macOS status item, in its order): Disable/Enable PopGuy, Show on Text
-/// Selection, Show on Double-Click, Capture Screen Text…, Settings…, History…, About PopGuy…, Setup Guide…, Check for
-/// Updates… and Quit PopGuy, with Update to vX… first while an update is ready; rebuilt each time it opens. The macOS
-/// Accessibility items have no Windows counterpart. Capture Screen Text… is always enabled (macOS): with Screen Text
-/// Capture off it opens Settings › Triggers at the OCR section instead of capturing. The icon is the app's colour logo
-/// (PopGuy.ico), on a light or dark taskbar alike, and dims while PopGuy is disabled. A left click opens Settings.
+/// Selection, Show on Double-Click, Show Logo Only, Capture Screen Text…, Settings, History, About PopGuy, Setup Guide,
+/// Check for Updates and Quit PopGuy, with Update to vX… first while an update is ready; rebuilt each time it opens. The
+/// macOS Accessibility items have no Windows counterpart. Capture Screen Text… is always enabled (macOS): with Screen
+/// Text Capture off it opens Settings › Triggers at the OCR section instead of capturing. The icon is the app's colour
+/// logo (PopGuy.ico), on a light or dark taskbar alike, and dims while PopGuy is disabled. A left click opens Settings.
 /// <para>
 /// Toggles save through <see cref="SettingsStore.Update"/>, whose <see cref="SettingsStore.Changed"/> also re-applies
 /// the triggers (ToolbarController). Create, use and dispose on the UI thread.
@@ -99,16 +99,20 @@ internal sealed class TrayIcon : IDisposable
             new("Show on Double-Click",
                 () => Toggle("triggerDoubleClick", s => s with { TriggerDoubleClickEnabled = !s.TriggerDoubleClickEnabled }),
                 Enabled: enabled, Checked: current.TriggerDoubleClickEnabled),
+            // An appearance toggle, not a trigger: enabled while the master switch is off (macOS).
+            new("Show Logo Only",
+                () => Toggle("showLogoOnly", s => s with { ShowLogoOnly = !s.ShowLogoOnly }),
+                Checked: current.ShowLogoOnly),
             // Queued like the others: a capture makes windows, which must not happen inside the icon's window procedure.
             new("Capture Screen Text…", () => _dispatcher.TryEnqueue(CaptureScreenText)),
             NotifyIconMenuItem.Separator,
-            new("Settings…", () => _dispatcher.TryEnqueue(() => _openSettings())),
-            new("History…", () => _dispatcher.TryEnqueue(() => _openSettingsSection("History", false))),
-            new("About PopGuy…", () => _dispatcher.TryEnqueue(() => _openSettingsSection("About", false))),
-            new("Setup Guide…", () => _dispatcher.TryEnqueue(() => _openSetupGuide())),
+            new("Settings", () => _dispatcher.TryEnqueue(() => _openSettings())),
+            new("History", () => _dispatcher.TryEnqueue(() => _openSettingsSection("History", false))),
+            new("About PopGuy", () => _dispatcher.TryEnqueue(() => _openSettingsSection("About", false))),
+            new("Setup Guide", () => _dispatcher.TryEnqueue(() => _openSetupGuide())),
             NotifyIconMenuItem.Separator,
             // On About, where the result shows (macOS: Sparkle's window for a check the user starts).
-            new("Check for Updates…", () => _dispatcher.TryEnqueue(() =>
+            new("Check for Updates", () => _dispatcher.TryEnqueue(() =>
             {
                 _openSettingsSection("About", false);
                 _updates.CheckNow();

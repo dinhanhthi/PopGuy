@@ -90,6 +90,7 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         nameof(ShowsIgnoreDivider), nameof(ShowsSettingsButton),
         nameof(ShowsSettingsDivider), nameof(ShowsSystemGap), nameof(ShowsSystemGroup), nameof(Zoom),
         nameof(ResultFontSize), nameof(ResultLineHeight), nameof(TargetLanguage), nameof(ShowsMenu), nameof(ShowsBar),
+        nameof(IsCollapsed), nameof(ExpandsLeading), nameof(ShowsLogoCard), nameof(ShowsLeadingLogo), nameof(ShowsTrailingLogo),
     ];
 
     /// <summary>
@@ -116,6 +117,9 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     private IReadOnlyList<ToolbarActionItem> _overflow = [];
     private bool _showsLogo = true;
     private bool _showsMenu;
+    private bool _menuOnExpand;
+    private bool _isCollapsed;
+    private bool _expandsLeading;
     private bool _showsIgnoreSite;
     private bool _showsIgnoreApp;
     private bool _canIgnoreApp;
@@ -201,6 +205,13 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// </summary>
     public event Action? MenuPicked;
 
+    /// <summary>
+    /// The logo card turned into the bar or the menu (<see cref="ExpandFromLogo"/>: a click on it or a per-action
+    /// hotkey), after <see cref="IsCollapsed"/> and <see cref="ShowsMenu"/> were raised and before any action runs: the
+    /// window re-places the card out of the logo (lay the view out first, as <c>ShowAt</c> does, to read its size).
+    /// </summary>
+    public event Action? LogoExpanded;
+
     /// <summary>"Listen again" was clicked (macOS replaySpeak: the cached audio, no new request, no history).</summary>
     public event Action? ReplayRequested;
 
@@ -227,8 +238,29 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// </summary>
     public bool ShowsMenu => _showsMenu;
 
-    /// <summary>The action bar shows (every time but while <see cref="ShowsMenu"/>).</summary>
-    public bool ShowsBar => !_showsMenu;
+    /// <summary>The action bar shows (every time but while <see cref="ShowsMenu"/> or <see cref="IsCollapsed"/>).</summary>
+    public bool ShowsBar => !_showsMenu && !_isCollapsed;
+
+    /// <summary>
+    /// "Show logo only" (macOS isCollapsed): only the logo card shows, until a click on it or a per-action hotkey
+    /// expands it (<see cref="ExpandFromLogo"/>). Set by <see cref="Present"/>.
+    /// </summary>
+    public bool IsCollapsed => _isCollapsed;
+
+    /// <summary>
+    /// The bar expanded leftward out of the logo card (macOS expandsLeading): the logo sits at the bar's trailing end,
+    /// where the card was. Set by the window (<see cref="SetExpandsLeading"/>).
+    /// </summary>
+    public bool ExpandsLeading => _expandsLeading;
+
+    /// <summary>The logo card shows (only while <see cref="IsCollapsed"/>).</summary>
+    public bool ShowsLogoCard => _isCollapsed;
+
+    /// <summary>The bar's logo at its leading end (the usual place).</summary>
+    public bool ShowsLeadingLogo => _showsLogo && !_expandsLeading;
+
+    /// <summary>The bar's logo at its trailing end (<see cref="ExpandsLeading"/>).</summary>
+    public bool ShowsTrailingLogo => _showsLogo && _expandsLeading;
 
     /// <summary>"Ignore this site": the selection is in a browser tab whose host was read (macOS sourceDomain != nil)
     /// and ShowToolbarIgnoreSiteButton is on.</summary>
@@ -497,15 +529,20 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         RefineDraft = "";
         _actions = Items(settings, ToolbarLayout.PrincipalOrdered(settings));
         _overflow = Items(settings, ToolbarLayout.OverflowOrdered(settings));
-        _showsLogo = !settings.HideToolbarLogo;
+        // The logo always shows in "Show logo only" mode: the toolbar expands from it (macOS).
+        _showsLogo = !settings.HideToolbarLogo || settings.ShowLogoOnly;
         _showsIgnoreSite = sourceHost is not null && settings.ShowToolbarIgnoreSiteButton;
         _showsIgnoreApp = settings.IgnoredAppsEnabled && settings.ShowToolbarIgnoreAppButton;
         _canIgnoreApp = canIgnoreApp;
         _showsSettingsButton = settings.ShowToolbarSettingsButton;
         _inlineSystemButtons = settings.InlineToolbarSystemButtons;
-        // A menu with no rows at all falls back to the bar (macOS menuHasRows).
-        _showsMenu = opensMenu && settings.ToolbarStyle == ToolbarStyle.Menu
+        // A menu with no rows at all falls back to the bar (macOS menuHasRows). With "Show logo only" the logo card shows
+        // first; its click opens the menu (macOS: logo-only wins at present time).
+        _menuOnExpand = settings.ToolbarStyle == ToolbarStyle.Menu
             && (_actions.Count > 0 || HasOverflow || _showsIgnoreSite || _showsIgnoreApp || _showsSettingsButton);
+        _showsMenu = opensMenu && !settings.ShowLogoOnly && _menuOnExpand;
+        _isCollapsed = opensMenu && settings.ShowLogoOnly;
+        _expandsLeading = false;
         _zoom = ZoomScale(settings.ToolbarZoom);
         _resultFontSize = settings.ResultFontSize;
         _zoomIncludesFontSize = settings.ZoomIncludesFontSize;
@@ -548,11 +585,13 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         foreach (var name in OcrThumbnailProperties) Raise(name);
     }
 
-    /// <summary>Cancels any run and returns to idle (every hide calls it); the menu goes too (macOS reset).</summary>
+    /// <summary>Cancels any run and returns to idle (every hide calls it); the menu and the logo card go too (macOS reset).</summary>
     public void Stop()
     {
         _session.Stop();
         SetShowsMenu(false);
+        SetCollapsed(false);
+        SetExpandsLeading(false);
         ClearOcrThumbnail();
         PromptDraft = "";
         RefineDraft = "";
@@ -636,6 +675,30 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         if (!_showsMenu) return;
         SetShowsMenu(false);
         MenuPicked?.Invoke();
+    }
+
+    /// <summary>
+    /// The logo card turns into the bar, or into the menu in the "Menu" style when <paramref name="allowMenu"/> (the logo
+    /// click; a per-action hotkey passes false) (macOS expandFromLogo), then <see cref="LogoExpanded"/>; nothing when the
+    /// card is not shown. No I/O: the click switches at once.
+    /// </summary>
+    public void ExpandFromLogo(bool allowMenu)
+    {
+        if (!_isCollapsed) return;
+        // The menu first: every ShowsBar raise then reads its final value (the bar never flashes before the menu).
+        if (allowMenu && _menuOnExpand) SetShowsMenu(true);
+        SetCollapsed(false);
+        LogoExpanded?.Invoke();
+    }
+
+    /// <summary>The bar grows leftward out of the logo card (<see cref="ExpandsLeading"/>); the window decides it.</summary>
+    public void SetExpandsLeading(bool leading)
+    {
+        if (_expandsLeading == leading) return;
+        _expandsLeading = leading;
+        Raise(nameof(ExpandsLeading));
+        Raise(nameof(ShowsLeadingLogo));
+        Raise(nameof(ShowsTrailingLogo));
     }
 
     public void RequestStop() => StopRequested?.Invoke();
@@ -781,6 +844,15 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
         if (_showsMenu == shows) return;
         _showsMenu = shows;
         Raise(nameof(ShowsMenu));
+        Raise(nameof(ShowsBar));
+    }
+
+    private void SetCollapsed(bool collapsed)
+    {
+        if (_isCollapsed == collapsed) return;
+        _isCollapsed = collapsed;
+        Raise(nameof(IsCollapsed));
+        Raise(nameof(ShowsLogoCard));
         Raise(nameof(ShowsBar));
     }
 

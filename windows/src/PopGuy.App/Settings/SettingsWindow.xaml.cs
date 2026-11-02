@@ -120,7 +120,7 @@ public sealed partial class SettingsWindow : Window
 
     /// <summary>
     /// Picks the sidebar item <paramref name="tag"/> (a <see cref="Pages"/> key) as a click would (macOS
-    /// SettingsNavigator.section): the tray's History…, About PopGuy… and Capture Screen Text… while OCR is off. With
+    /// SettingsNavigator.section): the tray's History, About PopGuy and Capture Screen Text… while OCR is off. With
     /// <paramref name="focusOcrSection"/>, Triggers then scrolls to its OCR section (macOS focusOCRSection).
     /// </summary>
     internal void SelectSection(string tag, bool focusOcrSection = false)
