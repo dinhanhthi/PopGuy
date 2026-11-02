@@ -5,7 +5,8 @@
 //
 // The pure math function `panelOrigin(panelSize:near:within:cursor:)` operates
 // only over CGRect/CGSize/CGPoint — no AppKit types — so it is nonisolated and
-// can be called from unit tests without an @MainActor context.
+// can be called from unit tests without an @MainActor context. The logo-only mode
+// helpers `collapsedPanelOrigin` and `logoExpandsLeading` are pure math too.
 //
 // The @MainActor helper `visibleFrameForSelection(_:)` wraps NSScreen (AppKit)
 // and must be called from the main actor.
@@ -141,6 +142,71 @@ func panelOrigin(
     }
 
     return CGPoint(x: clampedX, y: clampedY)
+}
+
+// MARK: - Logo-only mode
+
+/// Computes the bottom-left origin for the collapsed (logo-only) panel, so the
+/// visible logo card lands right next to the mouse pointer.
+///
+/// Coordinate system: AppKit screen coordinates (Y up, origin bottom-left).
+///
+/// The panel carries transparent padding around the card: `cardTopInset` above,
+/// `cardBottomInset` below, and symmetric horizontal padding (so the card is
+/// horizontally centred in the panel). The card is centred on `mouse.x` with its
+/// top `pointerVerticalGap` below the pointer; for an up-drag
+/// (`grewDownward == false`) or when the card would not fit below, its bottom
+/// sits `pointerVerticalGap` above the pointer instead. The whole panel is then
+/// clamped inside `screenFrame` (minus `panelEdgeInset`), preferring the top/left
+/// edge when the panel is larger than the screen.
+///
+/// Pure: CoreGraphics value types only; main-actor isolated (target default).
+func collapsedPanelOrigin(
+    panelSize: CGSize,
+    cardTopInset: CGFloat,
+    cardBottomInset: CGFloat,
+    mouse: CGPoint,
+    grewDownward: Bool?,
+    within screenFrame: CGRect
+) -> CGPoint {
+    let cardHeight = panelSize.height - cardTopInset - cardBottomInset
+    let cardBottomBelow = mouse.y - pointerVerticalGap - cardHeight
+    let placeAbove = grewDownward == false || cardBottomBelow < screenFrame.minY + panelEdgeInset
+    let cardBottom = placeAbove ? mouse.y + pointerVerticalGap : cardBottomBelow
+
+    let minX = screenFrame.minX + panelEdgeInset
+    let maxX = screenFrame.maxX - panelSize.width - panelEdgeInset
+    let minY = screenFrame.minY + panelEdgeInset
+    let maxY = screenFrame.maxY - panelSize.height - panelEdgeInset
+    let x = mouse.x - panelSize.width / 2
+    let y = cardBottom - cardBottomInset
+    return CGPoint(
+        x: maxX >= minX ? min(max(x, minX), maxX) : minX,
+        y: maxY >= minY ? min(max(y, minY), maxY) : maxY
+    )
+}
+
+/// Decides which way the full toolbar expands out of the logo card.
+///
+/// Returns false (expand rightward, the logo's left edge stays fixed) when the
+/// expanded card fits to the right; else true (expand leftward, the logo's right
+/// edge stays fixed) when it fits to the left. When it fits neither side, returns
+/// true only when there is more room left of the logo than right of it; the
+/// panel clamp handles the overflow.
+///
+/// Pure: CoreGraphics value types only; main-actor isolated (target default).
+func logoExpandsLeading(
+    logoCardFrame: CGRect,
+    expandedCardWidth: CGFloat,
+    within screenFrame: CGRect
+) -> Bool {
+    if logoCardFrame.minX + expandedCardWidth <= screenFrame.maxX - panelEdgeInset {
+        return false
+    }
+    if logoCardFrame.maxX - expandedCardWidth >= screenFrame.minX + panelEdgeInset {
+        return true
+    }
+    return logoCardFrame.maxX - screenFrame.minX > screenFrame.maxX - logoCardFrame.minX
 }
 
 // MARK: - Screen lookup

@@ -327,6 +327,16 @@ final class ToolbarViewModel: ObservableObject {
     /// Whether the PopGuy logo is shown at the start of the action bar.
     @Published var showsLogo: Bool = true
 
+    /// "Show logo only" mode: true while only the logo card is on screen. Set by
+    /// ToolbarController on each presentation from SettingsStore.showLogoOnly;
+    /// cleared when the user clicks the logo (or an action/OCR needs the full bar).
+    @Published var isCollapsed = false
+
+    /// True when the full toolbar expands leftward out of the logo card: the logo
+    /// renders at the trailing end of the bar and the panel keeps its right edge
+    /// fixed for the rest of the presentation. Decided by ToolbarController.
+    @Published var expandsLeading = false
+
     /// Whether the "Ignore this app" button is shown. Set by ToolbarController
     /// (and ToolbarPreviewView) on each presentation from SettingsStore.ignoredAppsEnabled
     /// && SettingsStore.showToolbarIgnoreAppButton.
@@ -472,6 +482,11 @@ final class ToolbarViewModel: ObservableObject {
     /// then closes the toolbar like a built-in side-effect action.
     /// Set by `ToolbarController`; nil-safe when unset (e.g. in tests).
     var onRequestDismiss: (() -> Void)?
+
+    /// Asks the controller to expand the full toolbar out of the logo card.
+    /// Called by the collapsed logo button. Set by `ToolbarController`; nil-safe
+    /// when unset (e.g. in previews and tests).
+    var onExpandFromLogo: (() -> Void)?
 
     // MARK: Speak seam
 
@@ -1196,6 +1211,8 @@ final class ToolbarViewModel: ObservableObject {
         clearRefineState()
         sourceDomain = nil
         ocrPreviewImage = nil
+        isCollapsed = false
+        expandsLeading = false
         speakCoordinator?.clearReplay()
     }
 

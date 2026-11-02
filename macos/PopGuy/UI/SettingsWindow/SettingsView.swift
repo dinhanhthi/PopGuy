@@ -1308,6 +1308,7 @@ struct VoiceTestButton: View {
 /// Settings tab for visual preferences of the floating toolbar.
 ///
 /// Sections:
+///   • Toolbar Style: "Show logo only" (a trigger shows just the logo; click to expand).
 ///   • Toolbar Zoom: global scale for chrome and optionally the result font.
 ///   • Result text: font size of the result body (small / normal / big).
 private struct AppearanceView: View {
@@ -1324,9 +1325,27 @@ private struct AppearanceView: View {
     @State private var zoomIncludesFontSize: Bool = true
     @State private var hideLogo: Bool = false
     @State private var inlineSystemButtons: Bool = false
+    @State private var showLogoOnly: Bool = false
 
     var body: some View {
         Form {
+            Section(header: Text("Toolbar Style")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Show logo only", isOn: $showLogoOnly)
+                        .onChange(of: showLogoOnly) { newValue in
+                            settings.showLogoOnly = newValue
+                        }
+                        // Also toggled from the menu bar while this tab is open.
+                        .onChange(of: settings.showLogoOnly) { newValue in
+                            showLogoOnly = newValue
+                        }
+
+                    Text("When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the full toolbar.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section(header: Text("Toolbar Zoom")) {
                 // A setting and its description live in one cell so no divider
                 // splits them; the grouped Form still draws a divider between
@@ -1363,8 +1382,12 @@ private struct AppearanceView: View {
                         .onChange(of: hideLogo) { newValue in
                             settings.hideToolbarLogo = newValue
                         }
+                        // The toolbar expands from the logo in "Show logo only" mode.
+                        .disabled(showLogoOnly)
 
-                    Text("Hide the PopGuy logo to save space on the toolbar.")
+                    Text(showLogoOnly
+                         ? "The logo always shows while Show logo only is on."
+                         : "Hide the PopGuy logo to save space on the toolbar.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1434,6 +1457,7 @@ private struct AppearanceView: View {
             zoomIncludesFontSize = settings.zoomIncludesFontSize
             hideLogo = settings.hideToolbarLogo
             inlineSystemButtons = settings.inlineToolbarSystemButtons
+            showLogoOnly = settings.showLogoOnly
         }
     }
 }

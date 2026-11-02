@@ -87,6 +87,20 @@ final class ToolbarController {
     /// re-clamp the panel without recomputing screen geometry.
     private var currentScreenFrame: CGRect?
 
+    /// True while the panel still has the logo card's size ("Show logo only").
+    /// The panel keeps it after hide(), so the next full presentation must not
+    /// position itself from `panel.frame.size`.
+    private var panelHoldsCollapsedSize = false
+
+    /// Set when expandFromLogo pre-sizes the panel; until the expanded layout
+    /// reports in, a stale logo-card-sized report must not shrink the panel back.
+    private var awaitingExpandedLayout = false
+
+    /// The hosting view is pinned top-leading, or top-trailing after a leftward
+    /// expansion from the logo card, so the logo stays put while the panel grows.
+    private var hostingLeadingConstraint: NSLayoutConstraint?
+    private var hostingTrailingConstraint: NSLayoutConstraint?
+
     // MARK: - Dimensions
 
     /// Initial panel frame. SwiftUI's fixedSize() drives actual sizing.
@@ -181,9 +195,12 @@ final class ToolbarController {
         container.wantsLayer = true
         container.layer?.backgroundColor = .clear
         container.addSubview(hostingView)
+        let leading = hostingView.leadingAnchor.constraint(equalTo: container.leadingAnchor)
+        hostingLeadingConstraint = leading
+        hostingTrailingConstraint = hostingView.trailingAnchor.constraint(equalTo: container.trailingAnchor)
         NSLayoutConstraint.activate([
             hostingView.topAnchor.constraint(equalTo: container.topAnchor),
-            hostingView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            leading,
         ])
         panel.contentView = container
 
@@ -200,6 +217,12 @@ final class ToolbarController {
         // dismiss the toolbar once they finish — nothing is left to interact with.
         viewModel.onRequestDismiss = { [weak self] in
             self?.hide()
+        }
+
+        // "Show logo only" mode: a click on the logo card expands the full toolbar
+        // out of the logo. Pure state + layout work, so the click reacts at once.
+        viewModel.onExpandFromLogo = { [weak self] in
+            self?.expandFromLogo(animated: true)
         }
     }
 
@@ -319,7 +342,9 @@ final class ToolbarController {
     private func showThenDispatch(_ event: SelectionEvent, id: ActionIdentifier, customActions: [CustomAction]) {
         // Route through handleEvent so enabled-flags, targetLanguage, customActions
         // are all populated consistently with the normal pipeline path.
-        handleEvent(event)
+        // A per-action hotkey skips the logo card ("Show logo only" mode): the full
+        // toolbar shows at its normal position and runs the action.
+        handleEvent(event, startsCollapsed: false)
         // handleEvent shows the panel and populates viewModel; if no actions are
         // enabled it returns early without showing, so guard here.
         guard isShowing, !viewModel.capturedText.isEmpty else { return }
@@ -346,7 +371,8 @@ final class ToolbarController {
             mouseReleasePoint: appKitAnchor,
             selectionGrewDownward: nil
         )
-        handleEvent(event)
+        // OCR always shows the full toolbar, even in "Show logo only" mode.
+        handleEvent(event, startsCollapsed: false)
         // handleEvent (via viewModel.update) clears any stale OCR preview first;
         // only set it here, after the panel has actually surfaced, so a
         // no-actions-enabled early-return in handleEvent never leaves a preview
@@ -373,6 +399,9 @@ final class ToolbarController {
     /// bound to a now-disabled built-in still fires it whenever the toolbar is
     /// shown (because some OTHER action is enabled). Custom actions re-check isEnabled.
     private func dispatchAction(for id: ActionIdentifier, customActions: [CustomAction]) {
+        // A per-action hotkey always shows the full toolbar: if only the logo card
+        // is showing ("Show logo only" mode), it expands first.
+        expandFromLogo(animated: false)
         switch id {
         case .builtin(.improve):
             guard settings.improveEnabled else { return }
@@ -451,7 +480,9 @@ final class ToolbarController {
 
     // MARK: - Event handling
 
-    private func handleEvent(_ event: SelectionEvent) {
+    /// - Parameter startsCollapsed: false for explicit triggers that must show the
+    ///   full toolbar (per-action hotkeys, OCR) even in "Show logo only" mode.
+    private func handleEvent(_ event: SelectionEvent, startsCollapsed: Bool = true) {
         guard !event.text.isEmpty else { return }
 
         // Presentation guard: once the toolbar is showing AND an action has been
@@ -468,9 +499,12 @@ final class ToolbarController {
         // event — e.g. the mouse-up from clicking the Speak button — must NOT
         // re-present the toolbar, which would stop playback and reposition the panel.
         let speakInProgress = viewModel.speakPhase != .idle || viewModel.canReplaySpeak
+        // In "Show logo only" mode, a toolbar the user already expanded also counts
+        // as in progress: the mouse-up from the logo click must not re-collapse it.
+        let expandedFromLogo = settings.showLogoOnly && isShowing && !viewModel.isCollapsed
         if shouldIgnoreReentrantSelection(
             isShowing: isShowing,
-            actionInProgress: viewModel.actionState != .idle || speakInProgress,
+            actionInProgress: viewModel.actionState != .idle || speakInProgress || expandedFromLogo,
             newText: event.text,
             currentText: viewModel.capturedText
         ) {
@@ -583,7 +617,10 @@ final class ToolbarController {
                 return true
             }
         }
-        viewModel.showsLogo = !settings.hideToolbarLogo
+        // The logo always shows in "Show logo only" mode: the toolbar expands from it.
+        viewModel.showsLogo = !settings.hideToolbarLogo || settings.showLogoOnly
+        viewModel.isCollapsed = settings.showLogoOnly && startsCollapsed
+        viewModel.expandsLeading = false
         viewModel.showsIgnoreAppButton = settings.ignoredAppsEnabled && settings.showToolbarIgnoreAppButton
         viewModel.showsIgnoreSiteButton = settings.showToolbarIgnoreSiteButton
         viewModel.showsSettingsButton = settings.showToolbarSettingsButton
@@ -600,6 +637,12 @@ final class ToolbarController {
 
     /// Position the panel near the selection and make it visible.
     func show(for event: SelectionEvent) {
+        pinHostingView(toTrailing: false)
+        if viewModel.isCollapsed {
+            showCollapsed(for: event)
+            return
+        }
+
         // Derive a screen rect in AppKit coordinates.
         // AX/Quartz coordinates use Y=0 at the top-left of the MAIN screen,
         // increasing downward; AppKit uses Y=0 at the bottom of the main
@@ -618,9 +661,21 @@ final class ToolbarController {
         }
 
         // Panel size after SwiftUI layout — use intrinsic content size if known.
-        let panelSize = panel.frame.size == .zero
+        // After a logo card the panel still has the card's size: measure the full
+        // toolbar instead, or panelOrigin would centre a logo-sized panel.
+        var panelSize = panel.frame.size == .zero
             ? ToolbarController.initialPanelSize
             : panel.frame.size
+        if panelHoldsCollapsedSize {
+            let measured = expandedPanelSize()
+            if measured.width > 0, measured.height > 0 {
+                panelSize = measured
+                panel.setContentSize(measured)
+                panelHoldsCollapsedSize = false
+                // Drop a stale logo-card-sized report until the full layout arrives.
+                awaitingExpandedLayout = true
+            }
+        }
 
         // Find the best screen for this selection.
         let screenFrame = visibleFrameForSelection(appKitRect)
@@ -648,12 +703,130 @@ final class ToolbarController {
         // A new selection resets manual-move state so auto-positioning applies.
         panel.resetMoveTracking()
         panel.setFrameOriginProgrammatically(origin)
+        orderFrontIfHidden()
+    }
 
+    /// "Show logo only" mode: place the logo card right next to the mouse pointer.
+    /// The size comes from the toolbar metrics, not `panel.frame.size`, which
+    /// still holds the last (expanded) presentation's size.
+    private func showCollapsed(for event: SelectionEvent) {
+        let zoom = settings.toolbarZoom.scale
+        let panelSize = ToolbarView.collapsedPanelSize(zoom: zoom)
+        let mouse = event.mouseReleasePoint ?? NSEvent.mouseLocation
+        let screenFrame = visibleFrameForSelection(CGRect(origin: mouse, size: .zero))
+        currentScreenFrame = screenFrame
+
+        let origin = collapsedPanelOrigin(
+            panelSize: panelSize,
+            cardTopInset: ToolbarView.outerTopPadding * zoom,
+            cardBottomInset: ToolbarView.outerBottomPadding * zoom,
+            mouse: mouse,
+            grewDownward: event.selectionGrewDownward,
+            within: screenFrame
+        )
+
+        ToolbarController.positionLog.debug("pos (logo only): mouse=\(NSStringFromPoint(mouse)) grewDownward=\(String(describing: event.selectionGrewDownward)) origin=\(NSStringFromPoint(origin))")
+
+        panel.resetMoveTracking()
+        panel.setContentSize(panelSize)
+        panelHoldsCollapsedSize = true
+        panel.setFrameOriginProgrammatically(origin)
+        orderFrontIfHidden()
+    }
+
+    /// Pins the hosting view to the container's leading (default) or trailing edge.
+    private func pinHostingView(toTrailing: Bool) {
+        guard let leading = hostingLeadingConstraint,
+              let trailing = hostingTrailingConstraint,
+              leading.isActive == toTrailing else { return }
+        leading.isActive = !toTrailing
+        trailing.isActive = toTrailing
+    }
+
+    private func orderFrontIfHidden() {
         if !isShowing {
             isShowing = true
             panel.orderFront(nil)
             installEventMonitors()
         }
+    }
+
+    /// Expands the full toolbar out of the logo card. No-op unless collapsed.
+    ///
+    /// Picks the expand side first: rightward (logo's left edge fixed) when the
+    /// expanded bar fits right of the logo, else leftward (logo moves to the
+    /// trailing end, the panel keeps its right edge fixed). The expanded card
+    /// width is measured synchronously by laying out an offscreen hosting view of
+    /// the same toolbar forced expanded; pure layout work on the main thread.
+    private func expandFromLogo(animated: Bool) {
+        guard viewModel.isCollapsed else { return }
+
+        let zoom = settings.toolbarZoom.scale
+        let logoCardFrame = CGRect(
+            x: panel.frame.minX + ToolbarView.outerHorizontalPadding * zoom,
+            y: panel.frame.minY + ToolbarView.outerBottomPadding * zoom,
+            width: panel.frame.width - 2 * ToolbarView.outerHorizontalPadding * zoom,
+            height: panel.frame.height - (ToolbarView.outerTopPadding + ToolbarView.outerBottomPadding) * zoom
+        )
+        let screenFrame = currentScreenFrame ?? visibleFrameForSelection(panel.frame)
+        let expandedSize = expandedPanelSize()
+        let expandedWidth = max(0, expandedSize.width - 2 * ToolbarView.outerHorizontalPadding * zoom)
+        viewModel.expandsLeading = expandedWidth > 0
+            ? logoExpandsLeading(logoCardFrame: logoCardFrame, expandedCardWidth: expandedWidth, within: screenFrame)
+            : logoCardFrame.midX > screenFrame.midX
+
+        // Size the panel for the expanded bar before the content switches, so no
+        // frame clips the growing card (the panel otherwise resizes a runloop tick
+        // after layout). Leftward: keep the right edge and pin the content
+        // trailing, so the logo card stays exactly where it is meanwhile.
+        if expandedWidth > 0 {
+            pinHostingView(toTrailing: viewModel.expandsLeading)
+            let oldFrame = panel.frame
+            let newSize = CGSize(width: expandedSize.width, height: max(expandedSize.height, oldFrame.height))
+            panel.setContentSize(newSize)
+            panel.setFrameOriginProgrammatically(CGPoint(
+                x: viewModel.expandsLeading ? oldFrame.maxX - newSize.width : oldFrame.minX,
+                y: oldFrame.maxY - newSize.height
+            ))
+            panelHoldsCollapsedSize = false
+            awaitingExpandedLayout = true
+            // A bar that fits on neither side of the logo is clamped on-screen here:
+            // reposition(forContentSize:) skips the matching expanded layout report.
+            let clamped = clampOnScreen(panel.frame, within: screenFrame)
+            if clamped != panel.frame.origin {
+                panel.setFrameOriginProgrammatically(clamped)
+            }
+        }
+
+        guard animated else {
+            viewModel.isCollapsed = false
+            return
+        }
+        let animation: Animation = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            ? .easeOut(duration: 0.15)
+            : .spring(response: 0.32, dampingFraction: 0.82)
+        withAnimation(animation) {
+            viewModel.isCollapsed = false
+        }
+    }
+
+    /// Size of the panel for the expanded toolbar (outer padding included),
+    /// measured from an offscreen hosting view of the toolbar forced expanded.
+    /// Zero when unmeasurable.
+    private func expandedPanelSize() -> CGSize {
+        let measuringView = NSHostingView(rootView: ToolbarView(
+            viewModel: viewModel,
+            outputHandler: outputHandler,
+            onContentResize: { _ in },
+            onOpenSettings: {},
+            onIgnoreApp: {},
+            onIgnoreDomain: {},
+            onDismiss: {},
+            onDisableCloseConfirmation: {},
+            onActivatePromptInput: {},
+            forceExpanded: true
+        ))
+        return measuringView.fittingSize
     }
 
     /// Called by the SwiftUI content (via onContentResize) whenever its measured
@@ -662,7 +835,9 @@ final class ToolbarController {
     ///
     /// Positioning policy (per product decision):
     ///   • Anchor the top-left: keep the panel's visual top edge fixed as it grows
-    ///     downward, so the action bar doesn't jump.
+    ///     downward, so the action bar doesn't jump. After a leftward expansion
+    ///     from the logo card (`viewModel.expandsLeading`), anchor the top-right
+    ///     instead, so the logo stays put.
     ///   • Only nudge the origin inward if the resized panel would spill off-screen.
     ///   • If the user has manually dragged the panel, never auto-reposition —
     ///     only clamp back on-screen when a resize would push it off-edge.
@@ -673,16 +848,24 @@ final class ToolbarController {
         // Skip when nothing changed — the hosting view reports its size on every
         // layout pass, and resizing the panel triggers another layout, so without
         // this guard the two would ping-pong.
+        if awaitingExpandedLayout {
+            let card = ToolbarView.collapsedPanelSize(zoom: settings.toolbarZoom.scale)
+            if abs(contentSize.width - card.width) < 0.5, abs(contentSize.height - card.height) < 0.5 {
+                return
+            }
+            awaitingExpandedLayout = false
+        }
         guard contentSize != panel.frame.size else { return }
 
         let oldFrame = panel.frame
         // Anchor the top edge: in AppKit (Y-up), the top is frame.maxY. Growing
         // the height must extend downward, so the new origin.y drops by the delta.
         let newOrigin = CGPoint(
-            x: oldFrame.origin.x,
+            x: viewModel.expandsLeading ? oldFrame.maxX - contentSize.width : oldFrame.origin.x,
             y: oldFrame.maxY - contentSize.height
         )
         panel.setContentSize(contentSize)
+        if !viewModel.isCollapsed { panelHoldsCollapsedSize = false }
         panel.setFrameOriginProgrammatically(newOrigin)
 
         // Clamp on-screen. Use the cached screen frame (the selection's display).
@@ -716,6 +899,7 @@ final class ToolbarController {
         panel.orderOut(nil)
         panel.resetMoveTracking()
         currentScreenFrame = nil
+        awaitingExpandedLayout = false
         removeEventMonitors()
         // I-E: cancel any in-flight stream before resetting view state.
         actionHandler?.cancel()

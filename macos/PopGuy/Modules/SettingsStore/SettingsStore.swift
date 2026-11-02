@@ -150,6 +150,7 @@ final class SettingsStore: ObservableObject {
         static let triggerOnSelectEditableOnly = "settings.triggerOnSelectEditableOnly"
         static let triggerDoubleClick         = "settings.triggerDoubleClick"
         static let hideToolbarLogo            = "settings.hideToolbarLogo"
+        static let showLogoOnly               = "settings.showLogoOnly"
         static let inlineToolbarSystemButtons = "settings.inlineToolbarSystemButtons"
         static let doubleClickAssignedAction  = "settings.doubleClickAssignedAction"
         static let triggerChord               = "settings.triggerChord"
@@ -460,6 +461,12 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(hideToolbarLogo, forKey: Keys.hideToolbarLogo) }
     }
 
+    /// When true, a trigger shows only the PopGuy logo near the pointer;
+    /// clicking it expands the full toolbar (default: false).
+    @Published var showLogoOnly: Bool {
+        didSet { defaults.set(showLogoOnly, forKey: Keys.showLogoOnly) }
+    }
+
     /// Places the system buttons (Ignore this site/app, Settings) right after the
     /// action buttons, separated by dividers like any other action, instead of
     /// after a gap (default: false — keep the gap).
@@ -681,6 +688,7 @@ final class SettingsStore: ObservableObject {
         triggerOnSelectEditableOnly = defaults.object(forKey: Keys.triggerOnSelectEditableOnly) as? Bool ?? false
         triggerDoubleClickEnabled = defaults.object(forKey: Keys.triggerDoubleClick) as? Bool ?? false
         hideToolbarLogo = defaults.object(forKey: Keys.hideToolbarLogo) as? Bool ?? false
+        showLogoOnly = defaults.object(forKey: Keys.showLogoOnly) as? Bool ?? false
         inlineToolbarSystemButtons = defaults.object(forKey: Keys.inlineToolbarSystemButtons) as? Bool ?? false
         doubleClickAssignedAction = Self.load(ActionIdentifier.self, key: Keys.doubleClickAssignedAction, from: defaults)
         triggerChordEnabled      = defaults.object(forKey: Keys.triggerChord)    as? Bool ?? true

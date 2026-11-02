@@ -241,6 +241,30 @@ struct SettingsStoreTests {
         #expect(store2.preserveFormatting == true)
     }
 
+    // MARK: - showLogoOnly
+
+    @Test("showLogoOnly defaults to false on a fresh suite")
+    func showLogoOnlyDefaultsFalse() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store = SettingsStore(defaults: suite)
+        #expect(store.showLogoOnly == false)
+    }
+
+    @Test("showLogoOnly round-trips through UserDefaults")
+    func showLogoOnlyRoundTrip() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store1 = SettingsStore(defaults: suite)
+        store1.showLogoOnly = true
+
+        // Re-load from the same suite — simulates app restart.
+        let store2 = SettingsStore(defaults: suite)
+        #expect(store2.showLogoOnly == true)
+    }
+
     // MARK: - globalPrompt
 
     @Test("globalPrompt defaults to empty on a fresh suite")

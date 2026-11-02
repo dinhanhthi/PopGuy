@@ -612,6 +612,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         doubleClickItem.isEnabled = popGuyEnabled
         menu.addItem(doubleClickItem)
 
+        // Show Logo Only — appearance toggle (not a trigger), so it stays enabled
+        // while the master switch is off.
+        let logoOnlyItem = NSMenuItem(
+            title: "Show Logo Only",
+            action: #selector(toggleShowLogoOnly),
+            keyEquivalent: ""
+        )
+        logoOnlyItem.state = settingsStore.showLogoOnly ? .on : .off
+        logoOnlyItem.image = NSImage(systemSymbolName: "circle.dashed", accessibilityDescription: nil)
+        menu.addItem(logoOnlyItem)
+
         // Capture Screen Text (OCR) — opt-in trigger. Users who have not opted
         // in yet are routed to Settings → Triggers to enable it (and grant
         // Screen Recording permission); once opted in, it directly starts a
@@ -707,6 +718,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     @objc private func toggleTriggerDoubleClick() {
         settingsStore.triggerDoubleClickEnabled.toggle()
+    }
+
+    @objc private func toggleShowLogoOnly() {
+        settingsStore.showLogoOnly.toggle()
     }
 
     /// Starts an OCR screen-region capture, or routes to Settings → Triggers

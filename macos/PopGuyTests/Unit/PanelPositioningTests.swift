@@ -370,3 +370,62 @@ struct PanelPositioningTests {
         #expect(panelFrame.maxY <= screenFrame.maxY + 1)
     }
 }
+
+@Suite("PanelPositioning — logo-only collapsed card")
+@MainActor
+struct CollapsedPanelPositioningTests {
+
+    let screenFrame = CGRect(x: 0, y: 0, width: 1440, height: 900)
+    // Panel = 40×40 logo card + transparent padding (12 each side, 8 top, 24 bottom).
+    let panelSize = CGSize(width: 64, height: 72)
+    let cardTopInset: CGFloat = 8
+    let cardBottomInset: CGFloat = 24
+
+    @Test("collapsed card sits centred just below the pointer")
+    func collapsedBelowPointerCentred() {
+        let mouse = CGPoint(x: 700, y: 500)
+        let origin = collapsedPanelOrigin(panelSize: panelSize, cardTopInset: cardTopInset,
+                                          cardBottomInset: cardBottomInset, mouse: mouse,
+                                          grewDownward: true, within: screenFrame)
+
+        #expect(origin.x == mouse.x - panelSize.width / 2)
+        // Card top (panel top minus the top inset) is pointerVerticalGap below the pointer.
+        let cardTop = origin.y + panelSize.height - cardTopInset
+        #expect(cardTop == mouse.y - pointerVerticalGap)
+    }
+
+    @Test("collapsed card flips above the pointer for an up-drag")
+    func collapsedFlipsAboveForUpDrag() {
+        let mouse = CGPoint(x: 700, y: 500)
+        let origin = collapsedPanelOrigin(panelSize: panelSize, cardTopInset: cardTopInset,
+                                          cardBottomInset: cardBottomInset, mouse: mouse,
+                                          grewDownward: false, within: screenFrame)
+
+        let cardBottom = origin.y + cardBottomInset
+        #expect(cardBottom == mouse.y + pointerVerticalGap)
+    }
+
+    @Test("collapsed panel is clamped inside the screen at the left edge")
+    func collapsedClampsAtLeftEdge() {
+        let mouse = CGPoint(x: 2, y: 500)
+        let origin = collapsedPanelOrigin(panelSize: panelSize, cardTopInset: cardTopInset,
+                                          cardBottomInset: cardBottomInset, mouse: mouse,
+                                          grewDownward: true, within: screenFrame)
+
+        #expect(origin.x == screenFrame.minX + panelEdgeInset)
+    }
+
+    @Test("logo expands rightward when the bar fits to its right")
+    func logoExpandsTrailingWhenItFits() {
+        let logo = CGRect(x: 600, y: 400, width: 40, height: 40)
+        #expect(logoExpandsLeading(logoCardFrame: logo, expandedCardWidth: 320,
+                                   within: screenFrame) == false)
+    }
+
+    @Test("logo expands leftward when it sits near the right screen edge")
+    func logoExpandsLeadingNearRightEdge() {
+        let logo = CGRect(x: screenFrame.maxX - 60, y: 400, width: 40, height: 40)
+        #expect(logoExpandsLeading(logoCardFrame: logo, expandedCardWidth: 320,
+                                   within: screenFrame) == true)
+    }
+}

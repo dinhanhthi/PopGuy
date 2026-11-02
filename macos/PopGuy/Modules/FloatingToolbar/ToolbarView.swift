@@ -97,9 +97,12 @@ private struct ToolbarMetrics {
 /// shared micro-animation so all controls respond identically.
 private struct ToolbarControlStyle: ButtonStyle {
     let controlRadius: CGFloat
+    /// False draws no hover/pressed wash (the decorative logo once expanded):
+    /// a view that stops being hit-testable may never get its hover exit.
+    var highlights: Bool = true
 
     func makeBody(configuration: Configuration) -> some View {
-        StyledBody(configuration: configuration, controlRadius: controlRadius)
+        StyledBody(configuration: configuration, controlRadius: controlRadius, highlights: highlights)
     }
 
     /// `@State` must live in a real View (a ButtonStyle is not installed in
@@ -107,10 +110,11 @@ private struct ToolbarControlStyle: ButtonStyle {
     private struct StyledBody: View {
         let configuration: Configuration
         let controlRadius: CGFloat
+        let highlights: Bool
         @State private var isHovered = false
 
         var body: some View {
-            let opacity: Double = configuration.isPressed
+            let opacity: Double = !highlights ? 0 : configuration.isPressed
                 ? ToolbarMetrics.pressedOpacity
                 : (isHovered ? ToolbarMetrics.hoverOpacity : 0)
 
@@ -162,6 +166,12 @@ struct ToolbarView: View {
     /// input area opens.
     let onActivatePromptInput: () -> Void
 
+    /// Renders the bar as expanded even while `viewModel.isCollapsed` is true.
+    /// Used only by ToolbarController's offscreen width measurement.
+    var forceExpanded: Bool = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// Tracks whether a paste-back is in-flight; disables the button while true.
     @State private var isPastingBack = false
 
@@ -182,6 +192,29 @@ struct ToolbarView: View {
     /// onChange (not a PreferenceKey) because preference updates do not fire under
     /// the panel's intrinsic-sizing hosting view.
     @State private var actionBarWidth: CGFloat = 0
+
+    // MARK: - Outer padding
+
+    /// Transparent space around the card (unzoomed points; multiply by the zoom).
+    /// Shared with ToolbarController so the collapsed panel size and the logo
+    /// card's screen frame match the layout in `body`.
+    static let outerTopPadding: CGFloat = 8
+    static let outerHorizontalPadding: CGFloat = 12
+    static let outerBottomPadding: CGFloat = 24
+
+    /// Panel size while only the logo card shows ("Show logo only" mode): the
+    /// logo control plus the card padding, plus the outer paddings.
+    static func collapsedPanelSize(zoom: CGFloat) -> CGSize {
+        let metrics = ToolbarMetrics(zoom: zoom)
+        let card = metrics.controlHeight + 2 * metrics.cardPadding
+        return CGSize(
+            width: card + 2 * outerHorizontalPadding * zoom,
+            height: card + (outerTopPadding + outerBottomPadding) * zoom
+        )
+    }
+
+    /// True while only the logo card shows.
+    private var isCollapsed: Bool { viewModel.isCollapsed && !forceExpanded }
 
     // MARK: - Zoom helpers
 
@@ -221,9 +254,9 @@ struct ToolbarView: View {
         // Transparent space around the content: sides/top give the card shadow
         // room to draw (the panel itself has no window shadow). Tooltips draw in
         // their own child panel, so they never depend on this inset.
-        .padding(.top, z(8))
-        .padding(.horizontal, z(12))
-        .padding(.bottom, z(24))
+        .padding(.top, z(Self.outerTopPadding))
+        .padding(.horizontal, z(Self.outerHorizontalPadding))
+        .padding(.bottom, z(Self.outerBottomPadding))
         .fixedSize()
         // Measure the laid-out size and forward it to the controller. A single
         // background GeometryReader + PreferenceKey works on macOS 13
@@ -357,93 +390,23 @@ struct ToolbarView: View {
 
     private var actionBar: some View {
         HStack(spacing: metrics.groupSpacing) {
-            // Brand mark — decorative, spans the full control height so
-            // it reads at the same visual weight as the action buttons.
-            if viewModel.showsLogo {
-                Image("ToolbarLogo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: metrics.controlHeight, height: metrics.controlHeight)
-                    .accessibilityHidden(true)
+            // Brand mark at the leading end, or at the trailing end when the bar
+            // expands leftward out of the logo card.
+            if showsLogoControl && !viewModel.expandsLeading {
+                logoControl
             }
 
-            // Ordered action buttons — one divider between consecutive actions;
-            // none before the first. Bookends (logo, utilities) are outside this loop.
-            ForEach(Array(viewModel.orderedActions.enumerated()), id: \.element) { index, id in
-                if index > 0 {
-                    toolbarDivider
+            // Everything but the logo is hidden while collapsed and grows out of
+            // the logo when the bar expands.
+            if !isCollapsed {
+                Group {
+                    barControls
                 }
-                actionControl(for: id)
-                    .background(actionFrameReporter(for: id))
-                    .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: index == 0))
+                .transition(expandTransition)
             }
 
-            if viewModel.hasOverflow {
-                if !viewModel.orderedActions.isEmpty {
-                    toolbarDivider
-                }
-                burgerButton
-                    .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: viewModel.orderedActions.isEmpty))
-            }
-
-            // Push the utility group (Ignore this site/app, Settings) to the
-            // trailing edge, leaving a clear gap between it and the action
-            // buttons. The gap exists only when at least one system button
-            // follows; with none the bar ends right after the last action. Under
-            // the root `.fixedSize()` this Spacer only has slack to expand when
-            // the action bar is floored to `minResultWidth` below; otherwise it
-            // stays at its minimum so the bar hugs its buttons. With
-            // `inlineSystemButtons` there is no gap: each system button follows
-            // the actions like another action, after a divider.
-            if viewModel.hasSystemButtons && !viewModel.inlineSystemButtons {
-                Spacer(minLength: z(16))
-            }
-
-            if viewModel.showsIgnoreSite {
-                if viewModel.inlineSystemButtons && hasActionControls {
-                    toolbarDivider
-                }
-                ToolbarUtilityButton(
-                    systemName: "nosign",
-                    tooltip: "Ignore this site",
-                    controlHeight: metrics.controlHeight,
-                    controlRadius: metrics.controlRadius,
-                    zoom: zoom,
-                    action: onIgnoreDomain
-                )
-                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls))
-            }
-
-            if viewModel.showsIgnoreAppButton {
-                if viewModel.inlineSystemButtons && (hasActionControls || viewModel.showsIgnoreSite) {
-                    toolbarDivider
-                }
-                ToolbarUtilityButton(
-                    systemName: "eye.slash",
-                    tooltip: "Ignore this app",
-                    controlHeight: metrics.controlHeight,
-                    controlRadius: metrics.controlRadius,
-                    zoom: zoom,
-                    action: { isShowingIgnoreConfirmation = true }
-                )
-                .opacity(viewModel.sourceBundleID == nil ? 0.4 : 1.0)
-                .disabled(viewModel.sourceBundleID == nil)
-                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && !viewModel.showsIgnoreSite))
-            }
-
-            if viewModel.showsSettingsButton {
-                if viewModel.inlineSystemButtons && (hasActionControls || viewModel.showsIgnoreSite || viewModel.showsIgnoreAppButton) {
-                    toolbarDivider
-                }
-                ToolbarUtilityButton(
-                    systemName: "gear",
-                    tooltip: "Settings",
-                    controlHeight: metrics.controlHeight,
-                    controlRadius: metrics.controlRadius,
-                    zoom: zoom,
-                    action: onOpenSettings
-                )
-                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && !viewModel.showsIgnoreSite && !viewModel.showsIgnoreAppButton))
+            if showsLogoControl && viewModel.expandsLeading {
+                logoControl
             }
         }
         .padding(metrics.cardPadding)
@@ -469,6 +432,124 @@ struct ToolbarView: View {
         )
     }
 
+    /// Whether the logo control is in the bar: always while collapsed (it is the
+    /// whole card), otherwise per the "Hide logo" setting.
+    private var showsLogoControl: Bool { viewModel.showsLogo || isCollapsed }
+
+    /// The brand mark. Always a Button so its identity survives the expand (it
+    /// stays put instead of fading); it takes clicks, hover and the tooltip only
+    /// while collapsed, where a click expands the full toolbar. Expanded, it is
+    /// decorative and spans the full control height so it reads at the same
+    /// visual weight as the action buttons.
+    private var logoControl: some View {
+        Button {
+            viewModel.onExpandFromLogo?()
+        } label: {
+            Image("ToolbarLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: metrics.controlHeight, height: metrics.controlHeight)
+        }
+        .buttonStyle(ToolbarControlStyle(controlRadius: metrics.controlRadius, highlights: isCollapsed))
+        .toolbarTooltip("Open PopGuy", controlRadius: metrics.controlRadius)
+        .environment(\.toolbarTooltipAlignment, .bottomLeading)
+        .allowsHitTesting(isCollapsed)
+        .accessibilityLabel("Open PopGuy")
+        .accessibilityHidden(!isCollapsed)
+        // Switching between the leading and trailing slot never animates.
+        .transition(.identity)
+    }
+
+    /// Insertion transition for the bar controls as they grow out of the logo.
+    private var expandTransition: AnyTransition {
+        reduceMotion
+            ? .opacity
+            : .opacity.combined(with: .scale(scale: 0.85, anchor: viewModel.expandsLeading ? .trailing : .leading))
+    }
+
+    /// Every action-bar control except the logo.
+    @ViewBuilder
+    private var barControls: some View {
+        // Ordered action buttons — one divider between consecutive actions;
+        // none before the first. Bookends (logo, utilities) are outside this loop.
+        ForEach(Array(viewModel.orderedActions.enumerated()), id: \.element) { index, id in
+            if index > 0 {
+                toolbarDivider
+            }
+            actionControl(for: id)
+                .background(actionFrameReporter(for: id))
+                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: index == 0))
+        }
+
+        if viewModel.hasOverflow {
+            if !viewModel.orderedActions.isEmpty {
+                toolbarDivider
+            }
+            burgerButton
+                .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: viewModel.orderedActions.isEmpty))
+        }
+
+        // Push the utility group (Ignore this site/app, Settings) to the
+        // trailing edge, leaving a clear gap between it and the action
+        // buttons. The gap exists only when at least one system button
+        // follows; with none the bar ends right after the last action. Under
+        // the root `.fixedSize()` this Spacer only has slack to expand when
+        // the action bar is floored to `minResultWidth` below; otherwise it
+        // stays at its minimum so the bar hugs its buttons. With
+        // `inlineSystemButtons` there is no gap: each system button follows
+        // the actions like another action, after a divider.
+        if viewModel.hasSystemButtons && !viewModel.inlineSystemButtons {
+            Spacer(minLength: z(16))
+        }
+
+        if viewModel.showsIgnoreSite {
+            if viewModel.inlineSystemButtons && hasActionControls {
+                toolbarDivider
+            }
+            ToolbarUtilityButton(
+                systemName: "nosign",
+                tooltip: "Ignore this site",
+                controlHeight: metrics.controlHeight,
+                controlRadius: metrics.controlRadius,
+                zoom: zoom,
+                action: onIgnoreDomain
+            )
+            .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls))
+        }
+
+        if viewModel.showsIgnoreAppButton {
+            if viewModel.inlineSystemButtons && (hasActionControls || viewModel.showsIgnoreSite) {
+                toolbarDivider
+            }
+            ToolbarUtilityButton(
+                systemName: "eye.slash",
+                tooltip: "Ignore this app",
+                controlHeight: metrics.controlHeight,
+                controlRadius: metrics.controlRadius,
+                zoom: zoom,
+                action: { isShowingIgnoreConfirmation = true }
+            )
+            .opacity(viewModel.sourceBundleID == nil ? 0.4 : 1.0)
+            .disabled(viewModel.sourceBundleID == nil)
+            .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && !viewModel.showsIgnoreSite))
+        }
+
+        if viewModel.showsSettingsButton {
+            if viewModel.inlineSystemButtons && (hasActionControls || viewModel.showsIgnoreSite || viewModel.showsIgnoreAppButton) {
+                toolbarDivider
+            }
+            ToolbarUtilityButton(
+                systemName: "gear",
+                tooltip: "Settings",
+                controlHeight: metrics.controlHeight,
+                controlRadius: metrics.controlRadius,
+                zoom: zoom,
+                action: onOpenSettings
+            )
+            .environment(\.toolbarTooltipAlignment, tooltipAlignment(isFirst: !hasActionControls && !viewModel.showsIgnoreSite && !viewModel.showsIgnoreAppButton))
+        }
+    }
+
     /// Whether any action button or the overflow menu precedes the utility group.
     private var hasActionControls: Bool {
         !viewModel.orderedActions.isEmpty || viewModel.hasOverflow
@@ -477,8 +558,9 @@ struct ToolbarView: View {
     /// Tooltip alignment for an action-bar control. The control at the bar's
     /// leading edge (nothing before it) left-aligns its tooltip, so a wider
     /// tooltip reads from the button rather than hanging off the bar's left side.
+    /// A trailing logo (leftward expansion) leaves the first action leading.
     private func tooltipAlignment(isFirst: Bool) -> Alignment {
-        isFirst && !viewModel.showsLogo ? .bottomLeading : .bottomTrailing
+        isFirst && (!viewModel.showsLogo || viewModel.expandsLeading) ? .bottomLeading : .bottomTrailing
     }
 
     /// Renders the appropriate control for a given action identifier.
