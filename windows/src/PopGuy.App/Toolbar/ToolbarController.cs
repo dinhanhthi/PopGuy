@@ -257,12 +257,53 @@ internal sealed class ToolbarController : IDisposable
             await foreach (var key in _input.Keys.ReadAllAsync(token).ConfigureAwait(false))
             {
                 _chord.Handle(key);
-                if (!(_shown && ToolbarWindowStyle.IsToolbarOrOwnedForeground(_toolbarHwnd))) _pipeline.Handle(key);
+                if (_shown && ToolbarWindowStyle.IsToolbarOrOwnedForeground(_toolbarHwnd)) continue;
+                _pipeline.Handle(key);
+                if (_shown) OnSourceAppKey(key);
             }
         }
         catch (OperationCanceledException)
         {
         }
+    }
+
+    /// <summary>Bumped by every source-app key press that re-checks the selection: an older check is dropped.</summary>
+    private long _selectionClearedCheck;
+
+    /// <summary>
+    /// A key press in the source app while the toolbar shows (the toolbar never takes the focus, so keys go there and its
+    /// own Esc handler never sees them). Esc closes it like an outside click; the app still gets the key. Any other key
+    /// re-checks the selection once the app has handled it (80 ms, like the pipeline's debounce; key repeats check once),
+    /// while the toolbar only offers its actions: when UI Automation reports no selection any more, the toolbar hides. A
+    /// new selection made by the key re-shows it through the pipeline instead; an inconclusive read keeps it. Key loop.
+    /// </summary>
+    private void OnSourceAppKey(KeyEvent key)
+    {
+        if (key.IsKeyUp || key.IsPopGuyMarker) return;
+        if (key.VirtualKey == 0x1B) // VK_ESCAPE
+        {
+            _dispatcher.TryEnqueue(RequestDismissKeepingDraft);
+            return;
+        }
+        var monaco = ForegroundApp.Snapshot().Exe is { } exe && SelectionGesture.UsesClipboardFallback(exe);
+        if (!SelectionGesture.ShouldCheckSelectionClearedOnKey(key.VirtualKey, _pipeline.HeldModifiers(), monaco)) return;
+        var check = Interlocked.Increment(ref _selectionClearedCheck);
+        _dispatcher.TryEnqueue(() =>
+        {
+            // The selection the toolbar shows for: a newer presentation (or a hide) makes this check stale.
+            var shownFor = _current;
+            if (!_shown || shownFor is null || shownFor.IsOcr || !_viewModel.IsAwaitingAction) return;
+            Watch(Task.Run(async () =>
+            {
+                await Task.Delay(80).ConfigureAwait(false);
+                if (check != Interlocked.Read(ref _selectionClearedCheck)) return;
+                if (UiaSelectionReader.Probe() != UiaProbeResult.Absent) return;
+                _dispatcher.TryEnqueue(() =>
+                {
+                    if (_shown && ReferenceEquals(_current, shownFor) && _viewModel.IsAwaitingAction) Hide();
+                });
+            }), "selection cleared");
+        });
     }
 
     /// <summary>

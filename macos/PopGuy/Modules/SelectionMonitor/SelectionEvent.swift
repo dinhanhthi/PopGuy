@@ -125,6 +125,31 @@ func shouldAttemptClipboardFallback(
     fromMouseUp && mouseReleasePoint != nil && usesClipboardFallback
 }
 
+// MARK: - Keyboard selection gestures
+
+/// Key codes of the navigation keys that select text with Shift held: the
+/// arrows, Home, End, Page Up and Page Down.
+nonisolated private let selectionNavigationKeyCodes: Set<UInt16> = [115, 116, 119, 121, 123, 124, 125, 126]
+
+/// Whether `keyCode` is an arrow, Home, End, Page Up or Page Down. Pure/testable.
+nonisolated func isSelectionNavigationKey(keyCode: UInt16) -> Bool {
+    selectionNavigationKeyCodes.contains(keyCode)
+}
+
+/// Whether a key press makes or extends a text selection: Shift with a
+/// navigation key (Option or Command optional, for words and lines), or
+/// Command+A. Control never counts (Control+Shift+arrows belong to the system).
+/// `characters` is the key's characters ignoring modifiers, so Command+A is
+/// recognized on any keyboard layout. Pure/testable — the Windows port's
+/// `SelectionGesture.IsKeyboardSelection` is the twin.
+nonisolated func isKeyboardSelectionKey(keyCode: UInt16, characters: String?, flags: NSEvent.ModifierFlags) -> Bool {
+    let modifiers = flags.intersection([.shift, .control, .option, .command])
+    if isSelectionNavigationKey(keyCode: keyCode) {
+        return modifiers.contains(.shift) && !modifiers.contains(.control)
+    }
+    return modifiers == .command && characters?.lowercased() == "a"
+}
+
 // MARK: - Event type
 
 /// A fully-resolved selection event: text, source element, and screen position.
@@ -248,6 +273,13 @@ final class SelectionPipeline {
     private var mouseDownMonitor: Any?
     private var lastMouseDownLocation: CGPoint = .zero
 
+    // Keyboard selection: a selection key (Shift+arrow, Command+A, …) schedules a
+    // capture on its own, like every mouse-up does, so a keyboard-only selection
+    // never depends on kAXSelectedTextChangedNotification (registered once per app
+    // activation on the focused element, and often not delivered after focus moves
+    // inside the app or in Chromium/Electron apps).
+    private var keyDownMonitor: Any?
+
     // Minimum pointer travel (points) to count as a deliberate drag vs. a bare click.
     private static let dragThreshold: CGFloat = 3
 
@@ -299,6 +331,22 @@ final class SelectionPipeline {
             }
         }
 
+        // Observe global key presses (other apps only) for keyboard selections.
+        // Routed through handleSignal, so the drag deferral, the 80 ms debounce
+        // (key repeats capture once) and fromMouseUp: false all apply: a keyboard
+        // selection never gets the synthetic ⌘C fallback.
+        keyDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard isKeyboardSelectionKey(
+                keyCode: event.keyCode,
+                characters: event.charactersIgnoringModifiers,
+                flags: event.modifierFlags
+            ) else { return }
+            Task { @MainActor [weak self] in
+                guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier else { return }
+                self?.handleSignal(SelectionChangedSignal(pid: pid))
+            }
+        }
+
         monitor.start()
     }
 
@@ -315,6 +363,10 @@ final class SelectionPipeline {
         if let token = mouseUpMonitor {
             NSEvent.removeMonitor(token)
             mouseUpMonitor = nil
+        }
+        if let token = keyDownMonitor {
+            NSEvent.removeMonitor(token)
+            keyDownMonitor = nil
         }
         pendingPid = nil
         pendingIsDoubleClick = false

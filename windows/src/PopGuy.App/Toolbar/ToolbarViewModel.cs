@@ -504,6 +504,14 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
     /// <summary>The refine input's text, as typed.</summary>
     public string RefineDraft { get; set; } = "";
 
+    /// <summary>
+    /// The toolbar only offers its actions (macOS isAwaitingAction): nothing run, spoken, typed or confirmed yet. Only
+    /// then does a selection cleared from the keyboard close it; a result stays up.
+    /// </summary>
+    public bool IsAwaitingAction =>
+        _failMessage is null && _state is ToolbarState.IdleState && _speakPhase == SpeakPhase.Idle && !_canReplaySpeak
+        && !_promptInputActive && !_confirmingIgnore;
+
     /// <summary>A non-empty prompt or refine draft is open: an outside click or Esc keeps the toolbar (macOS).</summary>
     public bool HasOpenDraft =>
         (IsPromptInputActive && PromptDraft.Trim().Length > 0) || (IsRefineInputActive && RefineDraft.Trim().Length > 0);

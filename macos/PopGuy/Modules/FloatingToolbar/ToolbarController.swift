@@ -37,6 +37,24 @@ func shouldShowOnTextSelect(isEditable: Bool, editableOnly: Bool) -> Bool {
     !editableOnly || isEditable
 }
 
+/// Returns true when a key press in the source app should re-check whether the
+/// selection is still there (and close the toolbar if it is gone).
+/// `selectionHiddenFromProbe` is true when the cheap AX probe may report the
+/// selection as absent while it is there (Monaco editors, whose large selections
+/// AX hides, or a probe that did not see the selection when the toolbar showed,
+/// e.g. Apple Books): then a shortcut that keeps the selection (⌘C) or a Shift
+/// selection key would close the toolbar, so those keys are skipped. Pure/testable.
+nonisolated func shouldCheckSelectionClearedOnKey(
+    keyCode: UInt16,
+    characters: String?,
+    flags: NSEvent.ModifierFlags,
+    selectionHiddenFromProbe: Bool
+) -> Bool {
+    guard selectionHiddenFromProbe else { return true }
+    if flags.contains(.command) { return false }
+    return !isKeyboardSelectionKey(keyCode: keyCode, characters: characters, flags: flags)
+}
+
 @MainActor
 final class ToolbarController {
 
@@ -81,6 +99,15 @@ final class ToolbarController {
     // NSEvent monitor tokens — removed on hide() to avoid leaking handlers.
     private var globalMouseMonitor: Any?
     private var localKeyMonitor: Any?
+    private var globalKeyMonitor: Any?
+
+    /// The pending "is the selection still there?" check after a key press in the
+    /// source app. Cancelled by the next key press and by hide().
+    private var selectionClearedCheck: Task<Void, Never>?
+
+    /// True when the AX probe saw the selection as the toolbar showed: only then
+    /// is a later "absent" trusted for every key (see `shouldCheckSelectionClearedOnKey`).
+    private var selectionProbeConfirmed = false
 
     /// Visible frame of the display that best contains the current selection.
     /// Cached at show() so content-size changes (reposition(forContentSize:)) can
@@ -681,6 +708,15 @@ final class ToolbarController {
         // A menu with no rows at all falls back to the bar.
         viewModel.showsMenu = settings.toolbarStyle == .menu && startsCollapsed
             && !settings.showLogoOnly && menuHasRows
+
+        // One cheap AX read: whether a later "no selection" probe can be trusted
+        // to mean the user cleared it from the keyboard.
+        if let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
+           case .present = captureEngine.probeSelection(from: pid) {
+            selectionProbeConfirmed = true
+        } else {
+            selectionProbeConfirmed = false
+        }
 
         // If already showing, reposition; otherwise show fresh.
         show(for: event)
@@ -1305,6 +1341,64 @@ final class ToolbarController {
             }
             return event
         }
+
+        // Global monitor: key presses in the source app (the panel is
+        // non-activating, so keys normally go there and the local monitor above
+        // never sees them). Escape closes like an outside click; any other key may
+        // have cleared the selection, which closes the toolbar too. The source app
+        // still gets the key: a global monitor cannot consume it.
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let keyCode = event.keyCode
+            let characters = event.charactersIgnoringModifiers
+            let flags = event.modifierFlags
+            Task { @MainActor [weak self] in
+                self?.handleSourceAppKeyDown(keyCode: keyCode, characters: characters, flags: flags)
+            }
+        }
+    }
+
+    /// True while the toolbar only offers its actions: nothing dispatched, spoken,
+    /// typed or confirmed yet, and not an OCR capture (no source selection). Only
+    /// then does a cleared selection close the toolbar — a result stays up.
+    private var isAwaitingAction: Bool {
+        viewModel.actionState == .idle
+            && viewModel.speakPhase == .idle
+            && !viewModel.canReplaySpeak
+            && !viewModel.isPromptInputActive
+            && !viewModel.isRefineInputActive
+            && !viewModel.isShowingCloseConfirmation
+            && viewModel.ocrPreviewImage == nil
+    }
+
+    /// A key press in another app while the toolbar shows. Escape requests a
+    /// dismiss (same rules as an outside click). Any other key re-checks the
+    /// selection once the app has handled it (80 ms, like the pipeline's
+    /// debounce; key repeats check once): when AX reports no selection any more,
+    /// the toolbar hides. A new selection made by the key re-shows the toolbar
+    /// through the pipeline instead; an inconclusive read keeps it.
+    private func handleSourceAppKeyDown(keyCode: UInt16, characters: String?, flags: NSEvent.ModifierFlags) {
+        guard isShowing else { return }
+        if keyCode == 53 { // Escape
+            handleDismissRequest()
+            return
+        }
+        guard isAwaitingAction,
+              let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
+              shouldCheckSelectionClearedOnKey(
+                  keyCode: keyCode,
+                  characters: characters,
+                  flags: flags,
+                  selectionHiddenFromProbe: !selectionProbeConfirmed
+                      || TextCaptureEngine.usesClipboardFallback(pid: pid)
+              ) else { return }
+        selectionClearedCheck?.cancel()
+        selectionClearedCheck = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            guard !Task.isCancelled, let self, self.isShowing, self.isAwaitingAction else { return }
+            if case .absent = self.captureEngine.probeSelection(from: pid) {
+                self.hide()
+            }
+        }
     }
 
     private func removeEventMonitors() {
@@ -1316,6 +1410,12 @@ final class ToolbarController {
             NSEvent.removeMonitor(token)
             localKeyMonitor = nil
         }
+        if let token = globalKeyMonitor {
+            NSEvent.removeMonitor(token)
+            globalKeyMonitor = nil
+        }
+        selectionClearedCheck?.cancel()
+        selectionClearedCheck = nil
     }
 }
 

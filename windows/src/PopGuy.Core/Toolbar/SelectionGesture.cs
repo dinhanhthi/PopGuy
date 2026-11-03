@@ -124,6 +124,22 @@ public static class SelectionGesture
             _ => false,
         };
     }
+
+    /// <summary>
+    /// Whether a key press in the source app (Esc aside) should re-check that the selection is still there, to close
+    /// the toolbar when it is gone (macOS <c>shouldCheckSelectionClearedOnKey</c>). A modifier alone never does. In a
+    /// Monaco editor (<paramref name="usesClipboardFallback"/>), whose large selections UI Automation reports as empty, a
+    /// Ctrl shortcut that keeps the selection (Ctrl+C) or a selection key would close a toolbar shown for one: those
+    /// keys are skipped there. <paramref name="virtualKey"/> is 0 for a key the hook does not name (typing).
+    /// </summary>
+    public static bool ShouldCheckSelectionClearedOnKey(uint virtualKey, ShortcutModifiers modifiers, bool usesClipboardFallback)
+    {
+        // VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN, VK_RWIN, VK_LSHIFT … VK_RMENU.
+        if (virtualKey is 0x10 or 0x11 or 0x12 or 0x5B or 0x5C or (>= 0xA0 and <= 0xA5)) return false;
+        if (!usesClipboardFallback) return true;
+        if ((modifiers & ShortcutModifiers.Control) != 0) return false;
+        return !IsKeyboardSelection(virtualKey, modifiers);
+    }
 }
 
 /// <summary>

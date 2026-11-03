@@ -140,6 +140,19 @@ public sealed class TriggerLogicTests
         Assert.Equal(selects, SelectionGesture.IsKeyboardSelection(virtualKey, modifiers));
 
     [Theory]
+    [InlineData(0x27u, ShortcutModifiers.None, false, true)] // Right: the caret moves, the selection may be gone
+    [InlineData(0u, ShortcutModifiers.None, false, true)] // typing (the hook names no key)
+    [InlineData(0x43u, ShortcutModifiers.Control, false, true)] // Ctrl+C outside Monaco: UI Automation still sees it
+    [InlineData(0xA0u, ShortcutModifiers.Shift, false, false)] // Left Shift alone
+    [InlineData(0x11u, ShortcutModifiers.Control, true, false)] // Ctrl alone
+    [InlineData(0x43u, ShortcutModifiers.Control, true, false)] // Ctrl+C in VS Code: a large selection reads as empty
+    [InlineData(0x27u, ShortcutModifiers.Shift, true, false)] // Shift+Right in VS Code
+    [InlineData(0x27u, ShortcutModifiers.None, true, true)] // Right in VS Code
+    [InlineData(0u, ShortcutModifiers.None, true, true)] // typing in VS Code
+    public void SelectionClearedCheckKeys(uint virtualKey, ShortcutModifiers modifiers, bool monaco, bool checks) =>
+        Assert.Equal(checks, SelectionGesture.ShouldCheckSelectionClearedOnKey(virtualKey, modifiers, monaco));
+
+    [Theory]
     [InlineData(true, true, true)] // editable-only on, editable source: show
     [InlineData(false, true, false)] // editable-only on, read-only source (web page text): no toolbar
     [InlineData(true, false, true)] // editable-only off: show

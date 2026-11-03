@@ -11,7 +11,7 @@ using Windows.Win32.UI.WindowsAndMessaging;
 namespace PopGuy.Platform.Input;
 
 /// <summary>
-/// A key press or release seen by the low-level keyboard hook. Only the keys PopGuy watches (every modifier, C, the
+/// A key press or release seen by the low-level keyboard hook. Only the keys PopGuy watches (every modifier, C, Esc, the
 /// navigation keys Page Up/Down, End, Home and the arrows, A pressed while Ctrl is down, and the keys of the registered
 /// hotkeys) carry their codes; any other key arrives as <see cref="OtherKey"/> with no virtual key or scan code, so the
 /// stream never holds what the user types (passwords), yet still breaks a double tap.
@@ -435,14 +435,14 @@ public sealed class GlobalInput : IDisposable
     }
 
     /// <summary>
-    /// The keys whose codes are published: every modifier, C (the Ctrl+C+C chord), the navigation keys and A pressed
-    /// while Ctrl is down (the keyboard-selection gestures: neither reveals typed text), and the keys of the registered
+    /// The keys whose codes are published: every modifier, C (the Ctrl+C+C chord), Esc (closes the toolbar), the
+    /// navigation keys and A pressed while Ctrl is down (the keyboard-selection gestures: none reveals typed text), and the keys of the registered
     /// hotkeys. An A press that was published has its release published too, so a reader tracking held keys never
     /// sees A stuck down. Keyboard hook only (it runs on the input thread, which alone touches <see cref="_registered"/>).
     /// </summary>
     private bool IsWatched(uint vk, bool isDown)
     {
-        if (vk == (uint)VIRTUAL_KEY.VK_C || IsModifier(vk) || vk is >= (uint)VIRTUAL_KEY.VK_PRIOR and <= (uint)VIRTUAL_KEY.VK_DOWN) return true;
+        if (vk is (uint)VIRTUAL_KEY.VK_C or (uint)VIRTUAL_KEY.VK_ESCAPE || IsModifier(vk) || vk is >= (uint)VIRTUAL_KEY.VK_PRIOR and <= (uint)VIRTUAL_KEY.VK_DOWN) return true;
         if (vk == (uint)VIRTUAL_KEY.VK_A)
         {
             if (isDown && (_leftControlDown || _rightControlDown))

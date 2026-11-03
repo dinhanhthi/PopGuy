@@ -230,8 +230,8 @@ public sealed class SelectionPipeline : IDisposable
         lock (_gate) return generation != _generation;
     }
 
-    /// <summary>The modifiers the user holds now (PopGuy's own synthetic keys do not count).</summary>
-    private ShortcutModifiers HeldModifiers()
+    /// <summary>The modifiers the user holds now (PopGuy's own synthetic keys do not count). Any thread.</summary>
+    public ShortcutModifiers HeldModifiers()
     {
         var modifiers = ShortcutModifiers.None;
         if (_input.IsUserKeyDown((uint)VIRTUAL_KEY.VK_CONTROL)) modifiers |= ShortcutModifiers.Control;
