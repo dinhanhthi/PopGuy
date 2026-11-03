@@ -9,6 +9,12 @@ Before 1.4.0 Windows had its own versions (0.1.0).
 
 ## [Unreleased]
 
+## [1.4.5] - 2026-11-02
+
+### Fixed
+
+- The toolbar now appears when you select text with the keyboard (for example Shift+Arrow or Ctrl+A), closes when you press Esc, and closes when the keyboard selection is cleared.
+
 ## [1.4.4] - 2026-11-02
 
 ### Added
