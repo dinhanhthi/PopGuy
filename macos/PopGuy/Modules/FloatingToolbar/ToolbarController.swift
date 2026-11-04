@@ -100,7 +100,12 @@ final class ToolbarController {
     // NSEvent monitor tokens — removed on hide() to avoid leaking handlers.
     private var globalMouseMonitor: Any?
     private var localKeyMonitor: Any?
+    private var localKeyUpMonitor: Any?
     private var globalKeyMonitor: Any?
+
+    /// An Enter press in the panel was taken for the "Enter on a result" action,
+    /// which runs when that Enter is released.
+    private var enterPressPending = false
 
     /// Makes the panel key when a result offering the Enter action lands, so Enter
     /// reaches the toolbar instead of the source app ("Enter on a result").
@@ -1333,13 +1338,26 @@ final class ToolbarController {
         return [settings.enterResultAction, settings.enterResultFallback].first(where: offers)
     }
 
-    /// Enter in the panel: asks the view to run `enterAction`. Returns true when
-    /// the key was used. A held Enter runs the action once: its auto-repeat is
-    /// used up without acting (a held Enter on Regenerate would otherwise run it
-    /// again each time a result lands).
-    private func handleEnterKey(windowNumber: Int, isRepeat: Bool) -> Bool {
-        guard windowNumber == panel.windowNumber, let action = enterAction else { return false }
-        if !isRepeat { viewModel.enterKeyRequests.send(action) }
+    /// Enter pressed in the panel: taken when `enterAction` applies, so the
+    /// action runs on the release (`handleEnterKeyUp`). Returns true when the key
+    /// was used. The action waits for the release so a held Enter runs it once
+    /// and its auto-repeat never reaches the source app once the toolbar closes;
+    /// the auto-repeat is used up here without acting.
+    private func handleEnterKeyDown(windowNumber: Int, isRepeat: Bool) -> Bool {
+        guard windowNumber == panel.windowNumber, enterAction != nil else { return false }
+        if !isRepeat { enterPressPending = true }
+        return true
+    }
+
+    /// Enter released: runs `enterAction` when its press was taken by
+    /// `handleEnterKeyDown` and the action still applies. Returns true when the
+    /// key was used.
+    private func handleEnterKeyUp(windowNumber: Int) -> Bool {
+        guard enterPressPending else { return false }
+        enterPressPending = false
+        if windowNumber == panel.windowNumber, let action = enterAction {
+            viewModel.enterKeyRequests.send(action)
+        }
         return true
     }
 
@@ -1423,7 +1441,19 @@ final class ToolbarController {
             let isRepeat = event.isARepeat
             if event.keyCode == 36 || event.keyCode == 76,
                event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty,
-               MainActor.assumeIsolated({ self.handleEnterKey(windowNumber: windowNumber, isRepeat: isRepeat) }) {
+               MainActor.assumeIsolated({ self.handleEnterKeyDown(windowNumber: windowNumber, isRepeat: isRepeat) }) {
+                return nil // consume the event
+            }
+            return event
+        }
+
+        // The release of an Enter press taken above runs the "Enter on a result"
+        // action. Modifiers are not checked: they may change while Enter is down.
+        localKeyUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyUp) { [weak self] event in
+            guard let self else { return event }
+            let windowNumber = event.windowNumber
+            if event.keyCode == 36 || event.keyCode == 76,
+               MainActor.assumeIsolated({ self.handleEnterKeyUp(windowNumber: windowNumber) }) {
                 return nil // consume the event
             }
             return event
@@ -1497,6 +1527,11 @@ final class ToolbarController {
             NSEvent.removeMonitor(token)
             localKeyMonitor = nil
         }
+        if let token = localKeyUpMonitor {
+            NSEvent.removeMonitor(token)
+            localKeyUpMonitor = nil
+        }
+        enterPressPending = false
         if let token = globalKeyMonitor {
             NSEvent.removeMonitor(token)
             globalKeyMonitor = nil

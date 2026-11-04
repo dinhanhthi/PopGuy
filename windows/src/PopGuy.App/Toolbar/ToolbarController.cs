@@ -104,10 +104,18 @@ internal sealed class ToolbarController : IDisposable
     private bool _enterDisarmed;
 
     /// <summary>
-    /// Enter ran Regenerate: Enter stays swallowed (and dropped) while that run is running, so a held or repeated Enter
-    /// never reaches the source app. Cleared once the toolbar stops running, hides or shows a new selection.
+    /// Enter ran Regenerate: Enter stays swallowed while that run is running, so a second, impatient Enter is dropped
+    /// rather than typed into the source app. That press ends it (<see cref="OnEnterKey"/>), so a run that never ends
+    /// holds back one Enter at most. Also cleared once the toolbar stops running, hides or shows a new selection.
     /// </summary>
     private bool _enterRegenerating;
+
+    /// <summary>
+    /// The swallowed Enter press now down came during the run Enter started: its release does nothing, even when the
+    /// result lands before it (decided on the press, <see cref="OnEnterPress"/>). Also cleared on hide and a new
+    /// selection.
+    /// </summary>
+    private bool _enterPressDropped;
 
     /// <summary>
     /// Counts passive selections, presses outside the toolbar and shows, so a browser read that finishes after newer
@@ -275,14 +283,25 @@ internal sealed class ToolbarController : IDisposable
         try
         {
             // The one reader of the key channel. Keys typed into the toolbar's own text boxes select nothing in the source.
+            var enterPressed = false;
             await foreach (var key in _input.Keys.ReadAllAsync(token).ConfigureAwait(false))
             {
                 _chord.Handle(key);
-                // A swallowed Enter (SwallowEnterFor): the source app never got it, so the pipeline does not either.
+                // A swallowed Enter (SwallowEnterFor): the source app never got it, so the pipeline does not either. The
+                // action runs on the release of a swallowed press, so a held Enter runs it once and its auto-repeat
+                // (swallowed too while armed) never reaches the source app once the toolbar closes.
                 if (key.Swallowed)
                 {
-                    // A held Enter runs the action once: its auto-repeat is kept from the source app and ignored.
-                    if (key.IsKeyDown && !key.IsRepeat) _dispatcher.TryEnqueue(OnEnterKey);
+                    if (key.IsKeyDown)
+                    {
+                        if (!enterPressed) _dispatcher.TryEnqueue(OnEnterPress);
+                        enterPressed = true;
+                    }
+                    else if (enterPressed)
+                    {
+                        enterPressed = false;
+                        _dispatcher.TryEnqueue(OnEnterKey);
+                    }
                     continue;
                 }
                 if (_shown && ToolbarWindowStyle.IsToolbarOrOwnedForeground(_toolbarHwnd)) continue;
@@ -648,6 +667,7 @@ internal sealed class ToolbarController : IDisposable
         _passiveSelections++;
         _pasting = false;
         _enterRegenerating = false;
+        _enterPressDropped = false;
         // A new selection: the previous one's speech stops and its "Listen again" goes (macOS update).
         _speak.ClearReplay();
         // Only a show without an action (a passive selection, the chord, its replacement) may open the "Menu" style or
@@ -803,6 +823,7 @@ internal sealed class ToolbarController : IDisposable
         _shown = false;
         _pasting = false;
         _enterRegenerating = false;
+        _enterPressDropped = false;
         UpdateEnterKey();
     }
 
@@ -1017,7 +1038,7 @@ internal sealed class ToolbarController : IDisposable
     /// while the action ran). Re-evaluated on every view-model change, show, hide and settings change. Once the hook
     /// disarms it (any other key typed in the source window), it stays off for that result, so a later Enter reaches
     /// the source app; the next time Enter is accepted again (a new result) it re-arms. A run that Enter regenerated
-    /// keeps it armed while running, so a held or repeated Enter is dropped rather than typed into the source. UI thread.
+    /// keeps it armed while running (<see cref="_enterRegenerating"/>). UI thread.
     /// </summary>
     private void UpdateEnterKey()
     {
@@ -1060,14 +1081,26 @@ internal sealed class ToolbarController : IDisposable
     }
 
     /// <summary>
-    /// A swallowed Enter: runs the Enter action (Paste back, Copy and close, or Regenerate), if the result still offers
-    /// one and the source window is still in front (the state may have changed since). UI thread.
+    /// A swallowed Enter, on its release: runs the Enter action (Paste back, Copy and close, or Regenerate), if the
+    /// result still offers one and the source window is still in front (the state may have changed since). UI thread.
     /// </summary>
     private void OnEnterKey()
     {
         // The hook already kept Enter from the source app; if the state changed between the hook and here (a refine
         // field just opened, a paste already in flight, the user switched windows), the key is dropped. Accepted: the
         // window is tiny, and replaying Enter could land in the wrong place.
+        if (_enterPressDropped)
+        {
+            // A press made during the run Enter started: dropped, and Enter goes back to the source app for the rest of
+            // the run, so a run that never ends cannot keep taking it.
+            _enterPressDropped = false;
+            if (_enterRegenerating)
+            {
+                _enterRegenerating = false;
+                UpdateEnterKey();
+            }
+            return;
+        }
         if (!_shown || _pasting || _enterDisarmed || !ForegroundGuard.IsStill(_current?.Source.Hwnd ?? 0)) return;
         switch (EnterAction())
         {
@@ -1085,6 +1118,9 @@ internal sealed class ToolbarController : IDisposable
                 break;
         }
     }
+
+    /// <summary>A swallowed Enter press (not its auto-repeat): notes whether it came during the run Enter started. UI thread.</summary>
+    private void OnEnterPress() => _enterPressDropped = _enterRegenerating && _viewModel.IsRunning;
 
     /// <summary>Paste back, called from the click on the UI thread.</summary>
     private async void OnPasteBackRequested(string text) => await PasteAsync(text, scriptResult: false);
