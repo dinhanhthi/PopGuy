@@ -15,6 +15,20 @@ heading, which the release body shows under `## Windows`.
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.4.6] - 2026-11-04
+
+### Added
+
+- Press Enter on a result to paste it back into the source app. Choose what Enter does (and its fallback) in Settings → General.
+
+### Changed
+
+- The Edit button on a result is now icon-only, and Cancel is inset for a cleaner toolbar.
+
+### Fixed
+
+- Holding Enter now runs the action once, on key release, so the keystroke never reaches the source app.
+
 ## [1.4.5] - 2026-11-02
 
 ### Fixed

@@ -9,6 +9,20 @@ Before 1.4.0 Windows had its own versions (0.1.0).
 
 ## [Unreleased]
 
+## [1.4.6] - 2026-11-04
+
+### Added
+
+- Press Enter on a result to paste it back into the source app. Choose what Enter does (and its fallback) in Settings → General.
+
+### Changed
+
+- The Edit button on a result is now icon-only, and Cancel is inset for a cleaner toolbar.
+
+### Fixed
+
+- Holding Enter now runs the action once, on key release, so the keystroke never reaches the source app.
+
 ## [1.4.5] - 2026-11-02
 
 ### Fixed
