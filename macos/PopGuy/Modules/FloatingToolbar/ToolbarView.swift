@@ -322,6 +322,7 @@ struct ToolbarView: View {
         } message: {
             Text("Use Copy or Paste back to keep the result, or close anyway.")
         }
+        .onReceive(viewModel.pasteBackRequests) { pasteBackFromKeyboard() }
     }
 
     // MARK: - Toolbar card
@@ -1348,17 +1349,7 @@ struct ToolbarView: View {
 
             if !hidePasteBack, let source = viewModel.sourceElement, source.isEditable {
                 Button {
-                    // Capture source and effective text before the async Task to
-                    // avoid capturing a potentially stale reference.
-                    let capturedSource = source
-                    let capturedEffective = effective
-                    isPastingBack = true
-                    Task { @MainActor in
-                        await outputHandler.pasteBack(capturedEffective, to: capturedSource)
-                        isPastingBack = false
-                        // Paste-back is the terminal action — dismiss the toolbar.
-                        onDismiss()
-                    }
+                    pasteBack(effective, to: source)
                 } label: {
                     Label("Paste back", systemImage: "arrow.uturn.backward.circle")
                         .font(footerButtonFont)
@@ -1382,13 +1373,14 @@ struct ToolbarView: View {
                     .disabled(isPastingBack)
                 } else {
                     Button { viewModel.beginEditing() } label: {
-                        Label("Edit", systemImage: "pencil")
+                        Image(systemName: "pencil")
                             .font(footerButtonFont)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .frame(minHeight: footerButtonHeight)
                     .disabled(isPastingBack)
+                    .toolbarTooltip("Edit", controlRadius: metrics.controlRadius)
                 }
             }
 
@@ -1456,10 +1448,35 @@ struct ToolbarView: View {
                 .padding(.leading, -z(12))
                 .padding(.bottom, -z(5))
             } else {
+                // The result container has no trailing inset (scrollbar flush), so
+                // keep Cancel off the card's right edge.
                 buttonRow
+                    .padding(.trailing, resultContentTrailing)
                     .frame(minHeight: footerButtonHeight)
             }
         }
+    }
+
+    /// Pastes `text` into the source and dismisses the toolbar. Shared by the
+    /// Paste back button and the Enter key (`viewModel.pasteBackRequests`).
+    private func pasteBack(_ text: String, to source: SourceElementRef) {
+        guard !isPastingBack else { return }
+        isPastingBack = true
+        Task { @MainActor in
+            await outputHandler.pasteBack(text, to: source)
+            isPastingBack = false
+            // Paste-back is the terminal action — dismiss the toolbar.
+            onDismiss()
+        }
+    }
+
+    /// Enter pressed on a result that offers Paste back (the controller checks
+    /// the setting and the toolbar state): same as clicking Paste back.
+    private func pasteBackFromKeyboard() {
+        guard case .result = viewModel.actionState,
+              !viewModel.isDictionaryAction,
+              let source = viewModel.sourceElement, source.isEditable else { return }
+        pasteBack(currentResultEffectiveText, to: source)
     }
 }
 

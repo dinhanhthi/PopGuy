@@ -36,6 +36,8 @@ public sealed partial class GeneralPage : Page
         EnabledToggle.Toggled += (_, _) => Save("popGuyEnabled", s => s with { PopGuyEnabled = EnabledToggle.IsOn });
         ConfirmCloseToggle.Toggled += (_, _) =>
             Save("confirmCloseAfterResult", s => s with { ConfirmCloseAfterResult = ConfirmCloseToggle.IsOn });
+        EnterPastesBackToggle.Toggled += (_, _) =>
+            Save("enterPastesBack", s => s with { EnterPastesBack = EnterPastesBackToggle.IsOn });
         LoginToggle.Toggled += (_, _) => OnLoginToggled();
         SetupGuideButton.Click += (_, _) => _services?.RequestSetupGuide();
         HoverTooltip.SetText(SetupGuideButton, "Replay the first-run setup guide");
@@ -96,6 +98,7 @@ public sealed partial class GeneralPage : Page
         _syncing = true;
         EnabledToggle.IsOn = current.PopGuyEnabled;
         ConfirmCloseToggle.IsOn = current.ConfirmCloseAfterResult;
+        EnterPastesBackToggle.IsOn = current.EnterPastesBack;
         _syncing = false;
     }
 

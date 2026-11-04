@@ -94,6 +94,15 @@ internal sealed class ToolbarController : IDisposable
     private int _presentation;
     private bool _pasting;
 
+    /// <summary>The window last given to <see cref="GlobalInput.ArmEnterFor"/> (0: none).</summary>
+    private nint _enterArmedFor;
+
+    /// <summary>
+    /// The keyboard hook disarmed Enter for the shown result (the user typed on in the source window): it stays off
+    /// until the result stops accepting Enter (a new result, run, hide or text input).
+    /// </summary>
+    private bool _enterPasteBackDisarmed;
+
     /// <summary>
     /// Counts passive selections, presses outside the toolbar and shows, so a browser read that finishes after newer
     /// input presents nothing.
@@ -154,6 +163,7 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.StopRequested += Hide;
         _viewModel.CopyRequested += OnCopyRequested;
         _viewModel.PasteBackRequested += OnPasteBackRequested;
+        _viewModel.PropertyChanged += OnViewModelChanged;
         _viewModel.CloseRequested += RequestDismiss;
         _viewModel.EscapeRequested += RequestDismissKeepingDraft;
         _viewModel.PromptSubmitted += OnPromptSubmitted;
@@ -188,6 +198,7 @@ internal sealed class ToolbarController : IDisposable
         _viewModel.StopRequested -= Hide;
         _viewModel.CopyRequested -= OnCopyRequested;
         _viewModel.PasteBackRequested -= OnPasteBackRequested;
+        _viewModel.PropertyChanged -= OnViewModelChanged;
         _viewModel.CloseRequested -= RequestDismiss;
         _viewModel.EscapeRequested -= RequestDismissKeepingDraft;
         _viewModel.PromptSubmitted -= OnPromptSubmitted;
@@ -207,7 +218,11 @@ internal sealed class ToolbarController : IDisposable
 
     // Settings.
 
-    private void OnSettingsChanged(object? sender, EventArgs e) => ApplySettings();
+    private void OnSettingsChanged(object? sender, EventArgs e)
+    {
+        ApplySettings();
+        _dispatcher.TryEnqueue(UpdateEnterPasteBack);
+    }
 
     /// <summary>
     /// Settings' shortcut recorder: while <paramref name="suspended"/>, every hotkey is unregistered and the chord is
@@ -257,6 +272,12 @@ internal sealed class ToolbarController : IDisposable
             await foreach (var key in _input.Keys.ReadAllAsync(token).ConfigureAwait(false))
             {
                 _chord.Handle(key);
+                // A swallowed Enter (SwallowEnterFor): the source app never got it, so the pipeline does not either.
+                if (key.Swallowed)
+                {
+                    if (key.IsKeyDown) _dispatcher.TryEnqueue(OnEnterPasteBack);
+                    continue;
+                }
                 if (_shown && ToolbarWindowStyle.IsToolbarOrOwnedForeground(_toolbarHwnd)) continue;
                 _pipeline.Handle(key);
                 if (_shown) OnSourceAppKey(key);
@@ -632,6 +653,7 @@ internal sealed class ToolbarController : IDisposable
         // when there is none (spec-1 §3.2).
         _window.ShowAt(capture.Pointer, capture.GrewDownward, capture.Selection, capture.Source);
         _shown = true;
+        UpdateEnterPasteBack();
         if (capture.Blocked)
         {
             _viewModel.Fail(capture.Failure ?? AdminAppMessage);
@@ -657,6 +679,7 @@ internal sealed class ToolbarController : IDisposable
         _session.ShowCanned(text);
         _window.ShowAt(PopGuy.Platform.Windowing.ToolbarWindowStyle.CursorPosition(), grewDownward: null, Rectangle.Empty, source);
         _shown = true;
+        UpdateEnterPasteBack();
         _log($"selftest: canned result, {text.Length} chars");
     }
 #endif
@@ -771,6 +794,7 @@ internal sealed class ToolbarController : IDisposable
         _current = null;
         _shown = false;
         _pasting = false;
+        UpdateEnterPasteBack();
     }
 
     // Dismissal (spec-1 §3.8).
@@ -977,6 +1001,47 @@ internal sealed class ToolbarController : IDisposable
         var written = ClipboardGuard.WriteText(text, excludeFromHistory: false);
         _log($"{what}: {text.Length} chars, written {written}");
     }), what);
+
+    /// <summary>
+    /// "Press Enter to Paste back": the keyboard hook swallows Enter only while the shown result offers Paste back, no
+    /// text input needs the key, and the source window is in front (the user may have switched apps while the action
+    /// ran). Re-evaluated on every view-model change, show, hide and settings change. Once the hook disarms it (any
+    /// other key typed in the source window), it stays off for that result, so a later Enter reaches the source app;
+    /// the next time Enter is accepted again (a new result) it re-arms. UI thread.
+    /// </summary>
+    private void UpdateEnterPasteBack()
+    {
+        if (_enterArmedFor != 0 && _input.SwallowEnterFor == 0) _enterPasteBackDisarmed = true;
+        var accepts = _shown && _settings.Current.EnterPastesBack && _viewModel.AcceptsEnterPasteBack;
+        if (!accepts) _enterPasteBackDisarmed = false;
+        var target = accepts && !_enterPasteBackDisarmed ? _current?.Source.Hwnd ?? 0 : 0;
+        if (target == _enterArmedFor) return;
+        if (_input.ArmEnterFor(_enterArmedFor, target))
+        {
+            _enterArmedFor = target;
+            return;
+        }
+        // The hook disarmed it since the check above (it only ever sets 0, from the armed window): the field is
+        // already 0, which is also right when the target was 0 (hide or off).
+        if (accepts) _enterPasteBackDisarmed = true;
+        _enterArmedFor = 0;
+    }
+
+    private void OnViewModelChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => UpdateEnterPasteBack();
+
+    /// <summary>
+    /// A swallowed Enter: Paste back, if the result still offers it and the source window is still in front (the state
+    /// may have changed since). UI thread.
+    /// </summary>
+    private void OnEnterPasteBack()
+    {
+        // The hook already kept Enter from the source app; if the state changed between the hook and here (a refine
+        // field just opened, a paste already in flight, the user switched windows), the key is dropped. Accepted: the
+        // window is tiny, and replaying Enter could land in the wrong place.
+        if (!_shown || _pasting || _enterPasteBackDisarmed || !_settings.Current.EnterPastesBack
+            || !_viewModel.AcceptsEnterPasteBack || !ForegroundGuard.IsStill(_current?.Source.Hwnd ?? 0)) return;
+        _viewModel.RequestPasteBack();
+    }
 
     /// <summary>Paste back, called from the click on the UI thread.</summary>
     private async void OnPasteBackRequested(string text) => await PasteAsync(text, scriptResult: false);

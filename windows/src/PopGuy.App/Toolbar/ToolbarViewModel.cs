@@ -411,6 +411,11 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public bool ShowsPasteBack => IsResult && IsEditable && !IsDictionaryResult;
 
+    /// <summary>Enter may paste back ("Press Enter to Paste back"): Paste back shows and no text input or confirmation needs the key.</summary>
+    public bool AcceptsEnterPasteBack =>
+        ShowsPasteBack && !IsEditing && !IsRefineInputActive && !IsPromptInputActive && !IsConfirmingClose
+        && !IsConfirmingIgnore;
+
     /// <summary>
     /// A lookup's result (Look up or a Dictionary custom action): the definitions show instead of the text, with Listen
     /// and no Copy, Paste back, Edit, Regenerate or Refine (macOS).

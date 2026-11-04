@@ -223,6 +223,11 @@ final class ToolbarViewModel: ObservableObject {
     /// ready and the confirm-on-close setting is on.
     @Published var isShowingCloseConfirmation: Bool = false
 
+    /// Enter pressed on a result that offers Paste back (sent by ToolbarController
+    /// when the "Press Enter to Paste back" setting is on); the view pastes as if
+    /// Paste back were clicked.
+    let pasteBackRequests = PassthroughSubject<Void, Never>()
+
     // MARK: Translate settings
 
     @Published var targetLanguage: TargetLanguage = .english

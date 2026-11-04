@@ -406,7 +406,8 @@
             <!--
                 Result: the Diff/Text toggle (Improve and Proofread), the selectable text, the inline diff or the
                 rendered Markdown (or the editor while editing), the refine input, then Copy, Paste back (editable
-                sources only), Edit/Done (non-diff results), Regenerate and Refine (icon only, as on macOS). A lookup
+                sources only), Edit/Done (non-diff results), Regenerate and Refine (Edit, Regenerate and Refine icon
+                only, as on macOS). A lookup
                 shows its definitions and Listen instead (LookupView), without the text or the buttons.
             -->
             <StackPanel
@@ -546,18 +547,17 @@
                             <TextBlock Text="Paste back" />
                         </StackPanel>
                     </Button>
+                    <!-- Icon only, like Regenerate and Refine; the tooltip is set in code. -->
                     <Button
                         x:Name="EditButton"
+                        VerticalAlignment="Stretch"
                         AutomationProperties.Name="Edit"
                         AllowFocusOnInteraction="False"
                         Visibility="{x:Bind ViewModel.ShowsEditButton, Mode=OneWay}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon
-                                FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                FontSize="14"
-                                Glyph="&#xE70F;" />
-                            <TextBlock Text="Edit" />
-                        </StackPanel>
+                        <FontIcon
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            FontSize="14"
+                            Glyph="&#xE70F;" />
                     </Button>
                     <Button
                         x:Name="DoneButton"

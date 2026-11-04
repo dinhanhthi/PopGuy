@@ -178,6 +178,7 @@ final class SettingsStore: ObservableObject {
         static let ocrEnabled                 = "settings.ocrEnabled"
         static let ocrShortcut                = "settings.ocrShortcut"
         static let confirmCloseAfterResult    = "settings.confirmCloseAfterResult"
+        static let enterPastesBack            = "settings.enterPastesBack"
         static let showDockIconWithSettings   = "settings.showDockIconWithSettings"
         static let resultFontSize             = "settings.resultFontSize"
         static let preserveFormatting         = "settings.preserveFormatting"
@@ -553,6 +554,13 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(confirmCloseAfterResult, forKey: Keys.confirmCloseAfterResult) }
     }
 
+    /// When true, pressing Enter while a result offers Paste back pastes it. The
+    /// toolbar takes the keyboard when such a result is ready, so Enter does not
+    /// reach the source app (default: true).
+    @Published var enterPastesBack: Bool {
+        didSet { defaults.set(enterPastesBack, forKey: Keys.enterPastesBack) }
+    }
+
     /// When true, a Dock icon is shown while the Settings window is open in addition
     /// to the normal menu-bar presence (default: false).
     @Published var showDockIconWithSettings: Bool {
@@ -725,6 +733,7 @@ final class SettingsStore: ObservableObject {
         ocrEnabled               = defaults.object(forKey: Keys.ocrEnabled) as? Bool ?? false
         ocrShortcut              = Self.load(KeyboardShortcut.self, key: Keys.ocrShortcut, from: defaults)
         confirmCloseAfterResult  = defaults.object(forKey: Keys.confirmCloseAfterResult) as? Bool ?? true
+        enterPastesBack          = defaults.object(forKey: Keys.enterPastesBack) as? Bool ?? true
         showDockIconWithSettings = defaults.object(forKey: Keys.showDockIconWithSettings) as? Bool ?? true
         resultFontSize = defaults.string(forKey: Keys.resultFontSize).flatMap(ResultFontSize.init(rawValue:)) ?? .normal
         preserveFormatting = defaults.bool(forKey: Keys.preserveFormatting)

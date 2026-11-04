@@ -127,6 +127,7 @@ public sealed partial class ToolbarView : UserControl
         HoverTooltip.SetText(SettingsButton, "Settings");
         HoverTooltip.SetText(CloseButton, "Close");
         HoverTooltip.SetText(LogoCardButton, "Open PopGuy");
+        HoverTooltip.SetText(EditButton, "Edit");
         HoverTooltip.SetText(RegenerateButton, "Regenerate");
         HoverTooltip.SetText(RefineButton, "Refine");
         HoverTooltip.SetText(ListenAgainButton, "Listen again");

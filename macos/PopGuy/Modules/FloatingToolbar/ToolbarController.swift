@@ -16,6 +16,7 @@
 
 import AppKit
 import ApplicationServices
+import Combine
 import SwiftUI
 import os
 
@@ -100,6 +101,10 @@ final class ToolbarController {
     private var globalMouseMonitor: Any?
     private var localKeyMonitor: Any?
     private var globalKeyMonitor: Any?
+
+    /// Makes the panel key when a result offering Paste back lands, so Enter
+    /// reaches the toolbar instead of the source app ("Press Enter to Paste back").
+    private var enterPasteBackSubscription: AnyCancellable?
 
     /// The pending "is the selection still there?" check after a key press in the
     /// source app. Cancelled by the next key press and by hide().
@@ -266,6 +271,26 @@ final class ToolbarController {
 
         // Bind the coordinator once — the Combine subscription is persistent.
         viewModel.bindSpeakCoordinator(speakCoordinator)
+
+        // The panel is non-activating: after a hotkey-triggered action it is not
+        // key, so Enter would go to the source app and replace its selection with a
+        // newline. Take the keyboard when a result offering Paste back lands, and
+        // only while the source app is frontmost: the user may have switched apps
+        // while the action ran, and Enter must not paste into a background app.
+        // `$actionState` publishes before the stored value changes; the hop lets it
+        // (and the source element) settle first.
+        enterPasteBackSubscription = viewModel.$actionState
+            .map { state -> Bool in
+                if case .result = state { return true }
+                return false
+            }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isResult in
+                guard isResult, let self, self.isShowing, self.settings.enterPastesBack,
+                      self.offersPasteBack, self.isSourceAppFrontmost else { return }
+                self.panel.makeKey()
+            }
 
         // Bind the script action engine and output handler so the view model can
         // dispatch scriptable actions and deliver their output without going through
@@ -1265,6 +1290,46 @@ final class ToolbarController {
         return false
     }
 
+    /// True when the shown result offers Paste back (an editable source, not a
+    /// dictionary lookup).
+    private var offersPasteBack: Bool {
+        isResultReady
+            && !viewModel.isDictionaryAction
+            && viewModel.sourceElement?.isEditable == true
+    }
+
+    /// True when the source app is the frontmost app. The panel is non-activating,
+    /// so it stays the source app while the panel is key.
+    private var isSourceAppFrontmost: Bool {
+        guard let element = viewModel.sourceElement?.element else { return false }
+        var pid: pid_t = 0
+        AXUIElementGetPid(element, &pid)
+        guard pid > 0 else { return false }
+        return NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
+    }
+
+    /// Enter pastes back: the setting is on, the result offers Paste back, the
+    /// source app is frontmost, and no text input or confirmation needs the key
+    /// (editor, prompt, refine field).
+    private var acceptsEnterPasteBack: Bool {
+        isShowing
+            && settings.enterPastesBack
+            && offersPasteBack
+            && isSourceAppFrontmost
+            && !viewModel.isEditing
+            && !viewModel.isPromptInputActive
+            && !viewModel.isRefineInputActive
+            && !viewModel.isShowingCloseConfirmation
+    }
+
+    /// Enter in the panel: asks the view to Paste back when `acceptsEnterPasteBack`.
+    /// Returns true when the key was used.
+    private func handleEnterPasteBack(windowNumber: Int) -> Bool {
+        guard windowNumber == panel.windowNumber, acceptsEnterPasteBack else { return false }
+        viewModel.pasteBackRequests.send()
+        return true
+    }
+
     /// Decide what an outside-click / Escape should do given the current state,
     /// then act: ignore while running, confirm when a result is ready (and the
     /// setting is on), otherwise close.
@@ -1337,6 +1402,14 @@ final class ToolbarController {
                 Task { @MainActor [weak self] in
                     self?.handleDismissRequest()
                 }
+                return nil // consume the event
+            }
+            // Return = 36, keypad Enter = 76, without modifiers: Paste back.
+            // Local monitors run on the main thread.
+            let windowNumber = event.windowNumber
+            if event.keyCode == 36 || event.keyCode == 76,
+               event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty,
+               MainActor.assumeIsolated({ self.handleEnterPasteBack(windowNumber: windowNumber) }) {
                 return nil // consume the event
             }
             return event

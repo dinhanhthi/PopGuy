@@ -110,6 +110,9 @@ public sealed record AppSettings
     // General, appearance, behaviour (§1.8).
     [JsonPropertyName("hasOnboarded")] public bool HasOnboarded { get; init; }
     [JsonPropertyName("confirmCloseAfterResult")] public bool ConfirmCloseAfterResult { get; init; } = true;
+
+    /// <summary>Enter pastes a result that offers Paste back; the key then does not reach the source app (on by default).</summary>
+    [JsonPropertyName("enterPastesBack")] public bool EnterPastesBack { get; init; } = true;
     [JsonPropertyName("resultFontSize")] public ResultFontSize ResultFontSize { get; init; } = ResultFontSize.Normal;
     [JsonPropertyName("preserveFormatting")] public bool PreserveFormatting { get; init; }
 

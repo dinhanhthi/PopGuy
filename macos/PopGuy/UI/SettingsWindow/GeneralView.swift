@@ -76,6 +76,12 @@ struct GeneralView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Press Enter to Paste back", isOn: $settings.enterPastesBack)
+                    Text("When on, pressing Enter while a result shows Paste back pastes it into the source app. When such a result appears while the source app is in front, the toolbar takes the keyboard, so your typing does not reach the source app until it closes.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)

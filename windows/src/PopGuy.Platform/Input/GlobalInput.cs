@@ -12,8 +12,8 @@ namespace PopGuy.Platform.Input;
 
 /// <summary>
 /// A key press or release seen by the low-level keyboard hook. Only the keys PopGuy watches (every modifier, C, Esc, the
-/// navigation keys Page Up/Down, End, Home and the arrows, A pressed while Ctrl is down, and the keys of the registered
-/// hotkeys) carry their codes; any other key arrives as <see cref="OtherKey"/> with no virtual key or scan code, so the
+/// navigation keys Page Up/Down, End, Home and the arrows, A pressed while Ctrl is down, a swallowed Enter (see
+/// <see cref="GlobalInput.SwallowEnterFor"/>), and the keys of the registered hotkeys) carry their codes; any other key arrives as <see cref="OtherKey"/> with no virtual key or scan code, so the
 /// stream never holds what the user types (passwords), yet still breaks a double tap.
 /// </summary>
 /// <param name="VirtualKey">
@@ -29,8 +29,10 @@ namespace PopGuy.Platform.Input;
 /// On a C press while Ctrl is down only: the clipboard sequence number before the app copies, for
 /// <see cref="Capture.ClipboardHistoryCache.MarkArming"/>. Null on every other event.
 /// </param>
+/// <param name="Swallowed">An Enter press or release kept from the foreground app (<see cref="GlobalInput.SwallowEnterFor"/>).</param>
 public readonly record struct KeyEvent(
-    uint VirtualKey, uint ScanCode, bool IsKeyDown, uint Timestamp, bool Injected, bool IsPopGuyMarker, uint? ClipboardSequence)
+    uint VirtualKey, uint ScanCode, bool IsKeyDown, uint Timestamp, bool Injected, bool IsPopGuyMarker, uint? ClipboardSequence,
+    bool Swallowed = false)
 {
     /// <summary>The <see cref="VirtualKey"/> of a key PopGuy does not watch (no real key has code 0).</summary>
     public const uint OtherKey = 0;
@@ -149,6 +151,12 @@ public sealed class GlobalInput : IDisposable
     /// <summary>An A press was published (Ctrl was down): its release is published too. Keyboard hook only.</summary>
     private bool _selectAllKeyDown;
 
+    /// <summary>See <see cref="SwallowEnterFor"/>. Written from any thread, read by the keyboard hook.</summary>
+    private nint _swallowEnterFor;
+
+    /// <summary>The last Enter press was swallowed: its release is too. Keyboard hook only.</summary>
+    private bool _enterSwallowed;
+
     /// <summary>The left-button press series, for <see cref="MouseEvent.ClickCount"/>. Mouse hook only.</summary>
     private readonly ClickCounter _clicks = new();
 
@@ -186,6 +194,22 @@ public sealed class GlobalInput : IDisposable
 
     /// <summary>The id of each registered hotkey press. A held hotkey does not repeat.</summary>
     public ChannelReader<int> HotKeys => _hotKeys.Reader;
+
+    /// <summary>
+    /// While this window (not 0) is the foreground window, an Enter press (Return or keypad Enter) with no modifier held
+    /// is kept from it and published as VK_RETURN, and so is its release ("Press Enter to Paste back"). Any other
+    /// foreground window gets Enter as usual. 0 turns it off. Set with <see cref="ArmEnterFor"/>. PopGuy's own synthetic
+    /// keys pass. Any other key pressed in that window (not a modifier, not PopGuy's own), Enter with a modifier
+    /// included, disarms it (sets 0): the user went on typing, so a later Enter is theirs. Any thread.
+    /// </summary>
+    public nint SwallowEnterFor => Volatile.Read(ref _swallowEnterFor);
+
+    /// <summary>
+    /// Sets <see cref="SwallowEnterFor"/> to <paramref name="target"/> only if it is still <paramref name="expected"/>.
+    /// False when the keyboard hook changed it meanwhile (disarmed it to 0), so a disarm is never overwritten. Any thread.
+    /// </summary>
+    public bool ArmEnterFor(nint expected, nint target) =>
+        Interlocked.CompareExchange(ref _swallowEnterFor, target, expected) == expected;
 
     /// <summary>
     /// Whether the user holds the modifier <paramref name="virtualKey"/> (sided, e.g. VK_LCONTROL, or generic, e.g.
@@ -318,6 +342,7 @@ public sealed class GlobalInput : IDisposable
 
     private unsafe LRESULT KeyboardProc(int code, WPARAM wParam, LPARAM lParam)
     {
+        var swallow = false;
         if (code == PInvoke.HC_ACTION)
         {
             try
@@ -344,7 +369,31 @@ public sealed class GlobalInput : IDisposable
                 uint? sequence = isDown && vk == (uint)VIRTUAL_KEY.VK_C && (_leftControlDown || _rightControlDown)
                     ? PInvoke.GetClipboardSequenceNumber()
                     : null;
-                var watched = IsWatched(vk, isDown);
+                if (vk == (uint)VIRTUAL_KEY.VK_RETURN && !isPopGuy)
+                {
+                    if (isDown)
+                    {
+                        // Only while the target is in front: Enter in any other app (after Alt+Tab) passes.
+                        var target = Volatile.Read(ref _swallowEnterFor);
+                        swallow = target != 0 && Volatile.Read(ref _userModifiers) == 0
+                            && PInvoke.GetForegroundWindow() == target;
+                    }
+                    else
+                    {
+                        swallow = _enterSwallowed;
+                    }
+                    _enterSwallowed = isDown && swallow;
+                }
+                if (isDown && !isPopGuy && !IsModifier(vk) && !swallow)
+                {
+                    // The user typed on in the source window (Enter with a modifier included): a later Enter is theirs.
+                    // Disarmed here, not on the UI thread, so a fast "x" then Enter cannot race it; a re-arm to another
+                    // window is left alone.
+                    var target = Volatile.Read(ref _swallowEnterFor);
+                    if (target != 0 && PInvoke.GetForegroundWindow() == target)
+                        Interlocked.CompareExchange(ref _swallowEnterFor, 0, target);
+                }
+                var watched = swallow || IsWatched(vk, isDown);
                 _keys.Writer.TryWrite(new KeyEvent(
                     watched ? vk : KeyEvent.OtherKey,
                     watched ? data->scanCode : 0,
@@ -352,7 +401,8 @@ public sealed class GlobalInput : IDisposable
                     data->time,
                     injected,
                     isPopGuy,
-                    sequence));
+                    sequence,
+                    swallow));
             }
             catch (Exception e)
             {
@@ -360,6 +410,8 @@ public sealed class GlobalInput : IDisposable
                 _log?.Invoke($"global input: keyboard hook threw, {e.GetType().Name} {e.Message}");
             }
         }
+        // A swallowed Enter goes no further: neither the next hooks nor the foreground app see it.
+        if (swallow) return new LRESULT(1);
         return PInvoke.CallNextHookEx(_keyboardHook, code, wParam, lParam);
     }
 

@@ -75,6 +75,12 @@
                 Header="Confirm before closing a finished result">
                 <ToggleSwitch x:Name="ConfirmCloseToggle" AutomationProperties.Name="Confirm before closing a finished result" />
             </controls:SettingsCard>
+
+            <controls:SettingsCard
+                Description="When on, pressing Enter while a result shows Paste back pastes it into the source app. The key then does not reach the source app."
+                Header="Press Enter to Paste back">
+                <ToggleSwitch x:Name="EnterPastesBackToggle" AutomationProperties.Name="Press Enter to Paste back" />
+            </controls:SettingsCard>
         </StackPanel>
     </ScrollViewer>
 </Page>
