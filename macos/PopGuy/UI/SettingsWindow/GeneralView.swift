@@ -77,11 +77,24 @@ struct GeneralView: View {
                         .foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Press Enter to Paste back", isOn: $settings.enterPastesBack)
-                    Text("When on, pressing Enter while a result shows Paste back pastes it into the source app. When such a result appears while the source app is in front, the toolbar takes the keyboard, so your typing does not reach the source app until it closes.")
+                    Picker("Enter on a result", selection: $settings.enterResultAction) {
+                        ForEach(EnterResultAction.allCases) { Text($0.displayName).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    Text("What pressing Enter does while a result shows. When a result it applies to appears while the source app is in front, the toolbar takes the keyboard, so your typing does not reach the source app until it closes.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                VStack(alignment: .leading, spacing: 8) {
+                    Picker("If that isn't available", selection: $settings.enterResultFallback) {
+                        ForEach(EnterResultAction.allCases) { Text($0.displayName).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    Text("Used when the first choice does not apply to the result: Paste back needs an editable text field, and Regenerate needs an action that can run again.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .disabled(settings.enterResultAction == .nothing)
             }
         }
         .formStyle(.grouped)

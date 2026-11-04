@@ -197,7 +197,7 @@ public sealed class GlobalInput : IDisposable
 
     /// <summary>
     /// While this window (not 0) is the foreground window, an Enter press (Return or keypad Enter) with no modifier held
-    /// is kept from it and published as VK_RETURN, and so is its release ("Press Enter to Paste back"). Any other
+    /// is kept from it and published as VK_RETURN, and so is its release ("Enter on a result"). Any other
     /// foreground window gets Enter as usual. 0 turns it off. Set with <see cref="ArmEnterFor"/>. PopGuy's own synthetic
     /// keys pass. Any other key pressed in that window (not a modifier, not PopGuy's own), Enter with a modifier
     /// included, disarms it (sets 0): the user went on typing, so a later Enter is theirs. Any thread.

@@ -111,8 +111,11 @@ public sealed record AppSettings
     [JsonPropertyName("hasOnboarded")] public bool HasOnboarded { get; init; }
     [JsonPropertyName("confirmCloseAfterResult")] public bool ConfirmCloseAfterResult { get; init; } = true;
 
-    /// <summary>Enter pastes a result that offers Paste back; the key then does not reach the source app (on by default).</summary>
-    [JsonPropertyName("enterPastesBack")] public bool EnterPastesBack { get; init; } = true;
+    /// <summary>What Enter does on a result; the key then does not reach the source app (Paste back by default).</summary>
+    [JsonPropertyName("enterResultAction")] public EnterResultAction EnterResultAction { get; init; } = EnterResultAction.PasteBack;
+
+    /// <summary>What Enter does when <see cref="EnterResultAction"/> does not apply to the result (nothing by default).</summary>
+    [JsonPropertyName("enterResultFallback")] public EnterResultAction EnterResultFallback { get; init; } = EnterResultAction.Nothing;
     [JsonPropertyName("resultFontSize")] public ResultFontSize ResultFontSize { get; init; } = ResultFontSize.Normal;
     [JsonPropertyName("preserveFormatting")] public bool PreserveFormatting { get; init; }
 
@@ -200,6 +203,16 @@ public enum ResultFontSize
     [JsonStringEnumMemberName("small")] Small,
     [JsonStringEnumMemberName("normal")] Normal,
     [JsonStringEnumMemberName("big")] Big,
+}
+
+/// <summary>What Enter does on a result (macOS <c>EnterResultAction</c>). <see cref="Copy"/> copies and closes.</summary>
+[JsonConverter(typeof(RawValueEnumConverter<EnterResultAction>))]
+public enum EnterResultAction
+{
+    [JsonStringEnumMemberName("pasteBack")] PasteBack,
+    [JsonStringEnumMemberName("copy")] Copy,
+    [JsonStringEnumMemberName("regenerate")] Regenerate,
+    [JsonStringEnumMemberName("nothing")] Nothing,
 }
 
 /// <summary>Toolbar zoom: 1.0, 1.2 or 1.3.</summary>

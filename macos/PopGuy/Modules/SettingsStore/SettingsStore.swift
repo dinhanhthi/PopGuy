@@ -111,6 +111,29 @@ nonisolated enum ToolbarStyle: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+// MARK: - EnterResultAction
+
+/// What pressing Enter does while a result shows ("Enter on a result").
+/// `.copy` copies the result and closes the toolbar.
+nonisolated enum EnterResultAction: String, CaseIterable, Identifiable, Codable {
+    case pasteBack
+    case copy
+    case regenerate
+    case nothing
+
+    var id: String { rawValue }
+
+    /// User-facing label for the General settings pickers.
+    var displayName: String {
+        switch self {
+        case .pasteBack:  return "Paste back"
+        case .copy:       return "Copy and close"
+        case .regenerate: return "Regenerate"
+        case .nothing:    return "Do nothing"
+        }
+    }
+}
+
 // MARK: - LocalModelAvailability
 
 /// Decision returned by `SettingsStore.availability(for:)`.
@@ -178,7 +201,8 @@ final class SettingsStore: ObservableObject {
         static let ocrEnabled                 = "settings.ocrEnabled"
         static let ocrShortcut                = "settings.ocrShortcut"
         static let confirmCloseAfterResult    = "settings.confirmCloseAfterResult"
-        static let enterPastesBack            = "settings.enterPastesBack"
+        static let enterResultAction          = "settings.enterResultAction"
+        static let enterResultFallback        = "settings.enterResultFallback"
         static let showDockIconWithSettings   = "settings.showDockIconWithSettings"
         static let resultFontSize             = "settings.resultFontSize"
         static let preserveFormatting         = "settings.preserveFormatting"
@@ -554,11 +578,17 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(confirmCloseAfterResult, forKey: Keys.confirmCloseAfterResult) }
     }
 
-    /// When true, pressing Enter while a result offers Paste back pastes it. The
-    /// toolbar takes the keyboard when such a result is ready, so Enter does not
-    /// reach the source app (default: true).
-    @Published var enterPastesBack: Bool {
-        didSet { defaults.set(enterPastesBack, forKey: Keys.enterPastesBack) }
+    /// What Enter does while a result shows. The toolbar takes the keyboard when a
+    /// result it applies to is ready, so Enter does not reach the source app
+    /// (default: .pasteBack).
+    @Published var enterResultAction: EnterResultAction {
+        didSet { defaults.set(enterResultAction.rawValue, forKey: Keys.enterResultAction) }
+    }
+
+    /// What Enter does when `enterResultAction` does not apply to the result
+    /// (default: .nothing).
+    @Published var enterResultFallback: EnterResultAction {
+        didSet { defaults.set(enterResultFallback.rawValue, forKey: Keys.enterResultFallback) }
     }
 
     /// When true, a Dock icon is shown while the Settings window is open in addition
@@ -733,7 +763,8 @@ final class SettingsStore: ObservableObject {
         ocrEnabled               = defaults.object(forKey: Keys.ocrEnabled) as? Bool ?? false
         ocrShortcut              = Self.load(KeyboardShortcut.self, key: Keys.ocrShortcut, from: defaults)
         confirmCloseAfterResult  = defaults.object(forKey: Keys.confirmCloseAfterResult) as? Bool ?? true
-        enterPastesBack          = defaults.object(forKey: Keys.enterPastesBack) as? Bool ?? true
+        enterResultAction        = defaults.string(forKey: Keys.enterResultAction).flatMap(EnterResultAction.init(rawValue:)) ?? .pasteBack
+        enterResultFallback      = defaults.string(forKey: Keys.enterResultFallback).flatMap(EnterResultAction.init(rawValue:)) ?? .nothing
         showDockIconWithSettings = defaults.object(forKey: Keys.showDockIconWithSettings) as? Bool ?? true
         resultFontSize = defaults.string(forKey: Keys.resultFontSize).flatMap(ResultFontSize.init(rawValue:)) ?? .normal
         preserveFormatting = defaults.bool(forKey: Keys.preserveFormatting)

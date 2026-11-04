@@ -101,7 +101,13 @@ internal sealed class ToolbarController : IDisposable
     /// The keyboard hook disarmed Enter for the shown result (the user typed on in the source window): it stays off
     /// until the result stops accepting Enter (a new result, run, hide or text input).
     /// </summary>
-    private bool _enterPasteBackDisarmed;
+    private bool _enterDisarmed;
+
+    /// <summary>
+    /// Enter ran Regenerate: Enter stays swallowed (and dropped) while that run is running, so a held or repeated Enter
+    /// never reaches the source app. Cleared once the toolbar stops running, hides or shows a new selection.
+    /// </summary>
+    private bool _enterRegenerating;
 
     /// <summary>
     /// Counts passive selections, presses outside the toolbar and shows, so a browser read that finishes after newer
@@ -221,7 +227,7 @@ internal sealed class ToolbarController : IDisposable
     private void OnSettingsChanged(object? sender, EventArgs e)
     {
         ApplySettings();
-        _dispatcher.TryEnqueue(UpdateEnterPasteBack);
+        _dispatcher.TryEnqueue(UpdateEnterKey);
     }
 
     /// <summary>
@@ -275,7 +281,7 @@ internal sealed class ToolbarController : IDisposable
                 // A swallowed Enter (SwallowEnterFor): the source app never got it, so the pipeline does not either.
                 if (key.Swallowed)
                 {
-                    if (key.IsKeyDown) _dispatcher.TryEnqueue(OnEnterPasteBack);
+                    if (key.IsKeyDown) _dispatcher.TryEnqueue(OnEnterKey);
                     continue;
                 }
                 if (_shown && ToolbarWindowStyle.IsToolbarOrOwnedForeground(_toolbarHwnd)) continue;
@@ -640,6 +646,7 @@ internal sealed class ToolbarController : IDisposable
         // A chord or hotkey show cancels a passive selection's pending browser read.
         _passiveSelections++;
         _pasting = false;
+        _enterRegenerating = false;
         // A new selection: the previous one's speech stops and its "Listen again" goes (macOS update).
         _speak.ClearReplay();
         // Only a show without an action (a passive selection, the chord, its replacement) may open the "Menu" style or
@@ -653,7 +660,7 @@ internal sealed class ToolbarController : IDisposable
         // when there is none (spec-1 §3.2).
         _window.ShowAt(capture.Pointer, capture.GrewDownward, capture.Selection, capture.Source);
         _shown = true;
-        UpdateEnterPasteBack();
+        UpdateEnterKey();
         if (capture.Blocked)
         {
             _viewModel.Fail(capture.Failure ?? AdminAppMessage);
@@ -679,7 +686,7 @@ internal sealed class ToolbarController : IDisposable
         _session.ShowCanned(text);
         _window.ShowAt(PopGuy.Platform.Windowing.ToolbarWindowStyle.CursorPosition(), grewDownward: null, Rectangle.Empty, source);
         _shown = true;
-        UpdateEnterPasteBack();
+        UpdateEnterKey();
         _log($"selftest: canned result, {text.Length} chars");
     }
 #endif
@@ -794,7 +801,8 @@ internal sealed class ToolbarController : IDisposable
         _current = null;
         _shown = false;
         _pasting = false;
-        UpdateEnterPasteBack();
+        _enterRegenerating = false;
+        UpdateEnterKey();
     }
 
     // Dismissal (spec-1 §3.8).
@@ -1003,18 +1011,25 @@ internal sealed class ToolbarController : IDisposable
     }), what);
 
     /// <summary>
-    /// "Press Enter to Paste back": the keyboard hook swallows Enter only while the shown result offers Paste back, no
-    /// text input needs the key, and the source window is in front (the user may have switched apps while the action
-    /// ran). Re-evaluated on every view-model change, show, hide and settings change. Once the hook disarms it (any
-    /// other key typed in the source window), it stays off for that result, so a later Enter reaches the source app;
-    /// the next time Enter is accepted again (a new result) it re-arms. UI thread.
+    /// "Enter on a result": the keyboard hook swallows Enter only while the shown result offers the chosen action (or
+    /// its fallback), no text input needs the key, and the source window is in front (the user may have switched apps
+    /// while the action ran). Re-evaluated on every view-model change, show, hide and settings change. Once the hook
+    /// disarms it (any other key typed in the source window), it stays off for that result, so a later Enter reaches
+    /// the source app; the next time Enter is accepted again (a new result) it re-arms. A run that Enter regenerated
+    /// keeps it armed while running, so a held or repeated Enter is dropped rather than typed into the source. UI thread.
     /// </summary>
-    private void UpdateEnterPasteBack()
+    private void UpdateEnterKey()
     {
-        if (_enterArmedFor != 0 && _input.SwallowEnterFor == 0) _enterPasteBackDisarmed = true;
-        var accepts = _shown && _settings.Current.EnterPastesBack && _viewModel.AcceptsEnterPasteBack;
-        if (!accepts) _enterPasteBackDisarmed = false;
-        var target = accepts && !_enterPasteBackDisarmed ? _current?.Source.Hwnd ?? 0 : 0;
+        if (_enterArmedFor != 0 && _input.SwallowEnterFor == 0) _enterDisarmed = true;
+        if (_enterRegenerating && !(_shown && _viewModel.IsRunning))
+        {
+            // The run Enter started is over: its result arms afresh, as after any run.
+            _enterRegenerating = false;
+            _enterDisarmed = false;
+        }
+        var accepts = _shown && (_enterRegenerating || EnterAction() is not null);
+        if (!accepts) _enterDisarmed = false;
+        var target = accepts && !_enterDisarmed ? _current?.Source.Hwnd ?? 0 : 0;
         if (target == _enterArmedFor) return;
         if (_input.ArmEnterFor(_enterArmedFor, target))
         {
@@ -1023,24 +1038,51 @@ internal sealed class ToolbarController : IDisposable
         }
         // The hook disarmed it since the check above (it only ever sets 0, from the armed window): the field is
         // already 0, which is also right when the target was 0 (hide or off).
-        if (accepts) _enterPasteBackDisarmed = true;
+        if (accepts) _enterDisarmed = true;
         _enterArmedFor = 0;
     }
 
-    private void OnViewModelChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => UpdateEnterPasteBack();
+    private void OnViewModelChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => UpdateEnterKey();
 
     /// <summary>
-    /// A swallowed Enter: Paste back, if the result still offers it and the source window is still in front (the state
-    /// may have changed since). UI thread.
+    /// What Enter does on the shown result: the chosen action, else the fallback, when the result offers it and no text
+    /// input or confirmation needs the key; null when neither applies, and always when the action is "Do nothing" (its
+    /// fallback is then off).
     /// </summary>
-    private void OnEnterPasteBack()
+    private EnterResultAction? EnterAction()
+    {
+        var settings = _settings.Current;
+        if (settings.EnterResultAction == EnterResultAction.Nothing || !_viewModel.AcceptsEnterKey) return null;
+        if (_viewModel.Offers(settings.EnterResultAction)) return settings.EnterResultAction;
+        if (_viewModel.Offers(settings.EnterResultFallback)) return settings.EnterResultFallback;
+        return null;
+    }
+
+    /// <summary>
+    /// A swallowed Enter: runs the Enter action (Paste back, Copy and close, or Regenerate), if the result still offers
+    /// one and the source window is still in front (the state may have changed since). UI thread.
+    /// </summary>
+    private void OnEnterKey()
     {
         // The hook already kept Enter from the source app; if the state changed between the hook and here (a refine
         // field just opened, a paste already in flight, the user switched windows), the key is dropped. Accepted: the
         // window is tiny, and replaying Enter could land in the wrong place.
-        if (!_shown || _pasting || _enterPasteBackDisarmed || !_settings.Current.EnterPastesBack
-            || !_viewModel.AcceptsEnterPasteBack || !ForegroundGuard.IsStill(_current?.Source.Hwnd ?? 0)) return;
-        _viewModel.RequestPasteBack();
+        if (!_shown || _pasting || _enterDisarmed || !ForegroundGuard.IsStill(_current?.Source.Hwnd ?? 0)) return;
+        switch (EnterAction())
+        {
+            case EnterResultAction.PasteBack:
+                _viewModel.RequestPasteBack();
+                break;
+            case EnterResultAction.Copy:
+                _viewModel.RequestCopy();
+                Hide();
+                break;
+            case EnterResultAction.Regenerate:
+                // Before the run starts: its first state change must already see the flag, or the hook disarms.
+                _enterRegenerating = true;
+                _viewModel.Regenerate();
+                break;
+        }
     }
 
     /// <summary>Paste back, called from the click on the UI thread.</summary>

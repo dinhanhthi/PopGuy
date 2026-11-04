@@ -36,8 +36,16 @@ public sealed partial class GeneralPage : Page
         EnabledToggle.Toggled += (_, _) => Save("popGuyEnabled", s => s with { PopGuyEnabled = EnabledToggle.IsOn });
         ConfirmCloseToggle.Toggled += (_, _) =>
             Save("confirmCloseAfterResult", s => s with { ConfirmCloseAfterResult = ConfirmCloseToggle.IsOn });
-        EnterPastesBackToggle.Toggled += (_, _) =>
-            Save("enterPastesBack", s => s with { EnterPastesBack = EnterPastesBackToggle.IsOn });
+        EnterActionBox.SelectionChanged += (_, _) =>
+        {
+            if (EnterActionBox.SelectedIndex < 0) return;
+            Save("enterResultAction", s => s with { EnterResultAction = (EnterResultAction)EnterActionBox.SelectedIndex });
+        };
+        EnterFallbackBox.SelectionChanged += (_, _) =>
+        {
+            if (EnterFallbackBox.SelectedIndex < 0) return;
+            Save("enterResultFallback", s => s with { EnterResultFallback = (EnterResultAction)EnterFallbackBox.SelectedIndex });
+        };
         LoginToggle.Toggled += (_, _) => OnLoginToggled();
         SetupGuideButton.Click += (_, _) => _services?.RequestSetupGuide();
         HoverTooltip.SetText(SetupGuideButton, "Replay the first-run setup guide");
@@ -98,7 +106,9 @@ public sealed partial class GeneralPage : Page
         _syncing = true;
         EnabledToggle.IsOn = current.PopGuyEnabled;
         ConfirmCloseToggle.IsOn = current.ConfirmCloseAfterResult;
-        EnterPastesBackToggle.IsOn = current.EnterPastesBack;
+        EnterActionBox.SelectedIndex = (int)current.EnterResultAction;
+        EnterFallbackBox.SelectedIndex = (int)current.EnterResultFallback;
+        EnterFallbackCard.IsEnabled = current.EnterResultAction != EnterResultAction.Nothing;
         _syncing = false;
     }
 

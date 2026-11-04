@@ -82,6 +82,23 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void EnterOnResultDefaultsToPasteBackThenNothingAndSavesTheMacOSRawValues()
+    {
+        var store = new SettingsStore(_paths);
+        Assert.Equal(EnterResultAction.PasteBack, store.Current.EnterResultAction);
+        Assert.Equal(EnterResultAction.Nothing, store.Current.EnterResultFallback);
+
+        store.Update(s => s with { EnterResultAction = EnterResultAction.Regenerate, EnterResultFallback = EnterResultAction.Copy });
+
+        var saved = JsonNode.Parse(File.ReadAllText(_paths.SettingsFile))!;
+        Assert.Equal("regenerate", saved["enterResultAction"]!.GetValue<string>());
+        Assert.Equal("copy", saved["enterResultFallback"]!.GetValue<string>());
+        var loaded = new SettingsStore(_paths).Current;
+        Assert.Equal(EnterResultAction.Regenerate, loaded.EnterResultAction);
+        Assert.Equal(EnterResultAction.Copy, loaded.EnterResultFallback);
+    }
+
+    [Fact]
     public void ShowLogoOnlyDefaultsOffAndSavesTheMacOSKey()
     {
         var store = new SettingsStore(_paths);

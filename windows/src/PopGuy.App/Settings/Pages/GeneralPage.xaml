@@ -76,10 +76,34 @@
                 <ToggleSwitch x:Name="ConfirmCloseToggle" AutomationProperties.Name="Confirm before closing a finished result" />
             </controls:SettingsCard>
 
+            <!-- Items in EnterResultAction order: the selected index is the enum value. -->
             <controls:SettingsCard
-                Description="When on, pressing Enter while a result shows Paste back pastes it into the source app. The key then does not reach the source app."
-                Header="Press Enter to Paste back">
-                <ToggleSwitch x:Name="EnterPastesBackToggle" AutomationProperties.Name="Press Enter to Paste back" />
+                Description="What pressing Enter does while a result shows. When the action applies, the key does not reach the source app."
+                Header="Enter on a result">
+                <ComboBox
+                    x:Name="EnterActionBox"
+                    MinWidth="160"
+                    AutomationProperties.Name="Enter on a result">
+                    <ComboBoxItem Content="Paste back" />
+                    <ComboBoxItem Content="Copy and close" />
+                    <ComboBoxItem Content="Regenerate" />
+                    <ComboBoxItem Content="Do nothing" />
+                </ComboBox>
+            </controls:SettingsCard>
+
+            <controls:SettingsCard
+                x:Name="EnterFallbackCard"
+                Description="Used when the first choice does not apply to the result: Paste back needs an editable text field, and Regenerate needs an action that can run again."
+                Header="If that isn't available">
+                <ComboBox
+                    x:Name="EnterFallbackBox"
+                    MinWidth="160"
+                    AutomationProperties.Name="If that isn't available">
+                    <ComboBoxItem Content="Paste back" />
+                    <ComboBoxItem Content="Copy and close" />
+                    <ComboBoxItem Content="Regenerate" />
+                    <ComboBoxItem Content="Do nothing" />
+                </ComboBox>
             </controls:SettingsCard>
         </StackPanel>
     </ScrollViewer>

@@ -102,9 +102,9 @@ final class ToolbarController {
     private var localKeyMonitor: Any?
     private var globalKeyMonitor: Any?
 
-    /// Makes the panel key when a result offering Paste back lands, so Enter
-    /// reaches the toolbar instead of the source app ("Press Enter to Paste back").
-    private var enterPasteBackSubscription: AnyCancellable?
+    /// Makes the panel key when a result offering the Enter action lands, so Enter
+    /// reaches the toolbar instead of the source app ("Enter on a result").
+    private var enterKeySubscription: AnyCancellable?
 
     /// The pending "is the selection still there?" check after a key press in the
     /// source app. Cancelled by the next key press and by hide().
@@ -274,12 +274,12 @@ final class ToolbarController {
 
         // The panel is non-activating: after a hotkey-triggered action it is not
         // key, so Enter would go to the source app and replace its selection with a
-        // newline. Take the keyboard when a result offering Paste back lands, and
-        // only while the source app is frontmost: the user may have switched apps
-        // while the action ran, and Enter must not paste into a background app.
-        // `$actionState` publishes before the stored value changes; the hop lets it
-        // (and the source element) settle first.
-        enterPasteBackSubscription = viewModel.$actionState
+        // newline. Take the keyboard when a result lands that the "Enter on a
+        // result" action applies to, and only while the source app is frontmost:
+        // the user may have switched apps while the action ran, and Enter must not
+        // act on a background app. `$actionState` publishes before the stored value
+        // changes; the hop lets it (and the source element) settle first.
+        enterKeySubscription = viewModel.$actionState
             .map { state -> Bool in
                 if case .result = state { return true }
                 return false
@@ -287,8 +287,7 @@ final class ToolbarController {
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isResult in
-                guard isResult, let self, self.isShowing, self.settings.enterPastesBack,
-                      self.offersPasteBack, self.isSourceAppFrontmost else { return }
+                guard isResult, let self, self.enterAction != nil else { return }
                 self.panel.makeKey()
             }
 
@@ -1308,25 +1307,37 @@ final class ToolbarController {
         return NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
     }
 
-    /// Enter pastes back: the setting is on, the result offers Paste back, the
-    /// source app is frontmost, and no text input or confirmation needs the key
-    /// (editor, prompt, refine field).
-    private var acceptsEnterPasteBack: Bool {
-        isShowing
-            && settings.enterPastesBack
-            && offersPasteBack
-            && isSourceAppFrontmost
-            && !viewModel.isEditing
-            && !viewModel.isPromptInputActive
-            && !viewModel.isRefineInputActive
-            && !viewModel.isShowingCloseConfirmation
+    /// True when the shown result offers `action` (its button shows).
+    private func offers(_ action: EnterResultAction) -> Bool {
+        switch action {
+        case .pasteBack:  return offersPasteBack
+        case .copy:       return isResultReady && !viewModel.isDictionaryAction
+        case .regenerate: return viewModel.canRegenerate && !viewModel.isEditing
+        case .nothing:    return false
+        }
     }
 
-    /// Enter in the panel: asks the view to Paste back when `acceptsEnterPasteBack`.
-    /// Returns true when the key was used.
-    private func handleEnterPasteBack(windowNumber: Int) -> Bool {
-        guard windowNumber == panel.windowNumber, acceptsEnterPasteBack else { return false }
-        viewModel.pasteBackRequests.send()
+    /// What Enter does now: the "Enter on a result" action, else its fallback,
+    /// when the result offers it, the source app is frontmost, and no text input
+    /// or confirmation needs the key (editor, prompt, refine field). Nil when
+    /// Enter is left alone, always when the action is "Do nothing" (its fallback
+    /// is then off).
+    private var enterAction: EnterResultAction? {
+        guard settings.enterResultAction != .nothing,
+              isShowing,
+              isSourceAppFrontmost,
+              !viewModel.isEditing,
+              !viewModel.isPromptInputActive,
+              !viewModel.isRefineInputActive,
+              !viewModel.isShowingCloseConfirmation else { return nil }
+        return [settings.enterResultAction, settings.enterResultFallback].first(where: offers)
+    }
+
+    /// Enter in the panel: asks the view to run `enterAction`. Returns true when
+    /// the key was used.
+    private func handleEnterKey(windowNumber: Int) -> Bool {
+        guard windowNumber == panel.windowNumber, let action = enterAction else { return false }
+        viewModel.enterKeyRequests.send(action)
         return true
     }
 
@@ -1404,12 +1415,12 @@ final class ToolbarController {
                 }
                 return nil // consume the event
             }
-            // Return = 36, keypad Enter = 76, without modifiers: Paste back.
+            // Return = 36, keypad Enter = 76, without modifiers: "Enter on a result".
             // Local monitors run on the main thread.
             let windowNumber = event.windowNumber
             if event.keyCode == 36 || event.keyCode == 76,
                event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty,
-               MainActor.assumeIsolated({ self.handleEnterPasteBack(windowNumber: windowNumber) }) {
+               MainActor.assumeIsolated({ self.handleEnterKey(windowNumber: windowNumber) }) {
                 return nil // consume the event
             }
             return event

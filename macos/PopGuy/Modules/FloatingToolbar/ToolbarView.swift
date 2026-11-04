@@ -322,7 +322,7 @@ struct ToolbarView: View {
         } message: {
             Text("Use Copy or Paste back to keep the result, or close anyway.")
         }
-        .onReceive(viewModel.pasteBackRequests) { pasteBackFromKeyboard() }
+        .onReceive(viewModel.enterKeyRequests) { performEnterAction($0) }
     }
 
     // MARK: - Toolbar card
@@ -1458,7 +1458,7 @@ struct ToolbarView: View {
     }
 
     /// Pastes `text` into the source and dismisses the toolbar. Shared by the
-    /// Paste back button and the Enter key (`viewModel.pasteBackRequests`).
+    /// Paste back button and the Enter key (`viewModel.enterKeyRequests`).
     private func pasteBack(_ text: String, to source: SourceElementRef) {
         guard !isPastingBack else { return }
         isPastingBack = true
@@ -1470,13 +1470,24 @@ struct ToolbarView: View {
         }
     }
 
-    /// Enter pressed on a result that offers Paste back (the controller checks
-    /// the setting and the toolbar state): same as clicking Paste back.
-    private func pasteBackFromKeyboard() {
-        guard case .result = viewModel.actionState,
-              !viewModel.isDictionaryAction,
-              let source = viewModel.sourceElement, source.isEditable else { return }
-        pasteBack(currentResultEffectiveText, to: source)
+    /// Enter pressed on a result (the controller picks the action from the
+    /// settings and checks the toolbar state): same as clicking its button, except
+    /// that Copy also closes the toolbar.
+    private func performEnterAction(_ action: EnterResultAction) {
+        guard case .result = viewModel.actionState, !viewModel.isDictionaryAction,
+              !isPastingBack else { return }
+        switch action {
+        case .pasteBack:
+            guard let source = viewModel.sourceElement, source.isEditable else { return }
+            pasteBack(currentResultEffectiveText, to: source)
+        case .copy:
+            outputHandler.copy(currentResultEffectiveText)
+            onDismiss()
+        case .regenerate:
+            viewModel.regenerate()
+        case .nothing:
+            break
+        }
     }
 }
 

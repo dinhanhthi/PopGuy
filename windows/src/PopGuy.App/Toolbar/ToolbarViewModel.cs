@@ -411,10 +411,19 @@ public sealed partial class ToolbarViewModel : INotifyPropertyChanged
 
     public bool ShowsPasteBack => IsResult && IsEditable && !IsDictionaryResult;
 
-    /// <summary>Enter may paste back ("Press Enter to Paste back"): Paste back shows and no text input or confirmation needs the key.</summary>
-    public bool AcceptsEnterPasteBack =>
-        ShowsPasteBack && !IsEditing && !IsRefineInputActive && !IsPromptInputActive && !IsConfirmingClose
-        && !IsConfirmingIgnore;
+    /// <summary>Enter may run the "Enter on a result" action: a result shows and no text input or confirmation needs the key.</summary>
+    public bool AcceptsEnterKey =>
+        IsResult && !IsDictionaryResult && !IsEditing && !IsRefineInputActive && !IsPromptInputActive
+        && !IsConfirmingClose && !IsConfirmingIgnore;
+
+    /// <summary>The result offers <paramref name="action"/>: its button shows.</summary>
+    public bool Offers(EnterResultAction action) => action switch
+    {
+        EnterResultAction.PasteBack => ShowsPasteBack,
+        EnterResultAction.Copy => IsResult && ShowsResultActions,
+        EnterResultAction.Regenerate => ShowsRegenerate,
+        _ => false,
+    };
 
     /// <summary>
     /// A lookup's result (Look up or a Dictionary custom action): the definitions show instead of the text, with Listen
