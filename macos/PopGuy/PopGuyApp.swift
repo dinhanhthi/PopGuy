@@ -787,7 +787,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
-            window.setContentSize(NSSize(width: 760, height: 520))
+            window.setContentSize(NSSize(width: 900, height: 640))
             window.center()
             window.delegate = self
             window.isReleasedWhenClosed = false

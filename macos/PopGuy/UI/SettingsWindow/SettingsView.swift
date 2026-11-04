@@ -263,7 +263,7 @@ struct SettingsView: View {
                 )
             }
         }
-        .frame(minWidth: 680, idealWidth: 740, minHeight: 460, idealHeight: 520)
+        .frame(minWidth: 680, idealWidth: 900, minHeight: 460, idealHeight: 640)
     }
 
     @ViewBuilder
