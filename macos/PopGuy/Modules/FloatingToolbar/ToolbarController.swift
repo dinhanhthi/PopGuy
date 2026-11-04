@@ -1334,10 +1334,12 @@ final class ToolbarController {
     }
 
     /// Enter in the panel: asks the view to run `enterAction`. Returns true when
-    /// the key was used.
-    private func handleEnterKey(windowNumber: Int) -> Bool {
+    /// the key was used. A held Enter runs the action once: its auto-repeat is
+    /// used up without acting (a held Enter on Regenerate would otherwise run it
+    /// again each time a result lands).
+    private func handleEnterKey(windowNumber: Int, isRepeat: Bool) -> Bool {
         guard windowNumber == panel.windowNumber, let action = enterAction else { return false }
-        viewModel.enterKeyRequests.send(action)
+        if !isRepeat { viewModel.enterKeyRequests.send(action) }
         return true
     }
 
@@ -1418,9 +1420,10 @@ final class ToolbarController {
             // Return = 36, keypad Enter = 76, without modifiers: "Enter on a result".
             // Local monitors run on the main thread.
             let windowNumber = event.windowNumber
+            let isRepeat = event.isARepeat
             if event.keyCode == 36 || event.keyCode == 76,
                event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty,
-               MainActor.assumeIsolated({ self.handleEnterKey(windowNumber: windowNumber) }) {
+               MainActor.assumeIsolated({ self.handleEnterKey(windowNumber: windowNumber, isRepeat: isRepeat) }) {
                 return nil // consume the event
             }
             return event

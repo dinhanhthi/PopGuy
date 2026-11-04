@@ -281,7 +281,8 @@ internal sealed class ToolbarController : IDisposable
                 // A swallowed Enter (SwallowEnterFor): the source app never got it, so the pipeline does not either.
                 if (key.Swallowed)
                 {
-                    if (key.IsKeyDown) _dispatcher.TryEnqueue(OnEnterKey);
+                    // A held Enter runs the action once: its auto-repeat is kept from the source app and ignored.
+                    if (key.IsKeyDown && !key.IsRepeat) _dispatcher.TryEnqueue(OnEnterKey);
                     continue;
                 }
                 if (_shown && ToolbarWindowStyle.IsToolbarOrOwnedForeground(_toolbarHwnd)) continue;

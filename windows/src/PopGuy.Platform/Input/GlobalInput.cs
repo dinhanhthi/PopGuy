@@ -30,9 +30,10 @@ namespace PopGuy.Platform.Input;
 /// <see cref="Capture.ClipboardHistoryCache.MarkArming"/>. Null on every other event.
 /// </param>
 /// <param name="Swallowed">An Enter press or release kept from the foreground app (<see cref="GlobalInput.SwallowEnterFor"/>).</param>
+/// <param name="IsRepeat">An Enter press while Enter is already down: the key's auto-repeat.</param>
 public readonly record struct KeyEvent(
     uint VirtualKey, uint ScanCode, bool IsKeyDown, uint Timestamp, bool Injected, bool IsPopGuyMarker, uint? ClipboardSequence,
-    bool Swallowed = false)
+    bool Swallowed = false, bool IsRepeat = false)
 {
     /// <summary>The <see cref="VirtualKey"/> of a key PopGuy does not watch (no real key has code 0).</summary>
     public const uint OtherKey = 0;
@@ -156,6 +157,9 @@ public sealed class GlobalInput : IDisposable
 
     /// <summary>The last Enter press was swallowed: its release is too. Keyboard hook only.</summary>
     private bool _enterSwallowed;
+
+    /// <summary>Enter is down (a user press, not PopGuy's own): a further press is its auto-repeat. Keyboard hook only.</summary>
+    private bool _enterDown;
 
     /// <summary>The left-button press series, for <see cref="MouseEvent.ClickCount"/>. Mouse hook only.</summary>
     private readonly ClickCounter _clicks = new();
@@ -369,8 +373,11 @@ public sealed class GlobalInput : IDisposable
                 uint? sequence = isDown && vk == (uint)VIRTUAL_KEY.VK_C && (_leftControlDown || _rightControlDown)
                     ? PInvoke.GetClipboardSequenceNumber()
                     : null;
+                var enterRepeat = false;
                 if (vk == (uint)VIRTUAL_KEY.VK_RETURN && !isPopGuy)
                 {
+                    enterRepeat = isDown && _enterDown;
+                    _enterDown = isDown;
                     if (isDown)
                     {
                         // Only while the target is in front: Enter in any other app (after Alt+Tab) passes.
@@ -402,7 +409,8 @@ public sealed class GlobalInput : IDisposable
                     injected,
                     isPopGuy,
                     sequence,
-                    swallow));
+                    swallow,
+                    enterRepeat));
             }
             catch (Exception e)
             {
