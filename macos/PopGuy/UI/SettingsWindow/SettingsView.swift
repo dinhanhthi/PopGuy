@@ -1570,6 +1570,16 @@ nonisolated func mapModelCheckOutcome(error: Error?, customEndpointMissing: Bool
 
 // MARK: - Reusable sub-views
 
+/// Label and content side by side, aligned on their first text line instead of centered.
+private struct FirstLineLabeledContentStyle: LabeledContentStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            configuration.label
+            configuration.content
+        }
+    }
+}
+
 struct ProviderPicker: View {
     let label: String
     @Binding var selection: ProviderKind
@@ -1688,6 +1698,8 @@ struct ModelField: View {
                 InfoTooltip(text: providerKind.modelHint)
             }
         }
+        // A hint under the picker makes the content taller; keep the label on the picker's line.
+        .labeledContentStyle(FirstLineLabeledContentStyle())
         .onAppear { syncCustomMode() }
         .onChange(of: providerKind) { newKind in
             checkTask?.cancel()
