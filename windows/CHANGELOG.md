@@ -9,9 +9,22 @@ Before 1.4.0 Windows had its own versions (0.1.0).
 
 ## [Unreleased]
 
+## [1.4.7] - 2026-11-05
+
+### Added
+
+- Settings → Providers → Local AI warns that small local models may answer the selected text instead of processing it.
+- Settings → Actions notes that a custom prompt replaces the default prompt.
+
 ### Changed
 
 - Settings → Providers → Local AI lists models from least to most RAM needed.
+- The Settings window opens larger by default.
+- "Preserve & render formatting" moved from Appearance to General.
+
+### Fixed
+
+- Small local models no longer answer a selected question instead of improving or translating it.
 
 ## [1.4.6] - 2026-11-04
 

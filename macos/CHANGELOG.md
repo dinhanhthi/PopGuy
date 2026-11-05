@@ -15,9 +15,25 @@ heading, which the release body shows under `## Windows`.
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.4.7] - 2026-11-05
+
+### Added
+
+- Settings → Providers → Local AI warns that small local models may answer the selected text instead of processing it.
+- Settings → Actions notes that a custom prompt replaces the default prompt.
+
 ### Changed
 
 - Settings → Providers → Local AI lists models from least to most RAM needed.
+- The Settings window opens larger by default.
+- "Preserve & render formatting" moved from Appearance to General.
+
+### Fixed
+
+- Small local models no longer answer a selected question instead of improving or translating it.
+- Downloading a local model is no longer interrupted when a local action runs at the same time.
+- Local AI uses less memory by capping the model's buffer cache.
+- The Model label stays on the picker's line when a hint shows below it.
 
 ## [1.4.6] - 2026-11-04
 
