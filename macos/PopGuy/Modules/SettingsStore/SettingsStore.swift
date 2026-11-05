@@ -228,9 +228,14 @@ final class SettingsStore: ObservableObject {
 
     // MARK: - Local model dependencies (injectable for tests)
 
-    /// MLXHelperManager used for install-detection, download, and delete.
+    /// MLXHelperManager used for install-detection, delete, status and unload.
     /// Defaults to the shared singleton; tests inject a stub.
     private let mlxHelper: MLXHelperManager
+
+    /// MLXHelperManager used only for downloads: its own helper process, so a local
+    /// action (which runs on `.shared`) never tears a download down.
+    /// Defaults to `.downloads`; tests inject a stub.
+    private let downloadHelper: MLXHelperManager
 
     /// Capability flag injected at init so tests can exercise all branches without
     /// depending on actual hardware. Production passes `MLXCapability.isSupported`.
@@ -649,15 +654,19 @@ final class SettingsStore: ObservableObject {
     ///     Pass `UserDefaults(suiteName: "<unique>")` in tests.
     ///   - mlxHelper: The `MLXHelperManager` to use for local model operations.
     ///     Defaults to `.shared`. Pass a stub in tests.
+    ///   - downloadHelper: The `MLXHelperManager` that runs model downloads.
+    ///     Defaults to `.downloads`. Pass a stub in tests.
     ///   - isMLXSupported: Whether MLX is supported on this Mac.
     ///     Defaults to `MLXCapability.isSupported`. Pass a fixed value in tests.
     init(
         defaults: UserDefaults = .standard,
         mlxHelper: MLXHelperManager = .shared,
+        downloadHelper: MLXHelperManager = .downloads,
         isMLXSupported: Bool = MLXCapability.isSupported
     ) {
         self.defaults = defaults
         self.mlxHelper = mlxHelper
+        self.downloadHelper = downloadHelper
         self.isMLXSupported = isMLXSupported
         completedLocalModelIDs = Self.load(Set<String>.self, key: Keys.completedLocalModelIDs, from: defaults) ?? []
         localModelIdleSeconds = defaults.object(forKey: Keys.localModelIdleSeconds) as? Int ?? 300
@@ -1358,7 +1367,7 @@ final class SettingsStore: ObservableObject {
         let myToken = downloadToken
 
         let repoID = model.repoID
-        let helper = mlxHelper
+        let helper = downloadHelper
 
         activeDownloadTask = Task {
             var completedSuccessfully = false

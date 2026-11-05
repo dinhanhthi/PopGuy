@@ -131,6 +131,11 @@ actor MLXHelperManager {
 
     static let shared = MLXHelperManager()
 
+    /// A second helper process used only for model downloads. The single-flight
+    /// invariant restarts a process when a new request arrives, so a download on
+    /// `.shared` was killed by any local action run meanwhile.
+    static let downloads = MLXHelperManager()
+
     // MARK: - Configuration
 
     private let helperURL: URL

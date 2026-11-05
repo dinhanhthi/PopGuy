@@ -3,7 +3,7 @@
 //
 // Phase 4 tests: LocalModelAvailability decision + SettingsStore download orchestration.
 //
-// Injection seam: SettingsStore(defaults:mlxHelper:isMLXSupported:) lets tests
+// Injection seam: SettingsStore(defaults:mlxHelper:downloadHelper:isMLXSupported:) lets tests
 // supply a stub MLXHelperManager (stub shell script — same approach as
 // MLXHelperManagerTests) and a fixed isMLXSupported flag.
 
@@ -200,7 +200,7 @@ struct LocalMLXSettingsTests {
         defer { removeSuite(name) }
 
         let manager = MLXHelperManager(helperURL: stubURL, supported: true, hubCacheBaseURL: isolatedHub)
-        let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
+        let store = SettingsStore(defaults: suite, mlxHelper: manager, downloadHelper: manager, isMLXSupported: true)
 
         let model = otherCatalogModel
         store.downloadLocalModel(model.id)
@@ -223,7 +223,7 @@ struct LocalMLXSettingsTests {
         defer { removeSuite(name) }
 
         let manager = MLXHelperManager(helperURL: stubURL, supported: false, hubCacheBaseURL: isolatedHub)
-        let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: false)
+        let store = SettingsStore(defaults: suite, mlxHelper: manager, downloadHelper: manager, isMLXSupported: false)
 
         store.downloadLocalModel(gemmaE2B.id)
 
@@ -242,7 +242,7 @@ struct LocalMLXSettingsTests {
         defer { removeSuite(name) }
 
         let manager = MLXHelperManager(helperURL: stubURL, supported: true, hubCacheBaseURL: isolatedHub)
-        let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
+        let store = SettingsStore(defaults: suite, mlxHelper: manager, downloadHelper: manager, isMLXSupported: true)
 
         store.downloadLocalModel("this-id-does-not-exist")
 
@@ -271,7 +271,7 @@ struct LocalMLXSettingsTests {
         try seedInstalledModel(hubDir: tempHub, repoID: freeModel.repoID)
 
         let manager = MLXHelperManager(helperURL: stubURL, supported: true, hubCacheBaseURL: tempHub)
-        let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
+        let store = SettingsStore(defaults: suite, mlxHelper: manager, downloadHelper: manager, isMLXSupported: true)
 
         #expect(store.installedLocalModels.isEmpty, "Should start empty before download")
 
@@ -302,6 +302,46 @@ struct LocalMLXSettingsTests {
         await manager.shutdown()
     }
 
+    /// Downloads must run on `downloadHelper`, never on `mlxHelper` (a local action on
+    /// `mlxHelper` would restart its process and kill the download). The mlxHelper here
+    /// points at a missing binary, so a download routed through it fails.
+    @Test("download runs on downloadHelper, not mlxHelper")
+    func downloadUsesDownloadHelper() async throws {
+        let stubURL = try writeStubHelper(mode: .fast)
+        defer { try? FileManager.default.removeItem(at: stubURL) }
+
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        // Both managers share the hub dir so install detection (on mlxHelper) sees the files.
+        let tempHub = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LocalMLXHub-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: tempHub) }
+
+        let freeModel = gemmaE2B
+        try seedInstalledModel(hubDir: tempHub, repoID: freeModel.repoID)
+
+        let brokenHelper = MLXHelperManager(
+            helperURL: URL(fileURLWithPath: "/nonexistent"), supported: true, hubCacheBaseURL: tempHub)
+        let downloadManager = MLXHelperManager(helperURL: stubURL, supported: true, hubCacheBaseURL: tempHub)
+        let store = SettingsStore(
+            defaults: suite, mlxHelper: brokenHelper, downloadHelper: downloadManager, isMLXSupported: true)
+
+        store.downloadLocalModel(freeModel.id)
+        try await withTimeout(seconds: 10) {
+            while await store.activeLocalModelDownloadID != nil {
+                try await Task.sleep(nanoseconds: 20_000_000)  // 20 ms
+            }
+        }
+
+        #expect(store.localModelDownloadError == nil,
+                "Expected no download error; got \(store.localModelDownloadError ?? "nil")")
+        #expect(store.installedLocalModels.contains(freeModel.id),
+                "Expected \(freeModel.id) installed after a download on downloadHelper")
+
+        await downloadManager.shutdown()
+    }
+
     // MARK: - Cancel mid-download
 
     @Test("cancel mid-download clears progress and activeID with no stuck state")
@@ -314,7 +354,7 @@ struct LocalMLXSettingsTests {
         defer { removeSuite(name) }
 
         let manager = MLXHelperManager(helperURL: stubURL, supported: true, hubCacheBaseURL: isolatedHub)
-        let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
+        let store = SettingsStore(defaults: suite, mlxHelper: manager, downloadHelper: manager, isMLXSupported: true)
 
         let freeModel = gemmaE2B
         store.downloadLocalModel(freeModel.id)
@@ -357,7 +397,7 @@ struct LocalMLXSettingsTests {
         defer { removeSuite(name) }
 
         let manager = MLXHelperManager(helperURL: stubURL, supported: true, hubCacheBaseURL: isolatedHub)
-        let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
+        let store = SettingsStore(defaults: suite, mlxHelper: manager, downloadHelper: manager, isMLXSupported: true)
 
         let freeModel = gemmaE2B
         store.downloadLocalModel(freeModel.id)
@@ -391,7 +431,7 @@ struct LocalMLXSettingsTests {
 
         // Both downloads go through the same manager instance.
         let manager = MLXHelperManager(helperURL: slowStubURL, supported: true, hubCacheBaseURL: isolatedHub)
-        let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
+        let store = SettingsStore(defaults: suite, mlxHelper: manager, downloadHelper: manager, isMLXSupported: true)
 
         // Pick two different free/pro models as A and B.
         let allModels = LocalModelCatalog.all
@@ -449,7 +489,7 @@ struct LocalMLXSettingsTests {
         defer { removeSuite(name) }
 
         let manager = MLXHelperManager(helperURL: slowStubURL, supported: true, hubCacheBaseURL: isolatedHub)
-        let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
+        let store = SettingsStore(defaults: suite, mlxHelper: manager, downloadHelper: manager, isMLXSupported: true)
 
         let freeModel = gemmaE2B
 
@@ -509,7 +549,7 @@ struct LocalMLXSettingsTests {
         try seedInstalledModel(hubDir: tempHub, repoID: freeModel.repoID)
 
         let manager = MLXHelperManager(helperURL: stubURL, supported: true, hubCacheBaseURL: tempHub)
-        let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
+        let store = SettingsStore(defaults: suite, mlxHelper: manager, downloadHelper: manager, isMLXSupported: true)
 
         // Complete a download so the model ends up in completedLocalModelIDs.
         store.downloadLocalModel(freeModel.id)
@@ -548,7 +588,7 @@ struct LocalMLXSettingsTests {
         try seedInstalledModel(hubDir: tempHub, repoID: freeModel.repoID)
 
         let manager = MLXHelperManager(helperURL: URL(fileURLWithPath: "/nonexistent"), supported: true, hubCacheBaseURL: tempHub)
-        let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
+        let store = SettingsStore(defaults: suite, mlxHelper: manager, downloadHelper: manager, isMLXSupported: true)
 
         await store.refreshInstalledLocalModels()
         #expect(store.installedLocalModels.isEmpty,
@@ -565,7 +605,7 @@ struct LocalMLXSettingsTests {
         defer { removeSuite(name) }
 
         let manager = MLXHelperManager(helperURL: URL(fileURLWithPath: "/nonexistent"), supported: true, hubCacheBaseURL: tempHub)
-        let store = SettingsStore(defaults: suite, mlxHelper: manager, isMLXSupported: true)
+        let store = SettingsStore(defaults: suite, mlxHelper: manager, downloadHelper: manager, isMLXSupported: true)
 
         await store.refreshInstalledLocalModels()
         #expect(store.installedLocalModels.isEmpty, "Expected empty set when no models are on disk")
