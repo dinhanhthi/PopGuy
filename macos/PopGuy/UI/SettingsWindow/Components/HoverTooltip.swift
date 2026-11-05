@@ -139,7 +139,10 @@ final class HoverTooltipPanelPresenter {
     /// `leadingAligned` lines the tooltip up with the anchor's leading edge
     /// instead of its trailing edge. The result is clamped to the screen.
     func show(text: String, anchor: NSView, cornerRadius: CGFloat = 6, leadingAligned: Bool = false) {
-        guard let parentWindow = anchor.window else { return }
+        // A hover timer can fire after its window was hidden (a button re-enabled
+        // under the pointer after an action closed the toolbar). Ordering the child
+        // tooltip in would order the hidden parent back in with it.
+        guard let parentWindow = anchor.window, parentWindow.isVisible else { return }
 
         let panel = panel ?? makePanel()
         let hostingController = NSHostingController(rootView: HoverTooltipBubble(text: text, cornerRadius: cornerRadius))

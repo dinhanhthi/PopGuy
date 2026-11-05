@@ -6,8 +6,10 @@
 // presenting outside the normal layout tree so sidebar and ScrollView siblings
 // cannot cover or clip the tooltip surface.
 
+import AppKit
 import Foundation
 import Testing
+@testable import PopGuy
 
 @Suite("HoverTooltip")
 struct HoverTooltipTests {
@@ -48,6 +50,29 @@ struct HoverTooltipTests {
             source.contains(".padding(.horizontal, 8)") && source.contains(".padding(.vertical, 4)"),
             "Expected hoverTooltip to keep the same compact padding as the toolbar tooltip."
         )
+    }
+
+    /// A tooltip whose hover timer fires after its window was hidden (e.g. the
+    /// toolbar closed by an action's "Close toolbar") must not order that window
+    /// back in: AppKit shows a hidden parent when its child panel orders front.
+    @Test("a tooltip never re-shows its hidden window")
+    @MainActor
+    func tooltipNeverReshowsHiddenWindow() {
+        let window = NSPanel(
+            contentRect: NSRect(x: 200, y: 200, width: 200, height: 40),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        let anchor = NSView(frame: NSRect(x: 0, y: 0, width: 40, height: 40))
+        window.contentView?.addSubview(anchor)
+        window.orderFront(nil)
+        window.orderOut(nil)
+        defer { HoverTooltipPanelPresenter.shared.hide(anchor: nil) }
+
+        HoverTooltipPanelPresenter.shared.show(text: "YouTube", anchor: anchor)
+
+        #expect(!window.isVisible, "Expected the hidden window to stay hidden when its tooltip fires late.")
     }
 
     private func repositoryRoot() throws -> URL {
