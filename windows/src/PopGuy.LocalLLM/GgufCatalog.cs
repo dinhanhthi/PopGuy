@@ -9,9 +9,10 @@ namespace PopGuy.LocalLLM;
 /// <param name="Sha256">Expected SHA-256 of the file, lowercase hex.</param>
 /// <param name="ContextTokens">The model's training context window.</param>
 /// <param name="RamMB">Estimated memory while loaded, for the RAM guidance in Settings.</param>
+/// <param name="SettingsWarning">Shown as a warning next to the model's name in Settings; null for none.</param>
 public sealed record GgufModel(
     string Id, string DisplayName, string Repo, string Revision, string File, long Bytes, string Sha256,
-    int ContextTokens, int RamMB, bool IsDefault = false);
+    int ContextTokens, int RamMB, bool IsDefault = false, string? SettingsWarning = null);
 
 /// <summary>
 /// The local models PopGuy for Windows offers (macOS <c>LocalModelCatalog</c>, MLX there): the Q4_K_M quantizations
@@ -20,12 +21,22 @@ public sealed record GgufModel(
 /// </summary>
 public static class GgufCatalog
 {
+    /// <summary>
+    /// The sub-3B models' warning (macOS <c>LocalModelCatalog.smallModelWarning</c>): with the built-in prompts they can
+    /// answer a selected question or return it unchanged, worse with extra instructions.
+    /// </summary>
+    public const string SmallModelWarning =
+        "This small model may answer a selected question instead of editing it, or return the text unchanged, more " +
+        "often with a Global Prompt or \"Preserve & render formatting\" on (Settings → General). For Improve, Proofread " +
+        "and Shorten, use a 4B model or larger.";
+
     public static readonly IReadOnlyList<GgufModel> All =
     [
         new("gguf-qwen3.5-2b", "Qwen3.5 2B",
             "unsloth/Qwen3.5-2B-GGUF", "f6d5376be1edb4d416d56da11e5397a961aca8ae",
             "Qwen3.5-2B-Q4_K_M.gguf", 1_280_835_840,
-            "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223", 262_144, 3100),
+            "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223", 262_144, 3100,
+            SettingsWarning: SmallModelWarning),
         new("gguf-gemma-4-e2b", "Gemma 4 E2B",
             "unsloth/gemma-4-E2B-it-GGUF", "0314792d7f1f7e229411f620751375812bb9faf2",
             "gemma-4-E2B-it-Q4_K_M.gguf", 3_106_738_272,

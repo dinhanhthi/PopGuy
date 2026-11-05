@@ -142,9 +142,10 @@ struct LocalModelCatalogTests {
 
     // MARK: - Small-model warning
 
-    @Test("only Qwen3 1.7B carries the small-model settings warning")
-    func onlyQwen3SmallHasWarning() {
-        let warned = LocalModelCatalog.all.filter { $0.settingsWarning != nil }.map(\.id)
-        #expect(warned == ["qwen3-1.7b"])
+    @Test("only the small models carry the small-model warning, with one shared text")
+    func onlySmallModelsHaveWarning() {
+        let warned = LocalModelCatalog.all.filter { $0.settingsWarning != nil }
+        #expect(warned.map(\.id) == ["qwen3-1.7b", "qwen3.5-2b", "llama-3.2-3b"])
+        #expect(Set(warned.map(\.settingsWarning)).count == 1)
     }
 }

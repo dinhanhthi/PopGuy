@@ -157,6 +157,10 @@ public nonisolated enum LocalModelCatalog {
 
     // MARK: - Catalog
 
+    /// Shown next to the small models (3B and below): with the built-in prompts they can answer
+    /// a selected question or return it unchanged, worse with extra instructions.
+    public nonisolated static let smallModelWarning = "This small model may answer a selected question instead of editing it, or return the text unchanged, more often with a Global Prompt or \"Preserve & render formatting\" on (Settings → General). For Improve, Proofread and Shorten, use a 4B model or larger."
+
     /// All curated on-device models, in display order.
     public nonisolated static let all: [LocalModel] = [
         LocalModel(
@@ -190,7 +194,7 @@ public nonisolated enum LocalModelCatalog {
             family: .qwen,
             approxSizeBytes: 1_000_000_000,
             minRAMBytes: 4_294_967_296,
-            settingsWarning: "This small model can return your text unchanged when a Global Prompt and \"Preserve & render formatting\" are both on. Turn one of them off in Settings → General, or use a larger model."
+            settingsWarning: smallModelWarning
         ),
         LocalModel(
             id: "qwen3.5-2b",
@@ -198,7 +202,8 @@ public nonisolated enum LocalModelCatalog {
             displayName: "Qwen3.5 2B (4-bit)",
             family: .qwen,
             approxSizeBytes: 1_750_000_000,
-            minRAMBytes: 4_294_967_296
+            minRAMBytes: 4_294_967_296,
+            settingsWarning: smallModelWarning
         ),
         LocalModel(
             id: "qwen3.5-4b",
@@ -222,7 +227,8 @@ public nonisolated enum LocalModelCatalog {
             displayName: "Llama 3.2 3B (4-bit)",
             family: .other,
             approxSizeBytes: 1_820_000_000,
-            minRAMBytes: 4_294_967_296
+            minRAMBytes: 4_294_967_296,
+            settingsWarning: smallModelWarning
         ),
         // Keep last: `all.first` is the onboarding default.
         LocalModel(

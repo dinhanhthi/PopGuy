@@ -160,6 +160,11 @@ public sealed class ModelDownloaderTests : IDisposable
     public void AModelIdResolvesToACatalogEntry(string? id, string expected) =>
         Assert.Equal(expected, GgufCatalog.Resolve(id).Id);
 
+    // Small models answer a selected question instead of editing it (macOS LocalModelCatalog.settingsWarning).
+    [Fact]
+    public void OnlyTheSmallQwenModelCarriesTheSmallModelWarning() =>
+        Assert.Equal(["gguf-qwen3.5-2b"], GgufCatalog.All.Where(m => m.SettingsWarning is not null).Select(m => m.Id));
+
     private static HttpResponseMessage Body(HttpStatusCode status, byte[] body, int chunkSize = int.MaxValue) =>
         new(status) { Content = new StreamContent(new ChunkedStream(body, chunkSize)) };
 

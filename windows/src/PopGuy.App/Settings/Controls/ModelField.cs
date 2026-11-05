@@ -36,6 +36,9 @@ public sealed partial class ModelField : UserControl
     private readonly FontIcon _deprecationIcon = new() { Glyph = "\uE7BA", VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _deprecationText = new();
     private readonly Button _replace = new();
+    private readonly Grid _smallModel = new() { ColumnSpacing = 6, Visibility = Visibility.Collapsed };
+    private readonly FontIcon _smallModelIcon = new() { Glyph = "\uE7BA", VerticalAlignment = VerticalAlignment.Top };
+    private readonly TextBlock _smallModelText = new() { TextWrapping = TextWrapping.Wrap, MaxWidth = 360 };
 
     private static readonly IReadOnlyList<string> LocalModelIds = [.. GgufCatalog.All.Select(m => m.Id)];
 
@@ -82,10 +85,18 @@ public sealed partial class ModelField : UserControl
         Grid.SetColumn(_replace, 2);
         _deprecation.Children.Add(_replace);
 
+        // A small local model's warning: icon, then text.
+        _smallModel.HorizontalAlignment = HorizontalAlignment.Right;
+        for (var i = 0; i < 2; i++) _smallModel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _smallModel.Children.Add(_smallModelIcon);
+        Grid.SetColumn(_smallModelText, 1);
+        _smallModel.Children.Add(_smallModelText);
+
         var root = new StackPanel { Spacing = 4 };
         root.Children.Add(input);
         root.Children.Add(_feedback);
         root.Children.Add(_deprecation);
+        root.Children.Add(_smallModel);
         Content = root;
         IsTabStop = false;
 
@@ -117,6 +128,8 @@ public sealed partial class ModelField : UserControl
         _feedbackText.Style = style("CaptionStyle");
         _deprecationText.Style = style("CaptionStyle");
         _deprecationIcon.Style = style("CautionIconStyle");
+        _smallModelText.Style = style("CaptionStyle");
+        _smallModelIcon.Style = style("CautionIconStyle");
     }
 
     /// <summary>
@@ -140,6 +153,8 @@ public sealed partial class ModelField : UserControl
             foreach (var id in suggestions)
             {
                 var item = new MenuFlyoutItem { Text = id };
+                if (kind == ProviderKind.MlxLocal && GgufCatalog.Find(id)?.SettingsWarning is not null)
+                    item.Icon = new FontIcon { Glyph = "\uE7BA" };
                 item.Click += (_, _) => SetAndCommit(id);
                 _suggestionMenu.Items.Add(item);
             }
@@ -195,10 +210,16 @@ public sealed partial class ModelField : UserControl
         Commit();
     }
 
-    /// <summary>Check needs a non-blank model and no running check; the notice names a deprecated id's replacement.</summary>
+    /// <summary>
+    /// Check needs a non-blank model and no running check; the notice names a deprecated id's replacement; a small local
+    /// model shows its warning.
+    /// </summary>
     private void Refresh()
     {
         _check.IsEnabled = _checkRun is null && _box.Text.Trim().Length > 0;
+        var warning = _kind == ProviderKind.MlxLocal ? GgufCatalog.Resolve(_box.Text.Trim()).SettingsWarning : null;
+        _smallModel.Visibility = warning is null ? Visibility.Collapsed : Visibility.Visible;
+        _smallModelText.Text = warning ?? "";
         var replacement = _kind.MigratedModel(_box.Text);
         var deprecated = replacement != _box.Text;
         _deprecation.Visibility = deprecated ? Visibility.Visible : Visibility.Collapsed;

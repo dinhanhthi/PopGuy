@@ -368,6 +368,13 @@ public sealed partial class ProvidersPage : Page
 
             var name = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             name.Children.Add(new TextBlock { Text = entry.DisplayName, VerticalAlignment = VerticalAlignment.Center });
+            if (entry.SettingsWarning is { } warning)
+            {
+                var icon = new FontIcon { Glyph = "\uE7BA", Style = page.PageStyle("CautionIconStyle"), VerticalAlignment = VerticalAlignment.Center };
+                HoverTooltip.SetText(icon, warning);
+                AutomationProperties.SetHelpText(icon, warning);
+                name.Children.Add(icon);
+            }
             _defaultBadge = new Border
             {
                 Style = page.PageStyle("BadgeStyle"),
