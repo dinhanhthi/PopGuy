@@ -23,6 +23,7 @@
 //   - ActivityTracker actor provides thread-safe idle time tracking.
 
 import Foundation
+import MLX
 
 // MARK: - Download progress state
 
@@ -126,6 +127,14 @@ private let kIdleTimeoutSeconds: TimeInterval = {
     }
     return 300
 }()
+
+/// Cap on MLX's cache of freed GPU buffers, set at startup.
+/// MLX keeps freed buffers cached for reuse, and without a cap that cache grows with every
+/// generation, so a long-lived helper's memory climbs far above the model's own size.
+/// The cap keeps the helper's footprint near the model's size. Measured 2026-11-05 over 59
+/// generations in one helper: Qwen3.5 4B 11.3 GB → 3.7 GB, Llama 3.2 3B 8.7 GB → 2.7 GB,
+/// with no measurable tokens/s loss (128 MB and 512 MB caps were no faster).
+private let kMLXCacheLimitBytes = 20 * 1024 * 1024  // 20 MB
 
 // MARK: - ActivityTracker
 
@@ -274,6 +283,9 @@ func runMain() async {
     let stdinReader = Task.detached {
         readStdinLines(into: lineContinuation)
     }
+
+    // Cap MLX's freed-buffer cache before any model loads.
+    Memory.cacheLimit = kMLXCacheLimitBytes
 
     // Emit startup ready signal.
     writeResponse(.ready)

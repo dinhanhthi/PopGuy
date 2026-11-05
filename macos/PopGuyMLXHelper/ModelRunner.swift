@@ -99,9 +99,12 @@ actor ModelRunner {
     // MARK: - Lifecycle
 
     /// Unload the currently cached model and release GPU memory.
+    /// MLX's cache of freed buffers is cleared too, so the model's buffers are returned
+    /// to the system instead of staying cached in the helper.
     func unload() {
         container = nil
         currentModelID = nil
+        Memory.clearCache()
     }
 
     /// Returns the id of the currently loaded model, or nil when nothing is loaded.
