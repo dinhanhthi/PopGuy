@@ -1747,7 +1747,8 @@ struct ModelField: View {
             VStack(alignment: .leading, spacing: 4) {
                 Picker("", selection: $model) {
                     ForEach(installedModels, id: \.id) { localModel in
-                        Text(localModel.displayName).tag(localModel.id)
+                        Text(localModel.settingsWarning == nil ? localModel.displayName : "\(localModel.displayName) ⚠️")
+                            .tag(localModel.id)
                     }
                     // When the stored id is not installed, show it as a disabled
                     // placeholder so the user SEES the situation without any silent
@@ -1791,6 +1792,15 @@ struct ModelField: View {
                             .font(.caption)
                     }
                     .foregroundStyle(.secondary)
+                } else if let warning = LocalModelCatalog.model(for: model)?.settingsWarning {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                        Text(warning)
+                            .font(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(.orange)
                 } else if LocalModelCatalog.model(for: model)?.completionPrompt != nil {
                     HStack(spacing: 4) {
                         Image(systemName: "info.circle")

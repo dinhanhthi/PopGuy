@@ -119,6 +119,10 @@ public struct LocalModel: Sendable {
     /// this Action Library preset id.
     public nonisolated let dedicatedPresetID: String?
 
+    /// Non-nil when the model needs a settings change to work well; shown as a
+    /// warning icon next to its name in Settings.
+    public nonisolated let settingsWarning: String?
+
     public nonisolated init(
         id: String,
         repoID: String,
@@ -127,7 +131,8 @@ public struct LocalModel: Sendable {
         approxSizeBytes: Int64,
         minRAMBytes: Int64,
         completionPrompt: CompletionPrompt? = nil,
-        dedicatedPresetID: String? = nil
+        dedicatedPresetID: String? = nil,
+        settingsWarning: String? = nil
     ) {
         self.id = id
         self.repoID = repoID
@@ -137,6 +142,7 @@ public struct LocalModel: Sendable {
         self.minRAMBytes = minRAMBytes
         self.completionPrompt = completionPrompt
         self.dedicatedPresetID = dedicatedPresetID
+        self.settingsWarning = settingsWarning
     }
 }
 
@@ -183,7 +189,8 @@ public nonisolated enum LocalModelCatalog {
             displayName: "Qwen3 1.7B (4-bit)",
             family: .qwen,
             approxSizeBytes: 1_000_000_000,
-            minRAMBytes: 4_294_967_296
+            minRAMBytes: 4_294_967_296,
+            settingsWarning: "This small model can return your text unchanged when a Global Prompt and \"Preserve & render formatting\" are both on. Turn one of them off in Settings → General, or use a larger model."
         ),
         LocalModel(
             id: "qwen3.5-2b",

@@ -217,6 +217,13 @@ struct LocalModelsView: View {
                         .font(.callout)
                         .lineLimit(1)
 
+                    if let warning = model.settingsWarning {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.yellow)
+                            .hoverTooltip(warning)
+                    }
+
                     // "In memory" indicator — shown when this model is currently
                     // loaded in the helper process and consuming RAM.
                     if isInMemory {
@@ -342,18 +349,22 @@ struct LocalModelsView: View {
     // MARK: - Download progress
 
     /// Only call with developer-controlled display name strings from `LocalModelCatalog`.
-    /// Always shows an indeterminate animated bar so the user sees activity even when
-    /// large files download via Xet (which streams to a system temp path before moving
-    /// to the cache, giving no incremental on-disk progress). The percentage text shows
-    /// the best-known fraction when one is available.
+    /// Determinate bar filled to the downloaded fraction once the helper reports one;
+    /// an indeterminate bar ("Preparing…") until the first progress event.
     fileprivate func downloadProgress(name: String, fraction: Double?) -> some View {
         let clamped = fraction.map { min(max($0, 0), 1) } ?? 0
         let label = clamped > 0
             ? "Downloading \(name)… \(Int((clamped * 100).rounded()))%"
             : "Preparing \(name)…"
         return VStack(alignment: .leading, spacing: 3) {
-            ProgressView()
-                .progressViewStyle(.linear)
+            Group {
+                if clamped > 0 {
+                    ProgressView(value: clamped)
+                } else {
+                    ProgressView()
+                }
+            }
+            .progressViewStyle(.linear)
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)

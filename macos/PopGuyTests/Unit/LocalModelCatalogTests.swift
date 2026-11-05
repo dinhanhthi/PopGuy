@@ -139,4 +139,12 @@ struct LocalModelCatalogTests {
         #expect(curated == LocalModelCatalog.all.filter { $0.dedicatedPresetID == nil }.map(\.id))
         #expect(curated.first == "gemma-4-e2b")
     }
+
+    // MARK: - Small-model warning
+
+    @Test("only Qwen3 1.7B carries the small-model settings warning")
+    func onlyQwen3SmallHasWarning() {
+        let warned = LocalModelCatalog.all.filter { $0.settingsWarning != nil }.map(\.id)
+        #expect(warned == ["qwen3-1.7b"])
+    }
 }
