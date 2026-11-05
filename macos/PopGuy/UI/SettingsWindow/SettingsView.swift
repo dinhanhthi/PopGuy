@@ -1321,7 +1321,6 @@ private struct AppearanceView: View {
     // within view updates". Local @State decouples the write; .onChange pushes
     // the value to the store outside the update cycle.
     @State private var fontSize: ResultFontSize = .normal
-    @State private var preserveFormatting: Bool = false
     @State private var toolbarZoom: ToolbarZoom = .x1
     @State private var zoomIncludesFontSize: Bool = true
     @State private var hideLogo: Bool = false
@@ -1460,24 +1459,10 @@ private struct AppearanceView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-
-            Section(header: Text("Formatting")) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Preserve & render formatting", isOn: $preserveFormatting)
-                        .onChange(of: preserveFormatting) { newValue in
-                            settings.preserveFormatting = newValue
-                        }
-
-                    Text("Render Markdown text styles and lists in the result. Bold, italic, strikethrough, inline code, and lists are supported.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
         }
         .formStyle(.grouped)
         .onAppear {
             fontSize = settings.resultFontSize
-            preserveFormatting = settings.preserveFormatting
             toolbarZoom = settings.toolbarZoom
             zoomIncludesFontSize = settings.zoomIncludesFontSize
             hideLogo = settings.hideToolbarLogo

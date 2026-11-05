@@ -43,8 +43,6 @@ public sealed partial class AppearancePage : Page
             Save("hideToolbarLogo", s => s with { HideToolbarLogo = HideLogoToggle.IsOn });
         InlineSystemButtonsToggle.Toggled += (_, _) =>
             Save("inlineToolbarSystemButtons", s => s with { InlineToolbarSystemButtons = InlineSystemButtonsToggle.IsOn });
-        FormattingToggle.Toggled += (_, _) =>
-            Save("preserveFormatting", s => s with { PreserveFormatting = FormattingToggle.IsOn });
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -94,7 +92,6 @@ public sealed partial class AppearancePage : Page
         ZoomFontToggle.IsOn = current.ZoomIncludesFontSize;
         HideLogoToggle.IsOn = current.HideToolbarLogo;
         InlineSystemButtonsToggle.IsOn = current.InlineToolbarSystemButtons;
-        FormattingToggle.IsOn = current.PreserveFormatting;
         _syncing = false;
         ToolbarPreview.Refresh();
         UpdateToolbarStyleCaption();

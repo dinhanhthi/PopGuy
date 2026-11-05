@@ -69,6 +69,15 @@ struct GeneralView: View {
                 }
             }
 
+            Section(header: Text("Formatting")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Preserve & render formatting", isOn: $settings.preserveFormatting)
+                    Text("Render Markdown text styles and lists in the result. Bold, italic, strikethrough, inline code, and lists are supported.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section(header: Text("Closing the Toolbar")) {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Confirm before closing a finished result", isOn: $settings.confirmCloseAfterResult)

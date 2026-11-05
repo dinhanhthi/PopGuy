@@ -68,6 +68,14 @@
                     TextWrapping="Wrap" />
             </controls:SettingsCard>
 
+            <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Formatting" />
+
+            <controls:SettingsCard
+                Description="Render Markdown text styles and lists in the result. Bold, italic, strikethrough, inline code, and lists are supported."
+                Header="Preserve &amp; render formatting">
+                <ToggleSwitch x:Name="FormattingToggle" AutomationProperties.Name="Preserve &amp; render formatting" />
+            </controls:SettingsCard>
+
             <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Closing the Toolbar" />
 
             <controls:SettingsCard

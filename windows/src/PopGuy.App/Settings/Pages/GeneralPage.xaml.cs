@@ -34,6 +34,8 @@ public sealed partial class GeneralPage : Page
     {
         InitializeComponent();
         EnabledToggle.Toggled += (_, _) => Save("popGuyEnabled", s => s with { PopGuyEnabled = EnabledToggle.IsOn });
+        FormattingToggle.Toggled += (_, _) =>
+            Save("preserveFormatting", s => s with { PreserveFormatting = FormattingToggle.IsOn });
         ConfirmCloseToggle.Toggled += (_, _) =>
             Save("confirmCloseAfterResult", s => s with { ConfirmCloseAfterResult = ConfirmCloseToggle.IsOn });
         EnterActionBox.SelectionChanged += (_, _) =>
@@ -105,6 +107,7 @@ public sealed partial class GeneralPage : Page
         var current = _services.Settings.Current;
         _syncing = true;
         EnabledToggle.IsOn = current.PopGuyEnabled;
+        FormattingToggle.IsOn = current.PreserveFormatting;
         ConfirmCloseToggle.IsOn = current.ConfirmCloseAfterResult;
         EnterActionBox.SelectedIndex = (int)current.EnterResultAction;
         EnterFallbackBox.SelectedIndex = (int)current.EnterResultFallback;
