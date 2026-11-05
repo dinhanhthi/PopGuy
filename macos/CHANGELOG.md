@@ -15,6 +15,11 @@ heading, which the release body shows under `## Windows`.
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.4.8] - 2026-11-05
+
+### Fixed
+- After an action set to "Close toolbar" (such as YouTube), the toolbar could reappear and stay on screen with no way to close it. Hiding the toolbar now stays final.
+
 ## [1.4.7] - 2026-11-05
 
 ### Added

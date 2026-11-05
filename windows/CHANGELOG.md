@@ -9,6 +9,11 @@ Before 1.4.0 Windows had its own versions (0.1.0).
 
 ## [Unreleased]
 
+## [1.4.8] - 2026-11-05
+
+### Changed
+- No changes on Windows; this version ships with the macOS update.
+
 ## [1.4.7] - 2026-11-05
 
 ### Added
