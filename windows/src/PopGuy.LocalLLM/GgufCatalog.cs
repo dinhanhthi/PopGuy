@@ -51,6 +51,13 @@ public static class GgufCatalog
             "85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87", 131_072, 6800),
     ];
 
+    /// <summary>
+    /// The models from least to most RAM needed, then smallest download, ties in catalog order (macOS
+    /// <c>LocalModelCatalog.byRAM</c>). Settings lists this; <see cref="All"/> keeps catalog order because onboarding
+    /// uses its first entry and <see cref="Default"/>.
+    /// </summary>
+    public static IReadOnlyList<GgufModel> ByRam { get; } = [.. All.OrderBy(m => m.RamMB).ThenBy(m => m.Bytes)];
+
     public static GgufModel Default { get; } = All.Single(m => m.IsDefault);
 
     /// <summary>

@@ -161,7 +161,8 @@ public nonisolated enum LocalModelCatalog {
     /// a selected question or return it unchanged, worse with extra instructions.
     public nonisolated static let smallModelWarning = "This small model may answer a selected question instead of editing it, or return the text unchanged, more often with a Global Prompt or \"Preserve & render formatting\" on (Settings → General). For Improve, Proofread and Shorten, use a 4B model or larger."
 
-    /// All curated on-device models, in display order.
+    /// All curated on-device models, in catalog order; `all.first` is the onboarding default.
+    /// Settings lists `byRAM`.
     public nonisolated static let all: [LocalModel] = [
         LocalModel(
             id: "gemma-4-e2b",
@@ -242,6 +243,14 @@ public nonisolated enum LocalModelCatalog {
             dedicatedPresetID: "ai.humanize"
         ),
     ]
+
+    /// `all` from least to most recommended RAM, then smallest download; ties keep catalog order.
+    public nonisolated static let byRAM: [LocalModel] = all.enumerated()
+        .sorted { a, b in
+            (a.element.minRAMBytes, a.element.approxSizeBytes, a.offset)
+                < (b.element.minRAMBytes, b.element.approxSizeBytes, b.offset)
+        }
+        .map(\.element)
 
     // MARK: - Lookup
 

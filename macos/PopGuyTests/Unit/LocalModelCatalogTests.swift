@@ -50,6 +50,21 @@ struct LocalModelCatalogTests {
         #expect(LocalModelCatalog.all.first?.id == "gemma-4-e2b")
     }
 
+    // MARK: - RAM order
+
+    @Test("byRAM lists every model from least to most RAM, then smallest download")
+    func byRAMOrder() {
+        let byRAM = LocalModelCatalog.byRAM
+        #expect(byRAM.count == LocalModelCatalog.all.count)
+        #expect(Set(byRAM.map(\.id)) == Set(LocalModelCatalog.all.map(\.id)))
+        for (a, b) in zip(byRAM, byRAM.dropFirst()) {
+            #expect(
+                (a.minRAMBytes, a.approxSizeBytes) <= (b.minRAMBytes, b.approxSizeBytes),
+                "'\(a.id)' should not come before '\(b.id)'"
+            )
+        }
+    }
+
     // MARK: - Family assignments
 
     @Test("gemma models have .gemma family")

@@ -15,6 +15,10 @@ heading, which the release body shows under `## Windows`.
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+### Changed
+
+- Settings → Providers → Local AI lists models from least to most RAM needed.
+
 ## [1.4.6] - 2026-11-04
 
 ### Added

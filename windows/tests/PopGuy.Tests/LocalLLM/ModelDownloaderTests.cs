@@ -165,6 +165,15 @@ public sealed class ModelDownloaderTests : IDisposable
     public void OnlyTheSmallQwenModelCarriesTheSmallModelWarning() =>
         Assert.Equal(["gguf-qwen3.5-2b"], GgufCatalog.All.Where(m => m.SettingsWarning is not null).Select(m => m.Id));
 
+    // Settings lists the models from least to most RAM needed, then smallest download (macOS LocalModelCatalog.byRAM).
+    [Fact]
+    public void ByRamListsEveryModelFromLeastToMostRamNeeded()
+    {
+        Assert.Equal(GgufCatalog.All.Select(m => m.Id).Order(), GgufCatalog.ByRam.Select(m => m.Id).Order());
+        foreach (var (a, b) in GgufCatalog.ByRam.Zip(GgufCatalog.ByRam.Skip(1)))
+            Assert.True((a.RamMB, a.Bytes).CompareTo((b.RamMB, b.Bytes)) <= 0, $"{a.Id} is listed before {b.Id}");
+    }
+
     private static HttpResponseMessage Body(HttpStatusCode status, byte[] body, int chunkSize = int.MaxValue) =>
         new(status) { Content = new StreamContent(new ChunkedStream(body, chunkSize)) };
 

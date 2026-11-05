@@ -9,7 +9,7 @@
 //
 // API consumed (all from Phase 3 / Phase 4 — no new logic here):
 //   - MLXCapability.isSupported / .unsupportedReason
-//   - LocalModelCatalog.all
+//   - LocalModelCatalog.byRAM
 //   - SettingsStore.installedLocalModels, .localModelDownloadProgress,
 //     .activeLocalModelDownloadID, .localModelDownloadError
 //   - SettingsStore.availability(for:) → LocalModelAvailability
@@ -104,10 +104,10 @@ struct LocalModelsView: View {
                 errorBanner(errorMsg)
             }
 
-            ForEach(LocalModelCatalog.all, id: \.id) { model in
+            ForEach(LocalModelCatalog.byRAM, id: \.id) { model in
                 modelRow(model)
 
-                if model.id != LocalModelCatalog.all.last?.id {
+                if model.id != LocalModelCatalog.byRAM.last?.id {
                     Divider()
                 }
             }

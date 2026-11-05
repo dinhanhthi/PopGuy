@@ -275,7 +275,7 @@ public sealed partial class ProvidersPage : Page
             Caption("An action set to Local model (on this PC) runs the model in its Model field; an empty or unknown id runs the default model."),
             _localErrorRow,
         ];
-        foreach (var entry in GgufCatalog.All)
+        foreach (var entry in GgufCatalog.ByRam)
         {
             content.Add(new Rectangle { Style = PageStyle("DividerStyle") });
             var row = new LocalRow(this, local, entry);

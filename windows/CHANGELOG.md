@@ -9,6 +9,10 @@ Before 1.4.0 Windows had its own versions (0.1.0).
 
 ## [Unreleased]
 
+### Changed
+
+- Settings → Providers → Local AI lists models from least to most RAM needed.
+
 ## [1.4.6] - 2026-11-04
 
 ### Added
