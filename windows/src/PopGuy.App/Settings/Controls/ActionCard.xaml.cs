@@ -38,6 +38,7 @@ public sealed partial class ActionCard : UserControl
         "Disabled because this action is in More actions, which always shows action names. Turn off In More actions to use it.";
     private const string PromptCaption =
         "Use {{text}} for the selected text. Also available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on).";
+    private const string BuiltinPromptCaption = "Replaces the default prompt. " + PromptCaption;
     private const string TranslatePromptCaption = "Added on top of the default translation prompt.";
     private const string DeleteLockedTooltip =
         "Can't delete the only active action. The toolbar needs at least one. Turn on another action first.";
@@ -240,7 +241,7 @@ public sealed partial class ActionCard : UserControl
         if (kind != ActionKind.Prompt)
         {
             PromptRow(
-                new PromptField(this, "Prompt", null, "Custom prompt", PromptCaption, allowsPredefined: true),
+                new PromptField(this, "Prompt", null, "Custom prompt", BuiltinPromptCaption, allowsPredefined: true),
                 _ => true,
                 s => ActionsViewModel.Config(s, kind).CustomPrompt ?? "",
                 (s, text) => ActionsViewModel.WithConfig(s, kind, c => c with { CustomPrompt = text.Length == 0 ? null : text }));

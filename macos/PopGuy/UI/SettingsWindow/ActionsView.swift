@@ -949,6 +949,7 @@ struct ActionsView: View {
                             config.wrappedValue = c
                         }
                     ),
+                    caption: "Replaces the default prompt. Use {{text}} for the selected text. Also available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on).",
                     allowsPredefined: true
                 )
             }
