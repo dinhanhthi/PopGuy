@@ -376,36 +376,37 @@ struct HeaderIconButton: View {
                 .font(.body)
                 .imageScale(.large)
         }
-        .buttonStyle(Highlight())
+        .buttonStyle(HeaderIconButtonStyle())
         .accessibilityLabel(tooltip)
         .hoverTooltip(tooltip)
     }
+}
 
-    /// A 36 by 24 label with a 28 pt round highlight, as big as a toolbar group button's.
-    private struct Highlight: ButtonStyle {
-        func makeBody(configuration: Configuration) -> some View {
-            HoverCircle(configuration: configuration)
-        }
+/// The look of a `HeaderIconButton`: a 36 by 24 label with a 28 pt round highlight, as big as a toolbar group
+/// button's. Also for a `Menu` in a header button group (`.menuStyle(.button)` + this style).
+struct HeaderIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HoverCircle(configuration: configuration)
+    }
 
-        private struct HoverCircle: View {
-            let configuration: ButtonStyleConfiguration
-            @State private var hovered = false
-            @Environment(\.isEnabled) private var isEnabled
+    private struct HoverCircle: View {
+        let configuration: ButtonStyleConfiguration
+        @State private var hovered = false
+        @Environment(\.isEnabled) private var isEnabled
 
-            var body: some View {
-                configuration.label
-                    .frame(width: 36, height: 24)
-                    .background {
-                        Circle()
-                            .fill(configuration.isPressed ? Palette.pressedFill
-                                : hovered && isEnabled ? Palette.hoverFill : .clear)
-                            .frame(width: 28, height: 28)
-                    }
-                    .contentShape(Rectangle())
-                    .opacity(isEnabled ? 1 : 0.45)
-                    .animation(Motion.hover, value: hovered)
-                    .onHover { hovered = $0 }
-            }
+        var body: some View {
+            configuration.label
+                .frame(width: 36, height: 24)
+                .background {
+                    Circle()
+                        .fill(configuration.isPressed ? Palette.pressedFill
+                            : hovered && isEnabled ? Palette.hoverFill : .clear)
+                        .frame(width: 28, height: 28)
+                }
+                .contentShape(Rectangle())
+                .opacity(isEnabled ? 1 : 0.45)
+                .animation(Motion.hover, value: hovered)
+                .onHover { hovered = $0 }
         }
     }
 }

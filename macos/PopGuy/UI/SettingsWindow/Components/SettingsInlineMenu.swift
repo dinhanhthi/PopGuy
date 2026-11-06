@@ -67,30 +67,27 @@ struct ToolbarIconButtonStyle: ButtonStyle {
 
 // MARK: - Label chrome
 
-/// Closed-state label for Settings filter menus (text + chevron + wash).
+/// Closed-state label for Settings filter menus: the title and a menu chevron.
+/// `SettingsInlinePickerMenu` draws it in an input-color capsule.
 struct SettingsInlineMenuLabel: View {
     let title: String
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             Text(title)
-            Image(systemName: "chevron.up.chevron.down")
-                .font(.caption2)
+                .lineLimit(1)
+            MenuChevron()
                 .foregroundStyle(.secondary)
         }
-        .padding(.leading, 10)
-        .padding(.trailing, 8)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.primary.opacity(0.05))
-        )
     }
 }
 
 // MARK: - Picker menu
 
-/// Inline Picker inside a borderless Menu — matches Actions → All Types.
+/// Inline Picker inside a Menu whose trigger is a small input-color capsule
+/// (title + chevron), e.g. Actions → All Types. It reads as a chip on the
+/// window glass and inside a header search capsule (same fill, so the 1 pt
+/// edge outlines it there).
 struct SettingsInlinePickerMenu<Value: Hashable>: View {
     @Binding var selection: Value
     let displayTitle: String
@@ -98,7 +95,7 @@ struct SettingsInlinePickerMenu<Value: Hashable>: View {
     var tooltip: String? = nil
 
     var body: some View {
-        inlineMenu {
+        Menu {
             Picker("", selection: $selection) {
                 ForEach(options, id: \.value) { option in
                     Text(option.label).tag(option.value)
@@ -109,7 +106,14 @@ struct SettingsInlinePickerMenu<Value: Hashable>: View {
         } label: {
             SettingsInlineMenuLabel(title: displayTitle)
         }
+        // A button-style menu draws the SwiftUI label through the button style;
+        // a borderless one flattens it to AppKit's image + title and drops the
+        // capsule.
+        .menuStyle(.button)
+        .buttonStyle(BottomBarButtonStyle(height: 26, horizontalPadding: 10, menu: true))
+        .menuIndicator(.hidden)
         .fixedSize()
+        .overlay(Capsule().strokeBorder(Palette.surfaceBorder, lineWidth: 1).allowsHitTesting(false))
         .hoverTooltip(tooltip ?? "")
     }
 }

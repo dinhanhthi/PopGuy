@@ -134,6 +134,11 @@ struct SettingsView: View {
 
                     detailView(for: navigator.section)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        // Every page's SettingsPageLayout shows the update banner from it.
+                        .environment(\.settingsUpdater, updater)
+                        // The slide-over panels leave the page in the tree:
+                        // its header search turns off Cmd-F behind them.
+                        .environment(\.settingsPanelOpen, editingAction != nil || showingLibrary || showingMemoryInfo)
                 }
                 .frame(maxHeight: .infinity)
 
@@ -334,31 +339,36 @@ struct SettingsView: View {
     @ViewBuilder
     private func detailView(for section: SettingsSection?) -> some View {
         let section = section ?? .general
-        // The page's header row sits in the titlebar band; its own ScrollView /
-        // Form scrolls in the area below it. Header slots stay empty for now.
-        SettingsPageLayout {
-            VStack(spacing: 0) {
-                if updater.updateAvailable {
-                    UpdateBanner(version: updater.pendingVersion) {
-                        updater.checkForUpdates()
-                    }
-                    // Page content starts `pagePadding` above the body (see
-                    // SettingsPageLayout); keep the banner below the band.
-                    .padding(.top, SettingsMetrics.pagePadding)
-                }
-                // Build the (heavy) tab content one runloop turn after a loading
-                // placeholder paints, so the panel responds to the tab click instantly.
-                // `.id(section)` makes every switch a fresh instance — see the type doc.
+        // `.id(section)` makes every switch a fresh page instance, with a fresh
+        // `DeferredSectionContent` — see its type doc.
+        switch section {
+        // Pages with header-row controls build their own SettingsPageLayout and
+        // defer only their body, so the controls paint in the click's frame.
+        case .providers:
+            APIKeysTab(settings: settings, keychain: keychain, onReadMore: { withAnimation(panelAnimation) { showingMemoryInfo = true } })
+                .id(section)
+        case .actions:
+            ActionsView(settings: settings, keychain: keychain, navigator: navigator, editingAction: $editingAction, showingLibrary: $showingLibrary)
+                .id(section)
+        case .history:
+            HistoryView(history: history, settings: settings)
+                .id(section)
+        case .ignoredApps:
+            AppsView(settings: settings)
+                .id(section)
+        case .general, .triggers, .appearance, .about:
+            // The page's header row sits in the titlebar band; its own ScrollView /
+            // Form scrolls in the area below it. No header controls here.
+            SettingsPageLayout {
+                // Build the (heavy) page one runloop turn after a loading
+                // placeholder paints, so the panel responds to the click instantly.
                 DeferredSectionContent {
                     switch section {
-                    case .general:     GeneralView(settings: settings, onReplayOnboarding: onReplayOnboarding)
-                    case .providers:   APIKeysTab(settings: settings, keychain: keychain, onReadMore: { withAnimation(panelAnimation) { showingMemoryInfo = true } })
-                    case .actions:     ActionsView(settings: settings, keychain: keychain, navigator: navigator, editingAction: $editingAction, showingLibrary: $showingLibrary)
-                    case .history:     HistoryView(history: history, settings: settings)
-                    case .triggers:    TriggersView(settings: settings, screenRecordingPermission: screenRecordingPermission, navigator: navigator)
-                    case .appearance:  AppearanceView(settings: settings)
-                    case .ignoredApps: AppsView(settings: settings)
-                    case .about:       AboutView(updater: updater)
+                    case .general:    GeneralView(settings: settings, onReplayOnboarding: onReplayOnboarding)
+                    case .triggers:   TriggersView(settings: settings, screenRecordingPermission: screenRecordingPermission, navigator: navigator)
+                    case .appearance: AppearanceView(settings: settings)
+                    case .about:      AboutView(updater: updater)
+                    case .providers, .actions, .history, .ignoredApps: EmptyView() // built above
                     }
                 }
                 .id(section)
@@ -393,18 +403,33 @@ private struct NoFocusRing: ViewModifier {
 /// tab click immediately; the indeterminate `ProgressView` keeps animating on
 /// the render server even while the main thread builds the real content.
 ///
+/// The content closure is evaluated eagerly, in `init`, i.e. inside the
+/// caller's `body`. SwiftUI then records every `@State` / observed-object read
+/// the content makes as a dependency of the caller, so a state change re-runs
+/// the caller and refreshes the content. Evaluated lazily in this view's own
+/// `body`, those reads were not tracked and the content went stale (e.g. a
+/// validation message or a saved-key indicator set after the page appeared).
+/// Building the view value is cheap; the heavy part — the child views' own
+/// bodies — still runs only once `ready` flips. Keep expensive work out of
+/// the closure itself (it runs in the click's frame); light filtering over
+/// in-memory data (e.g. History's filter over at most 500 records) is fine.
+///
 /// The caller MUST attach `.id(section)` so each tab switch creates a fresh
 /// instance with `ready == false`. Without it the persisted state would stay
 /// `true` and build the heavy content on the switch render, skipping the
 /// placeholder entirely.
 struct DeferredSectionContent<Content: View>: View {
-    @ViewBuilder let content: () -> Content
+    private let content: Content
     @State private var ready = false
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
 
     var body: some View {
         Group {
             if ready {
-                content()
+                content
             } else {
                 ProgressView()
                     .controlSize(.small)
@@ -490,14 +515,29 @@ private struct SettingsFooter: View {
 
 // MARK: - APIKeysTab
 
+/// The Providers page's categories, one header-row tab each.
+private enum ProviderCategory: String, CaseIterable {
+    case ai, local, translation, speech, dictionary
+
+    var title: String {
+        switch self {
+        case .ai:          "AI"
+        case .local:       "Local AI"
+        case .translation: "Translation"
+        case .speech:      "Speech"
+        case .dictionary:  "Dictionary"
+        }
+    }
+}
+
 private struct APIKeysTab: View {
     @ObservedObject var settings: SettingsStore
     let keychain: KeychainManager
     /// Called when the user taps "Read more: how models use memory" in LocalModelsView.
     var onReadMore: () -> Void = {}
 
-    // Segmented control: 0 = AI, 1 = Translation, 2 = Speech, 3 = Dictionary.
-    @State private var providerCategory: Int = 0
+    /// The provider category the header-row tabs show.
+    @State private var providerCategory: ProviderCategory = .ai
 
     // Local draft key state — never persisted until the user commits.
     // The real stored key is NEVER read back into these fields.
@@ -534,43 +574,50 @@ private struct APIKeysTab: View {
     @State private var bglImportError: String?
 
     var body: some View {
+        // The page builds its own layout so its category tabs paint in the
+        // click's frame; only the cards below wait for the deferred turn. The
+        // category is read here and passed down so the cards depend on it
+        // explicitly (DeferredSectionContent builds its content in this body anyway).
+        let category = providerCategory
+        return SettingsPageLayout(leading: {
+            CapsuleTabs(selection: $providerCategory, tabs: ProviderCategory.allCases, title: { Text($0.title) })
+                .fixedSize()
+        }) {
+            // Deferred once per page switch; a category switch rebuilds only
+            // the (cheap) cards, at once, without the loading placeholder.
+            DeferredSectionContent { pageBody(category) }
+        }
+        #if DEBUG
+        .onAppear(perform: applyDebugTab)
+        #endif
+    }
+
+    #if DEBUG
+    /// DEBUG-only QA hook: `--providers-tab=ai|local|translation|speech|dictionary`
+    /// selects a category when the page appears, for screenshots from a shell.
+    private func applyDebugTab() {
+        let prefix = "--providers-tab="
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) }),
+              let tab = ProviderCategory(rawValue: String(arg.dropFirst(prefix.count))) else { return }
+        providerCategory = tab
+    }
+    #endif
+
+    private func pageBody(_ category: ProviderCategory) -> some View {
         // Custom SettingsCard cards instead of a grouped Form: a grouped Form
         // column-splits every row (first label, control in a trailing column),
         // which prevents the key field from spanning the full row width.
-        VStack(spacing: 0) {
-            // Fixed segmented header pinned to the top.
-            HStack(spacing: 0) {
-                CapsuleSegmentedPicker(
-                    selection: $providerCategory,
-                    segments: [
-                        .init(value: 0, label: "AI"),
-                        .init(value: 1, label: "Local AI"),
-                        .init(value: 2, label: "Translation"),
-                        .init(value: 3, label: "Speech"),
-                        .init(value: 4, label: "Dictionary"),
-                    ]
-                )
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, SettingsMetrics.pagePadding)
-            .padding(.top, SettingsMetrics.pagePadding)
-            .padding(.bottom, SettingsMetrics.cardSpacing)
-
-            // Scrollable provider cards.
-            ScrollView {
-                VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
-                    switch providerCategory {
-                    case 0:  aiProviderCards
-                    case 1:  localProviderCards
-                    case 2:  translationProviderCards
-                    case 3:  speechProviderCards
-                    default: dictionaryProviderCards
-                    }
+        ScrollView {
+            VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
+                switch category {
+                case .ai:          aiProviderCards
+                case .local:       localProviderCards
+                case .translation: translationProviderCards
+                case .speech:      speechProviderCards
+                case .dictionary:  dictionaryProviderCards
                 }
-                .padding(.horizontal, SettingsMetrics.pagePadding)
-                .padding(.bottom, SettingsMetrics.pagePadding)
             }
+            .padding(SettingsMetrics.pagePadding)
         }
         .onAppear {
             refreshSavedIndicators()
@@ -1359,14 +1406,14 @@ struct VoiceTestButton: View {
 /// Settings tab for visual preferences of the floating toolbar.
 ///
 /// Sections:
-///   • Toolbar Style: Bar / Menu layout, and "Show logo only" (a trigger shows
-///     just the logo; click to expand).
+///   • Toolbar Style: Bar / Menu layout, "Show logo only" (a trigger shows
+///     just the logo; click to expand), and the toolbar's Settings button.
 ///   • Toolbar Zoom: global scale for chrome and optionally the result font.
 ///   • Result text: font size of the result body (small / normal / big).
 private struct AppearanceView: View {
     @ObservedObject var settings: SettingsStore
 
-    // The Picker binds to local state, not directly to settings.resultFontSize:
+    // The tabs bind to local state, not directly to settings.resultFontSize:
     // a segmented Picker bound straight to an @Published property writes back
     // during the SwiftUI update pass, which trips "Publishing changes from
     // within view updates". Local @State decouples the write; .onChange pushes
@@ -1384,10 +1431,13 @@ private struct AppearanceView: View {
             Section(header: Text("Toolbar Style")) {
                 VStack(alignment: .leading, spacing: 8) {
                     LabeledContent("Toolbar style") {
-                        CapsuleSegmentedPicker(
+                        CapsuleTabs(
                             selection: $toolbarStyle,
-                            segments: ToolbarStyle.allCases.map { .init(value: $0, label: $0.displayName) }
+                            tabs: Array(ToolbarStyle.allCases),
+                            title: { Text($0.displayName) },
+                            compact: true
                         )
+                        .fixedSize()
                         .onChange(of: toolbarStyle) { newValue in
                             settings.toolbarStyle = newValue
                         }
@@ -1419,6 +1469,16 @@ private struct AppearanceView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    // Bound straight to the store, like before on the Actions
+                    // page: a Toggle writes on the click, not during an update.
+                    Toggle("Show Settings button on toolbar", isOn: $settings.showToolbarSettingsButton)
+
+                    Text("Settings stay available from the PopGuy menu bar icon")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section(header: Text("Toolbar Zoom")) {
@@ -1427,10 +1487,13 @@ private struct AppearanceView: View {
                 // cells (i.e. between settings).
                 VStack(alignment: .leading, spacing: 8) {
                     LabeledContent("Zoom level") {
-                        CapsuleSegmentedPicker(
+                        CapsuleTabs(
                             selection: $toolbarZoom,
-                            segments: ToolbarZoom.allCases.map { .init(value: $0, label: $0.displayName) }
+                            tabs: Array(ToolbarZoom.allCases),
+                            title: { Text($0.displayName) },
+                            compact: true
                         )
+                        .fixedSize()
                         .onChange(of: toolbarZoom) { newValue in
                             settings.toolbarZoom = newValue
                         }
@@ -1486,10 +1549,13 @@ private struct AppearanceView: View {
             Section(header: Text("Result Text")) {
                 VStack(alignment: .leading, spacing: 8) {
                     LabeledContent("Font size") {
-                        CapsuleSegmentedPicker(
+                        CapsuleTabs(
                             selection: $fontSize,
-                            segments: ResultFontSize.allCases.map { .init(value: $0, label: $0.displayName) }
+                            tabs: Array(ResultFontSize.allCases),
+                            title: { Text($0.displayName) },
+                            compact: true
                         )
+                        .fixedSize()
                         .onChange(of: fontSize) { newValue in
                             settings.resultFontSize = newValue
                         }

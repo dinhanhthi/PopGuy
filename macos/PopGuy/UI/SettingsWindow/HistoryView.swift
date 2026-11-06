@@ -1,8 +1,9 @@
 // HistoryView.swift
 // PopGuy — UI/SettingsWindow
 //
-// History tab: a settings card with the two history toggles + Clear All, and a
-// newest-first list of recorded action runs. Each row collapses to a summary and
+// History tab: a search capsule (with an action filter) in the header row, a
+// settings card with the two history toggles + Clear All, and a newest-first
+// list of recorded action runs. Each row collapses to a summary and
 // expands to show the input/output text with per-section Copy and a per-row delete.
 //
 // Isolation: @MainActor throughout (implicitly via SWIFT_DEFAULT_ACTOR_ISOLATION).
@@ -23,100 +24,121 @@ struct HistoryView: View {
     /// Drives the Clear All confirmation dialog.
     @State private var showClearConfirm = false
 
-    /// Free-text query matched against each record's input and output.
-    @State private var searchText: String = ""
+    /// Free-text query matched against each record's input and output. Not
+    /// empty at start → the header's search capsule starts open.
+    @State private var searchText = HistoryView.initialSearchText
 
     /// Selected action-name filter; `nil` means all actions.
-    @State private var actionFilter: String? = nil
-
-    /// True while the filter bar is stuck to the top (the settings card has
-    /// scrolled past it). Drives the bar's larger pinned padding.
-    @State private var isPinned = false
-
-    /// Coordinate space used to measure the filter bar's offset from the top.
-    private let scrollSpace = "historyScroll"
+    @State private var actionFilter: String? = HistoryView.initialActionFilter
 
     var body: some View {
+        // The page builds its own layout so its header-row search paints in
+        // the click's frame; only the body below waits for the deferred turn.
+        // The search text, action filter and expanded rows are read here and
+        // passed down so the list depends on them explicitly
+        // (DeferredSectionContent builds its content in this body anyway).
+        let searchText = searchText
+        let actionFilter = actionFilter
+        let expandedIDs = expandedIDs
+        return SettingsPageLayout(trailing: { headerSearch }) {
+            DeferredSectionContent {
+                pageBody(records: filteredRecords(searchText: searchText, actionFilter: actionFilter),
+                         isSearching: Self.isSearching(searchText),
+                         expandedIDs: expandedIDs)
+            }
+        }
+    }
+
+    /// The header row's search capsule, with the action filter while open.
+    private var headerSearch: some View {
+        HeaderSearchCapsule(
+            text: $searchText,
+            prompt: "Search input & output",
+            isFilterActive: actionFilter != nil,
+            onClose: { actionFilter = nil }
+        ) {
+            SettingsInlinePickerMenu(
+                selection: $actionFilter,
+                displayTitle: Self.chipTitle(actionFilter ?? "All actions"),
+                options: [(.none, "All actions")]
+                    + availableActions.map { (Optional.some($0), $0) },
+                tooltip: "Filter history by action"
+            )
+        }
+    }
+
+    private func pageBody(records: [HistoryRecord], isSearching: Bool, expandedIDs: Set<UUID>) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
-                // pinnedViews keeps the filter bar (the Section header) glued to the
-                // top once the settings card scrolls past it, and lets it drop back
-                // into place when scrolled to the top. Lazy so rows materialize on
-                // scroll rather than all-at-once (the list is capped at 500 records).
-                // Small outer spacing controls the gap around the filter bar (card ↔
-                // bar and bar ↔ rows). The rows keep their own 16pt gap via a nested
-                // stack so only the bar sits tight.
-                LazyVStack(alignment: .leading, spacing: 4,
-                           pinnedViews: [.sectionHeaders]) {
+                // Lazy so rows materialize on scroll rather than all-at-once
+                // (the list is capped at 500 records).
+                LazyVStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
                     settingsCard
 
                     if history.records.isEmpty {
                         emptyState
+                    } else if records.isEmpty {
+                        noMatchesState
                     } else {
-                        Section {
-                            let records = filteredRecords
-                            if records.isEmpty {
-                                noMatchesState
-                            } else {
-                                LazyVStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
-                                    ForEach(records) { record in
-                                        HistoryRow(
-                                            // While searching, expand every match so the
-                                            // hit is visible without an extra click.
-                                            record: record,
-                                            isExpanded: isSearching || expandedIDs.contains(record.id),
-                                            onToggle: { toggleExpanded(record.id) },
-                                            onDelete: { history.delete(id: record.id) }
-                                        )
-                                    }
-                                }
-                            }
-                        } header: {
-                            filterBar
+                        ForEach(records) { record in
+                            HistoryRow(
+                                // While searching, expand every match so the
+                                // hit is visible without an extra click.
+                                record: record,
+                                isExpanded: isSearching || expandedIDs.contains(record.id),
+                                onToggle: { toggleExpanded(record.id) },
+                                onDelete: { history.delete(id: record.id) }
+                            )
                         }
                     }
                 }
-                // No top padding: the safe-area inset below supplies it.
-                .padding([.horizontal, .bottom], SettingsMetrics.pagePadding)
-            }
-            .coordinateSpace(name: scrollSpace)
-            // The page's top padding as a safe-area inset, so the pinned filter bar
-            // sticks at `bodyTopInset` (below the titlebar band), not under it.
-            .safeAreaInset(edge: .top, spacing: 0) {
-                Color.clear.frame(height: SettingsMetrics.pagePadding)
-            }
-            .onPreferenceChange(HeaderOffsetKey.self) { minY in
-                // The header pins at the inset's bottom edge, where its minY
-                // settles at ~pagePadding. A small threshold absorbs sub-pixel jitter.
-                let pinned = minY <= SettingsMetrics.pagePadding + 1
-                if pinned != isPinned { isPinned = pinned }
+                .padding(SettingsMetrics.pagePadding)
             }
             #if DEBUG
-            .onAppear { debugScroll(proxy) }
+            .onAppear { debugScroll(proxy, records: records) }
             #endif
         }
     }
 
     #if DEBUG
     /// DEBUG-only QA hook: `--history-scroll=N` scrolls the list to the Nth
-    /// record when the page appears, for screenshots of the pinned filter bar.
-    private func debugScroll(_ proxy: ScrollViewProxy) {
+    /// record when the page appears, for screenshots of a scrolled list.
+    private func debugScroll(_ proxy: ScrollViewProxy, records: [HistoryRecord]) {
         let prefix = "--history-scroll="
         guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) }),
               let index = Int(arg.dropFirst(prefix.count)) else { return }
-        let records = filteredRecords
         guard !records.isEmpty else { return }
         let id = records[min(max(index, 0), records.count - 1)].id
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             proxy.scrollTo(id, anchor: .top)
         }
     }
+
+    /// DEBUG-only QA hook: `--history-search=<text>` prefills the search (the
+    /// capsule starts open), for screenshots from a shell. Read at state init,
+    /// because the capsule decides open/closed when it is created.
+    private static var initialSearchText: String {
+        let prefix = "--history-search="
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) }) else { return "" }
+        return String(arg.dropFirst(prefix.count))
+    }
+
+    /// DEBUG-only QA hook: `--history-filter=<action name>` preselects the
+    /// action filter (the capsule starts open).
+    private static var initialActionFilter: String? {
+        let prefix = "--history-filter="
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) }) else { return nil }
+        return String(arg.dropFirst(prefix.count))
+    }
+    #else
+    private static var initialSearchText: String { "" }
+    private static var initialActionFilter: String? { nil }
     #endif
 
     // MARK: - Filtering
 
     /// True when a non-empty search query is active.
-    private var isSearching: Bool {
+    private static func isSearching(_ searchText: String) -> Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
@@ -127,7 +149,7 @@ struct HistoryView: View {
 
     /// Records narrowed by the action filter and a fuzzy search query that
     /// matches against the input and output text.
-    private var filteredRecords: [HistoryRecord] {
+    private func filteredRecords(searchText: String, actionFilter: String?) -> [HistoryRecord] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         return history.records.filter { record in
             if let actionFilter, record.actionName != actionFilter { return false }
@@ -151,69 +173,12 @@ struct HistoryView: View {
         return true
     }
 
-    // MARK: - Filter bar
-
-    private var filterBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Search input & output", text: $searchText)
-                        .textFieldStyle(.plain)
-                    if !searchText.isEmpty {
-                        Button {
-                            searchText = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.borderless)
-                        .hoverTooltip("Clear search")
-                    }
-                }
-                .padding(.leading, 10)
-                .padding(.trailing, 4)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.primary.opacity(0.05))
-                )
-
-                SettingsInlinePickerMenu(
-                    selection: $actionFilter,
-                    displayTitle: actionFilter ?? "All actions",
-                    options: [(.none, "All actions")]
-                        + availableActions.map { (Optional.some($0), $0) }
-                )
-            }
-        }
-        // Tight when resting (below the History card); roomier when pinned to
-        // the top so the stuck bar has breathing room above and below.
-        .padding(.vertical, isPinned ? 10 : 0)
-        // A backing that replays the window's own glass so rows scrolling
-        // underneath are masked while the bar is pinned. The same `WindowGlass`
-        // as the window (not a solid color) matches the page exactly — the detail
-        // area has no fill of its own. In the resting position (below the History
-        // card) it is therefore invisible. Extended past the page padding to span
-        // edge-to-edge, and a little above so the gap to the row above is masked
-        // when pinned (kept small so it never cuts into the card at rest).
-        .background(
-            WindowGlass()
-                // Stops at the sidebar card: the page sits 8 pt closer to it.
-                .padding(.leading, -(SettingsMetrics.pagePadding - SettingsMetrics.pageContentPullLeading))
-                .padding(.trailing, -SettingsMetrics.pagePadding)
-                .padding(.top, -1)
-        )
-        // Measure the bar's distance from the top to detect when it pins.
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: HeaderOffsetKey.self,
-                    value: geo.frame(in: .named(scrollSpace)).minY
-                )
-            }
-        )
+    /// The filter chip's title, cut short so a long custom action name never
+    /// pushes the header past the window (the chip sizes to its title). The
+    /// menu itself lists full names.
+    private static func chipTitle(_ name: String) -> String {
+        let limit = 20
+        return name.count > limit ? String(name.prefix(limit - 1)) + "…" : name
     }
 
     // MARK: - No matches state
@@ -297,17 +262,6 @@ struct HistoryView: View {
         } else {
             expandedIDs.insert(id)
         }
-    }
-}
-
-// MARK: - HeaderOffsetKey
-
-/// Reports the filter bar's top offset within the scroll view so the view can
-/// tell when the bar has pinned to the top.
-private struct HeaderOffsetKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
 

@@ -83,10 +83,11 @@ struct ActionsView: View {
     private var panelAnimation: Animation? { reduceMotion ? nil : Motion.sheet }
 
     /// Filters the action list by type. `.all` shows every action.
-    @State private var typeFilter: ActionTypeFilter = .all
+    @State private var typeFilter: ActionTypeFilter = ActionsView.initialTypeFilter
 
-    /// Free-text search query matched against action titles.
-    @State private var searchQuery = ""
+    /// Free-text search query matched against action titles. Not empty at
+    /// start → the header's search capsule starts open.
+    @State private var searchQuery = ActionsView.initialSearchQuery
 
     /// Drives the import error alert.
     @State private var importError: String? = nil
@@ -136,137 +137,18 @@ struct ActionsView: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(spacing: 0) {
-
-            // MARK: Fixed header (toolbar preview + switch/action-buttons row)
-            VStack(spacing: SettingsMetrics.cardSpacing) {
-
-                ToolbarLayoutEditorView(settings: settings)
-
-                // MARK: Settings-button switch (left) + action buttons (right)
-                HStack {
-                    // Same look as ActionCard header switches.
-                    Toggle(isOn: $settings.showToolbarSettingsButton) {
-                        Text("Show Settings button on toolbar")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .hoverTooltip("Settings stay available from the PopGuy menu bar icon")
-
-                    Spacer()
-
-                    Button {
-                        withAnimation(panelAnimation) {
-                            editingAction = CustomAction(title: "", systemPrompt: "")
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                    }
-                    .buttonStyle(ToolbarIconButtonStyle(prominent: true))
-                    .hoverTooltip("Add action")
-
-                    Button {
-                        exportActions()
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                    }
-                    .buttonStyle(ToolbarIconButtonStyle())
-                    .disabled(settings.customActions.isEmpty)
-                    .hoverTooltip("Export custom actions")
-
-                    Button {
-                        importActions()
-                    } label: {
-                        Image(systemName: "square.and.arrow.down")
-                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                    }
-                    .buttonStyle(ToolbarIconButtonStyle())
-                    .hoverTooltip("Import custom actions")
-
-                    SettingsInlineMenu(borderedToolbarTrigger: true) {
-                        Image(systemName: "puzzlepiece.extension")
-                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                    } menuContent: {
-                        Button {
-                            importPluginFromFile()
-                        } label: {
-                            Label("Choose file\u{2026}", systemImage: "folder")
-                        }
-                        Button {
-                            snippetText = ""
-                            showSnippetSheet = true
-                        } label: {
-                            Label("Paste snippet\u{2026}", systemImage: "doc.on.clipboard")
-                        }
-                    }
-                    .hoverTooltip("Import plugin")
-
-                    // Slides the gallery panel in from the right (owned by SettingsView).
-                    Button {
-                        withAnimation(panelAnimation) {
-                            showingLibrary = true
-                        }
-                    } label: {
-                        Image(systemName: "books.vertical")
-                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                    }
-                    .buttonStyle(ToolbarIconButtonStyle())
-                    .hoverTooltip("Browse Action Library")
-                }
-
-                // MARK: Search + type filter bar
-                HStack(spacing: 8) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.secondary)
-                        TextField("Search actions\u{2026}", text: $searchQuery)
-                            .textFieldStyle(.plain)
-                        if !searchQuery.isEmpty {
-                            Button {
-                                searchQuery = ""
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.borderless)
-                        }
-                    }
-                    .padding(.leading, 10)
-                    .padding(.trailing, 4)
-                    .padding(.vertical, 6)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.primary.opacity(0.05))
-                    )
-
-                    SettingsInlinePickerMenu(
-                        selection: $typeFilter,
-                        displayTitle: typeFilter.displayName,
-                        options: ActionTypeFilter.allCases.map { ($0, $0.displayName) },
-                        tooltip: "Filter actions by type"
-                    )
-                }
-            }
-            .padding(.horizontal, SettingsMetrics.pagePadding)
-            .padding(.top, SettingsMetrics.pagePadding)
-            .padding(.bottom, SettingsMetrics.cardSpacing)
-
-            // MARK: Scrollable action cards — rendered in actionOrder
-            ScrollView {
-                VStack(spacing: SettingsMetrics.cardSpacing) {
-                    ForEach(filteredActionOrder, id: \.self) { id in
-                        card(for: id)
-                            .environment(\.isLastEnabledAction, settings.isLastEnabledAction(id))
-                    }
-                }
-                .padding(.horizontal, SettingsMetrics.pagePadding)
-                .padding(.bottom, SettingsMetrics.pagePadding)
-            }
+        // The page builds its own layout so its header-row controls (search,
+        // buttons) paint in the click's frame; only the body below waits for
+        // the deferred turn. The search text and type filter are read here and
+        // passed down so the list depends on them explicitly
+        // (DeferredSectionContent builds its content in this body anyway).
+        let searchQuery = searchQuery
+        let typeFilter = typeFilter
+        // Alerts, sheets and the Finder-import hooks sit on the page root, not
+        // in the deferred body: the header's buttons drive them, and they must
+        // work before the body is built.
+        return SettingsPageLayout(trailing: { headerControls }) {
+            DeferredSectionContent { pageBody(typeFilter: typeFilter, searchQuery: searchQuery) }
         }
         .alert("Import Failed", isPresented: $showImportError) {
             Button("OK", role: .cancel) {}
@@ -338,6 +220,122 @@ struct ActionsView: View {
             recordingID = nil
         }
     }
+
+    /// The header row's trailing controls: the search capsule (with the type
+    /// filter while open), then the action buttons, which always stay visible.
+    private var headerControls: some View {
+        HStack(spacing: 8) {
+            HeaderSearchCapsule(
+                text: $searchQuery,
+                prompt: "Search actions",
+                isFilterActive: typeFilter != .all,
+                onClose: { typeFilter = .all }
+            ) {
+                SettingsInlinePickerMenu(
+                    selection: $typeFilter,
+                    displayTitle: typeFilter.displayName,
+                    options: ActionTypeFilter.allCases.map { ($0, $0.displayName) },
+                    tooltip: "Filter actions by type"
+                )
+            }
+
+            HeaderButtonGroup {
+                HeaderIconButton(systemImage: "plus", tooltip: "Add action") {
+                    withAnimation(panelAnimation) {
+                        editingAction = CustomAction(title: "", systemPrompt: "")
+                    }
+                }
+
+                HeaderIconButton(systemImage: "square.and.arrow.up", tooltip: "Export custom actions") {
+                    exportActions()
+                }
+                .disabled(settings.customActions.isEmpty)
+
+                HeaderIconButton(systemImage: "square.and.arrow.down", tooltip: "Import custom actions") {
+                    importActions()
+                }
+
+                Menu {
+                    Button {
+                        importPluginFromFile()
+                    } label: {
+                        Label("Choose file\u{2026}", systemImage: "folder")
+                    }
+                    Button {
+                        snippetText = ""
+                        showSnippetSheet = true
+                    } label: {
+                        Label("Paste snippet\u{2026}", systemImage: "doc.on.clipboard")
+                    }
+                } label: {
+                    // Same label as a HeaderIconButton's, so it sizes the same.
+                    Image(systemName: "puzzlepiece.extension")
+                        .font(.body)
+                        .imageScale(.large)
+                }
+                .menuStyle(.button)
+                .buttonStyle(HeaderIconButtonStyle())
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .accessibilityLabel("Import plugin")
+                .hoverTooltip("Import plugin")
+
+                // Slides the gallery panel in from the right (owned by SettingsView).
+                HeaderIconButton(systemImage: "books.vertical", tooltip: "Browse Action Library") {
+                    withAnimation(panelAnimation) {
+                        showingLibrary = true
+                    }
+                }
+            }
+        }
+    }
+
+    /// The page body: the toolbar preview, then the action cards narrowed to
+    /// `typeFilter` and `searchQuery` (passed in from `body`, see there).
+    private func pageBody(typeFilter: ActionTypeFilter, searchQuery: String) -> some View {
+        VStack(spacing: 0) {
+            ToolbarLayoutEditorView(settings: settings)
+                .padding(.horizontal, SettingsMetrics.pagePadding)
+                .padding(.top, SettingsMetrics.pagePadding)
+                .padding(.bottom, SettingsMetrics.cardSpacing)
+
+            // MARK: Scrollable action cards — rendered in actionOrder
+            ScrollView {
+                VStack(spacing: SettingsMetrics.cardSpacing) {
+                    ForEach(filteredActionOrder(typeFilter: typeFilter, searchQuery: searchQuery), id: \.self) { id in
+                        card(for: id)
+                            .environment(\.isLastEnabledAction, settings.isLastEnabledAction(id))
+                    }
+                }
+                .padding(.horizontal, SettingsMetrics.pagePadding)
+                .padding(.bottom, SettingsMetrics.pagePadding)
+            }
+        }
+    }
+
+    // MARK: - Initial search state
+
+    #if DEBUG
+    /// DEBUG-only QA hook: `--actions-search=<text>` prefills the search (the
+    /// capsule starts open), for screenshots from a shell. Read at state init,
+    /// because the capsule decides open/closed when it is created.
+    private static var initialSearchQuery: String {
+        let prefix = "--actions-search="
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) }) else { return "" }
+        return String(arg.dropFirst(prefix.count))
+    }
+
+    /// DEBUG-only QA hook: `--actions-type=<raw>` (e.g. `ai`, `fromPlugin`)
+    /// preselects the type filter.
+    private static var initialTypeFilter: ActionTypeFilter {
+        let prefix = "--actions-type="
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) }) else { return .all }
+        return ActionTypeFilter(rawValue: String(arg.dropFirst(prefix.count))) ?? .all
+    }
+    #else
+    private static var initialSearchQuery: String { "" }
+    private static var initialTypeFilter: ActionTypeFilter { .all }
+    #endif
 
     /// Consumes `navigator.pendingPluginImportURL` if set, running the same
     /// dispatch logic as `importPluginFromFile()` but without a panel.
@@ -555,8 +553,8 @@ struct ActionsView: View {
 
     // MARK: - Type filter
 
-    /// The action order narrowed to the selected type filter.
-    private var filteredActionOrder: [ActionIdentifier] {
+    /// The action order narrowed to a type filter and a title search.
+    private func filteredActionOrder(typeFilter: ActionTypeFilter, searchQuery: String) -> [ActionIdentifier] {
         let byType: [ActionIdentifier]
         switch typeFilter {
         case .all:         byType = settings.actionOrder

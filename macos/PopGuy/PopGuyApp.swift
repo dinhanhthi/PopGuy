@@ -202,7 +202,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         // DEBUG-only QA hook: `--open-settings [--settings-section=<rawValue>]
         // [--settings-screen=<display name>] [--appearance=light|dark]` opens the
-        // Settings window at launch, for screenshots from a shell.
+        // Settings window at launch, for screenshots from a shell;
+        // `--snapshot-out=` (below) writes one without screencapture.
         #if DEBUG
         let args = ProcessInfo.processInfo.arguments
         if let arg = args.first(where: { $0.hasPrefix("--appearance=") }) {
@@ -215,6 +216,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 settingsNavigator.section = section
             }
             openSettings()
+        }
+        if let arg = args.first(where: { $0.hasPrefix("--snapshot-out=") }) {
+            // QA: `--snapshot-out=<png> [--snapshot-delay=<seconds>]` renders
+            // the Settings window's content into a PNG after the delay, then
+            // quits. Works while the screen is locked (no screencapture).
+            let path = String(arg.dropFirst("--snapshot-out=".count))
+            let delay = args.first(where: { $0.hasPrefix("--snapshot-delay=") })
+                .flatMap { Double($0.dropFirst("--snapshot-delay=".count)) } ?? 3
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                self?.writeDebugSnapshot(to: path)
+                NSApp.terminate(nil)
+            }
         }
         #endif
     }
@@ -842,6 +856,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--settings-screen=") }) else { return nil }
         let name = String(arg.dropFirst("--settings-screen=".count))
         return NSScreen.screens.first { $0.localizedName.localizedCaseInsensitiveContains(name) }
+    }
+
+    /// QA hook for `--snapshot-out=`: draws the Settings window's content view
+    /// into a PNG at `path` (visual-effect blur may render flat).
+    private func writeDebugSnapshot(to path: String) {
+        guard let view = settingsWindow?.contentView,
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+            NSLog("PopGuy snapshot: no Settings window")
+            return
+        }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        guard let data = rep.representation(using: .png, properties: [:]) else { return }
+        do {
+            try data.write(to: URL(fileURLWithPath: path))
+        } catch {
+            NSLog("PopGuy snapshot: %@", error.localizedDescription)
+        }
     }
     #endif
 }

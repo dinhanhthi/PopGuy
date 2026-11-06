@@ -3,10 +3,11 @@
 //
 // Interactive drag-and-drop editor for the toolbar layout (Settings → Actions).
 //
-// Row 1 renders the REAL floating toolbar (`ToolbarView`, non-interactive) from an
+// It renders the REAL floating toolbar (`ToolbarView`, non-interactive) from an
 // editor-owned view model, so metrics, zoom, labels, burger, and system buttons
-// match the live toolbar exactly. Row 2 is an editor-owned "More actions" card of
-// icon chips. Both rows are draggable: reorder on the toolbar, reorder within
+// match the live toolbar exactly, and an editor-owned "More actions" card of icon
+// chips beside it, top-aligned — wrapped to a second row only when both don't fit
+// the preview's width. Both are draggable: reorder on the toolbar, reorder within
 // More, and move actions between the two. There are no action-count caps; a soft
 // warning appears when the toolbar card grows wider than
 // `ToolbarLimits.toolbarWidthWarningThreshold`.
@@ -65,6 +66,28 @@ nonisolated enum ToolbarLayoutEditMath {
         result.insert(dragging, at: min(max(0, index), result.count))
         return result
     }
+
+    /// Whether the More card fits on the toolbar's row: toolbar, gap and card
+    /// together are no wider than `available`.
+    static func moreFitsBesideToolbar(
+        toolbarWidth: CGFloat,
+        moreWidth: CGFloat,
+        spacing: CGFloat,
+        available: CGFloat
+    ) -> Bool {
+        toolbarWidth + spacing + moreWidth <= available
+    }
+
+    /// Whether a drag at `location` targets the More card. The card spans only its
+    /// chips, so the zone is a whole band: side by side, everything right of the
+    /// card's left edge; wrapped, everything at or below its top edge — so dragging
+    /// straight down from any toolbar action reaches More. `slack` widens the zone
+    /// toward the toolbar.
+    static func isInMoreZone(location: CGPoint, moreFrame: CGRect, sideBySide: Bool, slack: CGFloat) -> Bool {
+        sideBySide
+            ? location.x >= moreFrame.minX - slack
+            : location.y >= moreFrame.minY - slack
+    }
 }
 
 // MARK: - Drag session
@@ -76,6 +99,9 @@ private struct ToolbarDragSession: Equatable {
     var targetPrincipal: Bool
     var targetIndex: Int
     var location: CGPoint
+    /// The layout when the drag began, kept for the whole drag: the preview
+    /// changes both widths, which must not flip the layout under the pointer.
+    var sideBySide: Bool
 }
 
 // MARK: - Frame preferences
@@ -105,6 +131,8 @@ struct ToolbarLayoutEditorView: View {
     @State private var moreRowFrame: CGRect = .zero
     @State private var cardWidth: CGFloat = 0
     @State private var canvasHeight: CGFloat = 0
+    /// Visible width of the preview (the horizontal ScrollView's own width).
+    @State private var availableWidth: CGFloat = 0
 
     private let dragAnimation = Animation.interactiveSpring(response: 0.28, dampingFraction: 0.86)
 
@@ -118,6 +146,33 @@ struct ToolbarLayoutEditorView: View {
     private var cardPadding: CGFloat { 4 * zoom }
     private var controlRadius: CGFloat { cardRadius - cardPadding }
     private var chipIconSize: CGFloat { NSFont.preferredFont(forTextStyle: .callout).pointSize * zoom }
+    /// ToolbarView's transparent side inset around its card.
+    private var toolbarInset: CGFloat { ToolbarView.outerHorizontalPadding * zoom }
+
+    /// Whether the More card sits beside the toolbar (latched during a drag).
+    private var sideBySide: Bool { dragSession?.sideBySide ?? measuredSideBySide }
+
+    /// Fit decision from measurements that do not depend on the layout (the
+    /// toolbar is fixed-size, the More card hugs its chips, the available width
+    /// is measured outside the ScrollView), so it cannot feed back on itself.
+    /// Wrapped until everything is measured.
+    private var measuredSideBySide: Bool {
+        #if DEBUG
+        if Self.forceWrap { return false }
+        #endif
+        guard availableWidth > 0, cardWidth > 0, moreRowFrame.width > 0 else { return false }
+        return ToolbarLayoutEditMath.moreFitsBesideToolbar(
+            toolbarWidth: toolbarInset + cardWidth,
+            moreWidth: moreRowFrame.width + toolbarInset, // room for the card's shadow
+            spacing: toolbarInset, // ToolbarView's trailing inset is the gap
+            available: availableWidth
+        )
+    }
+
+    #if DEBUG
+    /// DEBUG-only QA hook: `--preview-force-wrap` keeps More on its own row.
+    private static let forceWrap = ProcessInfo.processInfo.arguments.contains("--preview-force-wrap")
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -126,6 +181,13 @@ struct ToolbarLayoutEditorView: View {
             }
             .frame(height: canvasHeight > 0 ? canvasHeight : nil)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { availableWidth = geo.size.width }
+                        .onChange(of: geo.size.width) { availableWidth = $0 }
+                }
+            )
             .background(ToolbarPreviewBackdrop())
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
@@ -147,14 +209,23 @@ struct ToolbarLayoutEditorView: View {
 
     // MARK: Canvas
 
-    /// Both rows plus hover targets and the drag ghost, in one named coordinate
-    /// space shared by every frame reader and the drag gesture.
+    /// Toolbar and More card plus hover targets and the drag ghost, in one named
+    /// coordinate space shared by every frame reader and the drag gesture.
+    /// `AnyLayout` switches side by side / wrapped while keeping view identity,
+    /// so frames, hover targets and the drag gesture survive the switch.
     private var canvas: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let layout = sideBySide
+            ? AnyLayout(HStackLayout(alignment: .top, spacing: 0))
+            : AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+        return layout {
             toolbarRow
             moreRow
-                // Align with the toolbar card (ToolbarView's root horizontal padding).
-                .padding(.leading, 12 * zoom)
+                // Side by side: level with the toolbar card (below ToolbarView's
+                // top inset), its trailing inset is the gap, room for the shadow
+                // on the right. Wrapped: aligned with the toolbar card.
+                .padding(.top, sideBySide ? ToolbarView.outerTopPadding * zoom : 0)
+                .padding(.leading, sideBySide ? 0 : toolbarInset)
+                .padding(.trailing, sideBySide ? toolbarInset : 0)
                 // Room for the card shadow.
                 .padding(.bottom, 16)
         }
@@ -200,15 +271,15 @@ struct ToolbarLayoutEditorView: View {
         )
         .allowsHitTesting(false)
         .onPreferenceChange(ToolbarActionFramesKey.self) { toolbarFrames = $0 }
-        // Card width = the toolbar's size minus its root horizontal padding (12pt
-        // per side, zoomed). Measured here with GeometryReader + onAppear/onChange:
+        // Card width = the toolbar's size minus its root horizontal padding
+        // (`toolbarInset` per side). Measured here with GeometryReader + onAppear/onChange:
         // ToolbarView's own onContentResize (its internal size preference) was
         // found not to fire when embedded like this.
         .background(
             GeometryReader { geo in
                 Color.clear
-                    .onAppear { cardWidth = max(0, geo.size.width - 24 * zoom) }
-                    .onChange(of: geo.size.width) { cardWidth = max(0, $0 - 24 * zoom) }
+                    .onAppear { cardWidth = max(0, geo.size.width - 2 * toolbarInset) }
+                    .onChange(of: geo.size.width) { cardWidth = max(0, $0 - 2 * toolbarInset) }
             }
         )
     }
@@ -416,18 +487,22 @@ struct ToolbarLayoutEditorView: View {
                     sourceIndex: index,
                     targetPrincipal: row.principal,
                     targetIndex: index,
-                    location: location
+                    location: location,
+                    sideBySide: measuredSideBySide
                 )
             }
         }
         return nil
     }
 
-    /// The More card spans only its chips' width, so the zone is the whole band at
-    /// or below its top edge (minus a little slack), not just the card's rect —
-    /// dragging straight down from any toolbar action reaches More.
+    /// See `ToolbarLayoutEditMath.isInMoreZone`; uses the layout on screen.
     private func isInMoreZone(_ location: CGPoint) -> Bool {
-        moreRowFrame != .zero && location.y >= moreRowFrame.minY - moreZoneSlack
+        moreRowFrame != .zero && ToolbarLayoutEditMath.isInMoreZone(
+            location: location,
+            moreFrame: moreRowFrame,
+            sideBySide: sideBySide,
+            slack: moreZoneSlack
+        )
     }
 
     /// Shows the dragged action at its target slot in the preview.
