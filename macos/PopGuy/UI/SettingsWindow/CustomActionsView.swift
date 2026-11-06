@@ -119,10 +119,10 @@ struct CustomActionEditSheet: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(saveDisabled)
             }
-            // Symmetric vertical padding, matching the ActionLibraryView baseline
-            // so the header sits the same distance from the panel's top and bottom edges.
+            // Centered in the titlebar's header row (symmetric, on the traffic
+            // lights at y = 26), matching the ActionLibraryView baseline.
             .padding(.horizontal, SettingsMetrics.cardPadding)
-            .padding(.vertical, SettingsMetrics.cardPadding + 6)
+            .frame(minHeight: SettingsMetrics.headerRowHeight)
 
             Divider()
 
@@ -151,14 +151,7 @@ struct CustomActionEditSheet: View {
                     .padding(.horizontal, SettingsMetrics.cardPadding)
                     .padding(.vertical, 6)
                     .frame(minHeight: 36)
-                    .background(
-                        RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                            .fill(Color.primary.opacity(0.05))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
-                    )
+                    .modifier(GlassCard(cornerRadius: SettingsMetrics.cardRadius))
                     .onChange(of: draft.type) { _ in
                         // Reset provider to the first allowed provider for the new type
                         // if the current one is not valid (e.g. switching AI→Translation

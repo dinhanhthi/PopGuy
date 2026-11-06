@@ -37,54 +37,81 @@ struct HistoryView: View {
     private let scrollSpace = "historyScroll"
 
     var body: some View {
-        ScrollView {
-            // pinnedViews keeps the filter bar (the Section header) glued to the
-            // top once the settings card scrolls past it, and lets it drop back
-            // into place when scrolled to the top. Lazy so rows materialize on
-            // scroll rather than all-at-once (the list is capped at 500 records).
-            // Small outer spacing controls the gap around the filter bar (card ↔
-            // bar and bar ↔ rows). The rows keep their own 16pt gap via a nested
-            // stack so only the bar sits tight.
-            LazyVStack(alignment: .leading, spacing: 4,
-                       pinnedViews: [.sectionHeaders]) {
-                settingsCard
+        ScrollViewReader { proxy in
+            ScrollView {
+                // pinnedViews keeps the filter bar (the Section header) glued to the
+                // top once the settings card scrolls past it, and lets it drop back
+                // into place when scrolled to the top. Lazy so rows materialize on
+                // scroll rather than all-at-once (the list is capped at 500 records).
+                // Small outer spacing controls the gap around the filter bar (card ↔
+                // bar and bar ↔ rows). The rows keep their own 16pt gap via a nested
+                // stack so only the bar sits tight.
+                LazyVStack(alignment: .leading, spacing: 4,
+                           pinnedViews: [.sectionHeaders]) {
+                    settingsCard
 
-                if history.records.isEmpty {
-                    emptyState
-                } else {
-                    Section {
-                        let records = filteredRecords
-                        if records.isEmpty {
-                            noMatchesState
-                        } else {
-                            LazyVStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
-                                ForEach(records) { record in
-                                    HistoryRow(
-                                        // While searching, expand every match so the
-                                        // hit is visible without an extra click.
-                                        record: record,
-                                        isExpanded: isSearching || expandedIDs.contains(record.id),
-                                        onToggle: { toggleExpanded(record.id) },
-                                        onDelete: { history.delete(id: record.id) }
-                                    )
+                    if history.records.isEmpty {
+                        emptyState
+                    } else {
+                        Section {
+                            let records = filteredRecords
+                            if records.isEmpty {
+                                noMatchesState
+                            } else {
+                                LazyVStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
+                                    ForEach(records) { record in
+                                        HistoryRow(
+                                            // While searching, expand every match so the
+                                            // hit is visible without an extra click.
+                                            record: record,
+                                            isExpanded: isSearching || expandedIDs.contains(record.id),
+                                            onToggle: { toggleExpanded(record.id) },
+                                            onDelete: { history.delete(id: record.id) }
+                                        )
+                                    }
                                 }
                             }
+                        } header: {
+                            filterBar
                         }
-                    } header: {
-                        filterBar
                     }
                 }
+                // No top padding: the safe-area inset below supplies it.
+                .padding([.horizontal, .bottom], SettingsMetrics.pagePadding)
             }
-            .padding(SettingsMetrics.pagePadding)
-        }
-        .coordinateSpace(name: scrollSpace)
-        .onPreferenceChange(HeaderOffsetKey.self) { minY in
-            // The header pins at the top of the scroll view, where its minY
-            // settles at ~0. A small threshold absorbs sub-pixel jitter.
-            let pinned = minY <= 1
-            if pinned != isPinned { isPinned = pinned }
+            .coordinateSpace(name: scrollSpace)
+            // The page's top padding as a safe-area inset, so the pinned filter bar
+            // sticks at `bodyTopInset` (below the titlebar band), not under it.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Color.clear.frame(height: SettingsMetrics.pagePadding)
+            }
+            .onPreferenceChange(HeaderOffsetKey.self) { minY in
+                // The header pins at the inset's bottom edge, where its minY
+                // settles at ~pagePadding. A small threshold absorbs sub-pixel jitter.
+                let pinned = minY <= SettingsMetrics.pagePadding + 1
+                if pinned != isPinned { isPinned = pinned }
+            }
+            #if DEBUG
+            .onAppear { debugScroll(proxy) }
+            #endif
         }
     }
+
+    #if DEBUG
+    /// DEBUG-only QA hook: `--history-scroll=N` scrolls the list to the Nth
+    /// record when the page appears, for screenshots of the pinned filter bar.
+    private func debugScroll(_ proxy: ScrollViewProxy) {
+        let prefix = "--history-scroll="
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) }),
+              let index = Int(arg.dropFirst(prefix.count)) else { return }
+        let records = filteredRecords
+        guard !records.isEmpty else { return }
+        let id = records[min(max(index, 0), records.count - 1)].id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            proxy.scrollTo(id, anchor: .top)
+        }
+    }
+    #endif
 
     // MARK: - Filtering
 
@@ -164,17 +191,18 @@ struct HistoryView: View {
         // Tight when resting (below the History card); roomier when pinned to
         // the top so the stuck bar has breathing room above and below.
         .padding(.vertical, isPinned ? 10 : 0)
-        // A backing that replays the window's own backdrop so rows scrolling
-        // underneath are masked while the bar is pinned. Using the .windowBackground
-        // material (not a solid color) matches the page exactly — the detail area
-        // has no opaque fill, so windowBackgroundColor reads too light against it.
-        // In the resting position (below the History card) it is therefore
-        // invisible. Extended past the page padding to span edge-to-edge, and a
-        // little above so the gap to the row above is masked when pinned (kept
-        // small so it never cuts into the card at rest).
+        // A backing that replays the window's own glass so rows scrolling
+        // underneath are masked while the bar is pinned. The same `WindowGlass`
+        // as the window (not a solid color) matches the page exactly — the detail
+        // area has no fill of its own. In the resting position (below the History
+        // card) it is therefore invisible. Extended past the page padding to span
+        // edge-to-edge, and a little above so the gap to the row above is masked
+        // when pinned (kept small so it never cuts into the card at rest).
         .background(
-            WindowBackdrop()
-                .padding(.horizontal, -SettingsMetrics.pagePadding)
+            WindowGlass()
+                // Stops at the sidebar card: the page sits 8 pt closer to it.
+                .padding(.leading, -(SettingsMetrics.pagePadding - SettingsMetrics.pageContentPullLeading))
+                .padding(.trailing, -SettingsMetrics.pagePadding)
                 .padding(.top, -1)
         )
         // Measure the bar's distance from the top to detect when it pins.
@@ -283,25 +311,6 @@ private struct HeaderOffsetKey: PreferenceKey {
     }
 }
 
-// MARK: - WindowBackdrop
-
-/// Reproduces the Settings window's own backdrop via `NSVisualEffectView` with
-/// the `.windowBackground` material. The detail area has no opaque fill, so a
-/// plain `windowBackgroundColor` reads too light against it; this matches the
-/// real window background exactly, keeping the pinned filter bar invisible at
-/// rest while still masking rows that scroll beneath it.
-private struct WindowBackdrop: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .windowBackground
-        view.blendingMode = .behindWindow
-        view.state = .active
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
-}
-
 // MARK: - HistoryRow
 
 /// A single history record: a tappable summary row that expands to reveal the
@@ -321,14 +330,7 @@ private struct HistoryRow: View {
                     .padding(SettingsMetrics.cardPadding)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                .fill(Color.primary.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
-        )
+        .modifier(GlassCard(cornerRadius: SettingsMetrics.cardRadius))
     }
 
     // MARK: - Summary

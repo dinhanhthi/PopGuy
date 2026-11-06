@@ -199,6 +199,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if !settingsStore.hasOnboarded {
             presentOnboarding()
         }
+
+        // DEBUG-only QA hook: `--open-settings [--settings-section=<rawValue>]
+        // [--settings-screen=<display name>] [--appearance=light|dark]` opens the
+        // Settings window at launch, for screenshots from a shell.
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        if let arg = args.first(where: { $0.hasPrefix("--appearance=") }) {
+            // QA: force light or dark without touching the system setting.
+            NSApp.appearance = NSAppearance(named: arg.hasSuffix("light") ? .aqua : .darkAqua)
+        }
+        if args.contains("--open-settings") {
+            if let arg = args.first(where: { $0.hasPrefix("--settings-section=") }),
+               let section = SettingsSection(rawValue: String(arg.dropFirst("--settings-section=".count))) {
+                settingsNavigator.section = section
+            }
+            openSettings()
+        }
+        #endif
     }
 
     // MARK: - Onboarding
@@ -782,21 +800,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             window.title = "PopGuy Settings"
             // Full-height left column: content extends under the title bar so the
             // sidebar column reaches the top and the traffic-light buttons sit
-            // over it. Title text is hidden (no toolbar) to avoid overlapping
-            // content in the borderless top area.
+            // over it. Title text is hidden so it doesn't overlap the page
+            // header rows in the titlebar band.
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
+            // An empty unified toolbar (no items) makes the titlebar band ~52 pt
+            // tall with the traffic lights vertically centered in it; SwiftUI
+            // page header rows sit inside that band.
+            window.toolbar = NSToolbar(identifier: "SettingsHeader")
+            window.toolbarStyle = .unified
+            window.titlebarSeparatorStyle = .none
             window.setContentSize(NSSize(width: 900, height: 640))
             window.center()
             window.delegate = self
             window.isReleasedWhenClosed = false
             settingsWindow = window
         }
+        #if DEBUG
+        if let screen = Self.debugQAScreen, let window = settingsWindow {
+            // QA screenshots: show the window on the named display without
+            // activating the app, so it never takes the user's focus.
+            let visible = screen.visibleFrame
+            window.setFrameOrigin(NSPoint(x: visible.midX - window.frame.width / 2,
+                                          y: visible.midY - window.frame.height / 2))
+            window.orderFrontRegardless()
+            return
+        }
+        #endif
         settingsWindow?.makeKeyAndOrderFront(nil)
         if settingsStore.showDockIconWithSettings {
             NSApp.setActivationPolicy(.regular)
         }
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    #if DEBUG
+    /// QA hook: `--settings-screen=<name substring>` (e.g. "Built-in") places the
+    /// Settings window on that display and does not activate the app.
+    private static var debugQAScreen: NSScreen? {
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--settings-screen=") }) else { return nil }
+        let name = String(arg.dropFirst("--settings-screen=".count))
+        return NSScreen.screens.first { $0.localizedName.localizedCaseInsensitiveContains(name) }
+    }
+    #endif
 }

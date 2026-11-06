@@ -77,6 +77,11 @@ struct ActionsView: View {
     /// panel slides over the whole window, matching the Add/Edit Action panel.
     @Binding var showingLibrary: Bool
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The slide-over panels' slide (`SlideOverPanel`); none under Reduce Motion.
+    private var panelAnimation: Animation? { reduceMotion ? nil : Motion.sheet }
+
     /// Filters the action list by type. `.all` shows every action.
     @State private var typeFilter: ActionTypeFilter = .all
 
@@ -153,7 +158,7 @@ struct ActionsView: View {
                     Spacer()
 
                     Button {
-                        withAnimation(.easeInOut(duration: 0.28)) {
+                        withAnimation(panelAnimation) {
                             editingAction = CustomAction(title: "", systemPrompt: "")
                         }
                     } label: {
@@ -202,7 +207,7 @@ struct ActionsView: View {
 
                     // Slides the gallery panel in from the right (owned by SettingsView).
                     Button {
-                        withAnimation(.easeInOut(duration: 0.28)) {
+                        withAnimation(panelAnimation) {
                             showingLibrary = true
                         }
                     } label: {
@@ -991,7 +996,7 @@ struct ActionsView: View {
             isFromPlugin: action.isFromPlugin,
             onEdit: {
                 if let current = settings.customActions.first(where: { $0.id == id }) {
-                    withAnimation(.easeInOut(duration: 0.28)) {
+                    withAnimation(panelAnimation) {
                         editingAction = current
                     }
                 }
@@ -2939,6 +2944,8 @@ private struct SnippetInputSheet: View {
                 .foregroundStyle(.secondary)
             TextEditor(text: $snippetText)
                 .font(.system(.body, design: .monospaced))
+                // Keep the editor's own text background (see GeneralView's Global Prompt).
+                .scrollContentBackground(.visible)
                 .frame(minHeight: 200)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)

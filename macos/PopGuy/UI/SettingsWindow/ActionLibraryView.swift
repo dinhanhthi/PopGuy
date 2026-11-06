@@ -95,7 +95,10 @@ struct ActionLibraryView: View {
                 .keyboardShortcut(.return, modifiers: [])
         }
         .padding(.horizontal, SettingsMetrics.cardPadding)
-        .padding(.vertical, SettingsMetrics.cardPadding + 6)
+        // The panel reaches the window's top edge: center the header in the
+        // titlebar's header row (symmetric, on the traffic lights at y = 26),
+        // like a page's header row.
+        .frame(minHeight: SettingsMetrics.headerRowHeight)
     }
 
     // MARK: - Search bar
@@ -289,14 +292,7 @@ private struct LibraryPresetRow: View {
                     .padding(SettingsMetrics.cardPadding)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                .fill(Color.primary.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
-        )
+        .modifier(GlassCard(cornerRadius: SettingsMetrics.cardRadius))
     }
 
     // MARK: - Sub-views

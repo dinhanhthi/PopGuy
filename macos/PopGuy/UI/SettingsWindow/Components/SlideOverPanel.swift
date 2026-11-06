@@ -17,13 +17,15 @@
 //       PanelContent()
 //   }
 //
-// Place inside the parent's ZStack(alignment: .trailing). A blurred backdrop
-// covers zIndex 1; the panel sits at zIndex 2. Both animate with
-// easeInOut(0.28) — the same animation used by the original hand-rolled panels.
+// Place inside the parent's ZStack(alignment: .trailing). A dimming scrim
+// (`Palette.scrim`, a solid wash: the window keeps its single glass) covers
+// zIndex 1; the panel, a solid `Palette.surface`, sits at zIndex 2. Both
+// animate with `Motion.sheet`, none under Reduce Motion.
 //
-// The parent must still wrap the dismiss call in withAnimation(panelAnimation)
-// because the dismiss originates in the parent (e.g. a Done button in the
-// panel body). Esc is handled internally via .onExitCommand.
+// The backdrop click and Esc dismiss with that animation here. Callers must
+// wrap their own open/close calls (e.g. a Done button in the panel body) in
+// `withAnimation(reduceMotion ? nil : Motion.sheet)` too, so every path slides
+// the same way.
 //
 // Isolation: @MainActor — implicitly via SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor.
 
@@ -31,12 +33,12 @@ import SwiftUI
 
 // MARK: - SlideOverPanel
 
-/// A trailing-edge slide-over panel with a dimmed/blurred tap-to-dismiss backdrop.
+/// A trailing-edge slide-over panel with a dimmed tap-to-dismiss backdrop.
 ///
 /// Renders as two layers inside the parent ZStack:
-///   1. A backdrop (zIndex 1) — `Rectangle().fill(.ultraThinMaterial)`, tap to dismiss.
+///   1. A backdrop (zIndex 1) — `Palette.scrim`, tap to dismiss.
 ///   2. The panel (zIndex 2) — 2/3 of `containerWidth` (floored at `minWidth`),
-///      full-height, window-background color, drop shadow, transitions with
+///      full-height, `Palette.surface`, drop shadow, transitions with
 ///      `.move(edge: .trailing)`.
 ///
 /// Use inside the same `ZStack(alignment: .trailing)` that holds all Settings
@@ -54,8 +56,10 @@ struct SlideOverPanel<Content: View>: View {
     let onDismiss: () -> Void
     @ViewBuilder let content: () -> Content
 
-    /// Shared slide animation — must match SettingsView's `panelAnimation`.
-    static var animation: Animation { .easeInOut(duration: 0.28) }
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The slide, the same as the callers' `Motion.sheet`; none under Reduce Motion.
+    private var animation: Animation? { reduceMotion ? nil : Motion.sheet }
 
     var panelWidth: CGFloat {
         max(containerWidth * widthFraction, minWidth)
@@ -65,11 +69,11 @@ struct SlideOverPanel<Content: View>: View {
         // Backdrop
         if isPresented {
             Rectangle()
-                .fill(.ultraThinMaterial)
+                .fill(Palette.scrim)
                 .ignoresSafeArea()
                 .transition(.opacity)
                 .onTapGesture {
-                    withAnimation(Self.animation) { onDismiss() }
+                    withAnimation(animation) { onDismiss() }
                 }
                 .zIndex(1)
         }
@@ -79,12 +83,12 @@ struct SlideOverPanel<Content: View>: View {
             content()
                 .frame(width: panelWidth)
                 .frame(maxHeight: .infinity)
-                .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
-                .shadow(color: .black.opacity(0.22), radius: 12, x: -3, y: 0)
+                .background(Palette.surface.ignoresSafeArea())
+                .shadow(color: Palette.cardShadow, radius: 12, x: -3, y: 0)
                 .transition(.move(edge: .trailing))
                 .zIndex(2)
                 .onExitCommand {
-                    withAnimation(Self.animation) { onDismiss() }
+                    withAnimation(animation) { onDismiss() }
                 }
         }
     }

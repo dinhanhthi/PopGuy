@@ -58,6 +58,9 @@ struct GeneralView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     TextEditor(text: $settings.globalPrompt)
                         .font(.body)
+                        // Keep the editor's own text background: the page-wide
+                        // `.scrollContentBackground(.hidden)` would clear it on macOS 13–15.
+                        .scrollContentBackground(.visible)
                         .frame(minHeight: 80)
                         .overlay(
                             RoundedRectangle(cornerRadius: 6, style: .continuous)

@@ -94,15 +94,6 @@ struct SettingsView: View {
     @ObservedObject var screenRecordingPermission: ScreenRecordingPermission
     let onReplayOnboarding: () -> Void
 
-    /// Local mirror of the selected section that `List(selection:)` binds to.
-    /// Binding the list directly to the `@Published` `navigator.section` trips
-    /// "Publishing changes from within view updates" because the list writes the
-    /// selection back during the SwiftUI update pass. Driving a local `@State`
-    /// instead keeps the highlight instant, and the navigator is updated from
-    /// `.onChange` (which runs after the update pass). Synced both ways so
-    /// external navigation (e.g. opening Settings on a specific tab) still works.
-    @State private var selectedSection: SettingsSection? = .general
-
     /// When non-nil, the Add/Edit Action panel slides in from the right edge
     /// over the whole window. Lifted here (not in ActionsView) so the panel can
     /// cover the sidebar list and footer. Set by ActionsView via a binding.
@@ -119,66 +110,49 @@ struct SettingsView: View {
 
     private static let galleryLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PopGuy", category: "action-library")
 
-    /// Shared slide animation for the Action panel (open and dismiss).
-    private let panelAnimation: Animation = .easeInOut(duration: 0.28)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Keyboard focus of the sidebar, so the arrow keys move the selection.
+    @FocusState private var sidebarFocused: Bool
+
+    /// Shared slide animation for the slide-over panels (open and dismiss);
+    /// none under Reduce Motion.
+    private var panelAnimation: Animation? { reduceMotion ? nil : Motion.sheet }
 
     /// Live window width, read from the main content, used to size the slide-over
     /// panel at 2/3 of the window.
     @State private var containerWidth: CGFloat = 0
 
     var body: some View {
-        // A plain fixed-width left column instead of NavigationSplitView:
-        // the built-in sidebar can be collapsed by dragging (with no way to
-        // bring it back) and offsets the window title by the sidebar width.
-        // A normal column avoids both and stays fixed.
+        // A plain fixed-width sidebar card instead of NavigationSplitView: the
+        // built-in sidebar can be collapsed by dragging (with no way to bring it
+        // back). A normal column avoids that and stays fixed.
         ZStack(alignment: .trailing) {
             VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                List(selection: $selectedSection) {
-                    ForEach(SettingsSection.allCases) { section in
-                        Label(section.title, systemImage: section.systemImage)
-                            .padding(.vertical, SettingsMetrics.sidebarItemVerticalPadding)
-                            .tag(section)
-                    }
-                }
-                .listStyle(.sidebar)
-                .frame(width: 160)
-                // Push genuine user selections to the navigator AFTER the update
-                // pass (deselection falls back to Providers).
-                .onChange(of: selectedSection) { newValue in
-                    let resolved = newValue ?? .general
-                    if navigator.section != resolved { navigator.section = resolved }
-                }
-                // Sync external navigation back into the list highlight.
-                .onChange(of: navigator.section) { newValue in
-                    if selectedSection != newValue { selectedSection = newValue }
-                }
-                .onAppear { selectedSection = navigator.section }
+                HStack(alignment: .top, spacing: 0) {
+                    sidebar
 
-                VStack(spacing: 0) {
-                    if updater.updateAvailable {
-                        UpdateBanner(version: updater.pendingVersion) {
-                            updater.checkForUpdates()
-                        }
-                    }
                     detailView(for: navigator.section)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .frame(maxHeight: .infinity)
+                .frame(maxHeight: .infinity)
 
-            SettingsFooter(updater: updater)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Track the window width so the slide-over panel can size itself to 2/3.
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { containerWidth = geo.size.width }
-                    .onChange(of: geo.size.width) { newWidth in containerWidth = newWidth }
+                SettingsFooter(updater: updater)
             }
-        )
+            // The window has a transparent titlebar (.fullSizeContentView) with an
+            // empty unified toolbar: a 52 pt band, traffic lights centered in it.
+            // Ignore the top safe area and place the header row in that band
+            // ourselves: AppKit reports a taller inset (66 pt) than the band.
+            .ignoresSafeArea(.container, edges: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Track the window width so the slide-over panel can size itself to 2/3.
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { containerWidth = geo.size.width }
+                        .onChange(of: geo.size.width) { newWidth in containerWidth = newWidth }
+                }
+            )
 
             // Add/Edit Action panel — slides in from the right edge.
             // Floor at 480 to honour CustomActionEditSheet's own minWidth
@@ -263,31 +237,146 @@ struct SettingsView: View {
                 )
             }
         }
-        .frame(minWidth: 680, idealWidth: 900, minHeight: 460, idealHeight: 640)
+        .background(WindowGlass().ignoresSafeArea())
+        .modifier(HardTopScrollEdge())
+        .frame(minWidth: 720, idealWidth: 900, minHeight: 460, idealHeight: 640)
+        #if DEBUG
+        .onAppear(perform: openDebugPanel)
+        #endif
+    }
+
+    #if DEBUG
+    /// DEBUG-only QA hook: `--open-panel=edit|library|memory` opens a slide-over
+    /// panel when the window appears, for screenshots from a shell.
+    private func openDebugPanel() {
+        let prefix = "--open-panel="
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) }) else { return }
+        switch arg.dropFirst(prefix.count) {
+        case "edit":    editingAction = CustomAction(title: "", systemPrompt: "")
+        case "library": showingLibrary = true
+        case "memory":  showingMemoryInfo = true
+        default:        break
+        }
+    }
+    #endif
+
+    // MARK: Sidebar
+
+    /// The sidebar column: the current page's name in the header band, next to
+    /// the traffic lights, then the sections as capsule rows in a raised card. A
+    /// row's click sets `navigator.section` at once; the arrow keys move the
+    /// selection while the sidebar has keyboard focus.
+    private var sidebar: some View {
+        ZStack(alignment: .topLeading) {
+            VStack(alignment: .leading, spacing: SidebarItemStyle.spacing) {
+                ForEach(SettingsSection.allCases) { section in
+                    Button {
+                        navigator.section = section
+                        sidebarFocused = true
+                    } label: {
+                        Label(section.title, systemImage: section.systemImage)
+                            .padding(.vertical, SettingsMetrics.sidebarItemVerticalPadding)
+                    }
+                    .buttonStyle(SidebarItemStyle(selected: section == navigator.section))
+                    .accessibilityAddTraits(section == navigator.section ? .isSelected : [])
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .frame(width: 200)
+            .frame(maxHeight: .infinity)
+            .focusable()
+            .modifier(NoFocusRing())
+            .focused($sidebarFocused)
+            .onMoveCommand(perform: moveSelection)
+            .onAppear { sidebarFocused = true }
+            .modifier(GlassCard(cornerRadius: 20, raised: true))
+            // Level with the page's first section or card.
+            .padding(.top, SettingsMetrics.bodyTopInset)
+            .padding([.leading, .bottom], 12)
+
+            // The page name in the header row, centered on the traffic lights.
+            // Not hit-testable, so dragging the band here still moves the window.
+            Text(navigator.section.title)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .padding(.leading, Self.pageTitleLeading)
+                .padding(.trailing, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: SettingsMetrics.headerRowHeight)
+                .allowsHitTesting(false)
+        }
+        // The card and its leading inset; the page name truncates within it.
+        .frame(width: 200 + 12)
+    }
+
+    /// Leading inset of the page name in the header band: just past the zoom
+    /// button (the traffic lights end at about x = 79 pt with the unified toolbar).
+    private static let pageTitleLeading: CGFloat = 88
+
+    /// Up/down arrow: the previous/next section, stopping at the ends.
+    private func moveSelection(_ direction: MoveCommandDirection) {
+        // A slide-over panel covers the page: leave the section as it is.
+        guard editingAction == nil, !showingLibrary, !showingMemoryInfo else { return }
+        let sections = SettingsSection.allCases
+        guard let index = sections.firstIndex(of: navigator.section) else { return }
+        switch direction {
+        case .up where index > sections.startIndex:
+            navigator.section = sections[index - 1]
+        case .down where index < sections.endIndex - 1:
+            navigator.section = sections[index + 1]
+        default:
+            break
+        }
     }
 
     @ViewBuilder
     private func detailView(for section: SettingsSection?) -> some View {
         let section = section ?? .general
-        // Each tab gets a fixed header pinned to the top; its own ScrollView /
-        // Form scrolls in the area below the header divider.
-        SettingsTabScaffold(title: section.title, systemImage: section.systemImage) {
-            // Build the (heavy) tab content one runloop turn after a loading
-            // placeholder paints, so the panel responds to the tab click instantly.
-            // `.id(section)` makes every switch a fresh instance — see the type doc.
-            DeferredSectionContent {
-                switch section {
-                case .general:     GeneralView(settings: settings, onReplayOnboarding: onReplayOnboarding)
-                case .providers:   APIKeysTab(settings: settings, keychain: keychain, onReadMore: { withAnimation(panelAnimation) { showingMemoryInfo = true } })
-                case .actions:     ActionsView(settings: settings, keychain: keychain, navigator: navigator, editingAction: $editingAction, showingLibrary: $showingLibrary)
-                case .history:     HistoryView(history: history, settings: settings)
-                case .triggers:    TriggersView(settings: settings, screenRecordingPermission: screenRecordingPermission, navigator: navigator)
-                case .appearance:  AppearanceView(settings: settings)
-                case .ignoredApps: AppsView(settings: settings)
-                case .about:       AboutView(updater: updater)
+        // The page's header row sits in the titlebar band; its own ScrollView /
+        // Form scrolls in the area below it. Header slots stay empty for now.
+        SettingsPageLayout {
+            VStack(spacing: 0) {
+                if updater.updateAvailable {
+                    UpdateBanner(version: updater.pendingVersion) {
+                        updater.checkForUpdates()
+                    }
+                    // Page content starts `pagePadding` above the body (see
+                    // SettingsPageLayout); keep the banner below the band.
+                    .padding(.top, SettingsMetrics.pagePadding)
                 }
+                // Build the (heavy) tab content one runloop turn after a loading
+                // placeholder paints, so the panel responds to the tab click instantly.
+                // `.id(section)` makes every switch a fresh instance — see the type doc.
+                DeferredSectionContent {
+                    switch section {
+                    case .general:     GeneralView(settings: settings, onReplayOnboarding: onReplayOnboarding)
+                    case .providers:   APIKeysTab(settings: settings, keychain: keychain, onReadMore: { withAnimation(panelAnimation) { showingMemoryInfo = true } })
+                    case .actions:     ActionsView(settings: settings, keychain: keychain, navigator: navigator, editingAction: $editingAction, showingLibrary: $showingLibrary)
+                    case .history:     HistoryView(history: history, settings: settings)
+                    case .triggers:    TriggersView(settings: settings, screenRecordingPermission: screenRecordingPermission, navigator: navigator)
+                    case .appearance:  AppearanceView(settings: settings)
+                    case .ignoredApps: AppsView(settings: settings)
+                    case .about:       AboutView(updater: updater)
+                    }
+                }
+                .id(section)
             }
-            .id(section)
+        }
+    }
+}
+
+// MARK: - NoFocusRing
+
+/// Hides the focus ring of the focusable sidebar (the selection capsule already
+/// shows where the arrow keys act). macOS 13 has no API for it and keeps the ring.
+private struct NoFocusRing: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 14, *) {
+            content.focusEffectDisabled()
+        } else {
+            content
         }
     }
 }
@@ -308,7 +397,7 @@ struct SettingsView: View {
 /// instance with `ready == false`. Without it the persisted state would stay
 /// `true` and build the heavy content on the switch render, skipping the
 /// placeholder entirely.
-private struct DeferredSectionContent<Content: View>: View {
+struct DeferredSectionContent<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var ready = false
 
@@ -396,44 +485,6 @@ private struct SettingsFooter: View {
             .padding(.horizontal, SettingsMetrics.pagePadding)
             .padding(.vertical, 8)
         }
-    }
-}
-
-// MARK: - SettingsTabScaffold
-
-/// Lays out a fixed tab header (icon + title) pinned to the top, a divider, and
-/// the caller-supplied scrollable content below. The content view is expected
-/// to provide its own ScrollView / Form so it scrolls under the fixed header.
-private struct SettingsTabScaffold<Content: View>: View {
-    let title: String
-    let systemImage: String
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: systemImage)
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 24)
-                Text(title)
-                    .font(.title2.weight(.semibold))
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, SettingsMetrics.pagePadding)
-            .padding(.top, 14)
-            .padding(.bottom, 14)
-
-            Divider()
-
-            content()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        // The window uses .fullSizeContentView, so the detail column is inset
-        // from the top by the (transparent) title bar's safe area. Ignore it so
-        // the header sits just below the window's top edge — the traffic lights
-        // are over the sidebar, not this column.
-        .ignoresSafeArea(.container, edges: .top)
     }
 }
 

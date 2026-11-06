@@ -45,10 +45,10 @@ struct LocalModelMemoryInfoView: View {
             .buttonStyle(.plain)
             .hoverTooltip("Close")
         }
-        // Symmetric vertical padding, matching the ActionLibraryView baseline
-        // so the header sits the same distance from the panel's top and bottom edges.
+        // Centered in the titlebar's header row (symmetric, on the traffic
+        // lights at y = 26), matching the ActionLibraryView baseline.
         .padding(.horizontal, SettingsMetrics.cardPadding)
-        .padding(.vertical, SettingsMetrics.cardPadding + 6)
+        .frame(minHeight: SettingsMetrics.headerRowHeight)
     }
 
     // MARK: - Scroll content
