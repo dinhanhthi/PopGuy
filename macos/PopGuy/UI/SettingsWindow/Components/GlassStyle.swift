@@ -503,7 +503,7 @@ struct CapsuleTabs<Tab: Hashable>: View {
     }
 }
 
-/// A small on/off switch; the system switch stays wide even at `.mini` on macOS 26.
+/// A small on/off switch, dimmed when disabled; the system switch stays wide even at `.mini` on macOS 26.
 struct CompactSwitch: ToggleStyle {
     static let height: CGFloat = 19
 
@@ -514,6 +514,7 @@ struct CompactSwitch: ToggleStyle {
     private struct Switch: View {
         let configuration: ToggleStyleConfiguration
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @Environment(\.isEnabled) private var isEnabled
 
         var body: some View {
             Capsule()
@@ -527,6 +528,7 @@ struct CompactSwitch: ToggleStyle {
                 }
                 .animation(reduceMotion ? nil : Motion.toggle, value: configuration.isOn)
                 .contentShape(Capsule())
+                .opacity(isEnabled ? 1 : 0.45)
                 .onTapGesture { configuration.isOn.toggle() }
                 .accessibilityRepresentation {
                     Toggle(isOn: configuration.$isOn) { configuration.label }

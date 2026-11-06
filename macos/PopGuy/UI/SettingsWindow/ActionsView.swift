@@ -1269,8 +1269,7 @@ private struct CustomPromptField: View {
                     // predefined one and collapses to the "Predefined prompt" state.
                     if allowsPredefined {
                         Button("Reset") { isShowingResetConfirmation = true }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
+                            .buttonStyle(RowTextButtonStyle())
                     }
                 }
             } else {
@@ -1280,8 +1279,7 @@ private struct CustomPromptField: View {
                         .font(.callout)
                     Spacer()
                     Button("Edit") { isEditing = true }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .buttonStyle(RowTextButtonStyle())
                 }
             }
         }
@@ -1384,7 +1382,7 @@ private struct ActionCard<Content: View>: View {
                             Image(systemName: "pencil")
                                 .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(RowIconButtonStyle())
                         .hoverTooltip("Edit")
                     }
                     if let onDelete {
@@ -1395,9 +1393,8 @@ private struct ActionCard<Content: View>: View {
                                 Image(systemName: "trash")
                                     .foregroundStyle(.red)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(RowIconButtonStyle())
                             .disabled(isLastEnabled)
-                            .opacity(isLastEnabled ? 0.35 : 1)
                         }
                         .contentShape(Rectangle())
                         .hoverTooltip(isLastEnabled
@@ -1452,15 +1449,18 @@ private struct ActionCard<Content: View>: View {
         )
     }
 
-    /// Caption + mini switch, macOS labeled-switch style (caption leading).
-    private func headerSwitch(_ title: String, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
+    /// Caption + compact switch, macOS labeled-switch style (caption leading).
+    /// `locked` disables the switch (it dims itself) and dims the caption to match.
+    private func headerSwitch(_ title: String, isOn: Binding<Bool>, locked: Bool = false) -> some View {
+        HStack(spacing: 6) {
             Text(title)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(locked ? .tertiary : .secondary)
+            Toggle(title, isOn: isOn)
+                .toggleStyle(CompactSwitch())
+                .labelsHidden()
+                .disabled(locked)
         }
-        .toggleStyle(.switch)
-        .controlSize(.mini)
     }
 
     /// A header switch that can be locked: faded and non-interactive, with a
@@ -1474,9 +1474,7 @@ private struct ActionCard<Content: View>: View {
         lockedTooltip: String
     ) -> some View {
         HStack {
-            headerSwitch(title, isOn: isOn)
-                .disabled(locked)
-                .opacity(locked ? 0.35 : 1)
+            headerSwitch(title, isOn: isOn, locked: locked)
         }
         .contentShape(Rectangle())
         .hoverTooltip(locked ? lockedTooltip : tooltip)
@@ -1615,8 +1613,14 @@ struct DictionaryConfigFields: View {
                 }
             }
 
-            Toggle("Use dictionary audio before TTS", isOn: $config.speakSettings.dictionaryAudioEnabled)
-                .hoverTooltip("When no native source audio is available, try Free Dictionary API pronunciation before falling back to the selected TTS engine.")
+            LabeledContent {
+                Toggle("Use dictionary audio before TTS", isOn: $config.speakSettings.dictionaryAudioEnabled)
+                    .toggleStyle(CompactSwitch())
+                    .labelsHidden()
+            } label: {
+                Text("Use dictionary audio before TTS")
+            }
+            .hoverTooltip("When no native source audio is available, try Free Dictionary API pronunciation before falling back to the selected TTS engine.")
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -2106,8 +2110,7 @@ private struct SpeakPreviewRow: View {
                     } label: {
                         Label("Preview", systemImage: "speaker.wave.2.fill")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                 } else {
                     Button {
                         coordinator.stop()
@@ -2117,15 +2120,14 @@ private struct SpeakPreviewRow: View {
                             // inside the button (no separate leading spinner).
                             if coordinator.phase == .loading {
                                 ProgressView()
-                                    .controlSize(.small)
+                                    .controlSize(.mini)
                             } else {
                                 Image(systemName: "stop.fill")
                             }
                             Text("Stop")
                         }
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                 }
             }
 
@@ -2791,8 +2793,7 @@ private struct DraftSpeechPreviewRow: View {
                     } label: {
                         Label("Preview", systemImage: "speaker.wave.2.fill")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                 } else {
                     Button {
                         coordinator.stop()
@@ -2800,15 +2801,14 @@ private struct DraftSpeechPreviewRow: View {
                         HStack(spacing: 4) {
                             if coordinator.phase == .loading {
                                 ProgressView()
-                                    .controlSize(.small)
+                                    .controlSize(.mini)
                             } else {
                                 Image(systemName: "stop.fill")
                             }
                             Text("Stop")
                         }
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                 }
             }
 
@@ -2873,8 +2873,7 @@ private struct CustomSpeechPreviewRow: View {
                     } label: {
                         Label("Preview", systemImage: "speaker.wave.2.fill")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                 } else {
                     Button {
                         coordinator.stop()
@@ -2882,15 +2881,14 @@ private struct CustomSpeechPreviewRow: View {
                         HStack(spacing: 4) {
                             if coordinator.phase == .loading {
                                 ProgressView()
-                                    .controlSize(.small)
+                                    .controlSize(.mini)
                             } else {
                                 Image(systemName: "stop.fill")
                             }
                             Text("Stop")
                         }
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                 }
             }
 
@@ -2953,14 +2951,14 @@ private struct SnippetInputSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel", action: onCancel)
-                    .buttonStyle(.bordered)
+                    .buttonStyle(BottomBarButtonStyle())
                     .keyboardShortcut(.escape, modifiers: [])
                 Button("Import\u{2026}") {
                     let trimmed = snippetText.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmed.isEmpty else { return }
                     onSubmit(trimmed)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(BottomBarButtonStyle(prominent: true))
                 .disabled(snippetText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .keyboardShortcut(.return, modifiers: .command)
             }

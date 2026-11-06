@@ -44,10 +44,14 @@ struct TriggersView: View {
                 // divider splits them; the grouped Form still draws a divider
                 // between cells (i.e. between settings).
                 VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Show toolbar when text is selected", isOn: $settings.triggerOnSelectEnabled)
-                    Text("When on, selecting text shows the toolbar — in editable fields only, or in any app when the option below is off.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    LabeledContent {
+                        Toggle("Show toolbar when text is selected", isOn: $settings.triggerOnSelectEnabled)
+                            .toggleStyle(CompactSwitch())
+                            .labelsHidden()
+                    } label: {
+                        Text("Show toolbar when text is selected")
+                        Text("When on, selecting text shows the toolbar — in editable fields only, or in any app when the option below is off.")
+                    }
 
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -58,19 +62,25 @@ struct TriggersView: View {
                     .font(.caption)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                LabeledContent {
                     Toggle("Only in editable text", isOn: $settings.triggerOnSelectEditableOnly)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                } label: {
+                    Text("Only in editable text")
                     Text("When on, the toolbar appears only for text selected inside a field you can type in (text boxes, editors, compose areas). Selecting read-only text — web page content, chat messages — does nothing, so other apps' own selection features are not interrupted. Cmd+C+C and hotkeys still work on any text.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
                 .disabled(!settings.triggerOnSelectEnabled)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Show toolbar on double-click (single word)", isOn: $settings.triggerDoubleClickEnabled)
-                    Text("When on, double-clicking a word shows the toolbar — handy for quickly checking a word's meaning or hearing it. Use it on its own, or alongside \"Show toolbar when text is selected\": a double-click shows the toolbar once (even on read-only text), while selecting a range of text still follows the options above.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    LabeledContent {
+                        Toggle("Show toolbar on double-click (single word)", isOn: $settings.triggerDoubleClickEnabled)
+                            .toggleStyle(CompactSwitch())
+                            .labelsHidden()
+                    } label: {
+                        Text("Show toolbar on double-click (single word)")
+                        Text("When on, double-clicking a word shows the toolbar — handy for quickly checking a word's meaning or hearing it. Use it on its own, or alongside \"Show toolbar when text is selected\": a double-click shows the toolbar once (even on read-only text), while selecting a range of text still follows the options above.")
+                    }
 
                     if ToolbarLimits.doubleClickActionFeatureEnabled, settings.triggerDoubleClickEnabled {
                         doubleClickActionPicker()
@@ -80,11 +90,18 @@ struct TriggersView: View {
 
             // MARK: Keyboard shortcut
             Section(header: Text("Keyboard Shortcut")) {
-                Toggle("Show toolbar with Cmd+C+C", isOn: $settings.triggerChordEnabled)
+                LabeledContent {
+                    Toggle("Show toolbar with Cmd+C+C", isOn: $settings.triggerChordEnabled)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                } label: {
+                    Text("Show toolbar with Cmd+C+C")
+                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     // Chord replacement row — disabled when chord trigger is off.
-                    HStack {
+                    // 10 pt apart: the icon buttons' hover highlights reach 5 pt past each icon.
+                    HStack(spacing: 10) {
                         Text("Use a different shortcut")
                             .foregroundStyle(settings.triggerChordEnabled ? .primary : .secondary)
 
@@ -111,7 +128,7 @@ struct TriggersView: View {
                                 } label: {
                                     Image(systemName: "xmark.circle")
                                 }
-                                .buttonStyle(.borderless)
+                                .buttonStyle(RowIconButtonStyle())
                                 .hoverTooltip("Clear — revert to Cmd+C+C")
                                 .disabled(!settings.triggerChordEnabled)
                             }
@@ -122,7 +139,7 @@ struct TriggersView: View {
                             } label: {
                                 Image(systemName: "record.circle")
                             }
-                            .buttonStyle(.borderless)
+                            .buttonStyle(RowIconButtonStyle())
                             .hoverTooltip("Record a replacement shortcut (e.g. ⌘⇧Space)")
                             .disabled(!settings.triggerChordEnabled)
                         }
@@ -143,7 +160,13 @@ struct TriggersView: View {
 
         }
         .formStyle(.grouped)
-        .onAppear { scrollToOCRSectionIfRequested(proxy) }
+        .onAppear {
+            #if DEBUG
+            // DEBUG-only QA hook: `--triggers-ocr` scrolls to the OCR section, for screenshots from a shell.
+            if ProcessInfo.processInfo.arguments.contains("--triggers-ocr") { navigator.focusOCRSection = true }
+            #endif
+            scrollToOCRSectionIfRequested(proxy)
+        }
         .onChange(of: navigator.focusOCRSection) { _ in
             scrollToOCRSectionIfRequested(proxy)
         }
@@ -178,15 +201,19 @@ struct TriggersView: View {
     @ViewBuilder
     private func ocrSectionContent() -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle("Enable Screen Text Capture", isOn: $settings.ocrEnabled)
-
-            Text("Select any region of the screen and PopGuy recognizes the text in it, then hands it to the toolbar to copy. Useful for text you can't select normally — images, PDFs, video captions.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            LabeledContent {
+                Toggle("Enable Screen Text Capture", isOn: $settings.ocrEnabled)
+                    .toggleStyle(CompactSwitch())
+                    .labelsHidden()
+            } label: {
+                Text("Enable Screen Text Capture")
+                Text("Select any region of the screen and PopGuy recognizes the text in it, then hands it to the toolbar to copy. Useful for text you can't select normally — images, PDFs, video captions.")
+            }
         }
 
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            // 10 pt apart: the icon buttons' hover highlights reach 5 pt past each icon.
+            HStack(spacing: 10) {
                 Text("Keyboard shortcut")
                     .foregroundStyle(settings.ocrEnabled ? .primary : .secondary)
 
@@ -211,7 +238,7 @@ struct TriggersView: View {
                         } label: {
                             Image(systemName: "xmark.circle")
                         }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(RowIconButtonStyle())
                         .hoverTooltip("Remove shortcut")
                         .disabled(!settings.ocrEnabled)
                     } else {
@@ -224,7 +251,7 @@ struct TriggersView: View {
                     } label: {
                         Image(systemName: "record.circle")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(RowIconButtonStyle())
                     .hoverTooltip("Record shortcut")
                     .disabled(!settings.ocrEnabled)
                 }
@@ -248,14 +275,12 @@ struct TriggersView: View {
                     Button("Grant\u{2026}") {
                         screenRecordingPermission.request()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle(formRow: true))
 
                     Button("Open System Settings") {
                         screenRecordingPermission.openSystemSettings()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle(formRow: true))
                 }
             }
 

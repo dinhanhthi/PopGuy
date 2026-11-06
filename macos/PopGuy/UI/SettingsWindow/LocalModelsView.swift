@@ -303,8 +303,7 @@ struct LocalModelsView: View {
                 Button("Cancel") {
                     settings.cancelLocalModelDownload()
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(RowTextButtonStyle())
                 .hoverTooltip("Cancel the download")
 
             } else if isInstalled {
@@ -321,8 +320,7 @@ struct LocalModelsView: View {
                                 await settings.unloadLoadedLocalModel()
                             }
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .buttonStyle(RowTextButtonStyle())
                         .hoverTooltip("Free this model's memory now")
                     }
 
@@ -336,8 +334,7 @@ struct LocalModelsView: View {
                     deleteError = nil
                     settings.downloadLocalModel(model.id)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(RowTextButtonStyle(prominent: true))
                 .disabled(anyDownloadActive)
                 .hoverTooltip(anyDownloadActive
                     ? "Another model is downloading — wait for it to finish"
@@ -376,11 +373,13 @@ struct LocalModelsView: View {
     /// Shared delete button for installed models.
     @ViewBuilder
     private func deleteButton(for model: LocalModel) -> some View {
-        Button("Delete") {
+        Button {
             modelPendingDelete = model
+        } label: {
+            // Red on the label: the style sets the label's own color.
+            Text("Delete").foregroundStyle(.red)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
+        .buttonStyle(RowTextButtonStyle())
         .hoverTooltip("Remove this model from disk")
     }
 

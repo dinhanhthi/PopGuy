@@ -208,9 +208,13 @@ struct HistoryView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Button("Clear All", role: .destructive) {
+                Button(role: .destructive) {
                     showClearConfirm = true
+                } label: {
+                    Text("Clear All")
+                        .foregroundStyle(.red)
                 }
+                .buttonStyle(RowTextButtonStyle())
                 .disabled(history.records.isEmpty)
             }
             .confirmationDialog(
@@ -224,16 +228,27 @@ struct HistoryView: View {
                 Text("This permanently removes every recorded action. This cannot be undone.")
             }
         }) {
-            HStack(spacing: 20) {
+            LabeledContent {
                 Toggle("Enable history", isOn: $settings.historyEnabled)
-
-                Toggle("Store full input & output text", isOn: $settings.historyStoreFullText)
-                    .disabled(!settings.historyEnabled)
+                    .toggleStyle(CompactSwitch())
+                    .labelsHidden()
+                    // Out of a Form the content sits right after the label; keep the switches in one trailing column.
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            } label: {
+                Text("Enable history")
             }
 
-            Text("When off, only the beginning and end of each text are kept as a preview.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            LabeledContent {
+                Toggle("Store full input & output text", isOn: $settings.historyStoreFullText)
+                    .toggleStyle(CompactSwitch())
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            } label: {
+                Text("Store full input & output text")
+                Text("When off, only the beginning and end of each text are kept as a preview.")
+                    .font(.caption)
+            }
+            .disabled(!settings.historyEnabled)
         }
     }
 
@@ -319,13 +334,17 @@ private struct HistoryRow: View {
             } label: {
                 Image(systemName: "trash")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(RowIconButtonStyle())
             .foregroundStyle(.secondary)
             .hoverTooltip("Delete this record")
 
-            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Button(action: onToggle) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(RowIconButtonStyle())
+            .accessibilityLabel(isExpanded ? "Collapse" : "Expand")
         }
         .padding(SettingsMetrics.cardPadding)
         .contentShape(Rectangle())
@@ -390,8 +409,7 @@ private struct HistoryRow: View {
                 } label: {
                     Image(systemName: "doc.on.doc")
                 }
-                .buttonStyle(.borderless)
-                .controlSize(.small)
+                .buttonStyle(RowIconButtonStyle())
                 .foregroundStyle(.secondary)
                 .hoverTooltip("Copy \(title.lowercased())")
             }

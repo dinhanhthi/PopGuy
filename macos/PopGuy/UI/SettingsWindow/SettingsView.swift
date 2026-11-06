@@ -705,8 +705,7 @@ private struct APIKeysTab: View {
                     let detected = SettingsStore.detectCLIPath("claude")
                     if !detected.isEmpty { settings.claudeCLIPath = detected }
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(RowTextButtonStyle())
             }
             Text("Uses your Claude subscription login — no API key needed. Slower than the API providers.")
                 .font(.caption)
@@ -724,8 +723,7 @@ private struct APIKeysTab: View {
                     let detected = SettingsStore.detectCLIPath("codex")
                     if !detected.isEmpty { settings.codexCLIPath = detected }
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(RowTextButtonStyle())
             }
             Text("Uses your Codex subscription login — no API key needed. Slower than the API providers.")
                 .font(.caption)
@@ -743,8 +741,7 @@ private struct APIKeysTab: View {
                     let detected = SettingsStore.detectCLIPath("gemini")
                     if !detected.isEmpty { settings.geminiCLIPath = detected }
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(RowTextButtonStyle())
             }
             Text("Uses your Gemini subscription login — no API key needed. Slower than the API providers.")
                 .font(.caption)
@@ -846,9 +843,8 @@ private struct APIKeysTab: View {
                             settings.babylonDictionaries = updated
                         }
                     ))
+                    .toggleStyle(CompactSwitch())
                     .labelsHidden()
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
                     .disabled(settings.babylonDictionaries.isEmpty)
                     .hoverTooltip("Enable or disable all Babylon dictionaries")
 
@@ -867,8 +863,7 @@ private struct APIKeysTab: View {
                             Text(isIndexingBGL ? "Indexing" : "Load")
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle(prominent: true))
                     .disabled(isIndexingBGL)
                 }
             },
@@ -1254,19 +1249,22 @@ private struct BabylonDictionarySettingsRow: View {
 
                 Spacer(minLength: 0)
 
-                Toggle("", isOn: $dictionary.isEnabled)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
+                HStack(spacing: 10) {
+                    Toggle("", isOn: $dictionary.isEnabled)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
 
-                Button(role: .destructive) {
-                    onRemove()
-                } label: {
-                    Image(systemName: "trash")
+                    Button(role: .destructive) {
+                        onRemove()
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(RowIconButtonStyle())
+                    .hoverTooltip("Remove dictionary")
                 }
-                .buttonStyle(.borderless)
-                .controlSize(.small)
-                .hoverTooltip("Remove dictionary")
+                // The switch has no text baseline: center the controls on the name's line.
+                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
             }
 
             Text("\(dictionary.entryCount) entries")
@@ -1372,8 +1370,7 @@ struct VoiceTestButton: View {
                     Image(systemName: "speaker.wave.2.fill")
                 }
             }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
+            .buttonStyle(RowIconButtonStyle())
             .hoverTooltip(didFallBack ? "Cloud voice unavailable — the System voice is being used instead." : "Preview this voice")
 
             if didFallBack {
@@ -1453,8 +1450,10 @@ private struct AppearanceView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                LabeledContent {
                     Toggle("Show logo only", isOn: $showLogoOnly)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
                         .onChange(of: showLogoOnly) { newValue in
                             settings.showLogoOnly = newValue
                         }
@@ -1462,22 +1461,22 @@ private struct AppearanceView: View {
                         .onChange(of: settings.showLogoOnly) { newValue in
                             showLogoOnly = newValue
                         }
-
+                } label: {
+                    Text("Show logo only")
                     Text(toolbarStyle == .menu
                          ? "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the menu."
                          : "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the full toolbar.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                LabeledContent {
                     // Bound straight to the store, like before on the Actions
                     // page: a Toggle writes on the click, not during an update.
                     Toggle("Show Settings button on toolbar", isOn: $settings.showToolbarSettingsButton)
-
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                } label: {
+                    Text("Show Settings button on toolbar")
                     Text("Settings stay available from the PopGuy menu bar icon")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -1504,41 +1503,44 @@ private struct AppearanceView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                LabeledContent {
                     Toggle("Include font size in zoom", isOn: $zoomIncludesFontSize)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
                         .onChange(of: zoomIncludesFontSize) { newValue in
                             settings.zoomIncludesFontSize = newValue
                         }
-
+                } label: {
+                    Text("Include font size in zoom")
                     Text("Turn off to keep the result text at its chosen size while everything else grows.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                LabeledContent {
                     Toggle("Hide logo", isOn: $hideLogo)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
                         .onChange(of: hideLogo) { newValue in
                             settings.hideToolbarLogo = newValue
                         }
-                        // The toolbar expands from the logo in "Show logo only" mode.
-                        .disabled(showLogoOnly)
-
+                } label: {
+                    Text("Hide logo")
                     Text(showLogoOnly
                          ? "The logo always shows while Show logo only is on."
                          : "Hide the PopGuy logo to save space on the toolbar.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
+                // The toolbar expands from the logo in "Show logo only" mode.
+                .disabled(showLogoOnly)
 
-                VStack(alignment: .leading, spacing: 8) {
+                LabeledContent {
                     Toggle("Remove gap before system buttons", isOn: $inlineSystemButtons)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
                         .onChange(of: inlineSystemButtons) { newValue in
                             settings.inlineToolbarSystemButtons = newValue
                         }
-
+                } label: {
+                    Text("Remove gap before system buttons")
                     Text("Show the Ignore and Settings buttons right after the actions, separated by dividers like any other action, instead of after a gap.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
 
                 // Live preview at the toolbar's real on-screen size for the
@@ -1977,8 +1979,7 @@ struct ModelField: View {
     private var checkButton: some View {
         if settings != nil && keychain != nil {
             Button("Check") { runCheck() }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(RowTextButtonStyle())
                 .disabled(model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isChecking)
 
             if isChecking {
@@ -2140,8 +2141,7 @@ struct CLIVerifyButton: View {
     var body: some View {
         HStack(spacing: 8) {
             Button("Verify") { run() }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(RowTextButtonStyle())
                 .disabled(path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isVerifying)
 
             if isVerifying {
@@ -2372,8 +2372,7 @@ private struct KeyEntryRow: View {
             HStack(spacing: 8) {
                 if showsField {
                     Button("Save") { commit() }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
+                        .buttonStyle(RowTextButtonStyle(prominent: true))
                         .disabled(draft.isEmpty || isValidating)
 
                     if isValidating {
@@ -2389,8 +2388,7 @@ private struct KeyEntryRow: View {
                         verifyOutcome = nil
                         isEditing = true
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
 
                     // Verify button — only shown when an onVerify handler is provided.
                     // Loading spinner sits inside the button, in front of the label.
@@ -2406,8 +2404,7 @@ private struct KeyEntryRow: View {
                                 Text("Verify")
                             }
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .buttonStyle(RowTextButtonStyle())
                         .disabled(isVerifying)
                     }
                 }
@@ -2420,19 +2417,20 @@ private struct KeyEntryRow: View {
                         errorMessage = nil
                         isEditing = false
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                     .disabled(isValidating)
                 }
 
-                Button("Clear") {
+                Button {
                     onClear()
                     errorMessage = nil
                     verifyOutcome = nil
                     isEditing = false
+                } label: {
+                    // Red on the label: the style sets the label's own color.
+                    Text("Clear").foregroundStyle(.red)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(RowTextButtonStyle())
                 .disabled(!isSaved || isValidating)
 
                 // Inline verify feedback sits next to the Clear button on the

@@ -14,39 +14,48 @@ struct GeneralView: View {
     var body: some View {
         Form {
             Section(header: Text("App")) {
-                VStack(alignment: .leading, spacing: 8) {
+                LabeledContent {
                     Toggle("Enable PopGuy", isOn: $settings.popGuyEnabled)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                } label: {
+                    Text("Enable PopGuy")
                     Text("When off, every trigger — text selection, double-click, Cmd+C+C, and hotkeys — is suppressed.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Start at login", isOn: $launchAtLogin)
-                        .onChange(of: launchAtLogin) { newValue in
-                            applyLoginItem(newValue)
-                        }
+                    LabeledContent {
+                        Toggle("Start at login", isOn: $launchAtLogin)
+                            .toggleStyle(CompactSwitch())
+                            .labelsHidden()
+                            .onChange(of: launchAtLogin) { newValue in
+                                applyLoginItem(newValue)
+                            }
+                    } label: {
+                        Text("Start at login")
+                        Text("Automatically launch PopGuy when you log in.")
+                    }
                     if let error = loginItemError {
                         Text(error)
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
-                    Text("Automatically launch PopGuy when you log in.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                LabeledContent {
                     Toggle("Show app icon on the Dock while Settings is open", isOn: $settings.showDockIconWithSettings)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                } label: {
+                    Text("Show app icon on the Dock while Settings is open")
                     Text("Normally PopGuy lives in the menu bar only. Turn this on to also show a Dock icon while the Settings window is open.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Button("Setup Guide\u{2026}") {
                         onReplayOnboarding()
                     }
+                    .buttonStyle(RowTextButtonStyle(formRow: true))
                     .hoverTooltip("Replay the first-run setup guide")
                     Text("Opens the first-run walkthrough again. Settings stays open.")
                         .font(.caption)
@@ -73,20 +82,24 @@ struct GeneralView: View {
             }
 
             Section(header: Text("Formatting")) {
-                VStack(alignment: .leading, spacing: 8) {
+                LabeledContent {
                     Toggle("Preserve & render formatting", isOn: $settings.preserveFormatting)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                } label: {
+                    Text("Preserve & render formatting")
                     Text("Render Markdown text styles and lists in the result. Bold, italic, strikethrough, inline code, and lists are supported.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
 
             Section(header: Text("Closing the Toolbar")) {
-                VStack(alignment: .leading, spacing: 8) {
+                LabeledContent {
                     Toggle("Confirm before closing a finished result", isOn: $settings.confirmCloseAfterResult)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                } label: {
+                    Text("Confirm before closing a finished result")
                     Text("When on, clicking outside or pressing Escape after a result is ready asks for confirmation, so you don't dismiss it by accident.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     Picker("Enter on a result", selection: $settings.enterResultAction) {

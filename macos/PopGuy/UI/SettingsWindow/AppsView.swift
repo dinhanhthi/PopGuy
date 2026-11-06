@@ -94,15 +94,23 @@ struct AppsView: View {
 
     private var appsSection: some View {
         Section {
-            Toggle("Enable Ignored Apps", isOn: $settings.ignoredAppsEnabled)
-                .padding(.vertical, 2)
+            LabeledContent {
+                Toggle("Enable Ignored Apps", isOn: $settings.ignoredAppsEnabled)
+                    .toggleStyle(CompactSwitch())
+                    .labelsHidden()
+            } label: {
+                Text("Enable Ignored Apps")
+            }
+            .padding(.vertical, 2)
 
             if settings.ignoredAppsEnabled {
-                VStack(alignment: .leading, spacing: 4) {
+                LabeledContent {
                     Toggle("Show \"Ignore this app\" button on toolbar", isOn: $settings.showToolbarIgnoreAppButton)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                } label: {
+                    Text("Show \"Ignore this app\" button on toolbar")
                     Text("Hides only the toolbar button; the ignored list keeps working.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 2)
 
@@ -123,7 +131,7 @@ struct AppsView: View {
                 } label: {
                     Label("Add App…", systemImage: "plus")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(RowTextButtonStyle(formRow: true))
                 .padding(.vertical, 4)
             }
         } header: {
@@ -136,15 +144,23 @@ struct AppsView: View {
 
     private var domainsSection: some View {
         Section {
-            Toggle("Enable Ignored Domains", isOn: $settings.ignoredDomainsEnabled)
-                .padding(.vertical, 2)
+            LabeledContent {
+                Toggle("Enable Ignored Domains", isOn: $settings.ignoredDomainsEnabled)
+                    .toggleStyle(CompactSwitch())
+                    .labelsHidden()
+            } label: {
+                Text("Enable Ignored Domains")
+            }
+            .padding(.vertical, 2)
 
             if settings.ignoredDomainsEnabled {
-                VStack(alignment: .leading, spacing: 4) {
+                LabeledContent {
                     Toggle("Show \"Ignore this site\" button on toolbar", isOn: $settings.showToolbarIgnoreSiteButton)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                } label: {
+                    Text("Show \"Ignore this site\" button on toolbar")
                     Text("Hides only the toolbar button; the ignored list keeps working.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 2)
 
@@ -176,7 +192,7 @@ struct AppsView: View {
                                 Image(systemName: "trash")
                                     .foregroundStyle(.red)
                             }
-                            .buttonStyle(.borderless)
+                            .buttonStyle(RowIconButtonStyle())
                             .hoverTooltip("Remove")
                         }
                         .padding(.vertical, 2)
@@ -191,7 +207,7 @@ struct AppsView: View {
                         .onSubmit { commitNewDomain() }
                         .onChange(of: newDomain) { _ in domainValidationError = nil }
                     Button("Add") { commitNewDomain() }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(RowTextButtonStyle(formRow: true))
                 }
                 .padding(.vertical, 4)
 
@@ -315,7 +331,7 @@ private struct IgnoredAppRow: View {
                 Image(systemName: "trash")
                     .foregroundStyle(.red)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(RowIconButtonStyle())
             .hoverTooltip("Remove")
         }
         .padding(.vertical, 2)
