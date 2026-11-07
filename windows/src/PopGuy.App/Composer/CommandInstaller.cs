@@ -74,7 +74,7 @@ internal static class CommandInstaller
             if (updated == (current ?? "")) return true;
             key.SetValue(PathName, updated, KindOf(key));
             // New processes started by Explorer pick up the new PATH.
-            SendMessageTimeout(HwndBroadcast, WmSettingChange, 0, EnvironmentKey, SmtoAbortIfHung, BroadcastTimeoutMs, out _);
+            BroadcastEnvironmentChange();
             return true;
         }
         catch (Exception e) when (e is SecurityException or UnauthorizedAccessException or IOException)
@@ -96,6 +96,13 @@ internal static class CommandInstaller
             return RegistryValueKind.ExpandString;
         }
     }
+
+    /// <summary>
+    /// Tells Explorer (and other top-level windows) that the user environment changed. Can block for a while on a slow
+    /// window: call it off the UI thread. Also used by <see cref="EditorVariable"/>.
+    /// </summary>
+    internal static void BroadcastEnvironmentChange() =>
+        SendMessageTimeout(HwndBroadcast, WmSettingChange, 0, EnvironmentKey, SmtoAbortIfHung, BroadcastTimeoutMs, out _);
 
     [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW", CharSet = CharSet.Unicode, ExactSpelling = true)]
     private static extern nint SendMessageTimeout(

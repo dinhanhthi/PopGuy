@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using PopGuy.Composer;
 using PopGuy.Controls;
+using PopGuy.Core.Composer;
 using PopGuy.Core.Settings;
 using PopGuy.Platform.Capture;
 using PopGuy.Platform.Input;
@@ -15,7 +16,8 @@ namespace PopGuy.Settings.Pages;
 /// control saves through <see cref="SettingsStore.Update"/> at once; its <see cref="SettingsStore.Changed"/> applies the
 /// hotkeys. While the Compose shortcut records, PopGuy's own hotkeys and chord are off
 /// (<see cref="AppServices.SetHotkeysSuspended"/>) so a combo PopGuy owns reaches the recorder; after each apply its
-/// registration status shows under its row. The command row installs or removes popguy-edit off the UI thread.
+/// registration status shows under its row. The command row installs or removes popguy-edit, and the editor variable row
+/// sets (after a confirm) or removes VISUAL, both off the UI thread.
 /// </summary>
 public sealed partial class TerminalComposerPage : Page
 {
@@ -32,6 +34,9 @@ public sealed partial class TerminalComposerPage : Page
     /// <summary>An Install or Remove of the popguy-edit command is running.</summary>
     private bool _commandBusy;
 
+    /// <summary>A Set up (with its confirm) or Remove of the VISUAL editor variable is running.</summary>
+    private bool _editorVariableBusy;
+
     public TerminalComposerPage()
     {
         InitializeComponent();
@@ -44,6 +49,7 @@ public sealed partial class TerminalComposerPage : Page
         HoverTooltip.SetText(ComposeClearButton, "Remove shortcut");
         HoverTooltip.SetText(ComposeRecordButton, "Record shortcut");
         CommandButton.Click += (_, _) => OnCommandClick();
+        EditorVariableButton.Click += (_, _) => OnEditorVariableClick();
         SnippetPowerShellText.Text = PowerShellSnippet;
         SnippetClaudeText.Text = ClaudeSnippet;
         SnippetGitText.Text = GitSnippet;
@@ -106,6 +112,7 @@ public sealed partial class TerminalComposerPage : Page
         RefreshRecorderButtons();
         RefreshStatus();
         RefreshCommand();
+        RefreshEditorVariable();
     }
 
     // Compose shortcut.
@@ -179,6 +186,85 @@ public sealed partial class TerminalComposerPage : Page
                 RefreshCommand();
             });
         });
+    }
+
+    /// <summary>VISUAL's status (a quick registry read) and the button: Remove when it is ours, Set up otherwise.</summary>
+    private void RefreshEditorVariable()
+    {
+        var status = EditorVariable.Status;
+        EditorVariableStatusText.Text = status.Kind switch
+        {
+            EditorVariableKind.Ours => "VISUAL is set to popguy-edit.",
+            EditorVariableKind.Other => $"VISUAL is set to {status.Value}.",
+            _ => "Not set.",
+        };
+        EditorVariableButton.Content = status.Kind == EditorVariableKind.Ours ? "Remove" : "Set up";
+        EditorVariableButton.IsEnabled = !_editorVariableBusy;
+    }
+
+    /// <summary>
+    /// Set up asks first (and says which value it replaces), then writes VISUAL off the UI thread; Remove deletes only
+    /// ours. The button stays disabled from the click until it is done, then the status is read again. The log gets the
+    /// outcome only, never the value.
+    /// </summary>
+    private async void OnEditorVariableClick()
+    {
+        if (_editorVariableBusy || _services is not { } services || XamlRoot is null) return;
+        _editorVariableBusy = true;
+        EditorVariableButton.IsEnabled = false;
+        try
+        {
+            var status = EditorVariable.Status;
+            if (status.Kind == EditorVariableKind.Ours)
+            {
+                var removed = await Task.Run(() => EditorVariable.Remove());
+                services.Log.Write($"composer editor variable remove: {(removed ? "done" : "failed")}");
+                return;
+            }
+            if (!await ConfirmSetEditorVariableAsync(status)) return;
+            var overwrite = status.Kind == EditorVariableKind.Other;
+            var set = await Task.Run(() => EditorVariable.Set(overwrite));
+            services.Log.Write($"composer editor variable set ({status.Kind}): {(set ? "done" : "failed")}");
+        }
+        finally
+        {
+            _editorVariableBusy = false;
+            RefreshEditorVariable();
+        }
+    }
+
+    /// <summary>True when the user chose Set; false on Cancel, or when another dialog is open.</summary>
+    private async Task<bool> ConfirmSetEditorVariableAsync(EditorVariableStatus status)
+    {
+        var replaces = status.Kind == EditorVariableKind.Other;
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Style = (Style)Application.Current.Resources["DefaultContentDialogStyle"],
+            Title = "Set VISUAL=popguy-edit for your user account?",
+            PrimaryButtonText = "Set",
+            CloseButtonText = "Cancel",
+            // Replacing the user's own editor: Enter keeps it.
+            DefaultButton = replaces ? ContentDialogButton.Close : ContentDialogButton.Primary,
+        };
+        if (replaces)
+        {
+            dialog.Content = new TextBlock
+            {
+                Text = $"This replaces the current value '{status.Value}'.",
+                TextWrapping = TextWrapping.Wrap,
+            };
+        }
+        try
+        {
+            return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        }
+        catch (System.Runtime.InteropServices.COMException e)
+        {
+            // Another dialog is open.
+            _services?.Log.Write($"settings: editor variable dialog failed, 0x{e.HResult:X8}");
+            return false;
+        }
     }
 
     /// <summary>A deliberate copy, as History's: off the UI thread; the log gets the outcome only.</summary>

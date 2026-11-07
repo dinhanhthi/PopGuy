@@ -111,6 +111,10 @@ struct SettingsView: View {
     /// Triggered by the "Read more: how models use memory" link in LocalModelsView.
     @State private var showingMemoryInfo = false
 
+    /// When non-nil, the "Set up shell" confirm modal is shown.
+    /// Set by TerminalComposerView's "Set up shell…" button.
+    @State private var shellSetupConfirmation: ShellSetupConfirmation?
+
     private static let galleryLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PopGuy", category: "action-library")
 
     /// Keyboard focus of the sidebar, so the arrow keys move the selection.
@@ -121,7 +125,9 @@ struct SettingsView: View {
     private var panelAnimation: Animation { Motion.sheet }
 
     /// True while one of the modals covers the page.
-    private var panelOpen: Bool { editingAction != nil || showingLibrary || showingMemoryInfo }
+    private var panelOpen: Bool {
+        editingAction != nil || showingLibrary || showingMemoryInfo || shellSetupConfirmation != nil
+    }
 
     /// Live window width, read from the main content, used to size the modals.
     @State private var containerWidth: CGFloat = 0
@@ -256,6 +262,27 @@ struct SettingsView: View {
                     }
                 )
             }
+
+            // "Set up shell" confirm modal (Composer page). Confirm closes it at once,
+            // then the page runs the install off the main thread.
+            SettingsModal(
+                isPresented: shellSetupConfirmation != nil,
+                containerWidth: containerWidth,
+                onDismiss: { shellSetupConfirmation = nil }
+            ) {
+                if let confirmation = shellSetupConfirmation {
+                    ShellSetupConfirmView(
+                        preview: confirmation.preview,
+                        onCancel: {
+                            withAnimation(panelAnimation) { shellSetupConfirmation = nil }
+                        },
+                        onConfirm: {
+                            withAnimation(panelAnimation) { shellSetupConfirmation = nil }
+                            confirmation.onConfirm()
+                        }
+                    )
+                }
+            }
         }
         .background(WindowGlass().ignoresSafeArea())
         .modifier(HardTopScrollEdge())
@@ -289,6 +316,7 @@ struct SettingsView: View {
             editingAction = nil
             showingLibrary = false
             showingMemoryInfo = false
+            shellSetupConfirmation = nil
         }
     }
 
@@ -415,7 +443,8 @@ struct SettingsView: View {
                 // placeholder paints, so the panel responds to the click instantly.
                 DeferredSectionContent {
                     switch section {
-                    case .terminalComposer: TerminalComposerView(settings: settings)
+                    case .terminalComposer:
+                        TerminalComposerView(settings: settings, shellSetupConfirmation: $shellSetupConfirmation)
                     case .about:      AboutView(updater: updater)
                     case .general, .providers, .actions, .history, .triggers, .appearance, .ignoredApps:
                         EmptyView() // built above

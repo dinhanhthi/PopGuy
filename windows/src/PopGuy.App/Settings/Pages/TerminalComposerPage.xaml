@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Settings → Composer (macOS TerminalComposerView.swift): the switch, its Compose shortcut, the popguy-edit
-    command and the editor snippets, as Windows 11 Settings cards. The header is the window's.
+    command, the VISUAL editor variable and the editor snippets, as Windows 11 Settings cards. The header is the
+    window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.TerminalComposerPage"
@@ -67,9 +68,19 @@
                 <Button x:Name="CommandButton" MinWidth="80" />
             </controls:SettingsCard>
 
+            <controls:SettingsCard Header="Editor variable">
+                <controls:SettingsCard.Description>
+                    <StackPanel Spacing="2">
+                        <TextBlock x:Name="EditorVariableStatusText" TextWrapping="Wrap" />
+                        <TextBlock Text="Terminal tools read VISUAL to pick their editor. Open a new terminal afterwards." TextWrapping="Wrap" />
+                    </StackPanel>
+                </controls:SettingsCard.Description>
+                <Button x:Name="EditorVariableButton" MinWidth="80" />
+            </controls:SettingsCard>
+
             <TextBlock
                 Margin="1,20,0,4"
-                Text="Paste one line into your terminal so terminal tools open PopGuy as their editor. Most people only need the first one."
+                Text="Set up does this for you. To do it by hand, run one line in your terminal. Most people only need the first one."
                 TextWrapping="Wrap" />
 
             <controls:SettingsCard Header="PowerShell">

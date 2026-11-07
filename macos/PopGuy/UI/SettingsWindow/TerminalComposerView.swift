@@ -2,11 +2,13 @@
 // PopGuy — UI/SettingsWindow
 //
 // The Settings → Composer page (Terminal Composer): the enable switch, the Compose shortcut,
-// the `popguy-edit` command (install / re-install / remove) and copyable snippets,
-// each with a caption, that set it as the editor of shells, Claude Code and git.
+// the `popguy-edit` command (install / re-install / remove), the shell setup (the
+// PATH/VISUAL lines in the shell config, confirmed in a SettingsModal shown by
+// SettingsView) and copyable snippets, each with a caption, that set it as the editor
+// of shells, Claude Code and git.
 //
-// The command's status is read and changed off the main thread (file system I/O);
-// the buttons react at once and show a busy label until the work is done.
+// The command's and the shell's status are read and changed off the main thread (file
+// system I/O); the buttons react at once and show a busy label until the work is done.
 //
 // Isolation: @MainActor — implicitly via SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor.
 
@@ -16,6 +18,8 @@ import SwiftUI
 struct TerminalComposerView: View {
 
     @ObservedObject var settings: SettingsStore
+    /// Non-nil while SettingsView shows the "Set up shell" confirm modal.
+    @Binding var shellSetupConfirmation: ShellSetupConfirmation?
 
     /// Whether the Compose shortcut recorder is active.
     @State private var isRecordingShortcut = false
@@ -26,10 +30,19 @@ struct TerminalComposerView: View {
     /// Short inline error of the last failed operation.
     @State private var commandError: String?
 
+    /// The shell config's status; nil until first read.
+    @State private var shellStatus: ShellSetupStatus?
+    /// The running shell setup operation, if any.
+    @State private var shellOperation: Operation?
+    /// Short inline error of the last failed shell operation.
+    @State private var shellError: String?
+
     private enum Operation { case install, remove }
 
     /// Nil when the home folder cannot be found.
     private let installer = CommandInstaller.standard()
+    /// Nil when the user record cannot be read.
+    private let shellSetup = ShellSetup.standard()
     /// Gatekeeper runs a quarantined app from a temporary path: a link to it would dangle.
     private let isTranslocated = Bundle.main.bundlePath.contains("/AppTranslocation/")
 
@@ -60,7 +73,10 @@ struct TerminalComposerView: View {
             .padding(SettingsMetrics.pagePadding)
         }
         .labeledContentStyle(.settingsRow)
-        .task { await refreshStatus() }
+        .task {
+            await refreshStatus()
+            await refreshShellStatus()
+        }
         .onDisappear { isRecordingShortcut = false }
     }
 
@@ -90,12 +106,16 @@ struct TerminalComposerView: View {
             SettingsDivider()
 
             commandRow()
+
+            SettingsDivider()
+
+            shellRow()
         }
     }
 
     private var snippetsGroup: some View {
         SettingsGroup("Set PopGuy as the editor") {
-            Text("Paste one line into your shell config so terminal tools open PopGuy as their editor. Most people only need the first one.")
+            Text("Set up shell does this for you. To do it by hand, paste one line into your shell config. Most people only need the first one.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -263,6 +283,87 @@ struct TerminalComposerView: View {
         }
     }
 
+    // MARK: - Shell
+
+    private func shellRow() -> some View {
+        LabeledContent {
+            HStack(spacing: 8) {
+                if case .notSetUp? = shellStatus {
+                    Button(shellOperation == .install ? "Setting up\u{2026}" : "Set up shell\u{2026}") {
+                        confirmShellSetup()
+                    }
+                    .buttonStyle(RowTextButtonStyle(formRow: true))
+                    .disabled(shellOperation != nil)
+                }
+                if case .setUp? = shellStatus {
+                    Button(shellOperation == .remove ? "Removing\u{2026}" : "Remove") { runShell(.remove) }
+                        .buttonStyle(RowTextButtonStyle(formRow: true))
+                        .disabled(shellOperation != nil)
+                }
+            }
+        } label: {
+            Text("Shell")
+            Text(shellStatusText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if let shellError {
+                Text(shellError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            Text("Adds the PATH and VISUAL lines to your shell config, between PopGuy markers. Open a new terminal afterwards.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var shellStatusText: String {
+        guard let shellSetup else { return "Your home folder could not be found." }
+        switch shellStatus {
+        case nil: return "Checking\u{2026}"
+        case .setUp(let file)?: return "Set up in \(shellSetup.displayPath(file))."
+        case .notSetUp?: return "Not set up."
+        case .unsupported(let name)?: return "Your shell (\(name)) isn't supported — use the lines below."
+        }
+    }
+
+    private func refreshShellStatus() async {
+        guard let shellSetup else { return }
+        shellStatus = await Task.detached { shellSetup.status }.value
+    }
+
+    /// Opens the confirm modal; its confirm button runs the install.
+    private func confirmShellSetup() {
+        guard let preview = shellSetup?.preview, shellOperation == nil else { return }
+        withAnimation(Motion.sheet) {
+            shellSetupConfirmation = ShellSetupConfirmation(preview: preview) { runShell(.install) }
+        }
+    }
+
+    /// Runs the shell install or remove off the main thread, then shows the new status (and a short error).
+    private func runShell(_ operation: Operation) {
+        guard let shellSetup, shellOperation == nil else { return }
+        shellOperation = operation
+        shellError = nil
+        let isInstall = operation == .install
+        Task {
+            let (status, failure) = await Task.detached { () -> (ShellSetupStatus, (any Error)?) in
+                do {
+                    if isInstall { try shellSetup.install() } else { try shellSetup.remove() }
+                    return (shellSetup.status, nil)
+                } catch {
+                    return (shellSetup.status, error)
+                }
+            }.value
+            shellStatus = status
+            if let failure {
+                shellError = (isInstall ? "Couldn't set up the shell: " : "Couldn't remove the shell lines: ")
+                    + failure.localizedDescription
+            }
+            shellOperation = nil
+        }
+    }
+
     // MARK: - Snippets
 
     private func snippetRow(title: String, caption: String, text: String) -> some View {
@@ -286,5 +387,71 @@ struct TerminalComposerView: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
         }
+    }
+}
+
+// MARK: - Shell setup confirm modal
+
+/// A pending "Set up shell" confirmation: what will be written and the page's install.
+struct ShellSetupConfirmation {
+    let preview: ShellSetupPreview
+    let onConfirm: () -> Void
+}
+
+/// The confirm card shown in a SettingsModal: the target file and the exact lines.
+struct ShellSetupConfirmView: View {
+
+    let preview: ShellSetupPreview
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    /// The card holds the keyboard focus (it has no field), so Esc reaches the modal.
+    @FocusState private var cardFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "terminal")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                Text("Set Up Shell")
+                    .font(.title2.weight(.semibold))
+                Spacer(minLength: 0)
+                Button("Cancel", action: onCancel)
+                    .buttonStyle(BottomBarButtonStyle(height: 28, horizontalPadding: 12))
+                Button("Add to \(preview.file.lastPathComponent)", action: onConfirm)
+                    .buttonStyle(BottomBarButtonStyle(height: 28, prominent: true, horizontalPadding: 12))
+            }
+            // At the top of the modal card, symmetric vertical padding.
+            .padding(.horizontal, SettingsMetrics.cardPadding)
+            .padding(.vertical, SettingsMetrics.cardPadding + 6)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("PopGuy adds these lines to \(preview.displayPath), between PopGuy markers. Nothing else in the file changes.")
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(preview.lines)
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.primary.opacity(0.05),
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    Text("Open a new terminal afterwards. Remove takes the lines out again.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(SettingsMetrics.cardPadding + 6)
+            }
+        }
+        // No minimum height: the modal card sets the height.
+        .frame(minWidth: 480)
+        .focusable()
+        .modifier(NoFocusRing())
+        .focused($cardFocused)
+        // Next run-loop turn, once the card is in the window.
+        .onAppear { DispatchQueue.main.async { cardFocused = true } }
     }
 }
