@@ -5,9 +5,11 @@
 //
 // It renders the REAL floating toolbar (`ToolbarView`, non-interactive) from an
 // editor-owned view model, so metrics, zoom, labels, burger, and system buttons
-// match the live toolbar exactly, and an editor-owned "More actions" card of icon
-// chips beside it, top-aligned — wrapped to a second row only when both don't fit
-// the preview's width. Both are draggable: reorder on the toolbar, reorder within
+// match the live toolbar exactly, and an editor-owned More card of icon chips
+// beside it, top-aligned — wrapped to a second row only when both don't fit the
+// preview's width. A "More actions" connector joins the two cards behind them: a
+// straight line with the label in its middle side by side; wrapped, an elbow from
+// the toolbar card's bottom into the More card's right edge, the label on its run. Both are draggable: reorder on the toolbar, reorder within
 // More, and move actions between the two. There are no action-count caps; a soft
 // warning appears when the toolbar card grows wider than
 // `ToolbarLimits.toolbarWidthWarningThreshold`.
@@ -130,14 +132,14 @@ struct ToolbarLayoutEditorView: View {
     @State private var moreFrames: [ActionIdentifier: CGRect] = [:]
     @State private var moreRowFrame: CGRect = .zero
     @State private var cardWidth: CGFloat = 0
+    /// The toolbar row's frame (ToolbarView with its transparent insets).
+    @State private var toolbarRowFrame: CGRect = .zero
     @State private var canvasHeight: CGFloat = 0
     /// Visible width of the preview (the horizontal ScrollView's own width).
     @State private var availableWidth: CGFloat = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Pointer slack (pt) above the More card that still counts as the More zone.
-    private let moreZoneSlack: CGFloat = 8
 
     // Same scaled metrics as the real toolbar (ToolbarView's ToolbarMetrics).
     private var zoom: CGFloat { previewModel.toolbarZoom.scale }
@@ -148,6 +150,43 @@ struct ToolbarLayoutEditorView: View {
     private var chipIconSize: CGFloat { NSFont.preferredFont(forTextStyle: .callout).pointSize * zoom }
     /// ToolbarView's transparent side inset around its card.
     private var toolbarInset: CGFloat { ToolbarView.outerHorizontalPadding * zoom }
+
+    // Connector metrics. The label is measured with AppKit, not from layout, so
+    // the fit decision below never waits on a layout pass.
+    private static let connectorTitle = "More actions"
+    private var connectorFontSize: CGFloat { NSFont.preferredFont(forTextStyle: .caption1).pointSize * zoom }
+    private var connectorLabelSize: CGSize {
+        let size = (Self.connectorTitle as NSString)
+            .size(withAttributes: [.font: NSFont.systemFont(ofSize: connectorFontSize)])
+        return CGSize(width: ceil(size.width), height: ceil(size.height))
+    }
+    /// Visible line on each side of the label.
+    private var connectorStub: CGFloat { 12 * zoom }
+    /// Space between the line and the label.
+    private var connectorLabelPad: CGFloat { 6 * zoom }
+    /// The run that carries the label (stub, pad, label, pad, stub): the gap
+    /// between the cards side by side.
+    private var connectorRun: CGFloat { connectorLabelSize.width + 2 * (connectorStub + connectorLabelPad) }
+    /// The gap between the rows when wrapped: the label sits beside the More
+    /// card, so the gap is the preview's own side space.
+    private var wrappedGap: CGFloat { toolbarInset }
+    /// Wrapped, whether the toolbar card ends too soon for the elbow to drop from
+    /// its bottom edge (More card plus run wider than it): the elbow then leaves
+    /// from its right edge, right of both cards, which needs room on the right.
+    private var wrappedElbowPastToolbar: Bool {
+        moreRowFrame.maxX + connectorRun > toolbarCardFrame.maxX - cardRadius
+    }
+    private var connectorColor: Color { .white.opacity(0.8) }
+
+    /// The toolbar card inside the toolbar row (less ToolbarView's insets).
+    private var toolbarCardFrame: CGRect {
+        CGRect(
+            x: toolbarRowFrame.minX + toolbarInset,
+            y: toolbarRowFrame.minY + ToolbarView.outerTopPadding * zoom,
+            width: toolbarRowFrame.width - 2 * toolbarInset,
+            height: toolbarRowFrame.height - (ToolbarView.outerTopPadding + ToolbarView.outerBottomPadding) * zoom
+        )
+    }
 
     /// Whether the More card sits beside the toolbar (latched during a drag).
     private var sideBySide: Bool { dragSession?.sideBySide ?? measuredSideBySide }
@@ -164,7 +203,7 @@ struct ToolbarLayoutEditorView: View {
         return ToolbarLayoutEditMath.moreFitsBesideToolbar(
             toolbarWidth: toolbarInset + cardWidth,
             moreWidth: moreRowFrame.width + toolbarInset, // room for the card's shadow
-            spacing: toolbarInset, // ToolbarView's trailing inset is the gap
+            spacing: connectorRun,
             available: availableWidth
         )
     }
@@ -221,15 +260,31 @@ struct ToolbarLayoutEditorView: View {
             toolbarRow
             moreRow
                 // Side by side: level with the toolbar card (below ToolbarView's
-                // top inset), its trailing inset is the gap, room for the shadow
-                // on the right. Wrapped: aligned with the toolbar card.
-                .padding(.top, sideBySide ? ToolbarView.outerTopPadding * zoom : 0)
-                .padding(.leading, sideBySide ? 0 : toolbarInset)
-                .padding(.trailing, sideBySide ? toolbarInset : 0)
-                // Room for the card shadow.
-                .padding(.bottom, 16)
+                // top inset), the connector's run as the gap (ToolbarView's
+                // trailing inset is part of it), room for the shadow on the right.
+                // Wrapped: aligned with the toolbar card, `wrappedGap` below it
+                // (into ToolbarView's bottom shadow inset), room on the right for
+                // the elbow when it passes the toolbar card.
+                .padding(.top, sideBySide
+                         ? ToolbarView.outerTopPadding * zoom
+                         : wrappedGap - ToolbarView.outerBottomPadding * zoom)
+                .padding(.leading, sideBySide ? connectorRun - toolbarInset : toolbarInset)
+                .padding(.trailing, sideBySide
+                         ? toolbarInset
+                         : (wrappedElbowPastToolbar ? connectorRun + toolbarInset : 0))
+                // The same space below the card as left of the toolbar card.
+                .padding(.bottom, toolbarInset)
         }
-        .padding(.top, 8)
+        // The same space on every side of the cards: ToolbarView's side inset
+        // (`toolbarInset`). Its top inset is smaller, its bottom inset larger
+        // (shadow room): side by side the toolbar row is the tallest, so trim
+        // the difference below; wrapped, the More row is last and already ends
+        // `toolbarInset` below its card.
+        .padding(.bottom, sideBySide
+                 ? -(ToolbarView.outerBottomPadding - ToolbarView.outerHorizontalPadding) * zoom
+                 : 0)
+        .padding(.top, (ToolbarView.outerHorizontalPadding - ToolbarView.outerTopPadding) * zoom)
+        .background(alignment: .topLeading) { connector }
         .overlay(alignment: .topLeading) { toolbarHoverTargets }
         .overlay(alignment: .topLeading) { dragGhost }
         .coordinateSpace(name: ToolbarView.previewCoordinateSpace)
@@ -277,11 +332,89 @@ struct ToolbarLayoutEditorView: View {
         // found not to fire when embedded like this.
         .background(
             GeometryReader { geo in
+                let frame = geo.frame(in: .named(ToolbarView.previewCoordinateSpace))
                 Color.clear
-                    .onAppear { cardWidth = max(0, geo.size.width - 2 * toolbarInset) }
+                    .onAppear {
+                        cardWidth = max(0, geo.size.width - 2 * toolbarInset)
+                        toolbarRowFrame = frame
+                    }
                     .onChange(of: geo.size.width) { cardWidth = max(0, $0 - 2 * toolbarInset) }
+                    .onChange(of: frame) { toolbarRowFrame = $0 }
             }
         )
+    }
+
+    // MARK: Connector
+
+    /// The "More actions" line between the toolbar card and the More card, drawn
+    /// behind both. Side by side: straight, from the toolbar card's right edge to
+    /// the More card's left edge. Wrapped: an elbow from the toolbar card's bottom
+    /// down to the More card's middle, then left into its right edge. The label
+    /// sits in a break of the last run (no fill behind it, so the backdrop shows
+    /// through).
+    @ViewBuilder
+    private var connector: some View {
+        if toolbarRowFrame != .zero, moreRowFrame != .zero {
+            let (points, labelCenter) = connectorGeometry(toolbar: toolbarCardFrame, more: moreRowFrame)
+            let half = connectorLabelSize.width / 2 + connectorLabelPad
+            ZStack(alignment: .topLeading) {
+                Path { path in
+                    // The line, broken around the label on the run that carries it.
+                    let breakIndex = points.count - 2
+                    let direction: CGFloat = points[breakIndex + 1].x >= points[breakIndex].x ? 1 : -1
+                    let before = CGPoint(x: labelCenter.x - direction * half, y: labelCenter.y)
+                    let after = CGPoint(x: labelCenter.x + direction * half, y: labelCenter.y)
+                    addPolyline(Array(points[...breakIndex]) + [before], to: &path)
+                    addPolyline([after] + Array(points[(breakIndex + 1)...]), to: &path)
+                }
+                .stroke(connectorColor, style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round))
+
+                Text(Self.connectorTitle)
+                    .font(.system(size: connectorFontSize))
+                    .foregroundStyle(connectorColor)
+                    .fixedSize()
+                    .position(labelCenter)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+
+    /// The connector's corner points and the label's center, in the canvas space.
+    private func connectorGeometry(toolbar: CGRect, more: CGRect) -> ([CGPoint], CGPoint) {
+        if sideBySide {
+            // Level with the toolbar card's middle, kept within the More card.
+            let y = min(max(toolbar.midY, more.minY + controlRadius), more.maxY - controlRadius)
+            return ([CGPoint(x: toolbar.maxX, y: y), CGPoint(x: more.minX, y: y)],
+                    CGPoint(x: (toolbar.maxX + more.minX) / 2, y: y))
+        }
+        // Wrapped: the run ends at the More card's right edge, level with its
+        // middle, and starts `connectorRun` to the right, where the line drops
+        // from the toolbar card's bottom; or, when the toolbar card ends before
+        // that, from its right edge (room reserved on the right).
+        let y = more.midY
+        let end = CGPoint(x: more.maxX, y: y)
+        if wrappedElbowPastToolbar {
+            // Clear of the toolbar card's right edge by at least a stub.
+            let x = max(more.maxX + connectorRun, toolbar.maxX + connectorStub)
+            return ([CGPoint(x: toolbar.maxX, y: toolbar.midY), CGPoint(x: x, y: toolbar.midY),
+                     CGPoint(x: x, y: y), end],
+                    CGPoint(x: (more.maxX + x) / 2, y: y))
+        }
+        let x = more.maxX + connectorRun
+        return ([CGPoint(x: x, y: toolbar.maxY), CGPoint(x: x, y: y), end],
+                CGPoint(x: (more.maxX + x) / 2, y: y))
+    }
+
+    /// Adds a line through `points` with rounded corners.
+    private func addPolyline(_ points: [CGPoint], to path: inout Path) {
+        guard let first = points.first else { return }
+        path.move(to: first)
+        for index in points.indices.dropFirst().dropLast() {
+            path.addArc(tangent1End: points[index], tangent2End: points[index + 1], radius: 4 * zoom)
+        }
+        if let last = points.last { path.addLine(to: last) }
     }
 
     /// Transparent hover targets over each toolbar action: the real toolbar has
@@ -305,24 +438,13 @@ struct ToolbarLayoutEditorView: View {
     // MARK: Row 2 — More actions
 
     private var moreRow: some View {
-        VStack(alignment: .leading, spacing: cardPadding) {
-            HStack(spacing: 3 * zoom) {
-                Text("More actions")
-                Image(systemName: "chevron.down")
-                    .imageScale(.small)
-            }
-            .font(.system(size: NSFont.preferredFont(forTextStyle: .caption1).pointSize * zoom))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 5 * zoom)
-            .padding(.top, 2 * zoom)
-
-            HStack(spacing: cardPadding) {
-                if previewModel.overflowActions.isEmpty {
-                    emptyMoreSlot
-                } else {
-                    ForEach(previewModel.overflowActions, id: \.self) { id in
-                        moreChip(for: id)
-                    }
+        // Titled by the connector's "More actions" label, not inside the card.
+        HStack(spacing: cardPadding) {
+            if previewModel.overflowActions.isEmpty {
+                emptyMoreSlot
+            } else {
+                ForEach(previewModel.overflowActions, id: \.self) { id in
+                    moreChip(for: id)
                 }
             }
         }
@@ -502,7 +624,8 @@ struct ToolbarLayoutEditorView: View {
             location: location,
             moreFrame: moreRowFrame,
             sideBySide: sideBySide,
-            slack: moreZoneSlack
+            // Up to the middle of the gap (the connector's run or the row gap).
+            slack: sideBySide ? connectorRun / 2 : wrappedGap / 2
         )
     }
 
