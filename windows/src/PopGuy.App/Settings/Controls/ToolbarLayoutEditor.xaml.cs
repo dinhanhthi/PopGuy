@@ -17,8 +17,10 @@ namespace PopGuy.Settings.Controls;
 /// <summary>
 /// The toolbar layout editor (macOS <c>ToolbarLayoutEditorView.swift</c>). Row 1 is the real <see cref="ToolbarView"/>,
 /// not hit-testable, bound to an editor-owned <see cref="ToolbarViewModel"/> presented with the current settings in
-/// idle state (its session is never run, so no provider, clipboard or history is touched). Row 2 is a More actions card
-/// of icon chips. Drag an action to reorder it, or to move it between the rows (a 4 DIP threshold, pointer capture);
+/// idle state (its session is never run, so no provider, clipboard or history is touched). Then a More actions card of
+/// icon chips: beside the toolbar, top aligned, when both fit the editor's width, else on row 2 (macOS
+/// moreFitsBesideToolbar; the arrangement holds still during a drag). Drag an action to reorder it, or to move it
+/// between the rows (a 4 DIP threshold, pointer capture);
 /// the drop slot comes from the buttons' and chips' real bounds and shows live in the preview, then saves through
 /// <see cref="ToolbarLayout.MoveAction"/>; a click without a drag does nothing (In More actions and Show label are switches
 /// on the action cards, as on macOS). No caps; a soft warning shows when the toolbar card is wider than
@@ -31,8 +33,11 @@ public sealed partial class ToolbarLayoutEditor : UserControl
     /// <summary>The pointer travel (DIP) before a press becomes a drag (macOS minimumDistance).</summary>
     private const double DragThreshold = 4;
 
-    /// <summary>Pointer slack (DIP) above the More card that still counts as the More zone.</summary>
+    /// <summary>Pointer slack (DIP) before the More card (above it, or left of it side by side) that still counts as the More zone.</summary>
     private const double MoreZoneSlack = 8;
+
+    /// <summary>The gap (DIP) between the toolbar card and the More card, beside it or below it.</summary>
+    private const double MoreGap = 6;
 
     /// <summary>The toolbar's button height at zoom 1 (the bar's 44 minus its padding): the More chips match it.</summary>
     private const double ControlHeight = 32;
@@ -56,6 +61,9 @@ public sealed partial class ToolbarLayoutEditor : UserControl
     /// <summary>The press or drag in progress; null when the pointer is up.</summary>
     private DragSession? _drag;
 
+    /// <summary>The More card sits beside the toolbar (else below it); see <see cref="UpdateArrangement"/>.</summary>
+    private bool _sideBySide;
+
     public ToolbarLayoutEditor()
     {
         InitializeComponent();
@@ -64,6 +72,9 @@ public sealed partial class ToolbarLayoutEditor : UserControl
         Surface.PointerReleased += OnPointerReleased;
         Surface.PointerCanceled += OnPointerLost;
         Surface.PointerCaptureLost += OnPointerLost;
+        Viewport.SizeChanged += OnArrangementInputChanged;
+        ToolbarCard.SizeChanged += OnArrangementInputChanged;
+        MoreCard.SizeChanged += OnArrangementInputChanged;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -197,6 +208,29 @@ public sealed partial class ToolbarLayoutEditor : UserControl
         RemoveTabStops(_view);
     }
 
+    private void OnArrangementInputChanged(object sender, SizeChangedEventArgs e) => UpdateArrangement();
+
+    /// <summary>
+    /// The More card goes beside the toolbar when both cards and the gap fit the viewport (less the surface's padding),
+    /// else below it (macOS measuredSideBySide). The widths do not depend on the arrangement (both cards hug their
+    /// content, the viewport is as wide as the page gives), so the switch cannot feed back on itself. Below until
+    /// measured. Editable only, and never during a press or drag: the drop zone keeps the layout the drag started in.
+    /// Idempotent: the height change it causes re-raises the viewport's SizeChanged.
+    /// </summary>
+    private void UpdateArrangement()
+    {
+        if (!_isEditable || _drag is not null) return;
+        var toolbarWidth = ToolbarCard.ActualWidth;
+        var moreWidth = MoreCard.ActualWidth;
+        var available = Viewport.ActualWidth - SurfaceContent.Padding.Left - SurfaceContent.Padding.Right;
+        var sideBySide = toolbarWidth > 0 && moreWidth > 0 && available > 0
+            && ToolbarLayoutEditMath.MoreFitsBesideToolbar(toolbarWidth, moreWidth, MoreGap, available);
+        if (sideBySide == _sideBySide) return;
+        _sideBySide = sideBySide;
+        SurfaceContent.Orientation = sideBySide ? Orientation.Horizontal : Orientation.Vertical;
+        MoreCard.Margin = sideBySide ? new Thickness(MoreGap, 0, 0, 0) : new Thickness(0, MoreGap, 0, 0);
+    }
+
     private static void RemoveTabStops(DependencyObject parent)
     {
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
@@ -292,6 +326,8 @@ public sealed partial class ToolbarLayoutEditor : UserControl
         var unchanged = drag.TargetPrincipal == drag.SourcePrincipal && drag.TargetIndex == drag.SourceIndex;
         if (!unchanged) Save("actionOrder", s => Moved(s, drag));
         Reseed();
+        // Sizes that changed during the drag raised no update then, and may not change again.
+        UpdateArrangement();
     }
 
     /// <summary>A cancelled drag (capture lost, pointer cancelled) drops its preview.</summary>
@@ -300,6 +336,7 @@ public sealed partial class ToolbarLayoutEditor : UserControl
         if (_drag is null) return;
         EndDrag();
         Reseed();
+        UpdateArrangement();
     }
 
     private void EndDrag()
@@ -333,11 +370,13 @@ public sealed partial class ToolbarLayoutEditor : UserControl
     }
 
     /// <summary>
-    /// The More card spans only its chips, so the zone is the whole band at or below its top (less a little slack):
-    /// dragging straight down from any toolbar action reaches it.
+    /// The More card spans only its chips, so the zone is a whole band (<see cref="ToolbarLayoutEditMath.IsInMoreZone"/>):
+    /// side by side, right of its left edge; below the toolbar, at or below its top, so dragging straight down from any
+    /// toolbar action reaches it. Uses the arrangement on screen, held still for the drag.
     /// </summary>
     private bool IsInMoreZone(Point position) =>
-        Bounds(MoreCard) is { } more && position.Y >= more.Top - MoreZoneSlack;
+        Bounds(MoreCard) is { } more
+        && ToolbarLayoutEditMath.IsInMoreZone(position.X, position.Y, more.Left, more.Top, _sideBySide, MoreZoneSlack);
 
     private (IReadOnlyList<ActionIdentifier>, IReadOnlyDictionary<ActionIdentifier, double>) ToolbarRow()
     {

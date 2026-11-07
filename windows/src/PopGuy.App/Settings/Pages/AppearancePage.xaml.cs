@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using PopGuy.Controls;
 using PopGuy.Core.Settings;
 using PopGuy.Services;
 using PopGuy.Settings.ViewModels;
@@ -9,9 +10,10 @@ using PopGuy.Toolbar;
 namespace PopGuy.Settings.Pages;
 
 /// <summary>
-/// Settings → Appearance (macOS SettingsView.swift AppearanceView, spec-3 §5.5, plus macOS's Show logo only, Hide logo
-/// and Remove gap before system buttons toggles, which the spec leaves out). Hide logo is disabled while Show logo only
-/// is on: the toolbar expands from the logo (macOS). The navigation parameter is the AppServices. Every control saves
+/// Settings → Appearance (macOS SettingsView.swift AppearanceView, spec-3 §5.5, plus macOS's Show logo only, Show
+/// Settings button on toolbar (on the Actions page before), Hide logo and Remove gap before system buttons toggles,
+/// which the spec leaves out). Hide logo is disabled while Show logo only is on: the toolbar expands from the logo
+/// (macOS). The navigation parameter is the AppServices. Every control saves
 /// through <see cref="SettingsStore.Update"/> at once; the toolbar reads these settings on each presentation, so the
 /// next toolbar shows the change; the toolbar preview (the layout editor, preview-only) shows it at once. The sample
 /// sentence shows the result text's size: the font size, grown by the zoom when "Include font size in zoom" is on. A
@@ -19,6 +21,8 @@ namespace PopGuy.Settings.Pages;
 /// </summary>
 public sealed partial class AppearancePage : Page
 {
+    private const string SettingsButtonTooltip = "Settings stay available from the PopGuy tray icon";
+
     private AppServices? _services;
     private ActionsViewModel? _model;
     private bool _subscribed;
@@ -37,6 +41,9 @@ public sealed partial class AppearancePage : Page
             UpdateHideLogoState();
             Save("showLogoOnly", s => s with { ShowLogoOnly = ShowLogoOnlyToggle.IsOn });
         };
+        ToolbarSettingsToggle.Toggled += (_, _) =>
+            Save("showToolbarSettingsButton", s => s with { ShowToolbarSettingsButton = ToolbarSettingsToggle.IsOn });
+        HoverTooltip.SetText(ToolbarSettingsToggle, SettingsButtonTooltip);
         ZoomFontToggle.Toggled += (_, _) =>
             Save("zoomIncludesFontSize", s => s with { ZoomIncludesFontSize = ZoomFontToggle.IsOn });
         HideLogoToggle.Toggled += (_, _) =>
@@ -87,6 +94,7 @@ public sealed partial class AppearancePage : Page
         // The bars' items are in the enums' order (here, in the change handlers and in UpdateSample).
         ToolbarStyleBar.SelectedItem = ToolbarStyleBar.Items[(int)current.ToolbarStyle];
         ShowLogoOnlyToggle.IsOn = current.ShowLogoOnly;
+        ToolbarSettingsToggle.IsOn = current.ShowToolbarSettingsButton;
         ZoomBar.SelectedItem = ZoomBar.Items[(int)current.ToolbarZoom];
         FontSizeBar.SelectedItem = FontSizeBar.Items[(int)current.ResultFontSize];
         ZoomFontToggle.IsOn = current.ZoomIncludesFontSize;

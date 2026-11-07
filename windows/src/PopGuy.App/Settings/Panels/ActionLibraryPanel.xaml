@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     The Action Library panel (macOS ActionLibraryView.swift), shown as the SlideOverPanel's centered modal: a header
-    (title, subtitle, Done) with the panel's symmetric padding, the search row, then the scrolling category sections of
+    (title, subtitle, the search box, Done) with the panel's symmetric padding, then the scrolling category sections of
     preset cards. The sections and cards are built in code (ActionLibraryPanel.xaml.cs); the styles below give them their
     theme colours.
 -->
@@ -54,15 +54,14 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Header: its padding is SlideOverPanel.HeaderPadding (set in code). -->
-        <Grid x:Name="HeaderBar" Grid.Row="0" ColumnSpacing="8">
+        <!-- Header: its padding is SlideOverPanel.HeaderPadding (set in code). The search sits in it (macOS: title, search, Done). -->
+        <Grid x:Name="HeaderBar" Grid.Row="0" ColumnSpacing="12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
@@ -74,9 +73,16 @@
                     Text="The action was not installed: the settings file could not be written."
                     Visibility="Collapsed" />
             </StackPanel>
+            <TextBox
+                x:Name="SearchBox"
+                Grid.Column="1"
+                Width="240"
+                VerticalAlignment="Center"
+                AutomationProperties.Name="Search actions"
+                PlaceholderText="Search actions…" />
             <Button
                 x:Name="DoneButton"
-                Grid.Column="1"
+                Grid.Column="2"
                 VerticalAlignment="Center"
                 Content="Done"
                 Style="{StaticResource AccentButtonStyle}" />
@@ -87,21 +93,7 @@
             Height="1"
             Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
-        <!-- Search: the same MaxWidth as the cards, so both line up on wide windows. -->
-        <Grid Grid.Row="2" Padding="24,10,24,10">
-            <TextBox
-                x:Name="SearchBox"
-                MaxWidth="1000"
-                AutomationProperties.Name="Search actions"
-                PlaceholderText="Search actions…" />
-        </Grid>
-
-        <Rectangle
-            Grid.Row="3"
-            Height="1"
-            Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
-
-        <ScrollViewer Grid.Row="4">
+        <ScrollViewer Grid.Row="2">
             <!-- A stretched Grid takes the viewport width: a MaxWidth child placed straight in the ScrollViewer is centered by its narrower desired width and overflows the right edge on wide windows. -->
             <Grid>
                 <StackPanel

@@ -11,10 +11,10 @@ namespace PopGuy.Settings.Panels;
 /// <summary>
 /// The Settings window's slide-over (macOS SlideOverPanel.swift): a dimmed backdrop over the whole window content and,
 /// on the right, a sheet 3/4 of the window wide (never under 480 DIPs, or the minimum the content asks for) that slides
-/// in. Presented centered, the sheet is a modal instead (Windows only; the Action Library): rounded, 4/5 of the window
-/// wide and as tall as the window less a margin, fading in as it rises a little. Esc or a click on the backdrop
-/// closes it. One panel at a time: presenting another replaces it. The window hosts one above its content; a page finds
-/// it with <see cref="Of"/>. The content lays out its own header with <see cref="HeaderPadding"/> (the macOS
+/// in. Presented centered, the sheet is a modal instead (macOS SettingsModal; every Settings panel now): rounded, 4/5 of
+/// the window wide and as tall as the window less a margin, fading in as it rises a little. Esc closes it, and so does a
+/// click on the backdrop unless the caller turns that off (Add/Edit action: an unsaved draft). One panel at a time:
+/// presenting another replaces it. The window hosts one above its content; a page finds it with <see cref="Of"/>. The content lays out its own header with <see cref="HeaderPadding"/> (the macOS
 /// ActionLibraryView structure: the same gap above and below the header, which never moves on resize). The backdrop and
 /// sheet styles come from the window's XAML, so they follow the theme. UI thread only.
 /// </summary>
@@ -34,6 +34,7 @@ public sealed partial class SlideOverPanel : Grid
     private Storyboard? _animation;
     private double _minWidth = MinSheetWidth;
     private bool _centered;
+    private bool _closeOnBackdropTap = true;
     private Action? _closed;
     private UIElement? _returnFocus;
 
@@ -46,7 +47,7 @@ public sealed partial class SlideOverPanel : Grid
         _backdrop.Tapped += (_, e) =>
         {
             e.Handled = true;
-            Close();
+            if (_closeOnBackdropTap) Close();
         };
         _sheet = new Border
         {
@@ -86,10 +87,12 @@ public sealed partial class SlideOverPanel : Grid
     /// in it) takes the focus, so Esc reaches the panel. <paramref name="closed"/> runs once the panel has closed, however
     /// it closed. <paramref name="minWidth"/>: the sheet's minimum width (macOS ActionLibraryView asks for 560).
     /// <paramref name="centered"/>: a modal in the middle of the window instead of a sheet on the right.
+    /// <paramref name="closeOnBackdropTap"/>: false keeps the panel open on a click on the backdrop (it still blocks the
+    /// window); its own buttons and Esc close it.
     /// </summary>
     public void Present(
         FrameworkElement content, UIElement? initialFocus = null, Action? closed = null, double minWidth = MinSheetWidth,
-        bool centered = false)
+        bool centered = false, bool closeOnBackdropTap = true)
     {
         // Open or still sliding out: that one finishes first.
         if (_sheet.Child is not null) Finish();
@@ -98,6 +101,7 @@ public sealed partial class SlideOverPanel : Grid
         _closed = closed;
         _minWidth = minWidth;
         _centered = centered;
+        _closeOnBackdropTap = closeOnBackdropTap;
         ApplyPlacement();
         _sheet.Child = content;
         IsOpen = true;

@@ -62,4 +62,26 @@ public sealed class ToolbarLayoutEditTests
         Assert.Equal([Shorten], ToolbarLayout.OverflowOrdered(inMore));
         Assert.Equal(s.ActionOrder, inMore.ActionOrder);
     }
+
+    [Fact]
+    public void MoreFitsBesideTheToolbarOnlyWhenBothFitTheWidth()
+    {
+        // 100 + 8 + 50 = 158.
+        Assert.True(ToolbarLayoutEditMath.MoreFitsBesideToolbar(100, 50, 8, 200));
+        Assert.True(ToolbarLayoutEditMath.MoreFitsBesideToolbar(100, 50, 8, 158));
+        Assert.False(ToolbarLayoutEditMath.MoreFitsBesideToolbar(100, 50, 8, 157));
+    }
+
+    [Fact]
+    public void MoreZoneFollowsTheLayout()
+    {
+        // The More card's left edge is at 300, its top at 10.
+        // Side by side: a point over the toolbar row is not in the zone, even level with the card.
+        Assert.False(ToolbarLayoutEditMath.IsInMoreZone(291, 20, 300, 10, sideBySide: true, slack: 8));
+        Assert.True(ToolbarLayoutEditMath.IsInMoreZone(292, 20, 300, 10, sideBySide: true, slack: 8));
+        Assert.True(ToolbarLayoutEditMath.IsInMoreZone(340, 0, 300, 10, sideBySide: true, slack: 8));
+        // Wrapped: the whole band at or below the card's top (less slack), at any x.
+        Assert.True(ToolbarLayoutEditMath.IsInMoreZone(0, 2, 300, 10, sideBySide: false, slack: 8));
+        Assert.False(ToolbarLayoutEditMath.IsInMoreZone(340, 1, 300, 10, sideBySide: false, slack: 8));
+    }
 }

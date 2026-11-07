@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Settings → Appearance (macOS SettingsView.swift AppearanceView): a live toolbar preview at the top, then the toolbar
-    style (Bar / Menu) and Show logo only, toolbar zoom, Hide logo (disabled while Show logo only is on) and the system
-    buttons gap, result font size with a sample, and formatting, as Windows 11 Settings cards under the macOS section
-    headers. WinUI has no segmented picker: a SelectorBar stands in. The preview is the Actions page's layout editor in
-    preview-only mode (macOS reuses ToolbarPreviewView in both); it always shows the bar. The header is the window's.
+    style (Bar / Menu), Show logo only and Show Settings button on toolbar, toolbar zoom, Hide logo (disabled while Show
+    logo only is on) and the system buttons gap, result font size with a sample, and formatting, as Windows 11 Settings
+    cards under the macOS section headers. WinUI has no segmented picker: a SelectorBar stands in. The preview is the
+    Actions page's layout editor in preview-only mode (macOS reuses ToolbarPreviewView in both); it always shows the bar.
+    The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.AppearancePage"
@@ -43,6 +44,11 @@
                 Description="When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the full toolbar."
                 Header="Show logo only">
                 <ToggleSwitch x:Name="ShowLogoOnlyToggle" AutomationProperties.Name="Show logo only" />
+            </controls:SettingsCard>
+
+            <!-- Moved here from the Actions page (macOS: the Toolbar Style group). -->
+            <controls:SettingsCard Description="Settings stay available from the PopGuy tray icon" Header="Show Settings button on toolbar">
+                <ToggleSwitch x:Name="ToolbarSettingsToggle" AutomationProperties.Name="Show Settings button on toolbar" />
             </controls:SettingsCard>
 
             <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Toolbar Zoom" />

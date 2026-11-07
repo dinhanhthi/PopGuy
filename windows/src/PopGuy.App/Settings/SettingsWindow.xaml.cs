@@ -18,8 +18,9 @@ namespace PopGuy.Settings;
 
 /// <summary>
 /// The Settings window (spec-3 §5, macOS SettingsView.swift): one at a time, made by the App when it opens and let go
-/// when it closes (the tray keeps PopGuy running). It opens at its saved frame (<see cref="FrameFile"/>), else 1080×680
-/// centered on its display, never below 900×460 (DIPs, in physical pixels at the window's DPI). A sidebar pick switches
+/// when it closes (the tray keeps PopGuy running). It opens at its saved frame (<see cref="FrameFile"/>), else 1250×810
+/// (macOS grew its default by the same ratio, 900×640 → 1040×760) centered on its display and inside its work area,
+/// never below 900×460 (DIPs, in physical pixels at the window's DPI). A sidebar pick switches
 /// the selection and the header at once; its page is made on a later dispatcher turn, so the click never waits for it.
 /// Pages get the <see cref="AppServices"/> as their navigation parameter; a page shows a panel over the window through
 /// its <see cref="SlideOverPanel"/>. UI thread only.
@@ -29,8 +30,8 @@ public sealed partial class SettingsWindow : Window
     // Wide enough that the Actions cards' text does not wrap word by word.
     private const double MinWidth = 900;
     private const double MinHeight = 460;
-    private const double DefaultWidth = 1080;
-    private const double DefaultHeight = 680;
+    private const double DefaultWidth = 1250;
+    private const double DefaultHeight = 810;
 
     /// <summary>The pages by sidebar item Tag, with their header glyph (Segoe Fluent Icons); a phase adds its page here.</summary>
     private static readonly Dictionary<string, (Type Page, string Glyph)> Pages = new()

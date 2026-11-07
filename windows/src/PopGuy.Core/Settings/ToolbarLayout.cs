@@ -181,4 +181,19 @@ public static class ToolbarLayoutEditMath
             ? zoneOthers.IndexOf(shownOthers[index])
             : zoneOthers.IndexOf(shownOthers[^1]) + 1;
     }
+
+    /// <summary>
+    /// True when the More actions card fits on the toolbar's row: toolbar, gap and card within <paramref name="available"/>.
+    /// </summary>
+    public static bool MoreFitsBesideToolbar(double toolbarWidth, double moreWidth, double spacing, double available) =>
+        toolbarWidth + spacing + moreWidth <= available;
+
+    /// <summary>
+    /// Whether a drag at (<paramref name="x"/>, <paramref name="y"/>) targets the More card. The card spans only its
+    /// chips, so the zone is a whole band: side by side, everything right of the card's left edge; wrapped, everything at
+    /// or below its top edge, so dragging straight down from any toolbar action reaches it. <paramref name="slack"/>
+    /// widens the zone towards the toolbar.
+    /// </summary>
+    public static bool IsInMoreZone(double x, double y, double moreLeft, double moreTop, bool sideBySide, double slack) =>
+        sideBySide ? x >= moreLeft - slack : y >= moreTop - slack;
 }

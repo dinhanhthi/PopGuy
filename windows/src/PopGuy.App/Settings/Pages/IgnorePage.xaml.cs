@@ -21,6 +21,7 @@ namespace PopGuy.Settings.Pages;
 
 /// <summary>
 /// Settings → Ignore (macOS AppsView.swift, spec-3 §5.7 Ignored Apps). The navigation parameter is the AppServices.
+/// A SelectorBar (macOS's header tabs) shows the Ignored apps or the Ignored domains tab; a new page opens on apps.
 /// "Enable Ignored Apps" gates the list (the saved list is kept); under it, a toggle hides just the toolbar's "Ignore this
 /// app" button (the list still applies), and likewise "Ignore this site" under "Enable Ignored Domains". An app is its lowercase exe name
 /// (<see cref="IgnoredApps"/>, the gate's rule); a row shows the exe's icon and FileDescription when it can be found
@@ -67,6 +68,8 @@ public sealed partial class IgnorePage : Page
     public IgnorePage()
     {
         InitializeComponent();
+        TabBar.SelectedItem = TabBar.Items[0];
+        TabBar.SelectionChanged += (_, _) => ShowTab();
         EnabledToggle.Toggled += (_, _) =>
             Save("ignoredAppsEnabled", s => s with { IgnoredAppsEnabled = EnabledToggle.IsOn });
         AddButton.Click += (_, _) => _ = PickAsync();
@@ -112,6 +115,16 @@ public sealed partial class IgnorePage : Page
 
     /// <summary>Queued: a change may be saved from any thread.</summary>
     private void OnSettingsChanged(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(Refresh);
+
+    /// <summary>The picked tab's panel (macOS IgnoreTab), scrolled to its top.</summary>
+    private void ShowTab()
+    {
+        var index = TabBar.Items.IndexOf(TabBar.SelectedItem);
+        if (index < 0) return;
+        AppsTab.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
+        DomainsTab.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
+        TabScroller.ChangeView(null, 0, null, disableAnimation: true);
+    }
 
     /// <summary>The toggle and the rows show the current settings; apps not resolved yet are looked up.</summary>
     private void Refresh()
