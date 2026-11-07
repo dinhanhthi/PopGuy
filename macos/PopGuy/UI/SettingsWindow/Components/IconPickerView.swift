@@ -279,16 +279,11 @@ struct IconPickerView: View {
         }
     }
 
-    // MARK: - Mode segmented picker
+    // MARK: - Mode tabs
 
     private var modePicker: some View {
-        Picker("Icon Type", selection: $mode) {
-            ForEach(IconPickerMode.allCases, id: \.self) { m in
-                Text(m.rawValue).tag(m)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
+        CapsuleTabs(selection: $mode, tabs: IconPickerMode.allCases, title: { Text($0.rawValue) }, compact: true)
+            .fixedSize()
     }
 
     // MARK: - SF Symbol tab
@@ -296,7 +291,7 @@ struct IconPickerView: View {
     private var sfSymbolContent: some View {
         VStack(spacing: 8) {
             TextField("Search", text: $symbolSearch)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.settings)
 
             let filtered = filteredSymbols
             if filtered.isEmpty {
@@ -369,7 +364,7 @@ struct IconPickerView: View {
                     .foregroundStyle(.secondary)
                     .font(.callout)
                 TextField("Type or paste emoji", text: emojiBinding)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.settings)
                     .frame(maxWidth: 140)
                     .focused($emojiFieldFocused)
 
@@ -384,8 +379,7 @@ struct IconPickerView: View {
                 } label: {
                     Label("More…", systemImage: "face.smiling")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(RowTextButtonStyle(formRow: true))
             }
 
             Divider()

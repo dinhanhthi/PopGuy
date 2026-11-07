@@ -199,6 +199,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if !settingsStore.hasOnboarded {
             presentOnboarding()
         }
+
+        // DEBUG-only QA hook: `--open-settings [--settings-section=<rawValue>]
+        // [--settings-screen=<display name>] [--appearance=light|dark]` opens the
+        // Settings window at launch, for screenshots from a shell;
+        // `--snapshot-out=` (below) writes one without screencapture.
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        if let arg = args.first(where: { $0.hasPrefix("--appearance=") }) {
+            // QA: force light or dark without touching the system setting.
+            NSApp.appearance = NSAppearance(named: arg.hasSuffix("light") ? .aqua : .darkAqua)
+        }
+        if args.contains("--open-settings") {
+            if let arg = args.first(where: { $0.hasPrefix("--settings-section=") }),
+               let section = SettingsSection(rawValue: String(arg.dropFirst("--settings-section=".count))) {
+                settingsNavigator.section = section
+            }
+            openSettings()
+        }
+        if let arg = args.first(where: { $0.hasPrefix("--snapshot-out=") }) {
+            // QA: `--snapshot-out=<png> [--snapshot-delay=<seconds>]` renders
+            // the Settings window's content into a PNG after the delay, then
+            // quits. Works while the screen is locked (no screencapture).
+            let path = String(arg.dropFirst("--snapshot-out=".count))
+            let delay = args.first(where: { $0.hasPrefix("--snapshot-delay=") })
+                .flatMap { Double($0.dropFirst("--snapshot-delay=".count)) } ?? 3
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                self?.writeDebugSnapshot(to: path)
+                NSApp.terminate(nil)
+            }
+        }
+        #endif
     }
 
     // MARK: - Onboarding
@@ -782,21 +814,83 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             window.title = "PopGuy Settings"
             // Full-height left column: content extends under the title bar so the
             // sidebar column reaches the top and the traffic-light buttons sit
-            // over it. Title text is hidden (no toolbar) to avoid overlapping
-            // content in the borderless top area.
+            // over it. Title text is hidden so it doesn't overlap the page
+            // header rows in the titlebar band.
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
-            window.setContentSize(NSSize(width: 900, height: 640))
+            // An empty unified toolbar (no items) makes the titlebar band ~52 pt
+            // tall with the traffic lights vertically centered in it; SwiftUI
+            // page header rows sit inside that band.
+            window.toolbar = NSToolbar(identifier: "SettingsHeader")
+            window.toolbarStyle = .unified
+            window.titlebarSeparatorStyle = .none
+            // Default size, at most 90% of the screen it opens on (no frame
+            // autosave: every new Settings window opens at this size).
+            let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
+            window.setContentSize(NSSize(width: min(1040, (visible?.width ?? 1040) * 0.9),
+                                         height: min(760, (visible?.height ?? 760) * 0.9)))
             window.center()
             window.delegate = self
             window.isReleasedWhenClosed = false
             settingsWindow = window
         }
+        #if DEBUG
+        if let size = Self.debugQASettingsSize {
+            // QA: `--settings-size=<W>x<H>` sets the content size (AppKit
+            // clamps it to the SwiftUI minimum: 720 wide, ~450 tall).
+            settingsWindow?.setContentSize(size)
+        }
+        if let screen = Self.debugQAScreen, let window = settingsWindow {
+            // QA screenshots: show the window on the named display without
+            // activating the app, so it never takes the user's focus.
+            let visible = screen.visibleFrame
+            window.setFrameOrigin(NSPoint(x: visible.midX - window.frame.width / 2,
+                                          y: visible.midY - window.frame.height / 2))
+            window.orderFrontRegardless()
+            return
+        }
+        #endif
         settingsWindow?.makeKeyAndOrderFront(nil)
         if settingsStore.showDockIconWithSettings {
             NSApp.setActivationPolicy(.regular)
         }
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    #if DEBUG
+    /// QA hook: `--settings-screen=<name substring>` (e.g. "Built-in") places the
+    /// Settings window on that display and does not activate the app.
+    private static var debugQAScreen: NSScreen? {
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--settings-screen=") }) else { return nil }
+        let name = String(arg.dropFirst("--settings-screen=".count))
+        return NSScreen.screens.first { $0.localizedName.localizedCaseInsensitiveContains(name) }
+    }
+
+    /// QA hook: `--settings-size=<W>x<H>` (e.g. 720x460) sets the Settings
+    /// window's content size, so its minimum can be screenshotted.
+    private static var debugQASettingsSize: NSSize? {
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--settings-size=") }) else { return nil }
+        let parts = arg.dropFirst("--settings-size=".count).split(separator: "x")
+        guard parts.count == 2, let w = Double(parts[0]), let h = Double(parts[1]) else { return nil }
+        return NSSize(width: w, height: h)
+    }
+
+    /// QA hook for `--snapshot-out=`: draws the Settings window's content view
+    /// into a PNG at `path` (visual-effect blur may render flat).
+    private func writeDebugSnapshot(to path: String) {
+        guard let view = settingsWindow?.contentView,
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+            NSLog("PopGuy snapshot: no Settings window")
+            return
+        }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        guard let data = rep.representation(using: .png, properties: [:]) else { return }
+        do {
+            try data.write(to: URL(fileURLWithPath: path))
+        } catch {
+            NSLog("PopGuy snapshot: %@", error.localizedDescription)
+        }
+    }
+    #endif
 }

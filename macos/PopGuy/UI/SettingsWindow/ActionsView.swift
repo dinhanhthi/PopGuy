@@ -70,18 +70,22 @@ struct ActionsView: View {
     /// When non-nil, the edit panel is presented for this action.
     /// Add flow: set to a fresh CustomAction (new UUID, empty fields).
     /// Edit flow: set to an existing CustomAction (preserves id).
-    /// Owned by SettingsView so the panel can slide over the whole window.
+    /// Owned by SettingsView so the modal can cover the whole window.
     @Binding var editingAction: CustomAction?
 
-    /// Drives the Action Library gallery panel. Owned by SettingsView so the
-    /// panel slides over the whole window, matching the Add/Edit Action panel.
+    /// Drives the Action Library gallery modal. Owned by SettingsView so the
+    /// modal covers the whole window, like the Add/Edit Action modal.
     @Binding var showingLibrary: Bool
 
-    /// Filters the action list by type. `.all` shows every action.
-    @State private var typeFilter: ActionTypeFilter = .all
+    /// The modals' open animation (`SettingsModal`), a plain fade under Reduce Motion.
+    private var panelAnimation: Animation { Motion.sheet }
 
-    /// Free-text search query matched against action titles.
-    @State private var searchQuery = ""
+    /// Filters the action list by type. `.all` shows every action.
+    @State private var typeFilter: ActionTypeFilter = ActionsView.initialTypeFilter
+
+    /// Free-text search query matched against action titles. Not empty at
+    /// start → the header's search capsule starts open.
+    @State private var searchQuery = ActionsView.initialSearchQuery
 
     /// Drives the import error alert.
     @State private var importError: String? = nil
@@ -131,137 +135,18 @@ struct ActionsView: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(spacing: 0) {
-
-            // MARK: Fixed header (toolbar preview + switch/action-buttons row)
-            VStack(spacing: SettingsMetrics.cardSpacing) {
-
-                ToolbarLayoutEditorView(settings: settings)
-
-                // MARK: Settings-button switch (left) + action buttons (right)
-                HStack {
-                    // Same look as ActionCard header switches.
-                    Toggle(isOn: $settings.showToolbarSettingsButton) {
-                        Text("Show Settings button on toolbar")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .hoverTooltip("Settings stay available from the PopGuy menu bar icon")
-
-                    Spacer()
-
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.28)) {
-                            editingAction = CustomAction(title: "", systemPrompt: "")
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                    }
-                    .buttonStyle(ToolbarIconButtonStyle(prominent: true))
-                    .hoverTooltip("Add action")
-
-                    Button {
-                        exportActions()
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                    }
-                    .buttonStyle(ToolbarIconButtonStyle())
-                    .disabled(settings.customActions.isEmpty)
-                    .hoverTooltip("Export custom actions")
-
-                    Button {
-                        importActions()
-                    } label: {
-                        Image(systemName: "square.and.arrow.down")
-                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                    }
-                    .buttonStyle(ToolbarIconButtonStyle())
-                    .hoverTooltip("Import custom actions")
-
-                    SettingsInlineMenu(borderedToolbarTrigger: true) {
-                        Image(systemName: "puzzlepiece.extension")
-                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                    } menuContent: {
-                        Button {
-                            importPluginFromFile()
-                        } label: {
-                            Label("Choose file\u{2026}", systemImage: "folder")
-                        }
-                        Button {
-                            snippetText = ""
-                            showSnippetSheet = true
-                        } label: {
-                            Label("Paste snippet\u{2026}", systemImage: "doc.on.clipboard")
-                        }
-                    }
-                    .hoverTooltip("Import plugin")
-
-                    // Slides the gallery panel in from the right (owned by SettingsView).
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.28)) {
-                            showingLibrary = true
-                        }
-                    } label: {
-                        Image(systemName: "books.vertical")
-                            .frame(width: SettingsMetrics.toolbarIconWidth, height: SettingsMetrics.toolbarIconHeight)
-                    }
-                    .buttonStyle(ToolbarIconButtonStyle())
-                    .hoverTooltip("Browse Action Library")
-                }
-
-                // MARK: Search + type filter bar
-                HStack(spacing: 8) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.secondary)
-                        TextField("Search actions\u{2026}", text: $searchQuery)
-                            .textFieldStyle(.plain)
-                        if !searchQuery.isEmpty {
-                            Button {
-                                searchQuery = ""
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.borderless)
-                        }
-                    }
-                    .padding(.leading, 10)
-                    .padding(.trailing, 4)
-                    .padding(.vertical, 6)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.primary.opacity(0.05))
-                    )
-
-                    SettingsInlinePickerMenu(
-                        selection: $typeFilter,
-                        displayTitle: typeFilter.displayName,
-                        options: ActionTypeFilter.allCases.map { ($0, $0.displayName) },
-                        tooltip: "Filter actions by type"
-                    )
-                }
-            }
-            .padding(.horizontal, SettingsMetrics.pagePadding)
-            .padding(.top, SettingsMetrics.pagePadding)
-            .padding(.bottom, SettingsMetrics.cardSpacing)
-
-            // MARK: Scrollable action cards — rendered in actionOrder
-            ScrollView {
-                VStack(spacing: SettingsMetrics.cardSpacing) {
-                    ForEach(filteredActionOrder, id: \.self) { id in
-                        card(for: id)
-                            .environment(\.isLastEnabledAction, settings.isLastEnabledAction(id))
-                    }
-                }
-                .padding(.horizontal, SettingsMetrics.pagePadding)
-                .padding(.bottom, SettingsMetrics.pagePadding)
-            }
+        // The page builds its own layout so its header-row controls (search,
+        // buttons) paint in the click's frame; only the body below waits for
+        // the deferred turn. The search text and type filter are read here and
+        // passed down so the list depends on them explicitly
+        // (DeferredSectionContent builds its content in this body anyway).
+        let searchQuery = searchQuery
+        let typeFilter = typeFilter
+        // Alerts, sheets and the Finder-import hooks sit on the page root, not
+        // in the deferred body: the header's buttons drive them, and they must
+        // work before the body is built.
+        return SettingsPageLayout(trailing: { headerControls }) {
+            DeferredSectionContent { pageBody(typeFilter: typeFilter, searchQuery: searchQuery) }
         }
         .alert("Import Failed", isPresented: $showImportError) {
             Button("OK", role: .cancel) {}
@@ -324,6 +209,12 @@ struct ActionsView: View {
         // Checked on appear and whenever the navigator publishes a new URL.
         .onAppear {
             consumePendingImportURL()
+            #if DEBUG
+            // QA hook: `--open-consent-sample` shows the consent sheet with a built-in sample.
+            if ProcessInfo.processInfo.arguments.contains("--open-consent-sample") {
+                pendingConsent = .debugSample
+            }
+            #endif
         }
         .onChange(of: navigator?.pendingPluginImportURL) { _ in
             consumePendingImportURL()
@@ -333,6 +224,122 @@ struct ActionsView: View {
             recordingID = nil
         }
     }
+
+    /// The header row's trailing controls: the search capsule (with the type
+    /// filter while open), then the action buttons, which always stay visible.
+    private var headerControls: some View {
+        HStack(spacing: 8) {
+            HeaderSearchCapsule(
+                text: $searchQuery,
+                prompt: "Search actions",
+                isFilterActive: typeFilter != .all,
+                onClose: { typeFilter = .all }
+            ) {
+                SettingsInlinePickerMenu(
+                    selection: $typeFilter,
+                    displayTitle: typeFilter.displayName,
+                    options: ActionTypeFilter.allCases.map { ($0, $0.displayName) },
+                    tooltip: "Filter actions by type"
+                )
+            }
+
+            HeaderButtonGroup {
+                HeaderIconButton(systemImage: "plus", tooltip: "Add action") {
+                    withAnimation(panelAnimation) {
+                        editingAction = CustomAction(title: "", systemPrompt: "")
+                    }
+                }
+
+                HeaderIconButton(systemImage: "square.and.arrow.up", tooltip: "Export custom actions") {
+                    exportActions()
+                }
+                .disabled(settings.customActions.isEmpty)
+
+                HeaderIconButton(systemImage: "square.and.arrow.down", tooltip: "Import custom actions") {
+                    importActions()
+                }
+
+                Menu {
+                    Button {
+                        importPluginFromFile()
+                    } label: {
+                        Label("Choose file\u{2026}", systemImage: "folder")
+                    }
+                    Button {
+                        snippetText = ""
+                        showSnippetSheet = true
+                    } label: {
+                        Label("Paste snippet\u{2026}", systemImage: "doc.on.clipboard")
+                    }
+                } label: {
+                    // Same label as a HeaderIconButton's, so it sizes the same.
+                    Image(systemName: "puzzlepiece.extension")
+                        .font(.body)
+                        .imageScale(.large)
+                }
+                .menuStyle(.button)
+                .buttonStyle(HeaderIconButtonStyle())
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .accessibilityLabel("Import plugin")
+                .hoverTooltip("Import plugin")
+
+                // Opens the gallery modal (owned by SettingsView).
+                HeaderIconButton(systemImage: "books.vertical", tooltip: "Browse Action Library") {
+                    withAnimation(panelAnimation) {
+                        showingLibrary = true
+                    }
+                }
+            }
+        }
+    }
+
+    /// The page body: the toolbar preview, then the action cards narrowed to
+    /// `typeFilter` and `searchQuery` (passed in from `body`, see there).
+    private func pageBody(typeFilter: ActionTypeFilter, searchQuery: String) -> some View {
+        VStack(spacing: 0) {
+            ToolbarLayoutEditorView(settings: settings)
+                .padding(.horizontal, SettingsMetrics.pagePadding)
+                .padding(.top, SettingsMetrics.pagePadding)
+                .padding(.bottom, SettingsMetrics.cardSpacing)
+
+            // MARK: Scrollable action cards — rendered in actionOrder
+            ScrollView {
+                VStack(spacing: SettingsMetrics.cardSpacing) {
+                    ForEach(filteredActionOrder(typeFilter: typeFilter, searchQuery: searchQuery), id: \.self) { id in
+                        card(for: id)
+                            .environment(\.isLastEnabledAction, settings.isLastEnabledAction(id))
+                    }
+                }
+                .padding(.horizontal, SettingsMetrics.pagePadding)
+                .padding(.bottom, SettingsMetrics.pagePadding)
+            }
+        }
+    }
+
+    // MARK: - Initial search state
+
+    #if DEBUG
+    /// DEBUG-only QA hook: `--actions-search=<text>` prefills the search (the
+    /// capsule starts open), for screenshots from a shell. Read at state init,
+    /// because the capsule decides open/closed when it is created.
+    private static var initialSearchQuery: String {
+        let prefix = "--actions-search="
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) }) else { return "" }
+        return String(arg.dropFirst(prefix.count))
+    }
+
+    /// DEBUG-only QA hook: `--actions-type=<raw>` (e.g. `ai`, `fromPlugin`)
+    /// preselects the type filter.
+    private static var initialTypeFilter: ActionTypeFilter {
+        let prefix = "--actions-type="
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) }) else { return .all }
+        return ActionTypeFilter(rawValue: String(arg.dropFirst(prefix.count))) ?? .all
+    }
+    #else
+    private static var initialSearchQuery: String { "" }
+    private static var initialTypeFilter: ActionTypeFilter { .all }
+    #endif
 
     /// Consumes `navigator.pendingPluginImportURL` if set, running the same
     /// dispatch logic as `importPluginFromFile()` but without a panel.
@@ -550,8 +557,8 @@ struct ActionsView: View {
 
     // MARK: - Type filter
 
-    /// The action order narrowed to the selected type filter.
-    private var filteredActionOrder: [ActionIdentifier] {
+    /// The action order narrowed to a type filter and a title search.
+    private func filteredActionOrder(typeFilter: ActionTypeFilter, searchQuery: String) -> [ActionIdentifier] {
         let byType: [ActionIdentifier]
         switch typeFilter {
         case .all:         byType = settings.actionOrder
@@ -991,7 +998,7 @@ struct ActionsView: View {
             isFromPlugin: action.isFromPlugin,
             onEdit: {
                 if let current = settings.customActions.first(where: { $0.id == id }) {
-                    withAnimation(.easeInOut(duration: 0.28)) {
+                    withAnimation(panelAnimation) {
                         editingAction = current
                     }
                 }
@@ -1254,7 +1261,7 @@ private struct CustomPromptField: View {
 
             if showsInput {
                 TextField(placeholder, text: $text, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.settings)
                     .lineLimit(3...6)
                 HStack {
                     Text(caption)
@@ -1266,8 +1273,7 @@ private struct CustomPromptField: View {
                     // predefined one and collapses to the "Predefined prompt" state.
                     if allowsPredefined {
                         Button("Reset") { isShowingResetConfirmation = true }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
+                            .buttonStyle(RowTextButtonStyle())
                     }
                 }
             } else {
@@ -1277,8 +1283,7 @@ private struct CustomPromptField: View {
                         .font(.callout)
                     Spacer()
                     Button("Edit") { isEditing = true }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .buttonStyle(RowTextButtonStyle())
                 }
             }
         }
@@ -1308,7 +1313,7 @@ private struct BuiltinBadge: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Capsule().fill(Color.primary.opacity(0.08)))
+            .background(Capsule().fill(Palette.inputSurface))
     }
 }
 
@@ -1323,7 +1328,7 @@ private struct FromPluginBadge: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Capsule().fill(Color.primary.opacity(0.08)))
+            .background(Capsule().fill(Palette.inputSurface))
     }
 }
 
@@ -1381,7 +1386,7 @@ private struct ActionCard<Content: View>: View {
                             Image(systemName: "pencil")
                                 .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(RowIconButtonStyle())
                         .hoverTooltip("Edit")
                     }
                     if let onDelete {
@@ -1392,9 +1397,8 @@ private struct ActionCard<Content: View>: View {
                                 Image(systemName: "trash")
                                     .foregroundStyle(.red)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(RowIconButtonStyle())
                             .disabled(isLastEnabled)
-                            .opacity(isLastEnabled ? 0.35 : 1)
                         }
                         .contentShape(Rectangle())
                         .hoverTooltip(isLastEnabled
@@ -1449,15 +1453,18 @@ private struct ActionCard<Content: View>: View {
         )
     }
 
-    /// Caption + mini switch, macOS labeled-switch style (caption leading).
-    private func headerSwitch(_ title: String, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
+    /// Caption + compact switch, macOS labeled-switch style (caption leading).
+    /// `locked` disables the switch (it dims itself) and dims the caption to match.
+    private func headerSwitch(_ title: String, isOn: Binding<Bool>, locked: Bool = false) -> some View {
+        HStack(spacing: 6) {
             Text(title)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(locked ? .tertiary : .secondary)
+            Toggle(title, isOn: isOn)
+                .toggleStyle(CompactSwitch())
+                .labelsHidden()
+                .disabled(locked)
         }
-        .toggleStyle(.switch)
-        .controlSize(.mini)
     }
 
     /// A header switch that can be locked: faded and non-interactive, with a
@@ -1471,9 +1478,7 @@ private struct ActionCard<Content: View>: View {
         lockedTooltip: String
     ) -> some View {
         HStack {
-            headerSwitch(title, isOn: isOn)
-                .disabled(locked)
-                .opacity(locked ? 0.35 : 1)
+            headerSwitch(title, isOn: isOn, locked: locked)
         }
         .contentShape(Rectangle())
         .hoverTooltip(locked ? lockedTooltip : tooltip)
@@ -1612,8 +1617,14 @@ struct DictionaryConfigFields: View {
                 }
             }
 
-            Toggle("Use dictionary audio before TTS", isOn: $config.speakSettings.dictionaryAudioEnabled)
-                .hoverTooltip("When no native source audio is available, try Free Dictionary API pronunciation before falling back to the selected TTS engine.")
+            LabeledContent {
+                Toggle("Use dictionary audio before TTS", isOn: $config.speakSettings.dictionaryAudioEnabled)
+                    .toggleStyle(CompactSwitch())
+                    .labelsHidden()
+            } label: {
+                Text("Use dictionary audio before TTS")
+            }
+            .hoverTooltip("When no native source audio is available, try Free Dictionary API pronunciation before falling back to the selected TTS engine.")
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -1759,7 +1770,7 @@ private struct SpeakCardView: View {
                         )
                         if curated.isEmpty {
                             TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
-                                .textFieldStyle(.roundedBorder)
+                                .textFieldStyle(.settings)
                                 .frame(maxWidth: .infinity)
                         } else {
                             let pickerBinding = Binding<String>(
@@ -1798,7 +1809,7 @@ private struct SpeakCardView: View {
 
                                 if isModelCustom[keyAccount] ?? false {
                                     TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
-                                        .textFieldStyle(.roundedBorder)
+                                        .textFieldStyle(.settings)
                                         .frame(maxWidth: 200)
                                 }
                             }
@@ -2094,7 +2105,7 @@ private struct SpeakPreviewRow: View {
             Text("Preview")
 
             TextField("Sample text", text: $sampleText)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.settings)
 
             HStack(spacing: 8) {
                 if coordinator.phase == .idle {
@@ -2103,8 +2114,7 @@ private struct SpeakPreviewRow: View {
                     } label: {
                         Label("Preview", systemImage: "speaker.wave.2.fill")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                 } else {
                     Button {
                         coordinator.stop()
@@ -2114,15 +2124,14 @@ private struct SpeakPreviewRow: View {
                             // inside the button (no separate leading spinner).
                             if coordinator.phase == .loading {
                                 ProgressView()
-                                    .controlSize(.small)
+                                    .controlSize(.mini)
                             } else {
                                 Image(systemName: "stop.fill")
                             }
                             Text("Stop")
                         }
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                 }
             }
 
@@ -2291,7 +2300,7 @@ private struct CustomSpeechFields: View {
                         )
                         if curated.isEmpty {
                             TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
-                                .textFieldStyle(.roundedBorder)
+                                .textFieldStyle(.settings)
                                 .frame(maxWidth: .infinity)
                         } else {
                             let pickerBinding = Binding<String>(
@@ -2329,7 +2338,7 @@ private struct CustomSpeechFields: View {
 
                                 if isModelCustom[keyAccount] ?? false {
                                     TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
-                                        .textFieldStyle(.roundedBorder)
+                                        .textFieldStyle(.settings)
                                         .frame(maxWidth: 200)
                                 }
                             }
@@ -2567,7 +2576,7 @@ struct DraftSpeechFields: View {
                         )
                         if curated.isEmpty {
                             TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
-                                .textFieldStyle(.roundedBorder)
+                                .textFieldStyle(.settings)
                                 .frame(maxWidth: .infinity)
                         } else {
                             let pickerBinding = Binding<String>(
@@ -2603,7 +2612,7 @@ struct DraftSpeechFields: View {
 
                                 if isModelCustom[keyAccount] ?? false {
                                     TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
-                                        .textFieldStyle(.roundedBorder)
+                                        .textFieldStyle(.settings)
                                         .frame(maxWidth: 200)
                                 }
                             }
@@ -2779,7 +2788,7 @@ private struct DraftSpeechPreviewRow: View {
             Text("Preview")
 
             TextField("Sample text", text: $sampleText)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.settings)
 
             HStack(spacing: 8) {
                 if coordinator.phase == .idle {
@@ -2788,8 +2797,7 @@ private struct DraftSpeechPreviewRow: View {
                     } label: {
                         Label("Preview", systemImage: "speaker.wave.2.fill")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                 } else {
                     Button {
                         coordinator.stop()
@@ -2797,15 +2805,14 @@ private struct DraftSpeechPreviewRow: View {
                         HStack(spacing: 4) {
                             if coordinator.phase == .loading {
                                 ProgressView()
-                                    .controlSize(.small)
+                                    .controlSize(.mini)
                             } else {
                                 Image(systemName: "stop.fill")
                             }
                             Text("Stop")
                         }
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                 }
             }
 
@@ -2861,7 +2868,7 @@ private struct CustomSpeechPreviewRow: View {
             Text("Preview")
 
             TextField("Sample text", text: $sampleText)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.settings)
 
             HStack(spacing: 8) {
                 if coordinator.phase == .idle {
@@ -2870,8 +2877,7 @@ private struct CustomSpeechPreviewRow: View {
                     } label: {
                         Label("Preview", systemImage: "speaker.wave.2.fill")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                 } else {
                     Button {
                         coordinator.stop()
@@ -2879,15 +2885,14 @@ private struct CustomSpeechPreviewRow: View {
                         HStack(spacing: 4) {
                             if coordinator.phase == .loading {
                                 ProgressView()
-                                    .controlSize(.small)
+                                    .controlSize(.mini)
                             } else {
                                 Image(systemName: "stop.fill")
                             }
                             Text("Stop")
                         }
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                 }
             }
 
@@ -2940,22 +2945,19 @@ private struct SnippetInputSheet: View {
             TextEditor(text: $snippetText)
                 .font(.system(.body, design: .monospaced))
                 .frame(minHeight: 200)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
-                )
+                .settingsTextEditor()
 
             HStack {
                 Spacer()
                 Button("Cancel", action: onCancel)
-                    .buttonStyle(.bordered)
+                    .buttonStyle(BottomBarButtonStyle())
                     .keyboardShortcut(.escape, modifiers: [])
                 Button("Import\u{2026}") {
                     let trimmed = snippetText.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmed.isEmpty else { return }
                     onSubmit(trimmed)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(BottomBarButtonStyle(prominent: true))
                 .disabled(snippetText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .keyboardShortcut(.return, modifiers: .command)
             }

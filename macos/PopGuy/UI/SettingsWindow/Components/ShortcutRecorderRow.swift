@@ -30,7 +30,8 @@ struct ShortcutRecorderRow: View {
     private var currentShortcut: KeyboardShortcut? { settings.shortcut(for: actionID) }
 
     var body: some View {
-        HStack {
+        // 10 pt between the row's icon buttons, so their hover highlights don't touch.
+        HStack(spacing: 10) {
             Text("Keyboard shortcut")
                 .foregroundStyle(.secondary)
                 .font(.callout)
@@ -65,7 +66,7 @@ struct ShortcutRecorderRow: View {
                 } label: {
                     Image(systemName: "record.circle")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(RowIconButtonStyle())
                 .hoverTooltip("Record shortcut")
 
                 // Clear button — only shown when a shortcut is set
@@ -75,7 +76,7 @@ struct ShortcutRecorderRow: View {
                     } label: {
                         Image(systemName: "xmark.circle")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(RowIconButtonStyle())
                     .hoverTooltip("Remove shortcut")
                 }
             }
@@ -105,7 +106,7 @@ struct ShortcutBadge: View {
                 Color.primary.opacity(onTap != nil && isHovered ? 0.12 : 0.06),
                 in: RoundedRectangle(cornerRadius: 5, style: .continuous)
             )
-            .animation(.easeOut(duration: 0.12), value: isHovered)
+            .animation(Motion.hover, value: isHovered)
             .onHover { hovering in
                 guard onTap != nil else { return }
                 isHovered = hovering

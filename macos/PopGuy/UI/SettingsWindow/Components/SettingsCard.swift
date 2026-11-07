@@ -20,8 +20,8 @@ import SwiftUI
 
 /// Shared metrics for the settings tabs (4pt base scale).
 enum SettingsMetrics {
-    /// Corner radius of a settings card.
-    static let cardRadius: CGFloat = 10
+    /// Corner radius of a settings card (`GlassCard`'s content-card radius).
+    static let cardRadius: CGFloat = 14
     /// Inner padding of a card's header and content areas.
     static let cardPadding: CGFloat = 12
     /// Vertical gap between consecutive cards in a tab.
@@ -32,12 +32,43 @@ enum SettingsMetrics {
     static let pagePadding: CGFloat = 20
     /// Extra vertical breathing room between Settings sidebar items.
     static let sidebarItemVerticalPadding: CGFloat = 4
-    /// Uniform icon-content box for the Actions toolbar icon buttons (export,
-    /// import, plugin import). Normalises differently-sized SF Symbols to the same
-    /// button size; the narrow width tightens horizontal padding, the taller height
-    /// gives a bit more vertical presence so the row lines up with the picker.
-    static let toolbarIconWidth: CGFloat = 14
-    static let toolbarIconHeight: CGFloat = 18
+    /// Height of the Settings header row: the band the empty unified NSToolbar
+    /// gives the titlebar (traffic lights centered at half of it). Use this, not
+    /// the top safe-area inset: AppKit reports a taller inset (66 pt on macOS 27)
+    /// than the band the traffic lights are centered in.
+    static let headerRowHeight: CGFloat = 52
+    /// Where the sidebar card starts, from the window's top. About 8 pt under
+    /// the header row's controls: they are centered on the traffic lights
+    /// (y = 26) and at most 28–34 pt tall, so they end around y = 41–43. The
+    /// detail column's content starts lower, at `contentTopInset`.
+    static let bodyTopInset: CGFloat = 48
+    /// Where the detail column's content starts, from the window's top: 12 pt
+    /// lower than `bodyTopInset` (the sidebar card's top), to leave about 16 pt
+    /// under the header row's tabs and buttons. A page's first section or card
+    /// lands here, and the detail column's titlebar band is this tall.
+    static let contentTopInset: CGFloat = 60
+    /// How far a page is pulled toward the sidebar card. Pages pad their
+    /// content by `pagePadding` (20 pt); pulling them 8 pt left leaves 12 pt to
+    /// the card, like the card's own 12 pt inset from the window edge.
+    static let pageContentPullLeading: CGFloat = 8
+}
+
+// MARK: - Disabled row label
+
+extension View {
+    /// Dims a row's title and caption when the row is `.disabled`, as much as its
+    /// `CompactSwitch` dims itself. Apply to the label of a `LabeledContent` row.
+    func dimmedWhenDisabled() -> some View {
+        modifier(DimmedWhenDisabled())
+    }
+}
+
+private struct DimmedWhenDisabled: ViewModifier {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        content.opacity(isEnabled ? 1 : 0.45)
+    }
 }
 
 // MARK: - SettingsCard
@@ -64,6 +95,8 @@ struct SettingsCard<Accessory: View, TitleAccessory: View, HeaderDetail: View, C
     /// toggle expansion. Pass `EmptyView` (the convenience inits do) to omit it.
     @ViewBuilder let headerDetail: () -> HeaderDetail
     @ViewBuilder let content: () -> Content
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         icon: ActionIcon? = nil,
@@ -111,16 +144,8 @@ struct SettingsCard<Accessory: View, TitleAccessory: View, HeaderDetail: View, C
                 .padding(SettingsMetrics.cardPadding)
             }
         }
-        .background(
-            // Soft primary wash instead of NSColor.quaternarySystemFill
-            // (which is macOS 14+; the deployment target is 13).
-            RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                .fill(Color.primary.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
-        )
+        // Solid surface + 1 pt edge on the single window glass (no material per card).
+        .modifier(GlassCard(cornerRadius: SettingsMetrics.cardRadius))
     }
 
     private var header: some View {
@@ -169,7 +194,7 @@ struct SettingsCard<Accessory: View, TitleAccessory: View, HeaderDetail: View, C
             // Toggle only when collapsible; the accessory (e.g. a Toggle)
             // intercepts its own taps so flipping it never expands the card.
             if let isExpanded {
-                withAnimation(.easeInOut(duration: 0.15)) {
+                withAnimation(reduceMotion ? nil : Motion.toggle) {
                     isExpanded.wrappedValue.toggle()
                 }
             }

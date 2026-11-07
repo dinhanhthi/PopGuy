@@ -21,7 +21,8 @@ namespace PopGuy.Settings.Panels;
 /// dictionary provider and language; Open URL template; shell script (PowerShell); the macOS-only Shortcut and
 /// AppleScript, offered only when the action already is one; and the visibility regex of the scriptable types. It edits
 /// a draft: Save (enabled while <see cref="CustomAction.IsSaveable"/>) adds or updates the action through
-/// <see cref="ActionsViewModel"/>, Cancel, Esc or a click beside the panel discard it. UI thread only.
+/// <see cref="ActionsViewModel"/>, Cancel or Esc discard it; a click beside the panel does nothing (an unsaved draft).
+/// UI thread only.
 /// </summary>
 public sealed partial class CustomActionEditPanel : UserControl
 {

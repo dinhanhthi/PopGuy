@@ -3,7 +3,7 @@
 //
 // Settings tab for ignored-apps and ignored-domains configuration.
 //
-// Sections:
+// Sections (one header-row tab each, the page shows the selected one's card):
 //   • Ignored Apps: an "Enable Ignored Apps" toggle (default on) gates the whole
 //     feature — while off, the list is not applied and the toolbar's "Ignore this
 //     app" button is hidden (the saved list is kept). When on, a list of bundle IDs
@@ -37,108 +37,201 @@ struct AppsView: View {
 
     @State private var newDomain = ""
     @State private var domainValidationError: String? = nil
+    /// The section the header-row tabs show.
+    @State private var tab: IgnoreTab = .apps
 
     var body: some View {
-        Form {
-            Section {
-                Toggle("Enable Ignored Apps", isOn: $settings.ignoredAppsEnabled)
-                    .padding(.vertical, 2)
+        // The page builds its own layout so its tabs paint in the click's
+        // frame; only the body below waits for the deferred turn. The tab is
+        // read here and passed down so the body depends on it explicitly
+        // (DeferredSectionContent builds its content in this body anyway).
+        let tab = tab
+        return SettingsPageLayout(leading: {
+            CapsuleTabs(selection: $tab, tabs: IgnoreTab.allCases, title: { Text($0.title) })
+                .fixedSize()
+        }) {
+            DeferredSectionContent { pageBody(tab) }
+        }
+        #if DEBUG
+        .onAppear(perform: applyDebugTab)
+        #endif
+    }
 
-                if settings.ignoredAppsEnabled {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Toggle("Show \"Ignore this app\" button on toolbar", isOn: $settings.showToolbarIgnoreAppButton)
-                        Text("Hides only the toolbar button; the ignored list keeps working.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 2)
+    #if DEBUG
+    /// DEBUG-only QA hook: `--ignore-tab=apps|domains` selects a tab when the
+    /// page appears, for screenshots from a shell. `--ignore-domain-draft=<text>`
+    /// prefills the domain field; `--ignore-commit-draft` then submits it 0.5 s
+    /// later (after the deferred body is up), to show the validation message.
+    private func applyDebugTab() {
+        let args = ProcessInfo.processInfo.arguments
+        let prefix = "--ignore-tab="
+        if let arg = args.first(where: { $0.hasPrefix(prefix) }),
+           let value = IgnoreTab(rawValue: String(arg.dropFirst(prefix.count))) {
+            tab = value
+        }
+        let draftPrefix = "--ignore-domain-draft="
+        if let arg = args.first(where: { $0.hasPrefix(draftPrefix) }) {
+            newDomain = String(arg.dropFirst(draftPrefix.count))
+        }
+        if args.contains("--ignore-commit-draft") {
+            Task {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                commitNewDomain()
+            }
+        }
+    }
+    #endif
 
-                    if settings.ignoredAppBundleIDs.isEmpty {
-                        Text("No ignored apps.")
-                            .foregroundStyle(.secondary)
-                            .padding(.vertical, 4)
-                    } else {
-                        ForEach(settings.ignoredAppBundleIDs, id: \.self) { bundleID in
-                            IgnoredAppRow(bundleID: bundleID) {
-                                settings.removeIgnoredApp(bundleID: bundleID)
-                            }
-                        }
-                    }
-
-                    Button {
-                        addApp()
-                    } label: {
-                        Label("Add App…", systemImage: "plus")
-                    }
-                    .buttonStyle(.bordered)
-                    .padding(.vertical, 4)
+    private func pageBody(_ tab: IgnoreTab) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
+                switch tab {
+                case .apps:    appsSection
+                case .domains: domainsSection
                 }
-            } header: {
-                Text("Ignored Apps")
-            } footer: {
-                Text("The toolbar will not appear when you select text in these apps. Turning this off also removes the \"Ignore this app\" button from the toolbar.")
-                    .foregroundStyle(.secondary)
+            }
+            .padding(SettingsMetrics.pagePadding)
+        }
+        .labeledContentStyle(.settingsRow)
+    }
+
+    private var appsSection: some View {
+        // No title: the header-row tab already names the section.
+        SettingsGroup(
+            nil,
+            footer: "The toolbar will not appear when you select text in these apps. Turning this off also removes the \"Ignore this app\" button from the toolbar."
+        ) {
+            LabeledContent {
+                Toggle("Enable Ignored Apps", isOn: $settings.ignoredAppsEnabled)
+                    .toggleStyle(CompactSwitch())
+                    .labelsHidden()
+            } label: {
+                Text("Enable Ignored Apps")
             }
 
-            Section {
-                Toggle("Enable Ignored Domains", isOn: $settings.ignoredDomainsEnabled)
-                    .padding(.vertical, 2)
+            if settings.ignoredAppsEnabled {
+                SettingsDivider()
 
-                if settings.ignoredDomainsEnabled {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Toggle("Show \"Ignore this site\" button on toolbar", isOn: $settings.showToolbarIgnoreSiteButton)
-                        Text("Hides only the toolbar button; the ignored list keeps working.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 2)
+                LabeledContent {
+                    Toggle("Show \"Ignore this app\" button on toolbar", isOn: $settings.showToolbarIgnoreAppButton)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                } label: {
+                    Text("Show \"Ignore this app\" button on toolbar")
+                    Text("Hides only the toolbar button; the ignored list keeps working.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
-                    HStack(alignment: .top, spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                        Text("To match these domains, PopGuy reads the address of your current browser tab. macOS will ask permission to control each browser the first time — choose Allow. While this is off, PopGuy never reads any browser URL.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 4)
+                SettingsDivider()
 
-                    if settings.ignoredDomains.isEmpty {
-                        Text("No ignored domains.")
-                            .foregroundStyle(.secondary)
-                            .padding(.vertical, 4)
-                    } else {
-                        ForEach(settings.ignoredDomains, id: \.self) { domain in
-                            HStack {
-                                Image(systemName: "globe")
-                                    .frame(width: 20, height: 20)
-                                    .foregroundStyle(.secondary)
-                                Text(domain)
-                                    .lineLimit(1)
-                                Spacer()
-                                Button {
-                                    settings.removeIgnoredDomain(domain)
-                                } label: {
-                                    Image(systemName: "trash")
-                                        .foregroundStyle(.red)
-                                }
-                                .buttonStyle(.borderless)
-                                .hoverTooltip("Remove")
-                            }
-                            .padding(.vertical, 2)
+                if settings.ignoredAppBundleIDs.isEmpty {
+                    Text("No ignored apps.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(settings.ignoredAppBundleIDs, id: \.self) { bundleID in
+                        if bundleID != settings.ignoredAppBundleIDs.first {
+                            SettingsDivider()
+                        }
+                        IgnoredAppRow(bundleID: bundleID) {
+                            settings.removeIgnoredApp(bundleID: bundleID)
                         }
                     }
+                }
 
+                SettingsDivider()
+
+                Button {
+                    addApp()
+                } label: {
+                    Label("Add App…", systemImage: "plus")
+                }
+                .buttonStyle(RowTextButtonStyle(formRow: true))
+            }
+        }
+    }
+
+    private var domainsSection: some View {
+        // No title: the header-row tab already names the section.
+        SettingsGroup(
+            nil,
+            footer: "Hide the toolbar on these websites. Works in Safari, Chrome, Brave, Edge, Arc. Desktop apps use Ignored Apps instead."
+        ) {
+            LabeledContent {
+                Toggle("Enable Ignored Domains", isOn: $settings.ignoredDomainsEnabled)
+                    .toggleStyle(CompactSwitch())
+                    .labelsHidden()
+            } label: {
+                Text("Enable Ignored Domains")
+            }
+
+            if settings.ignoredDomainsEnabled {
+                SettingsDivider()
+
+                LabeledContent {
+                    Toggle("Show \"Ignore this site\" button on toolbar", isOn: $settings.showToolbarIgnoreSiteButton)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                } label: {
+                    Text("Show \"Ignore this site\" button on toolbar")
+                    Text("Hides only the toolbar button; the ignored list keeps working.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                SettingsDivider()
+
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("To match these domains, PopGuy reads the address of your current browser tab. macOS will ask permission to control each browser the first time — choose Allow. While this is off, PopGuy never reads any browser URL.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                SettingsDivider()
+
+                if settings.ignoredDomains.isEmpty {
+                    Text("No ignored domains.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(settings.ignoredDomains, id: \.self) { domain in
+                        if domain != settings.ignoredDomains.first {
+                            SettingsDivider()
+                        }
+                        HStack {
+                            Image(systemName: "globe")
+                                .frame(width: 20, height: 20)
+                                .foregroundStyle(.secondary)
+                            Text(domain)
+                                .lineLimit(1)
+                            Spacer()
+                            Button {
+                                settings.removeIgnoredDomain(domain)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .foregroundStyle(.red)
+                            }
+                            .buttonStyle(RowIconButtonStyle())
+                            .hoverTooltip("Remove")
+                        }
+                    }
+                }
+
+                SettingsDivider()
+
+                VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         TextField("", text: $newDomain)
-                            .textFieldStyle(.roundedBorder)
+                            .textFieldStyle(.settings)
                             .labelsHidden()
                             .frame(maxWidth: .infinity)
                             .onSubmit { commitNewDomain() }
                             .onChange(of: newDomain) { _ in domainValidationError = nil }
                         Button("Add") { commitNewDomain() }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(RowTextButtonStyle(formRow: true))
                     }
-                    .padding(.vertical, 4)
 
                     if let err = domainValidationError {
                         Text(err)
@@ -146,14 +239,8 @@ struct AppsView: View {
                             .foregroundStyle(.red)
                     }
                 }
-            } header: {
-                Text("Ignored Domains")
-            } footer: {
-                Text("Hide the toolbar on these websites. Works in Safari, Chrome, Brave, Edge, Arc. Desktop apps use Ignored Apps instead.")
-                    .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
     }
 
     // MARK: - Domain helpers
@@ -186,6 +273,20 @@ struct AppsView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard let bundleID = Bundle(url: url)?.bundleIdentifier else { return }
         settings.addIgnoredApp(bundleID: bundleID)
+    }
+}
+
+// MARK: - IgnoreTab
+
+/// The Ignore page's tabs, one per section.
+private enum IgnoreTab: String, CaseIterable {
+    case apps, domains
+
+    var title: String {
+        switch self {
+        case .apps:    "Ignored apps"
+        case .domains: "Ignored domains"
+        }
     }
 }
 
@@ -248,7 +349,7 @@ private struct IgnoredAppRow: View {
                 Image(systemName: "trash")
                     .foregroundStyle(.red)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(RowIconButtonStyle())
             .hoverTooltip("Remove")
         }
         .padding(.vertical, 2)

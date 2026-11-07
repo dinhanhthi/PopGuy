@@ -2,95 +2,37 @@
 // PopGuy — UI/SettingsWindow/Components
 //
 // Shared inline Menu styling for Settings filter controls (Actions type
-// filter, History action filter) and other list-style menus (Import plugin,
-// floating-toolbar overflow). Uses a native Menu with an inline Picker or
+// filter, History action filter) and other list-style menus (floating-toolbar
+// overflow). Uses a native Menu with an inline Picker or
 // Button list — not a custom popover panel.
 //
 // Isolation: @MainActor — implicitly via SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor.
 
 import SwiftUI
 
-// MARK: - Toolbar icon chrome
-
-/// Shared pill chrome for the Actions toolbar icon controls (Export, Import,
-/// Import plugin, Browse Library) so every trigger — Button or Menu — has the
-/// exact same padding, corner radius, and height. Native `.bordered` button and
-/// pull-down `Menu` bezels differ in height, so we render our own.
-private let toolbarIconCornerRadius: CGFloat = 6
-private let toolbarIconHPadding: CGFloat = 9
-private let toolbarIconVPadding: CGFloat = 6
-
-extension View {
-    /// Applies the shared toolbar-icon pill background (resting state).
-    /// Padding defaults match the bordered Button siblings; callers (e.g. the
-    /// plugin Menu trigger) may override to fine-tune their own footprint.
-    /// `prominent` fills the pill with the accent color (primary action, e.g. Add).
-    func toolbarIconChrome(
-        pressed: Bool = false,
-        prominent: Bool = false,
-        hPadding: CGFloat = toolbarIconHPadding,
-        vPadding: CGFloat = toolbarIconVPadding
-    ) -> some View {
-        self
-            .padding(.horizontal, hPadding)
-            .padding(.vertical, vPadding)
-            .background(
-                RoundedRectangle(cornerRadius: toolbarIconCornerRadius, style: .continuous)
-                    .fill(prominent
-                        ? Color.accentColor.opacity(pressed ? 0.8 : 1)
-                        : Color.primary.opacity(pressed ? 0.14 : 0.08))
-            )
-            .contentShape(RoundedRectangle(cornerRadius: toolbarIconCornerRadius, style: .continuous))
-    }
-}
-
-/// Button style matching `toolbarIconChrome` for the Actions toolbar row.
-struct ToolbarIconButtonStyle: ButtonStyle {
-    /// Accent-filled variant for the primary action (Add action).
-    var prominent = false
-
-    @ViewBuilder
-    private func tinted(_ label: Configuration.Label) -> some View {
-        if prominent {
-            label.foregroundStyle(.white)
-        } else {
-            label
-        }
-    }
-
-    func makeBody(configuration: Configuration) -> some View {
-        tinted(configuration.label)
-            .toolbarIconChrome(pressed: configuration.isPressed, prominent: prominent)
-            .opacity(configuration.isPressed ? 0.85 : 1)
-    }
-}
-
 // MARK: - Label chrome
 
-/// Closed-state label for Settings filter menus (text + chevron + wash).
+/// Closed-state label for Settings filter menus: the title and a menu chevron.
+/// `SettingsInlinePickerMenu` draws it in an input-color capsule.
 struct SettingsInlineMenuLabel: View {
     let title: String
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             Text(title)
-            Image(systemName: "chevron.up.chevron.down")
-                .font(.caption2)
+                .lineLimit(1)
+            MenuChevron()
                 .foregroundStyle(.secondary)
         }
-        .padding(.leading, 10)
-        .padding(.trailing, 8)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.primary.opacity(0.05))
-        )
     }
 }
 
 // MARK: - Picker menu
 
-/// Inline Picker inside a borderless Menu — matches Actions → All Types.
+/// Inline Picker inside a Menu whose trigger is a small input-color capsule
+/// (title + chevron), e.g. Actions → All Types. It reads as a chip on the
+/// window glass and inside a header search capsule (same fill, so the 1 pt
+/// edge outlines it there).
 struct SettingsInlinePickerMenu<Value: Hashable>: View {
     @Binding var selection: Value
     let displayTitle: String
@@ -98,7 +40,7 @@ struct SettingsInlinePickerMenu<Value: Hashable>: View {
     var tooltip: String? = nil
 
     var body: some View {
-        inlineMenu {
+        Menu {
             Picker("", selection: $selection) {
                 ForEach(options, id: \.value) { option in
                     Text(option.label).tag(option.value)
@@ -109,55 +51,28 @@ struct SettingsInlinePickerMenu<Value: Hashable>: View {
         } label: {
             SettingsInlineMenuLabel(title: displayTitle)
         }
+        // A button-style menu draws the SwiftUI label through the button style;
+        // a borderless one flattens it to AppKit's image + title and drops the
+        // capsule.
+        .menuStyle(.button)
+        .buttonStyle(BottomBarButtonStyle(height: 26, horizontalPadding: 10, menu: true))
+        .menuIndicator(.hidden)
         .fixedSize()
+        .overlay(Capsule().strokeBorder(Palette.surfaceBorder, lineWidth: 1).allowsHitTesting(false))
         .hoverTooltip(tooltip ?? "")
     }
 }
 
 // MARK: - Generic list menu
 
-/// Borderless Menu wrapper for arbitrary menu content (Import plugin, toolbar overflow, …).
+/// Borderless Menu wrapper for arbitrary menu content (e.g. the floating toolbar's overflow menu).
 struct SettingsInlineMenu<Label: View, MenuContent: View>: View {
-    /// When true, renders the trigger as a standard bordered toolbar icon button
-    /// (Settings → Actions Import/Export/Library row). When false, borderless.
-    var borderedToolbarTrigger: Bool = false
     @ViewBuilder let label: () -> Label
     @ViewBuilder let menuContent: () -> MenuContent
 
     var body: some View {
-        inlineMenu(
-            borderedToolbarTrigger: borderedToolbarTrigger,
-            content: menuContent,
-            label: label
-        )
-    }
-}
-
-// MARK: - Shared modifiers
-
-private func inlineMenu<Label: View, MenuContent: View>(
-    borderedToolbarTrigger: Bool = false,
-    @ViewBuilder content: @escaping () -> MenuContent,
-    @ViewBuilder label: @escaping () -> Label
-) -> some View {
-    Group {
-        if borderedToolbarTrigger {
-            // Borderless menu (no native bezel), then wrap the whole trigger in the
-            // shared pill chrome so background + height match the sibling
-            // ToolbarIconButtonStyle buttons. (Applying chrome to the label inside a
-            // borderless Menu does not render the background.)
-            Menu(content: content, label: label)
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                // The Menu trigger needs slightly tighter horizontal and taller
-                // vertical padding than the bordered Button siblings to read as the
-                // same footprint.
-                .toolbarIconChrome(hPadding: 7, vPadding: 8)
-        } else {
-            Menu(content: content, label: label)
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-        }
+        Menu(content: menuContent, label: label)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
     }
 }

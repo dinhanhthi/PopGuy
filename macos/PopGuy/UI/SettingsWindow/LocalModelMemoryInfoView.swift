@@ -1,7 +1,7 @@
 // LocalModelMemoryInfoView.swift
 // PopGuy — UI/SettingsWindow
 //
-// Slide-over panel content explaining how on-device MLX models load, use,
+// Settings modal content explaining how on-device MLX models load, use,
 // and release memory. Triggered by the "Read more: how models use memory"
 // link in LocalModelsView.
 //
@@ -15,16 +15,23 @@ struct LocalModelMemoryInfoView: View {
 
     let onClose: () -> Void
 
+    /// The card itself holds the keyboard focus while the modal is open (it has
+    /// no field), so Esc reaches the modal's handler and Tab stays inside.
+    @FocusState private var cardFocused: Bool
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             headerBar
             Divider()
             scrollContent
         }
-        .frame(minWidth: 480, minHeight: 520)
-        // Match the ActionLibraryView baseline: extend to the panel's top edge so the
-        // header's top gap stays fixed (and equal to its bottom gap) as the window resizes.
-        .ignoresSafeArea(.container, edges: .top)
+        // No minimum height: the modal card sets the height, the text scrolls.
+        .frame(minWidth: 480)
+        .focusable()
+        .modifier(NoFocusRing())
+        .focused($cardFocused)
+        // Next run-loop turn, once the card is in the window.
+        .onAppear { DispatchQueue.main.async { cardFocused = true } }
     }
 
     // MARK: - Header
@@ -37,16 +44,12 @@ struct LocalModelMemoryInfoView: View {
             Text("How Models Use Memory")
                 .font(.title2.weight(.semibold))
             Spacer(minLength: 0)
-            Button(action: onClose) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .hoverTooltip("Close")
+            // The only action: a prominent capsule, like the Action Library's Done.
+            Button("Done", action: onClose)
+                .buttonStyle(BottomBarButtonStyle(height: 28, prominent: true, horizontalPadding: 12))
+                .hoverTooltip("Close")
         }
-        // Symmetric vertical padding, matching the ActionLibraryView baseline
-        // so the header sits the same distance from the panel's top and bottom edges.
+        // At the top of the modal card, symmetric vertical padding.
         .padding(.horizontal, SettingsMetrics.cardPadding)
         .padding(.vertical, SettingsMetrics.cardPadding + 6)
     }

@@ -61,6 +61,9 @@ struct ActionLibraryView: View {
 
     @State private var query = ""
 
+    /// The search field takes the keyboard focus when the modal opens.
+    @FocusState private var searchFocused: Bool
+
     private var trimmedQuery: String {
         query.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -69,12 +72,10 @@ struct ActionLibraryView: View {
         VStack(spacing: 0) {
             headerBar
             Divider()
-            searchBar
-            Divider()
             scrollContent
         }
-        .frame(minWidth: 560, minHeight: 480)
-        .ignoresSafeArea(.container, edges: .top)
+        // No minimum height: the modal card sets the height, the list scrolls.
+        .frame(minWidth: 560)
     }
 
     // MARK: - Header
@@ -89,43 +90,68 @@ struct ActionLibraryView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            Spacer()
+            .lineLimit(1)
+            // The search shrinks to its minimum before the title truncates.
+            .layoutPriority(1)
+            Spacer(minLength: 8)
+            searchField
+            // No Return shortcut: the search field has focus when the modal
+            // opens, and Return there closed the Library mid-search. Esc closes.
             Button("Done", action: onClose)
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.return, modifiers: [])
+                .buttonStyle(BottomBarButtonStyle(height: 28, prominent: true, horizontalPadding: 12))
         }
+        // At the top of the modal card, symmetric vertical padding.
         .padding(.horizontal, SettingsMetrics.cardPadding)
         .padding(.vertical, SettingsMetrics.cardPadding + 6)
     }
 
-    // MARK: - Search bar
+    // MARK: - Search field
 
-    private var searchBar: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Search actions\u{2026}", text: $query)
-                    .textFieldStyle(.plain)
-                if !query.isEmpty {
-                    Button {
-                        query = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
+    /// Always-open search in the header row, styled like the Settings header
+    /// search when it is open: an input capsule with a magnifier.
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            TextField("Search actions\u{2026}", text: $query)
+                .textFieldStyle(.plain)
+                .focused($searchFocused)
+                // The capsule's accent edge shows the focus instead.
+                .modifier(NoFocusRing())
+                .accessibilityLabel("Search actions")
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
                 }
+                .buttonStyle(RowIconButtonStyle())
+                .accessibilityLabel("Clear search")
+                .hoverTooltip("Clear search")
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color.primary.opacity(0.07))
-            )
         }
-        .padding(.horizontal, SettingsMetrics.pagePadding)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .frame(height: 30)
+        .frame(minWidth: 180, maxWidth: 320)
+        .background(
+            Capsule()
+                .fill(Palette.inputSurface)
+                // Accent edge while focused, like the Settings text inputs.
+                .overlay(
+                    Capsule().strokeBorder(
+                        searchFocused ? Color.accentColor : Palette.surfaceBorder,
+                        lineWidth: searchFocused ? 1.5 : 1)
+                )
+                .animation(Motion.hover, value: searchFocused)
+        )
+        // Esc clears the text first; with an empty field it closes the modal.
+        .onExitCommand {
+            if query.isEmpty { onClose() } else { query = "" }
+        }
+        // Next run-loop turn, once the modal card is in the window.
+        .onAppear { DispatchQueue.main.async { searchFocused = true } }
     }
 
     // MARK: - Scrollable content
@@ -198,6 +224,7 @@ private struct LibraryPresetRow: View {
     let onInstall: () -> Void
 
     @State private var isExpanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// True when the action has a non-empty scriptSource (shell / applescript / url / shortcut).
     private var hasScriptBody: Bool {
@@ -231,6 +258,11 @@ private struct LibraryPresetRow: View {
         }
     }
 
+    /// Shows or hides the script body; instant under Reduce Motion (the card's height changes).
+    private func toggleExpanded() {
+        withAnimation(reduceMotion ? nil : Motion.toggle) { isExpanded.toggle() }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Card header
@@ -262,16 +294,13 @@ private struct LibraryPresetRow: View {
 
                 // Script disclosure chevron (only when there is a body to show)
                 if isScriptableWithBody {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            isExpanded.toggle()
-                        }
-                    } label: {
+                    Button(action: toggleExpanded) {
                         Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .frame(width: 12, height: 12)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(RowIconButtonStyle())
                     .hoverTooltip(isExpanded ? "Hide script" : "Show script")
                 }
             }
@@ -279,7 +308,7 @@ private struct LibraryPresetRow: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 guard isScriptableWithBody else { return }
-                withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+                toggleExpanded()
             }
 
             // Collapsible script body
@@ -289,14 +318,7 @@ private struct LibraryPresetRow: View {
                     .padding(SettingsMetrics.cardPadding)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                .fill(Color.primary.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
-        )
+        .modifier(GlassCard(cornerRadius: SettingsMetrics.cardRadius))
     }
 
     // MARK: - Sub-views
@@ -307,29 +329,25 @@ private struct LibraryPresetRow: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Capsule().fill(Color.primary.opacity(0.08)))
+            .background(Capsule().fill(Palette.inputSurface))
     }
 
     @ViewBuilder
     private var installButton: some View {
         if installed {
-            // Already installed — show a disabled checkmark state.
+            // Already installed — a non-interactive chip, the size of a row button.
             Label("Installed", systemImage: "checkmark")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule().fill(Color.primary.opacity(0.06))
-                )
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Palette.inputSurface))
         } else if canInstall {
             Button("Install", action: onInstall)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(RowTextButtonStyle(prominent: true))
         } else {
             Button("Install") {}
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(RowTextButtonStyle(prominent: true))
                 .disabled(true)
         }
     }
@@ -350,11 +368,11 @@ private struct LibraryPresetRow: View {
             .frame(maxHeight: 160)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
+                    .fill(Palette.inputSurface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
+                    .strokeBorder(Palette.surfaceBorder, lineWidth: 1)
             )
         }
     }

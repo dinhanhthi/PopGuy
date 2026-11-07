@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Settings → Actions (macOS ActionsView.swift): a fixed header (the toolbar layout editor, the Settings-button switch,
-    then the search box and the type filter) above the scrolling action cards, one per action in the action order. The
+    Settings → Actions (macOS ActionsView.swift): a fixed header (the toolbar layout editor, the action buttons, then
+    the search box and the type filter) above the scrolling action cards, one per action in the action order. The
     cards are built in code (ActionsPage.xaml.cs, Controls/ActionCard). Add action and a custom card's Edit open the
     Add/Edit panel (Panels/CustomActionEditPanel); Import and the plugin menu end in the consent panel
     (Panels/PluginImportConsentDialog); the library button opens the Action Library (Panels/ActionLibraryPanel). Speak's
@@ -30,43 +30,30 @@
             <!-- The live toolbar preview: drag to reorder or to move actions to and from More actions. -->
             <controls:ToolbarLayoutEditor x:Name="LayoutEditor" />
 
-            <!-- The toolbar's Settings button (macOS keeps this switch on the Actions page), then Add action, Export, Import, the plugin menu (built in code) and the Action Library. -->
-            <Grid ColumnSpacing="8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <ToggleSwitch
-                    x:Name="SettingsButtonToggle"
-                    HorizontalAlignment="Left"
-                    AutomationProperties.Name="Show Settings button on toolbar"
-                    OffContent="Show Settings button on toolbar"
-                    OnContent="Show Settings button on toolbar" />
-                <StackPanel
-                    Grid.Column="1"
-                    VerticalAlignment="Center"
-                    Orientation="Horizontal"
-                    Spacing="8">
-                    <Button
-                        x:Name="AddButton"
-                        AutomationProperties.Name="Add action"
-                        Style="{StaticResource AccentButtonStyle}">
-                        <FontIcon FontSize="14" Glyph="&#xE710;" />
-                    </Button>
-                    <Button x:Name="ExportButton" AutomationProperties.Name="Export custom actions">
-                        <FontIcon FontSize="14" Glyph="&#xEDE1;" />
-                    </Button>
-                    <Button x:Name="ImportButton" AutomationProperties.Name="Import custom actions">
-                        <FontIcon FontSize="14" Glyph="&#xE8B5;" />
-                    </Button>
-                    <Button x:Name="PluginButton" AutomationProperties.Name="Import plugin">
-                        <FontIcon FontSize="14" Glyph="&#xEA86;" />
-                    </Button>
-                    <Button x:Name="LibraryButton" AutomationProperties.Name="Browse Action Library">
-                        <FontIcon FontSize="14" Glyph="&#xE8F1;" />
-                    </Button>
-                </StackPanel>
-            </Grid>
+            <!-- Add action, Export, Import, the plugin menu (built in code) and the Action Library. -->
+            <StackPanel
+                HorizontalAlignment="Right"
+                Orientation="Horizontal"
+                Spacing="8">
+                <Button
+                    x:Name="AddButton"
+                    AutomationProperties.Name="Add action"
+                    Style="{StaticResource AccentButtonStyle}">
+                    <FontIcon FontSize="14" Glyph="&#xE710;" />
+                </Button>
+                <Button x:Name="ExportButton" AutomationProperties.Name="Export custom actions">
+                    <FontIcon FontSize="14" Glyph="&#xEDE1;" />
+                </Button>
+                <Button x:Name="ImportButton" AutomationProperties.Name="Import custom actions">
+                    <FontIcon FontSize="14" Glyph="&#xE8B5;" />
+                </Button>
+                <Button x:Name="PluginButton" AutomationProperties.Name="Import plugin">
+                    <FontIcon FontSize="14" Glyph="&#xEA86;" />
+                </Button>
+                <Button x:Name="LibraryButton" AutomationProperties.Name="Browse Action Library">
+                    <FontIcon FontSize="14" Glyph="&#xE8F1;" />
+                </Button>
+            </StackPanel>
 
             <!-- Search and type filter. -->
             <Grid ColumnSpacing="8">

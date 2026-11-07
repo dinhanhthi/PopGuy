@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The Add/Edit action panel (macOS CustomActionEditSheet in CustomActionsView.swift), shown in the SlideOverPanel: a
+    The Add/Edit action panel (macOS CustomActionEditSheet in CustomActionsView.swift), shown as the SlideOverPanel's centered modal: a
     header (the live icon and title, Cancel, Save) with the panel's symmetric padding, then the scrolling cards. The cards
     are built in code (CustomActionEditPanel.xaml.cs); the styles below give them their theme colours.
 -->

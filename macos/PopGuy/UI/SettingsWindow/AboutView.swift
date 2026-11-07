@@ -82,13 +82,21 @@ struct AboutView: View {
     private var updatesCard: some View {
         SettingsCard(title: "Updates") {
             VStack(alignment: .leading, spacing: SettingsMetrics.contentSpacing) {
-                Toggle("Automatically check for updates", isOn: $updater.automaticallyChecksForUpdates)
-                    .toggleStyle(.checkbox)
+                LabeledContent {
+                    Toggle("Automatically check for updates", isOn: $updater.automaticallyChecksForUpdates)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                        // Out of a Form the content sits right after the label; keep the switch in a trailing column.
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                } label: {
+                    Text("Automatically check for updates")
+                }
 
                 HStack(spacing: 8) {
                     Button("Check for Updates\u{2026}") {
                         updater.checkForUpdates()
                     }
+                    .buttonStyle(RowTextButtonStyle())
                     .disabled(!updater.canCheckForUpdates)
 
                     if updater.updateAvailable {

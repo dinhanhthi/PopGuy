@@ -245,4 +245,24 @@ struct ToolbarLayoutEditMathTests {
         #expect(ToolbarLayoutEditMath.previewOrder([a, b], dragging: d, at: 99) == [a, b, d])
         #expect(ToolbarLayoutEditMath.previewOrder([], dragging: d, at: -1) == [d])
     }
+
+    @Test("More fits beside the toolbar only when toolbar + spacing + More fit the available width")
+    func moreFitsBesideToolbar() {
+        // 100 + 8 + 50 = 158.
+        #expect(ToolbarLayoutEditMath.moreFitsBesideToolbar(toolbarWidth: 100, moreWidth: 50, spacing: 8, available: 200))
+        #expect(ToolbarLayoutEditMath.moreFitsBesideToolbar(toolbarWidth: 100, moreWidth: 50, spacing: 8, available: 158))
+        #expect(!ToolbarLayoutEditMath.moreFitsBesideToolbar(toolbarWidth: 100, moreWidth: 50, spacing: 8, available: 157))
+    }
+
+    @Test("side by side the More zone starts at the card's left edge; wrapped it starts at its top edge")
+    func moreZoneFollowsLayout() {
+        let more = CGRect(x: 300, y: 10, width: 80, height: 40)
+        // Side by side: a point over the toolbar row is not in the zone, even level with the card.
+        #expect(!ToolbarLayoutEditMath.isInMoreZone(location: CGPoint(x: 291, y: 20), moreFrame: more, sideBySide: true, slack: 8))
+        #expect(ToolbarLayoutEditMath.isInMoreZone(location: CGPoint(x: 292, y: 20), moreFrame: more, sideBySide: true, slack: 8))
+        #expect(ToolbarLayoutEditMath.isInMoreZone(location: CGPoint(x: 340, y: 0), moreFrame: more, sideBySide: true, slack: 8))
+        // Wrapped: the whole band at or below the card's top (minus slack), at any x.
+        #expect(ToolbarLayoutEditMath.isInMoreZone(location: CGPoint(x: 0, y: 2), moreFrame: more, sideBySide: false, slack: 8))
+        #expect(!ToolbarLayoutEditMath.isInMoreZone(location: CGPoint(x: 340, y: 1), moreFrame: more, sideBySide: false, slack: 8))
+    }
 }

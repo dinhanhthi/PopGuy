@@ -25,10 +25,10 @@ namespace PopGuy.Settings.Pages;
 
 /// <summary>
 /// Settings → Actions (macOS ActionsView.swift, spec-3 §5.3): the toolbar layout editor
-/// (<see cref="ToolbarLayoutEditor"/>), the toolbar's Settings-button switch, the search box and type filter, then one
+/// (<see cref="ToolbarLayoutEditor"/>), the action buttons, the search box and type filter, then one
 /// <see cref="ActionCard"/> per action in the action order (built-ins, Speak with its <see cref="SpeakCard"/> rows, Look
 /// up with its <see cref="DictionaryCard"/> rows, and custom actions). Add action and a custom card's Edit open
-/// <see cref="CustomActionEditPanel"/> in the window's <see cref="SlideOverPanel"/>. The navigation parameter is the AppServices. A card is built once and updated on every
+/// <see cref="CustomActionEditPanel"/> as a modal in the window's <see cref="SlideOverPanel"/>. The navigation parameter is the AppServices. A card is built once and updated on every
 /// settings change, so text being typed, a recording and the expansion survive; it is built again only when its custom
 /// action's type, title, icon, description or origin changed. Search and filter only hide cards. While a card's
 /// shortcut records, PopGuy's own hotkeys and chord are off (<see cref="AppServices.SetHotkeysSuspended"/>); after
@@ -40,8 +40,6 @@ namespace PopGuy.Settings.Pages;
 /// </summary>
 public sealed partial class ActionsPage : Page
 {
-    private const string SettingsButtonTooltip = "Settings stay available from the PopGuy tray icon";
-
     private readonly Dictionary<ActionIdentifier, (ActionCard Card, object Signature)> _cards = [];
     private AppServices? _services;
     private ActionsViewModel? _model;
@@ -51,15 +49,9 @@ public sealed partial class ActionsPage : Page
     /// <summary>A picker, dialog or read of an export or import is under way: another click waits for it.</summary>
     private bool _transferring;
 
-    /// <summary>The controls are being set from the settings: their change events are not the user's.</summary>
-    private bool _syncing;
-
     public ActionsPage()
     {
         InitializeComponent();
-        SettingsButtonToggle.Toggled += (_, _) =>
-            Save("showToolbarSettingsButton", s => s with { ShowToolbarSettingsButton = SettingsButtonToggle.IsOn });
-        HoverTooltip.SetText(SettingsButtonToggle, SettingsButtonTooltip);
         AddButton.Click += (_, _) => OpenEditor(new CustomAction { Title = "", SystemPrompt = "" });
         HoverTooltip.SetText(AddButton, "Add action");
         ExportButton.Click += (_, _) => Transfer(ExportAsync);
@@ -135,9 +127,6 @@ public sealed partial class ActionsPage : Page
     {
         if (_model is null) return;
         var current = _model.Current;
-        _syncing = true;
-        SettingsButtonToggle.IsOn = current.ShowToolbarSettingsButton;
-        _syncing = false;
         ExportButton.IsEnabled = current.CustomActions.Count > 0;
         LayoutEditor.Refresh();
         SyncCards(current);
@@ -200,18 +189,22 @@ public sealed partial class ActionsPage : Page
         if (_model is not null && ActionsViewModel.Custom(_model.Current, id) is { } action) OpenEditor(action);
     }
 
-    /// <summary>Shows the Add/Edit panel on <paramref name="action"/> at once, over the window (macOS editingAction).</summary>
+    /// <summary>
+    /// Shows the Add/Edit panel on <paramref name="action"/> at once, as a modal in the middle of the window (macOS
+    /// editingAction). A click on the backdrop leaves it open: only Cancel, Esc and Save close it, so a stray click never
+    /// drops an unsaved draft.
+    /// </summary>
     private void OpenEditor(CustomAction action)
     {
         if (_model is null || SlideOverPanel.Of(this) is not { } panels) return;
         var editor = new CustomActionEditPanel();
         editor.Initialize(_model, action, panels);
-        panels.Present(editor, editor.InitialFocus);
+        panels.Present(editor, editor.InitialFocus, centered: true, closeOnBackdropTap: false);
     }
 
     /// <summary>
-    /// Shows the Action Library at once, as a modal in the middle of the window (macOS showingLibrary slides it in); an
-    /// install refreshes the cards through the settings change.
+    /// Shows the Action Library at once, as a modal in the middle of the window (macOS showingLibrary); an install
+    /// refreshes the cards through the settings change.
     /// </summary>
     private void OpenLibrary()
     {
@@ -390,13 +383,16 @@ public sealed partial class ActionsPage : Page
         ShowConsent(consent);
     }
 
-    /// <summary>The consent panel; after Add, the actions dropped for their provider are reported (macOS handleConsentConfirm).</summary>
+    /// <summary>
+    /// The consent panel, as a modal in the middle of the window (macOS shows it as a sheet); after Add, the actions
+    /// dropped for their provider are reported (macOS handleConsentConfirm).
+    /// </summary>
     private void ShowConsent(ImportConsent consent)
     {
         if (_model is null || SlideOverPanel.Of(this) is not { } panels) return;
         var dialog = new PluginImportConsentDialog();
         dialog.Initialize(_model, consent, panels);
-        panels.Present(dialog, closed: () =>
+        panels.Present(dialog, centered: true, closed: () =>
         {
             if (dialog.Added && consent.UnsupportedProviderCount > 0)
                 Transfer(() => AlertAsync("Unsupported Provider", ImportConsent.UnsupportedProviderMessage(consent.UnsupportedProviderCount)));
@@ -534,13 +530,6 @@ public sealed partial class ActionsPage : Page
     }
 
     // Header.
-
-    /// <summary>Saves one change; a failed write is logged and the controls go back to the saved settings.</summary>
-    private void Save(string key, Func<AppSettings, AppSettings> change)
-    {
-        if (_syncing || _model is null) return;
-        if (!_model.Save(key, change)) Refresh();
-    }
 
     /// <summary>
     /// The search box's own clear button (shown while the box has focus) is the macOS clear button: it gets the fast

@@ -105,14 +105,7 @@ struct PluginImportConsentView: View {
         }
         .padding(SettingsMetrics.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                .fill(Color.primary.opacity(0.04))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
-        )
+        .modifier(GlassCard(cornerRadius: SettingsMetrics.cardRadius))
     }
 
     // MARK: - Imported actions section
@@ -139,15 +132,17 @@ struct PluginImportConsentView: View {
 
             ForEach(result.imported) { action in
                 HStack(alignment: .top, spacing: 8) {
-                    Toggle("", isOn: Binding(
+                    Toggle(action.title, isOn: Binding(
                         get: { selectedIDs.contains(action.id) },
                         set: { checked in
                             if checked { selectedIDs.insert(action.id) }
                             else { selectedIDs.remove(action.id) }
                         }
                     ))
-                    .toggleStyle(.checkbox)
-                    .padding(.top, 10)
+                    .toggleStyle(CompactSwitch())
+                    .labelsHidden()
+                    // On the card's title line.
+                    .padding(.top, 8)
 
                     ImportedActionCard(action: action)
                 }
@@ -173,14 +168,7 @@ struct PluginImportConsentView: View {
                     SkippedItemRow(item: item)
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                    .fill(Color.primary.opacity(0.05))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: SettingsMetrics.cardRadius, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
-            )
+            .modifier(GlassCard(cornerRadius: SettingsMetrics.cardRadius))
         }
     }
 
@@ -190,12 +178,12 @@ struct PluginImportConsentView: View {
         HStack {
             Spacer()
             Button("Cancel", action: onCancel)
-                .buttonStyle(.bordered)
+                .buttonStyle(BottomBarButtonStyle())
                 .keyboardShortcut(.escape, modifiers: [])
             Button("Add to PopGuy") {
                 onConfirm(selectedActions)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(BottomBarButtonStyle(prominent: true))
             .disabled(selectedIDs.isEmpty)
             .keyboardShortcut(.return, modifiers: [])
         }
@@ -227,7 +215,7 @@ private struct ImportedActionCard: View {
                     .padding(.vertical, 2)
                     .background(
                         Capsule()
-                            .fill(Color.primary.opacity(0.08))
+                            .fill(Palette.inputSurface)
                     )
             },
             content: {
@@ -257,11 +245,11 @@ private struct ImportedActionCard: View {
                 .frame(maxHeight: 180)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.primary.opacity(0.06))
+                        .fill(Palette.inputSurface)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
+                        .strokeBorder(Palette.surfaceBorder, lineWidth: 1)
                 )
             }
         } else if action.type == .ai {
@@ -279,11 +267,11 @@ private struct ImportedActionCard: View {
                 .frame(maxHeight: 120)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.primary.opacity(0.06))
+                        .fill(Palette.inputSurface)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
+                        .strokeBorder(Palette.surfaceBorder, lineWidth: 1)
                 )
             }
         }
@@ -364,67 +352,77 @@ private struct SkippedItemRow: View {
     }
 }
 
+// MARK: - Debug sample
+
+#if DEBUG
+extension PluginImportResult {
+    /// A small built-in import for the preview and the DEBUG `--open-consent-sample` QA hook.
+    static var debugSample: PluginImportResult {
+        let imported: [CustomAction] = [
+            CustomAction(
+                id: UUID(),
+                title: "Open in Browser",
+                actionDescription: "Opens the selected text as a URL",
+                icon: .sfSymbol("link"),
+                type: .openURL,
+                systemPrompt: "",
+                providerKind: .anthropic,
+                model: "",
+                isEnabled: true,
+                scriptSource: "https://example.com/search?q={popclip text}",
+                afterRun: .closeToolbar,
+                appliesWhenRegex: "^https?://"
+            ),
+            CustomAction(
+                id: UUID(),
+                title: "Count Words",
+                actionDescription: "Counts words in the selection and shows the result",
+                icon: .sfSymbol("number"),
+                type: .shellScript,
+                systemPrompt: "",
+                providerKind: .anthropic,
+                model: "",
+                isEnabled: true,
+                scriptSource: "echo \"$POPCLIP_TEXT\" | wc -w | tr -d ' '",
+                afterRun: .showResult,
+                appliesWhenRegex: ""
+            ),
+            CustomAction(
+                id: UUID(),
+                title: "Summarise",
+                actionDescription: "Sends selected text to an AI model for summarisation",
+                icon: .sfSymbol("sparkles"),
+                type: .ai,
+                systemPrompt: "Summarise the following text in 2-3 sentences. Be concise.",
+                providerKind: .anthropic,
+                model: "claude-sonnet-4-6",
+                isEnabled: true,
+                scriptSource: "",
+                afterRun: .showResult,
+                appliesWhenRegex: ""
+            ),
+        ]
+
+        let skipped: [SkippedItem] = [
+            SkippedItem(label: "Run JavaScript", reason: "JavaScript actions are not supported"),
+            SkippedItem(label: "WebhookAction", reason: "Unknown action type in import file"),
+        ]
+
+        return PluginImportResult(
+            sourceName: "My PopClip Extension v1.2",
+            imported: imported,
+            skipped: skipped
+        )
+    }
+}
+#endif
+
 // MARK: - Preview
 
+#if DEBUG
 #Preview {
-    let imported: [CustomAction] = [
-        CustomAction(
-            id: UUID(),
-            title: "Open in Browser",
-            actionDescription: "Opens the selected text as a URL",
-            icon: .sfSymbol("link"),
-            type: .openURL,
-            systemPrompt: "",
-            providerKind: .anthropic,
-            model: "",
-            isEnabled: true,
-            scriptSource: "https://example.com/search?q={popclip text}",
-            afterRun: .closeToolbar,
-            appliesWhenRegex: "^https?://"
-        ),
-        CustomAction(
-            id: UUID(),
-            title: "Count Words",
-            actionDescription: "Counts words in the selection and shows the result",
-            icon: .sfSymbol("number"),
-            type: .shellScript,
-            systemPrompt: "",
-            providerKind: .anthropic,
-            model: "",
-            isEnabled: true,
-            scriptSource: "echo \"$POPCLIP_TEXT\" | wc -w | tr -d ' '",
-            afterRun: .showResult,
-            appliesWhenRegex: ""
-        ),
-        CustomAction(
-            id: UUID(),
-            title: "Summarise",
-            actionDescription: "Sends selected text to an AI model for summarisation",
-            icon: .sfSymbol("sparkles"),
-            type: .ai,
-            systemPrompt: "Summarise the following text in 2-3 sentences. Be concise.",
-            providerKind: .anthropic,
-            model: "claude-sonnet-4-6",
-            isEnabled: true,
-            scriptSource: "",
-            afterRun: .showResult,
-            appliesWhenRegex: ""
-        ),
-    ]
-
-    let skipped: [SkippedItem] = [
-        SkippedItem(label: "Run JavaScript", reason: "JavaScript actions are not supported"),
-        SkippedItem(label: "WebhookAction", reason: "Unknown action type in import file"),
-    ]
-
-    let result = PluginImportResult(
-        sourceName: "My PopClip Extension v1.2",
-        imported: imported,
-        skipped: skipped
-    )
-
     PluginImportConsentView(
-        result: result,
+        result: .debugSample,
         onConfirm: { actions in
             print("Confirmed \(actions.count) actions")
         },
@@ -433,3 +431,4 @@ private struct SkippedItemRow: View {
         }
     )
 }
+#endif
