@@ -462,11 +462,22 @@ public sealed partial class ComposerWindow : Window
         }
     }
 
-    /// <summary>Undo and redo step over the format passes (they leave the text as it was), so one key is one edit.</summary>
+    /// <summary>
+    /// Enter and Backspace continue and end Markdown lists. Undo and redo step over the format passes (they leave the
+    /// text as it was), so one key is one edit.
+    /// </summary>
     private void OnEditorPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (!IsDown(VirtualKey.Control)) return;
         var shift = IsDown(VirtualKey.Shift);
+        if (!IsDown(VirtualKey.Control))
+        {
+            if (!shift && !IsDown(VirtualKey.Menu) && e.Key is VirtualKey.Enter or VirtualKey.Back
+                && ApplyListEdit(enter: e.Key == VirtualKey.Enter))
+            {
+                e.Handled = true;
+            }
+            return;
+        }
         if (e.Key == VirtualKey.Z)
         {
             e.Handled = true;
@@ -477,6 +488,25 @@ public sealed partial class ComposerWindow : Window
             e.Handled = true;
             StepHistory(redo: true);
         }
+    }
+
+    /// <summary>
+    /// The <see cref="ListContinuation"/> edit for Enter or Backspace at a caret (no selection), as one undoable edit
+    /// with the caret after it; false: the key does its own thing.
+    /// </summary>
+    private bool ApplyListEdit(bool enter)
+    {
+        var document = Editor.TextDocument;
+        var selection = document.Selection;
+        if (selection.StartPosition != selection.EndPosition) return false;
+        var text = RawText();
+        var caret = selection.StartPosition;
+        if ((enter ? ListContinuation.ReturnEdit(text, caret) : ListContinuation.BackspaceEdit(text, caret)) is not { } edit)
+            return false;
+        var range = document.GetRange(edit.Start, edit.Start + edit.Length);
+        range.SetText(TextSetOptions.None, edit.Replacement.Replace('\n', '\r'));
+        selection.SetRange(range.EndPosition, range.EndPosition);
+        return true;
     }
 
     /// <summary>

@@ -6,6 +6,7 @@
 // formatting), no smart quotes/dashes or autocorrect (prompt and code text).
 //
 // Keys: Cmd+Return → onDone, Cmd+Shift+Return → onDoneAndSubmit, Esc → onCancel.
+// Return and Backspace continue and end Markdown lists (ListContinuation).
 // Standard edit shortcuts (cut/copy/paste/undo/redo/select all/find) are handled
 // in the view itself, so they work whether or not the app's main menu has an Edit menu.
 //
@@ -134,6 +135,25 @@ final class ComposerNSTextView: NSTextView {
     /// Esc (NSTextView would otherwise start completion).
     override func cancelOperation(_ sender: Any?) {
         onCancel()
+    }
+
+    /// Return continues or ends a Markdown list (ListContinuation).
+    override func insertNewline(_ sender: Any?) {
+        if !applyListEdit(ListContinuation.returnEdit) { super.insertNewline(sender) }
+    }
+
+    /// Backspace right after a list marker deletes the marker.
+    override func deleteBackward(_ sender: Any?) {
+        if !applyListEdit(ListContinuation.backspaceEdit) { super.deleteBackward(sender) }
+    }
+
+    /// Applies the list edit for a single caret (no selection, no IME composition) as one undoable edit.
+    private func applyListEdit(_ makeEdit: (String, Int) -> ListContinuation.Edit?) -> Bool {
+        let selection = selectedRange()
+        guard !hasMarkedText(), selectedRanges.count == 1, selection.length == 0,
+              let edit = makeEdit(string, selection.location) else { return false }
+        insertText(edit.replacement, replacementRange: edit.range)
+        return true
     }
 
     /// Called for every view in the key window, not only the focused one: when the
