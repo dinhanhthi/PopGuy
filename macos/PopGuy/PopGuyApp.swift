@@ -75,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var selectionPipeline: SelectionPipeline?
     private var toolbarController: ToolbarController?
     private var ocrCaptureController: OCRCaptureController?
+    private var composerController: ComposerController?
     private var permissionObserver: NSObjectProtocol?
 
     // MARK: - Shared services (created once, injected into subsystems)
@@ -127,6 +128,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     /// Combine subscription — re-applies hotkey wiring when the OCR opt-in toggle changes.
     private var ocrEnabledCancellable: AnyCancellable?
+
+    /// Combine subscription — re-applies hotkey wiring when the Compose shortcut changes.
+    private var composeShortcutCancellable: AnyCancellable?
+
+    /// Combine subscription — starts/stops the Terminal Composer server and re-applies
+    /// hotkey wiring when its opt-in toggle changes.
+    private var terminalComposerEnabledCancellable: AnyCancellable?
 
     // MARK: - Lifecycle
 
@@ -217,6 +225,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             }
             openSettings()
         }
+        if args.contains("--open-composer") || args.contains("--composer-session-ended") {
+            // QA: opens a test composer with Markdown sample text, drafts autosaved;
+            // `--composer-session-ended` opens it in the "Session ended" state.
+            openDebugComposer(sessionEnded: args.contains("--composer-session-ended"))
+        }
         if let arg = args.first(where: { $0.hasPrefix("--snapshot-out=") }) {
             // QA: `--snapshot-out=<png> [--snapshot-delay=<seconds>]` renders
             // the Settings window's content into a PNG after the delay, then
@@ -231,6 +244,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             }
         }
         #endif
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        composerController?.applicationWillTerminate()
     }
 
     // MARK: - Onboarding
@@ -302,6 +319,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             controller?.handleOCRCapture(text: text, anchorPoint: anchor, image: image)
         }
         ocrCaptureController = ocr
+
+        // Wire the Terminal Composer: its socket server runs only while opted in.
+        let composer = ComposerController(outputHandler: controller.outputHandler)
+        composerController = composer
+        if settingsStore.terminalComposerEnabled {
+            composer.startServer()
+        }
 
         // Wire ActionEngine into the toolbar via the protocol seam.
         let handler = ActionEngineHandler(
@@ -397,6 +421,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             .dropFirst()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.applyShortcutBindings() }
+
+        // Re-apply when the Compose shortcut or the Terminal Composer toggle changes;
+        // the toggle also starts/stops the composer's socket server.
+        composeShortcutCancellable = settingsStore.$composeShortcut
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.applyShortcutBindings() }
+
+        terminalComposerEnabledCancellable = settingsStore.$terminalComposerEnabled
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] enabled in
+                guard let self else { return }
+                if enabled {
+                    self.composerController?.startServer()
+                } else {
+                    self.composerController?.stopServer()
+                }
+                self.applyShortcutBindings()
+            }
     }
 
     /// A fixed sentinel ActionIdentifier for the chord-replacement shortcut.
@@ -414,6 +458,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     /// both real custom-action UUIDs and the chord-replacement sentinel above.
     private static let ocrCaptureActionID: ActionIdentifier =
         .custom(UUID(uuidString: "00000000-0000-0000-0000-00004F4352AA")!)
+
+    /// A fixed sentinel ActionIdentifier for the Terminal Composer's Compose shortcut.
+    /// Same rationale as `chordReplacementActionID` ("COMP" in the last bytes).
+    private static let composeActionID: ActionIdentifier =
+        .custom(UUID(uuidString: "00000000-0000-0000-0000-0000434F4D50")!)
 
     /// Build the action map from current settings and call HotkeyManager.applyBindings.
     ///
@@ -462,6 +511,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 guard self?.settingsStore.popGuyEnabled == true else { return }
                 guard self?.settingsStore.ocrEnabled == true else { return }
                 self?.ocrCaptureController?.beginCapture()
+            }
+        }
+
+        // Register the Compose shortcut only while the Terminal Composer is on, so
+        // the key combo is never swallowed with the module off.
+        if settingsStore.terminalComposerEnabled, let composeShortcut = settingsStore.composeShortcut {
+            hkm.register(
+                shortcut: composeShortcut,
+                for: AppDelegate.composeActionID
+            ) { [weak self] in
+                guard let self, self.settingsStore.popGuyEnabled else { return }
+                // Read the source app before anything activates PopGuy.
+                let sourcePID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+                self.composerController?.beginCompose(sourcePID: sourcePID)
             }
         }
     }
@@ -671,6 +734,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         ocrItem.isEnabled = true
         menu.addItem(ocrItem)
 
+        // New Composer — shown only while the Terminal Composer is on. The menu
+        // is rebuilt on every open (menuNeedsUpdate), so toggling it needs no refresh.
+        if settingsStore.terminalComposerEnabled {
+            let composeItem = NSMenuItem(
+                title: "New Composer",
+                action: #selector(newComposer),
+                keyEquivalent: ""
+            )
+            composeItem.image = NSImage(systemSymbolName: "square.and.pencil", accessibilityDescription: nil)
+            // Show the Compose shortcut for letter keys (the same glyph table as Settings);
+            // multi-character glyphs such as "Space" or "F1" are not key equivalents.
+            if let shortcut = settingsStore.composeShortcut {
+                let glyph = KeyboardShortcut.keyCodeToGlyph(shortcut.keyCode)
+                if glyph.count == 1, let letter = glyph.first, letter.isASCII, letter.isLetter {
+                    composeItem.keyEquivalent = glyph.lowercased()
+                    composeItem.keyEquivalentModifierMask = NSEvent.ModifierFlags(rawValue: shortcut.modifierFlags)
+                }
+            }
+            composeItem.isEnabled = composerController != nil
+            menu.addItem(composeItem)
+        }
+
         menu.addItem(.separator())
 
         // Settings
@@ -769,6 +854,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         ocrCaptureController?.beginCapture()
     }
 
+    /// Opens an empty composer that pastes into the app that was frontmost when the
+    /// menu opened (a status menu does not activate PopGuy).
+    @objc private func newComposer() {
+        let sourcePID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        composerController?.beginCompose(sourcePID: sourcePID)
+    }
+
     @objc private func performUpdateCheck() {
         updater.checkForUpdates()
     }
@@ -859,6 +951,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     #if DEBUG
+    /// QA hook `--open-composer`: the open test composer and its autosave (kept alive while shown).
+    private var debugComposerWindow: ComposerWindow?
+    private var debugComposerAutosave: AnyCancellable?
+
+    private func openDebugComposer(sessionEnded: Bool) {
+        let store = ComposerDraftStore()
+        let draftID = UUID()
+        let model = ComposerModel(text: """
+            # Composer sample
+
+            Some prose with `inline code` and **bold** text.
+
+            - first item
+            - second item
+            1. numbered item
+
+            ```swift
+            let greeting = "Hello"
+            print(greeting)
+            ```
+            """, sourceAppName: "Terminal")
+        model.sessionEnded = sessionEnded
+        store.prune()
+
+        // Logs states only, never the text.
+        let close: (String) -> Void = { [weak self] state in
+            NSLog("PopGuy composer (debug): %@", state)
+            self?.debugComposerAutosave = nil
+            self?.debugComposerWindow?.close()
+        }
+        model.onDone = { store.delete(id: draftID); close("done, draft deleted") }
+        model.onDoneAndSubmit = { store.delete(id: draftID); close("done and submit, draft deleted") }
+        model.onCancel = { store.flush(); close("cancel, draft kept") }
+        model.onCopyAndClose = { store.flush(); close("copy and close, draft kept") }
+        model.onRestoreDraft = { [weak model] in
+            Task { @MainActor in
+                guard let draft = await store.latestDraft(excluding: draftID) else { return }
+                model?.text = draft.text
+                model?.draftAvailable = false
+                NSLog("PopGuy composer (debug): draft restored (%ld bytes)", draft.text.utf8.count)
+            }
+        }
+        debugComposerAutosave = model.$text.dropFirst().sink { store.scheduleSave(id: draftID, text: $0) }
+        Task { @MainActor [weak model] in
+            let available = await store.latestDraft(excluding: draftID) != nil
+            model?.draftAvailable = available
+            NSLog("PopGuy composer (debug): draft available %@", available ? "yes" : "no")
+        }
+
+        let window = ComposerWindow(rootView: ComposerView(model: model))
+        debugComposerWindow = window
+        window.show()
+    }
+
     /// QA hook: `--settings-screen=<name substring>` (e.g. "Built-in") places the
     /// Settings window on that display and does not activate the app.
     private static var debugQAScreen: NSScreen? {

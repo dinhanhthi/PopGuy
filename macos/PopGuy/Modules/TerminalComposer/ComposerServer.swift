@@ -2,7 +2,8 @@
 //
 // Terminal Composer socket server: listens on a same-user Unix domain socket (POSIX
 // sockets driven by Dispatch sources) for the popguy-edit CLI, which sends one "open"
-// line and waits for one reply line. One composer session is active at a time.
+// line and waits for one reply line; after a "done" reply it sends "written" once the
+// file is written. One composer session is active at a time.
 // Prompt text is never logged; only lengths and states.
 
 import Foundation
@@ -19,10 +20,12 @@ protocol ComposerServerDelegate: AnyObject {
     /// A client opened a session. Answer it once with `ComposerServer.reply(_:to:)`.
     func composerServer(_ server: ComposerServer, didOpen session: ComposerSession, text: String, fileName: String)
     /// The session's connection closed: the client exited (also after a "done" reply, which
-    /// is how the owner times auto-submit), failed, the server closed it after a "cancel" or
-    /// "error" reply, or the server stopped. Fires exactly once for every session announced
-    /// by `didOpen`; after it, the session is gone and replies to it are ignored.
-    func composerServer(_ server: ComposerServer, sessionDidEnd session: ComposerSession)
+    /// is how the owner times auto-submit), failed, the server closed it after a "cancel",
+    /// "busy" or "error" reply, or the server stopped. `delivered` is true only when the
+    /// client sent "written" after a "done" reply (it wrote the file). Fires exactly once for
+    /// every session announced by `didOpen`; after it, the session is gone and replies to it
+    /// are ignored.
+    func composerServer(_ server: ComposerServer, sessionDidEnd session: ComposerSession, delivered: Bool)
     /// A second "open" arrived while a session was active; the server already replied
     /// "busy" and closed that connection.
     func composerServerDidRejectBusy(_ server: ComposerServer)
@@ -52,6 +55,8 @@ nonisolated final class ComposerServer: @unchecked Sendable {
         let source: any DispatchSourceRead
         var state: State = .awaitingOpen
         var input: [UInt8] = []
+        /// The client sent "written" after the "done" reply.
+        var delivered = false
 
         init(id: Int, fd: Int32, source: any DispatchSourceRead) {
             self.id = id
@@ -85,9 +90,9 @@ nonisolated final class ComposerServer: @unchecked Sendable {
     }
 
     /// Sends the one reply of `session`. After `.done` the connection stays open until the
-    /// client exits; after `.cancel` or `.error` the server closes it. Either way the end is
-    /// reported by `sessionDidEnd`. Replies to an ended session, second replies, and
-    /// `.open`/`.busy` (not replies) are ignored.
+    /// client exits; after `.cancel`, `.busy` (the owner already shows a composer) or
+    /// `.error` the server closes it. Either way the end is reported by `sessionDidEnd`.
+    /// Replies to an ended session, second replies, and `.open` (not a reply) are ignored.
     func reply(_ message: ComposerMessage, to session: ComposerSession) {
         queue.async { [self] in replyOnQueue(message, to: session) }
     }
@@ -196,18 +201,33 @@ nonisolated final class ComposerServer: @unchecked Sendable {
             finish(connection)
             return
         }
-        // Only the first line matters; later bytes are drained and ignored.
-        guard case .awaitingOpen = connection.state else { return }
-        let searchStart = connection.input.count
-        connection.input.append(contentsOf: chunk[0..<count])
-        if let newline = connection.input[searchStart...].firstIndex(of: 0x0A) {
-            let line = Data(connection.input[..<newline])
-            connection.input = []
-            handleFirstLine(line, on: connection)
-        } else if connection.input.count > ComposerMessage.maxLineBytes {
-            connection.input = []
-            Self.log.error("Composer: request line exceeds the size cap")
-            send(.error(reason: "Request is too large."), on: connection, thenClose: true)
+        switch connection.state {
+        case .awaitingOpen:
+            let searchStart = connection.input.count
+            connection.input.append(contentsOf: chunk[0..<count])
+            if let newline = connection.input[searchStart...].firstIndex(of: 0x0A) {
+                let line = Data(connection.input[..<newline])
+                connection.input = []
+                handleFirstLine(line, on: connection)
+            } else if connection.input.count > ComposerMessage.maxLineBytes {
+                connection.input = []
+                Self.log.error("Composer: request line exceeds the size cap")
+                send(.error(reason: "Request is too large."), on: connection, thenClose: true)
+            }
+        case .session(_, replied: true):
+            // Still open after a reply means "done": watch for "written", ignore the rest.
+            connection.input.append(contentsOf: chunk[0..<count])
+            while let newline = connection.input.firstIndex(of: 0x0A) {
+                let line = Data(connection.input[..<newline])
+                connection.input.removeSubrange(...newline)
+                if case .written? = try? ComposerMessage.decodeLine(line) {
+                    connection.delivered = true
+                }
+            }
+            if connection.input.count > ComposerMessage.maxLineBytes { connection.input = [] }
+        case .session(_, replied: false):
+            // Nothing is expected before the reply; drained and ignored.
+            break
         }
     }
 
@@ -242,9 +262,9 @@ nonisolated final class ComposerServer: @unchecked Sendable {
         let closeAfter: Bool
         switch message {
         case .done: closeAfter = false
-        case .cancel, .error: closeAfter = true
-        case .open, .busy:
-            Self.log.fault("Composer: open/busy is not a reply")
+        case .cancel, .busy, .error: closeAfter = true
+        case .open, .written:
+            Self.log.fault("Composer: open and written are not replies")
             return
         }
         connection.state = .session(session, replied: true)
@@ -281,8 +301,11 @@ nonisolated final class ComposerServer: @unchecked Sendable {
         guard let active, active.connection == connection.id else { return }
         self.active = nil
         let session = active.session
-        Self.log.info("Composer: session \(session.id) ended")
-        notify { server, delegate in delegate.composerServer(server, sessionDidEnd: session) }
+        let delivered = connection.delivered
+        Self.log.info("Composer: session \(session.id) ended (delivered \(delivered))")
+        notify { server, delegate in
+            delegate.composerServer(server, sessionDidEnd: session, delivered: delivered)
+        }
     }
 
     /// Hops to the main queue (FIFO, so events keep their order) and calls the delegate.

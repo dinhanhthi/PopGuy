@@ -3,8 +3,9 @@
 // Terminal Composer CLI: the $VISUAL editor that terminal programs call with a file path.
 // It reads and validates the file, sends its text to the running PopGuy app over a
 // same-user Unix domain socket (POSIX sockets), then blocks until the composer replies:
-// "done" writes the text back in place and exits 0; cancel, busy, error or a closed
-// connection exit 1 and leave the file untouched. The text itself is never printed.
+// "done" writes the text back in place, tells the app "written" and exits 0; cancel, busy,
+// error or a closed connection exit 1 and leave the file untouched; a failed write exits 1
+// without "written". The text itself is never printed.
 
 import AppKit
 import Foundation
@@ -200,6 +201,10 @@ case .line(let line):
         } catch {
             fail("\(path): \(describe(error))")
         }
+        // Best effort: without it the app keeps the draft and skips auto-submit.
+        if let ack = try? ComposerMessage.encodeLine(.written) {
+            _ = writeAll(fd, ack)
+        }
         close(fd)
         exit(0)
     case .cancel:
@@ -208,7 +213,7 @@ case .line(let line):
         fail("another composer is already open")
     case .error(let reason):
         fail(reason)
-    case .open:
+    case .open, .written:
         fail("invalid reply from PopGuy")
     }
 }

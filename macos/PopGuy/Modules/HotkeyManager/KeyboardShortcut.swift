@@ -93,7 +93,7 @@ extension KeyboardShortcut {
     ///
     /// Covers the most common shortcut keys. For uncovered codes, falls back
     /// to a decimal string so the UI always shows something.
-    private nonisolated static func keyCodeToGlyph(_ keyCode: UInt32) -> String {
+    nonisolated static func keyCodeToGlyph(_ keyCode: UInt32) -> String {
         switch keyCode {
         case 0:  return "A"
         case 1:  return "S"

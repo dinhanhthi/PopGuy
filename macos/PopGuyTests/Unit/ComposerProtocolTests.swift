@@ -27,6 +27,7 @@ struct ComposerProtocolTests {
          .done(text: "", submit: false)),
         (#"{"type":"cancel"}"#, .cancel),
         (#"{"type":"busy"}"#, .busy),
+        (#"{"type":"written"}"#, .written),
         (#"{"type":"error","reason":"Terminal Composer is off"}"#,
          .error(reason: "Terminal Composer is off")),
     ]

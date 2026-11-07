@@ -9,6 +9,9 @@
 //                           posts synthetic Cmd+V to the source app's PID,
 //                           waits a short delay, then restores the original
 //                           pasteboard (clipboard hygiene).
+//   3. pasteIntoApp(_:pid:) — Terminal Composer: same as pasteBack, but first
+//                           activates the target app and waits for it to be
+//                           frontmost. postReturn(to:) presses bare Return.
 //
 // Clipboard-restore decision (paste-back path):
 //   The delay before restore (~150 ms) is a best-effort window for the target
@@ -103,6 +106,109 @@ final class OutputHandler {
         try? await Task.sleep(nanoseconds: 150_000_000) // 150 ms
 
         // 6. Restore original pasteboard (clipboard hygiene).
+        snapshot.restore(to: pasteboard)
+    }
+
+    // MARK: - Compose paste (Terminal Composer)
+
+    /// Delay before restoring the pasteboard after a compose paste. Longer than
+    /// pasteBack's 150 ms because the target app was just reactivated and may
+    /// handle the Cmd+V later.
+    private static let composePasteRestoreDelay: UInt64 = 500_000_000 // 500 ms
+
+    /// How long to wait for the target app to become frontmost.
+    private static let activationTimeout: TimeInterval = 1.0
+
+    /// Poll interval while waiting for the target app to become frontmost.
+    private static let activationPollInterval: UInt64 = 30_000_000 // 30 ms
+
+    /// Activate the app with `pid` and paste `text` into it via synthetic Cmd+V.
+    ///
+    /// The pasteboard is snapshotted first and restored afterwards (clipboard
+    /// hygiene). The restore is skipped if the pasteboard changed after our
+    /// write (the user copied something meanwhile).
+    ///
+    /// - Returns: `true` if Cmd+V was posted; `false` if a paste is already in
+    ///   progress, the app is gone, or it never became frontmost.
+    func pasteIntoApp(_ text: String, pid: pid_t) async -> Bool {
+        guard !isPasting else { return false }
+        isPasting = true
+        defer { isPasting = false }
+
+        let pasteboard = NSPasteboard.general
+
+        // 1. Snapshot.
+        let snapshot = PasteboardSnapshot.capture(from: pasteboard)
+
+        // 2. Write the text.
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        let ourChangeCount = pasteboard.changeCount
+
+        // 3. Activate the target and wait until it is frontmost.
+        guard await activateAndWait(pid: pid) else {
+            restoreIfUnchanged(snapshot, to: pasteboard, expectedChangeCount: ourChangeCount)
+            return false
+        }
+
+        // 4. Post Cmd+V.
+        postCmdV(to: pid)
+
+        // 5. Restore after a best-effort delay (same race caveat as pasteBack).
+        try? await Task.sleep(nanoseconds: Self.composePasteRestoreDelay)
+        restoreIfUnchanged(snapshot, to: pasteboard, expectedChangeCount: ourChangeCount)
+        return true
+    }
+
+    /// Post a bare Return key press to `pid`, only if that app is alive and
+    /// frontmost. Flags are cleared so a still-held modifier (e.g. from
+    /// Cmd+Shift+Return) does not turn it into Cmd+Return.
+    ///
+    /// - Returns: whether the key events were posted.
+    func postReturn(to pid: pid_t) -> Bool {
+        guard
+            let app = NSRunningApplication(processIdentifier: pid),
+            !app.isTerminated,
+            NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+            let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_Return), keyDown: true),
+            let keyUp   = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_Return), keyDown: false)
+        else { return false }
+
+        keyDown.flags = []
+        keyUp.flags   = []
+
+        keyDown.postToPid(pid)
+        keyUp.postToPid(pid)
+        return true
+    }
+
+    /// Activate the app with `pid` and poll until it is frontmost.
+    /// Returns `false` if the app is gone or the timeout elapses.
+    private func activateAndWait(pid: pid_t) async -> Bool {
+        guard let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated else {
+            return false
+        }
+        if #available(macOS 14, *) {
+            NSApp.yieldActivation(to: app)
+        }
+        app.activate(options: [])
+
+        let deadline = Date().addingTimeInterval(Self.activationTimeout)
+        while Date() < deadline {
+            if app.isTerminated { return false }
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { return true }
+            try? await Task.sleep(nanoseconds: Self.activationPollInterval)
+        }
+        return NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
+    }
+
+    /// Restore `snapshot` only if the pasteboard still holds what we wrote.
+    private func restoreIfUnchanged(
+        _ snapshot: PasteboardSnapshot,
+        to pasteboard: NSPasteboard,
+        expectedChangeCount: Int
+    ) {
+        guard pasteboard.changeCount == expectedChangeCount else { return }
         snapshot.restore(to: pasteboard)
     }
 

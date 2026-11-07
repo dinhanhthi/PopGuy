@@ -6,7 +6,7 @@
 // compiles in the command-line tool target too.
 //
 // Wire protocol: JSON lines over a same-user AF_UNIX socket, UTF-8, one message per "\n".
-//   client -> app: open
+//   client -> app: open, then written (after it wrote the "done" text to the file)
 //   app -> client: done | cancel | busy | error
 // Message text is LF-only and never logged.
 
@@ -22,6 +22,8 @@ nonisolated enum ComposerMessage: Codable, Equatable, Sendable {
     case open(text: String, fileName: String, mode: String)
     /// App -> client: the user finished; write `text` back. `submit` asks the caller to submit.
     case done(text: String, submit: Bool)
+    /// Client -> app: the "done" text was written to the file (sent just before exiting).
+    case written
     /// App -> client: the user cancelled; leave the file untouched.
     case cancel
     /// App -> client: another composer session is already open.
@@ -61,7 +63,7 @@ nonisolated enum ComposerMessage: Codable, Equatable, Sendable {
     private var text: String? {
         switch self {
         case .open(let text, _, _), .done(let text, _): return text
-        case .cancel, .busy, .error: return nil
+        case .written, .cancel, .busy, .error: return nil
         }
     }
 
@@ -86,6 +88,8 @@ nonisolated enum ComposerMessage: Codable, Equatable, Sendable {
                 text: try container.decode(String.self, forKey: .text),
                 submit: try container.decode(Bool.self, forKey: .submit)
             )
+        case "written":
+            self = .written
         case "cancel":
             self = .cancel
         case "busy":
@@ -111,6 +115,8 @@ nonisolated enum ComposerMessage: Codable, Equatable, Sendable {
             try container.encode("done", forKey: .type)
             try container.encode(text, forKey: .text)
             try container.encode(submit, forKey: .submit)
+        case .written:
+            try container.encode("written", forKey: .type)
         case .cancel:
             try container.encode("cancel", forKey: .type)
         case .busy:
