@@ -256,11 +256,9 @@ struct SettingsView: View {
         }
         .background(WindowGlass().ignoresSafeArea())
         .modifier(HardTopScrollEdge())
-        // No minHeight: the window's minimum height is the layout's own (the
-        // sidebar card, the band and the footer: ~450 pt on macOS 27). The
-        // hosting view adds the titlebar's top safe-area inset (66 pt) to a
-        // declared minHeight, so 460 here made a 526 pt minimum window.
-        .frame(minWidth: 720, idealWidth: 1040, idealHeight: 760)
+        // The hosting view adds the titlebar's top safe-area inset (66 pt) to
+        // the declared minHeight: 460 here makes a 526 pt minimum window.
+        .frame(minWidth: 780, idealWidth: 920, minHeight: 460, idealHeight: 680)
         // Fallback: Esc while the keyboard focus is not inside the card (e.g.
         // the moment before the card's own initial focus lands) closes the
         // open modal. Focus inside the card reaches the card's handler first.

@@ -28,10 +28,10 @@ namespace PopGuy.Settings;
 public sealed partial class SettingsWindow : Window
 {
     // Wide enough that the Actions cards' text does not wrap word by word.
-    private const double MinWidth = 900;
-    private const double MinHeight = 460;
-    private const double DefaultWidth = 1250;
-    private const double DefaultHeight = 810;
+    private const double MinWidth = 960;
+    private const double MinHeight = 520;
+    private const double DefaultWidth = 1100;
+    private const double DefaultHeight = 720;
 
     /// <summary>The pages by sidebar item Tag, with their header glyph (Segoe Fluent Icons); a phase adds its page here.</summary>
     private static readonly Dictionary<string, (Type Page, string Glyph)> Pages = new()

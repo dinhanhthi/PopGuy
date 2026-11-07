@@ -920,8 +920,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             // Default size, at most 90% of the screen it opens on (no frame
             // autosave: every new Settings window opens at this size).
             let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
-            window.setContentSize(NSSize(width: min(1040, (visible?.width ?? 1040) * 0.9),
-                                         height: min(760, (visible?.height ?? 760) * 0.9)))
+            window.setContentSize(NSSize(width: min(920, (visible?.width ?? 920) * 0.9),
+                                         height: min(680, (visible?.height ?? 680) * 0.9)))
             window.center()
             window.delegate = self
             window.isReleasedWhenClosed = false
@@ -930,7 +930,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         #if DEBUG
         if let size = Self.debugQASettingsSize {
             // QA: `--settings-size=<W>x<H>` sets the content size (AppKit
-            // clamps it to the SwiftUI minimum: 720 wide, ~450 tall).
+            // clamps it to the SwiftUI minimum: 780 wide, 526 tall).
             settingsWindow?.setContentSize(size)
         }
         if let screen = Self.debugQAScreen, let window = settingsWindow {
