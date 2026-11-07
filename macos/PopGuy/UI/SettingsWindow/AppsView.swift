@@ -99,7 +99,7 @@ struct AppsView: View {
         // No title: the header-row tab already names the section.
         SettingsGroup(
             nil,
-            footer: "The toolbar will not appear when you select text in these apps. Turning this off also removes the \"Ignore this app\" button from the toolbar."
+            description: "The toolbar will not appear when you select text in these apps. Turning this off also removes the \"Ignore this app\" button from the toolbar."
         ) {
             LabeledContent {
                 Toggle("Enable Ignored Apps", isOn: $settings.ignoredAppsEnabled)
@@ -119,7 +119,7 @@ struct AppsView: View {
                 } label: {
                     Text("Show \"Ignore this app\" button on toolbar")
                     Text("Hides only the toolbar button; the ignored list keeps working.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 }
 
@@ -155,7 +155,7 @@ struct AppsView: View {
         // No title: the header-row tab already names the section.
         SettingsGroup(
             nil,
-            footer: "Hide the toolbar on these websites. Works in Safari, Chrome, Brave, Edge, Arc. Desktop apps use Ignored Apps instead."
+            description: "Hide the toolbar on these websites. Works in Safari, Chrome, Brave, Edge, Arc. Desktop apps use Ignored Apps instead."
         ) {
             LabeledContent {
                 Toggle("Enable Ignored Domains", isOn: $settings.ignoredDomainsEnabled)
@@ -175,7 +175,7 @@ struct AppsView: View {
                 } label: {
                     Text("Show \"Ignore this site\" button on toolbar")
                     Text("Hides only the toolbar button; the ignored list keeps working.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 }
 
@@ -185,7 +185,7 @@ struct AppsView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
                     Text("To match these domains, PopGuy reads the address of your current browser tab. macOS will ask permission to control each browser the first time — choose Allow. While this is off, PopGuy never reads any browser URL.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -235,7 +235,7 @@ struct AppsView: View {
 
                     if let err = domainValidationError {
                         Text(err)
-                            .font(.caption)
+                            .font(.settingsCaption)
                             .foregroundStyle(.red)
                     }
                 }
@@ -334,7 +334,7 @@ private struct IgnoredAppRow: View {
                 // Show bundle ID as secondary caption when we have a friendly name.
                 if appName != bundleID {
                     Text(bundleID)
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }

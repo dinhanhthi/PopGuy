@@ -385,7 +385,7 @@ struct IconPickerView: View {
             Divider()
 
             Text("Quick pick")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
 
             ScrollView {

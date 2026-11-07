@@ -108,7 +108,7 @@
             <TextBlock
                 Grid.Column="1"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Style="{StaticResource CaptionTextBlockStyle}"
+                Style="{StaticResource SettingsCaptionTextBlockStyle}"
                 Text="Your toolbar is getting wide and may cover more of your work. Consider moving some actions to More actions or turning off labels."
                 TextWrapping="Wrap" />
         </Grid>

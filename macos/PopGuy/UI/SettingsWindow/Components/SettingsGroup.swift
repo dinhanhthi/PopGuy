@@ -17,16 +17,17 @@ import SwiftUI
 
 // MARK: - SettingsGroup
 
-/// A titled card of settings rows, with an optional caption under the card.
+/// A titled card of settings rows, with an optional description above the card
+/// (styled like a page intro, e.g. the Composer page's).
 /// Separate the rows with `SettingsDivider()`.
 struct SettingsGroup<Content: View>: View {
     let title: String?
-    let footer: String?
+    let description: String?
     @ViewBuilder let content: () -> Content
 
-    init(_ title: String?, footer: String? = nil, @ViewBuilder content: @escaping () -> Content) {
+    init(_ title: String?, description: String? = nil, @ViewBuilder content: @escaping () -> Content) {
         self.title = title
-        self.footer = footer
+        self.description = description
         self.content = content
     }
 
@@ -38,6 +39,14 @@ struct SettingsGroup<Content: View>: View {
                     .padding(.horizontal, SettingsMetrics.cardPadding)
             }
 
+            if let description {
+                Text(description)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, SettingsMetrics.cardPadding)
+                    .padding(.bottom, 4)
+            }
+
             VStack(alignment: .leading, spacing: 0) {
                 content()
             }
@@ -46,13 +55,6 @@ struct SettingsGroup<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .modifier(GlassCard(cornerRadius: SettingsMetrics.cardRadius))
 
-            if let footer {
-                Text(footer)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, SettingsMetrics.cardPadding)
-            }
         }
     }
 }
@@ -81,7 +83,7 @@ struct SettingsDivider: View {
 struct SettingsRowStyle: LabeledContentStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(alignment: .center, spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 configuration.label
             }
             .fixedSize(horizontal: false, vertical: true)

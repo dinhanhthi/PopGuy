@@ -8,6 +8,10 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
+            <!-- Small text in Settings (descriptions, warnings, footers): one step above the 12 px Caption, still below the 14 px Body. -->
+            <Style x:Key="SettingsCaptionTextBlockStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+                <Setter Property="FontSize" Value="13" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

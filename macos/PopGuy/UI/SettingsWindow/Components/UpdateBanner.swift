@@ -40,7 +40,7 @@ struct UpdateBanner: View {
             }
             .buttonStyle(RowTextButtonStyle(prominent: true))
         }
-        .font(.caption)
+        .font(.settingsCaption)
         .padding(.horizontal, SettingsMetrics.pagePadding)
         .padding(.vertical, 8)
         .background(Color.accentColor.opacity(0.08))

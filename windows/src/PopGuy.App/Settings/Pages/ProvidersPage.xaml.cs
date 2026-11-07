@@ -188,7 +188,7 @@ public sealed partial class ProvidersPage : Page
         {
             var link = new HyperlinkButton
             {
-                Content = new TextBlock { Text = "Get API key ↗", Style = AppStyle("CaptionTextBlockStyle") },
+                Content = new TextBlock { Text = "Get API key ↗", Style = AppStyle("SettingsCaptionTextBlockStyle") },
                 NavigateUri = new Uri(keyUrl),
                 Padding = new Thickness(4, 2, 4, 2),
                 VerticalAlignment = VerticalAlignment.Center,

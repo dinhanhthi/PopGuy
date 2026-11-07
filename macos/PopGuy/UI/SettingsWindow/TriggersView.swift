@@ -114,7 +114,7 @@ struct TriggersView: View {
                             } label: {
                                 Text("Show toolbar when text is selected")
                                 Text("When on, selecting text shows the toolbar — in editable fields only, or in any app when the option below is off.")
-                                    .font(.caption)
+                                    .font(.settingsCaption)
                                     .foregroundStyle(.secondary)
                             }
 
@@ -125,7 +125,7 @@ struct TriggersView: View {
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
-                            .font(.caption)
+                            .font(.settingsCaption)
                         }
 
                         SettingsDivider()
@@ -138,7 +138,7 @@ struct TriggersView: View {
                         } label: {
                             Text("Only in editable text")
                             Text("When on, the toolbar appears only for text selected inside a field you can type in (text boxes, editors, compose areas). Selecting read-only text — web page content, chat messages — does nothing, so other apps' own selection features are not interrupted. Cmd+C+C and hotkeys still work on any text.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
                         .disabled(!settings.triggerOnSelectEnabled)
@@ -152,7 +152,7 @@ struct TriggersView: View {
                         } label: {
                             Text("Show toolbar on double-click (single word)")
                             Text("When on, double-clicking a word shows the toolbar — handy for quickly checking a word's meaning or hearing it. Use it on its own, or alongside \"Show toolbar when text is selected\": a double-click shows the toolbar once (even on read-only text), while selecting a range of text still follows the options above.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -223,7 +223,7 @@ struct TriggersView: View {
                             .disabled(!settings.triggerChordEnabled)
 
                             Text("Replaces Cmd+C+C with a single key combo (e.g. ⌘⇧Space). A repeated-key chord like Cmd+C+C cannot be recorded — use one modifier + a key.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -252,7 +252,7 @@ struct TriggersView: View {
             } label: {
                 Text("Enable Screen Text Capture")
                 Text("Select any region of the screen and PopGuy recognizes the text in it, then hands it to the toolbar to copy. Useful for text you can't select normally — images, PDFs, video captions.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -306,7 +306,7 @@ struct TriggersView: View {
             }
 
             Text("Assign a shortcut to start a capture from anywhere (e.g. ⌘⇧2). Also available from the menu bar.")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -336,7 +336,7 @@ struct TriggersView: View {
             }
 
             Text("macOS requires Screen Recording permission to capture the screen region for OCR. PopGuy only captures the region you select.")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -358,7 +358,7 @@ struct TriggersView: View {
         } label: {
             Text("Default action")
             Text("When assigned, double-clicking a word runs this action directly instead of showing the toolbar.")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
         }
     }

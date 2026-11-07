@@ -527,7 +527,7 @@ struct ToolbarLayoutEditorView: View {
             Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(.orange)
         }
-        .font(.caption)
+        .font(.settingsCaption)
         .foregroundStyle(.secondary)
     }
 

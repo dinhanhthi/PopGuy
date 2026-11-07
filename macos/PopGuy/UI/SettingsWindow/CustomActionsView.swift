@@ -305,7 +305,7 @@ struct CustomActionEditSheet: View {
                 .frame(minHeight: 100)
                 .settingsTextEditor()
             Text("Use {{text}} for the selected text. Also available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on).")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
         }
 
@@ -387,7 +387,7 @@ struct CustomActionEditSheet: View {
                     .textFieldStyle(.settings)
                     .lineLimit(3...6)
                     Text("Added on top of the default translation prompt.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -434,7 +434,7 @@ struct CustomActionEditSheet: View {
                 afterRunPicker
 
                 Text("{text} is replaced with the selected text, URL-encoded. Place it in the path or query, not the hostname.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -456,7 +456,7 @@ struct CustomActionEditSheet: View {
                 afterRunPicker
 
                 Text("The selected text is passed to the Shortcut on standard input.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -476,7 +476,7 @@ struct CustomActionEditSheet: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.caption)
+                .font(.settingsCaption)
 
                 TextEditor(text: $draft.scriptSource)
                     .font(.system(.body, design: .monospaced))
@@ -496,7 +496,7 @@ struct CustomActionEditSheet: View {
                 afterRunPicker
 
                 Text("{text} is replaced with the selected text as a quoted AppleScript string literal.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -516,7 +516,7 @@ struct CustomActionEditSheet: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.caption)
+                .font(.settingsCaption)
 
                 TextEditor(text: $draft.scriptSource)
                     .font(.system(.body, design: .monospaced))
@@ -526,7 +526,7 @@ struct CustomActionEditSheet: View {
                 afterRunPicker
 
                 Text("The selection is available as $POPGUY_TEXT (and $POPGUY_FULL_TEXT). Runs via /bin/zsh.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -567,7 +567,7 @@ struct CustomActionEditSheet: View {
                     }
                 }
                 Text("Leave empty to always show. Example for file paths: ^(/|~|file:).+")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         }

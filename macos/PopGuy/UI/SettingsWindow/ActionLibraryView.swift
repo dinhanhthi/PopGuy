@@ -278,7 +278,7 @@ private struct LibraryPresetRow: View {
                         .font(.body)
                     if !action.actionDescription.isEmpty {
                         Text(action.actionDescription)
-                            .font(.caption)
+                            .font(.settingsCaption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -325,7 +325,7 @@ private struct LibraryPresetRow: View {
 
     private var typeBadge: some View {
         Text(action.type.displayName)
-            .font(.caption2.weight(.medium))
+            .font(.settingsCaption.weight(.medium))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -337,7 +337,7 @@ private struct LibraryPresetRow: View {
         if installed {
             // Already installed — a non-interactive chip, the size of a row button.
             Label("Installed", systemImage: "checkmark")
-                .font(.caption.weight(.medium))
+                .font(.settingsCaption.weight(.medium))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
@@ -355,11 +355,11 @@ private struct LibraryPresetRow: View {
     private var scriptBody: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(scriptLabel)
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
             ScrollView(action.scriptSource.contains("\n") ? [.vertical, .horizontal] : .horizontal) {
                 Text(action.scriptSource)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(.primary)
                     .padding(.top, 8)
                     .padding(.horizontal, 8)

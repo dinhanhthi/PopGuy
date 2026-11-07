@@ -537,7 +537,7 @@ public sealed partial class SpeakCard : UserControl
             _fallback.Children.Add(new TextBlock
             {
                 Text = "cloud isn't available",
-                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                Style = (Style)Application.Current.Resources["SettingsCaptionTextBlockStyle"],
                 Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                 VerticalAlignment = VerticalAlignment.Center,
             });

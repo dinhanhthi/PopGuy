@@ -586,7 +586,7 @@ private struct SettingsFooter: View {
                     }
                 }
             }
-            .font(.caption)
+            .font(.settingsCaption)
             .padding(.horizontal, SettingsMetrics.pagePadding)
             .padding(.vertical, 8)
         }
@@ -771,7 +771,7 @@ private struct APIKeysTab: View {
                     .frame(maxWidth: .infinity)
             }
             Text("Ollama does not require an API key.")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
         }
 
@@ -788,7 +788,7 @@ private struct APIKeysTab: View {
                 .buttonStyle(RowTextButtonStyle())
             }
             Text("Uses your Claude subscription login — no API key needed. Slower than the API providers.")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
             CLIVerifyButton(kind: .claudeCLI, path: settings.claudeCLIPath)
         }
@@ -806,7 +806,7 @@ private struct APIKeysTab: View {
                 .buttonStyle(RowTextButtonStyle())
             }
             Text("Uses your Codex subscription login — no API key needed. Slower than the API providers.")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
             CLIVerifyButton(kind: .codexCLI, path: settings.codexCLIPath)
         }
@@ -824,7 +824,7 @@ private struct APIKeysTab: View {
                 .buttonStyle(RowTextButtonStyle())
             }
             Text("Uses your Gemini subscription login — no API key needed. Slower than the API providers.")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
             CLIVerifyButton(kind: .geminiCLI, path: settings.geminiCLIPath)
         }
@@ -956,7 +956,7 @@ private struct APIKeysTab: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                         Text(bglImportError)
-                            .font(.caption)
+                            .font(.settingsCaption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -969,7 +969,7 @@ private struct APIKeysTab: View {
                         Text("No dictionaries loaded")
                             .foregroundStyle(.secondary)
                     }
-                    .font(.caption)
+                    .font(.settingsCaption)
                 } else {
                     VStack(spacing: 8) {
                         ForEach($settings.babylonDictionaries) { $dictionary in
@@ -997,7 +997,7 @@ private struct APIKeysTab: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
-            .font(.caption)
+            .font(.settingsCaption)
             .foregroundStyle(.secondary)
         }
     }
@@ -1130,7 +1130,7 @@ private struct APIKeysTab: View {
                     .frame(maxWidth: .infinity)
             }
             Text("Azure region, e.g. eastus — required.")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
         }
 
@@ -1153,7 +1153,7 @@ private struct APIKeysTab: View {
 
         // Privacy notice.
         Text("Cloud speech sends the selected text to \(kind.displayName)'s servers. The local System voice keeps everything on-device.")
-            .font(.caption)
+            .font(.settingsCaption)
             .foregroundStyle(.secondary)
     }
 
@@ -1321,7 +1321,7 @@ private struct BabylonDictionarySettingsRow: View {
                         .font(.body.weight(.medium))
                         .lineLimit(1)
                     Text(dictionary.filePath)
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -1348,7 +1348,7 @@ private struct BabylonDictionarySettingsRow: View {
             }
 
             Text("\(dictionary.entryCount) entries")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
 
             // User-declared language mapping. The .bgl header does carry source/target
@@ -1356,7 +1356,7 @@ private struct BabylonDictionarySettingsRow: View {
             // for later use (e.g. provider routing); empty means unspecified.
             HStack(spacing: 6) {
                 Text("Source")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
                 TextField("en", text: languageBinding(\.sourceLanguage))
                     .textFieldStyle(.settings)
@@ -1365,7 +1365,7 @@ private struct BabylonDictionarySettingsRow: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 Text("Target")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
                 TextField("vi", text: languageBinding(\.targetLanguage))
                     .textFieldStyle(.settings)
@@ -1373,7 +1373,7 @@ private struct BabylonDictionarySettingsRow: View {
             }
 
             Text("Language codes (ISO 639 / BCP-47), e.g. en, vi, fr, zh. Leave empty if unsure.")
-                .font(.caption2)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
         }
         .padding(8)
@@ -1460,7 +1460,7 @@ struct VoiceTestButton: View {
                     Text("cloud isn't available")
                         .foregroundStyle(.secondary)
                 }
-                .font(.caption)
+                .font(.settingsCaption)
                 .hoverTooltip("Cloud voice unavailable — the System voice is being used instead.")
                 .accessibilityLabel("Cloud voice unavailable, using System voice")
             }
@@ -1561,7 +1561,7 @@ private struct AppearanceView: View {
                             Text(toolbarStyle == .menu
                                  ? "Actions appear in a list like a context menu; extra actions open from More actions."
                                  : "Actions appear in a horizontal toolbar.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -1579,7 +1579,7 @@ private struct AppearanceView: View {
                             Text(toolbarStyle == .menu
                                  ? "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the menu."
                                  : "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the full toolbar.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -1594,7 +1594,7 @@ private struct AppearanceView: View {
                         } label: {
                             Text("Show Settings button on toolbar")
                             Text("Settings stay available from the PopGuy menu bar icon")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -1615,7 +1615,7 @@ private struct AppearanceView: View {
                         } label: {
                             Text("Zoom level")
                             Text("Zoom level scales the entire floating toolbar — buttons, icons, and spacing — making it easier to see and click. 1× is the default size; higher levels make everything proportionally larger.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -1631,7 +1631,7 @@ private struct AppearanceView: View {
                         } label: {
                             Text("Include font size in zoom")
                             Text("Turn off to keep the result text at its chosen size while everything else grows.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -1650,7 +1650,7 @@ private struct AppearanceView: View {
                             Text(showLogoOnly
                                  ? "The logo always shows while Show logo only is on."
                                  : "Hide the PopGuy logo to save space on the toolbar.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
                         // The toolbar expands from the logo in "Show logo only" mode.
@@ -1668,7 +1668,7 @@ private struct AppearanceView: View {
                         } label: {
                             Text("Remove gap before system buttons")
                             Text("Show the Ignore and Settings buttons right after the actions, separated by dividers like any other action, instead of after a gap.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -1696,7 +1696,7 @@ private struct AppearanceView: View {
                             } label: {
                                 Text("Font size")
                                 Text("Applies to the result shown in the toolbar after an action runs.")
-                                    .font(.caption)
+                                    .font(.settingsCaption)
                                     .foregroundStyle(.secondary)
                             }
 
@@ -2030,9 +2030,9 @@ struct ModelField: View {
             HStack(spacing: 6) {
                 Image(systemName: "tray")
                     .foregroundStyle(.secondary)
-                    .font(.caption)
+                    .font(.settingsCaption)
                 Text("No models downloaded. Go to Providers → AI → Local Models.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         } else {
@@ -2065,7 +2065,7 @@ struct ModelField: View {
                         Image(systemName: "lock")
                             .font(.caption2)
                         Text("This model is reserved for the Humanize action from the Action Library. Choose another model.")
-                            .font(.caption)
+                            .font(.settingsCaption)
                     }
                     .foregroundStyle(.secondary)
                 } else if !currentIsInstalled && !model.isEmpty {
@@ -2073,7 +2073,7 @@ struct ModelField: View {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.caption2)
                         Text("This model is not downloaded. Get it in Providers → AI → Local Models.")
-                            .font(.caption)
+                            .font(.settingsCaption)
                     }
                     .foregroundStyle(.orange)
                 } else if installedModels.isEmpty {
@@ -2081,7 +2081,7 @@ struct ModelField: View {
                         Image(systemName: "tray")
                             .font(.caption2)
                         Text("No models downloaded. Go to Providers → AI → Local Models.")
-                            .font(.caption)
+                            .font(.settingsCaption)
                     }
                     .foregroundStyle(.secondary)
                 } else if let warning = LocalModelCatalog.model(for: model)?.settingsWarning {
@@ -2089,7 +2089,7 @@ struct ModelField: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.caption2)
                         Text(warning)
-                            .font(.caption)
+                            .font(.settingsCaption)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .foregroundStyle(.orange)
@@ -2098,7 +2098,7 @@ struct ModelField: View {
                         Image(systemName: "info.circle")
                             .font(.caption2)
                         Text("This model uses its own fixed instruction. The action prompt, global prompt and Preserve formatting are not applied.")
-                            .font(.caption)
+                            .font(.settingsCaption)
                     }
                     .foregroundStyle(.secondary)
                 }
@@ -2160,7 +2160,7 @@ struct ModelField: View {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(.green)
                 Text("Model OK")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         case .invalid:
@@ -2168,7 +2168,7 @@ struct ModelField: View {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.red)
                 Text("Model not found or key invalid")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.red)
             }
         case .unreachable:
@@ -2176,7 +2176,7 @@ struct ModelField: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                 Text("Couldn't reach provider")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         case .noEndpoint:
@@ -2184,7 +2184,7 @@ struct ModelField: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                 Text("Set the base URL first")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         case .noKey:
@@ -2192,7 +2192,7 @@ struct ModelField: View {
                 Image(systemName: "key.slash")
                     .foregroundStyle(.secondary)
                 Text("No key saved")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -2309,7 +2309,7 @@ struct CLIVerifyButton: View {
                 ProgressView()
                     .controlSize(.small)
                 Text("Running…")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             } else if let outcome {
                 feedback(outcome)
@@ -2338,7 +2338,7 @@ struct CLIVerifyButton: View {
             HStack(spacing: 6) {
                 Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
                 Text(message)
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.red)
                     .lineLimit(2)
                     .hoverTooltip(message)
@@ -2388,7 +2388,7 @@ struct GetAPIKeyLink: View {
                 Text("Get API key")
                 Image(systemName: "arrow.up.right.square")
             }
-            .font(.caption)
+            .font(.settingsCaption)
         }
         .buttonStyle(.borderless)
         .hoverTooltip("Open the provider's website to get an API key")
@@ -2426,7 +2426,7 @@ struct InfoTooltip: View {
             }
             .popover(isPresented: $showTooltip, arrowEdge: .bottom) {
                 Text(text)
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(width: 240, alignment: .leading)
@@ -2524,7 +2524,7 @@ private struct KeyEntryRow: View {
                         .foregroundStyle(.red)
                     Text(errorMessage)
                         .foregroundStyle(.red)
-                        .font(.caption)
+                        .font(.settingsCaption)
                 }
             }
 
@@ -2540,7 +2540,7 @@ private struct KeyEntryRow: View {
                         ProgressView()
                             .controlSize(.small)
                         Text("Verifying…")
-                            .font(.caption)
+                            .font(.settingsCaption)
                             .foregroundStyle(.secondary)
                     }
                 } else {
@@ -2612,7 +2612,7 @@ private struct KeyEntryRow: View {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(.green)
                 Text("Key is valid")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         case .invalid:
@@ -2620,7 +2620,7 @@ private struct KeyEntryRow: View {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.red)
                 Text("Key invalid")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.red)
             }
         case .unreachable:
@@ -2628,7 +2628,7 @@ private struct KeyEntryRow: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                 Text("Couldn't reach provider")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         case .noEndpoint:
@@ -2636,7 +2636,7 @@ private struct KeyEntryRow: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                 Text("Set the base URL first")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         case .noKey:
@@ -2644,7 +2644,7 @@ private struct KeyEntryRow: View {
                 Image(systemName: "key.slash")
                     .foregroundStyle(.secondary)
                 Text("No key saved")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         }

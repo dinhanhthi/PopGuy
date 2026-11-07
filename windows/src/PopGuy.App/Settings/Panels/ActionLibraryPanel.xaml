@@ -16,11 +16,11 @@
             <Setter Property="Margin" Value="1,0,0,0" />
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
         </Style>
-        <Style x:Key="CaptionStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+        <Style x:Key="CaptionStyle" TargetType="TextBlock" BasedOn="{StaticResource SettingsCaptionTextBlockStyle}">
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
-        <Style x:Key="ErrorTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+        <Style x:Key="ErrorTextStyle" TargetType="TextBlock" BasedOn="{StaticResource SettingsCaptionTextBlockStyle}">
             <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>

@@ -55,7 +55,7 @@ struct GeneralView: View {
                         } label: {
                             Text("Enable PopGuy")
                             Text("When off, every trigger — text selection, double-click, Cmd+C+C, and hotkeys — is suppressed.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -72,12 +72,12 @@ struct GeneralView: View {
                             } label: {
                                 Text("Start at login")
                                 Text("Automatically launch PopGuy when you log in.")
-                                    .font(.caption)
+                                    .font(.settingsCaption)
                                     .foregroundStyle(.secondary)
                             }
                             if let error = loginItemError {
                                 Text(error)
-                                    .font(.caption)
+                                    .font(.settingsCaption)
                                     .foregroundStyle(.red)
                             }
                         }
@@ -91,7 +91,7 @@ struct GeneralView: View {
                         } label: {
                             Text("Show app icon on the Dock while Settings is open")
                             Text("Normally PopGuy lives in the menu bar only. Turn this on to also show a Dock icon while the Settings window is open.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -104,7 +104,7 @@ struct GeneralView: View {
                             .buttonStyle(RowTextButtonStyle(formRow: true))
                             .hoverTooltip("Replay the first-run setup guide")
                             Text("Opens the first-run walkthrough again. Settings stays open.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -117,7 +117,7 @@ struct GeneralView: View {
                                 .frame(minHeight: 80)
                                 .settingsTextEditor()
                             Text("Added to the beginning of every AI action's prompt — Improve, Shorten, Proofread, Translate, the Prompt action, and custom actions — so you don't repeat the same instruction in each one. Leave empty to disable. Available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on).")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -132,7 +132,7 @@ struct GeneralView: View {
                         } label: {
                             Text("Preserve & render formatting")
                             Text("Render Markdown text styles and lists in the result. Bold, italic, strikethrough, inline code, and lists are supported.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -146,7 +146,7 @@ struct GeneralView: View {
                         } label: {
                             Text("Confirm before closing a finished result")
                             Text("When on, clicking outside or pressing Escape after a result is ready asks for confirmation, so you don't dismiss it by accident.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -162,7 +162,7 @@ struct GeneralView: View {
                         } label: {
                             Text("Enter on a result")
                             Text("What pressing Enter does while a result shows. When a result it applies to appears while the source app is in front, the toolbar takes the keyboard, so your typing does not reach the source app until it closes.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -178,7 +178,7 @@ struct GeneralView: View {
                         } label: {
                             Text("If that isn't available")
                             Text("Used when the first choice does not apply to the result: Paste back needs an editable text field, and Regenerate needs an action that can run again.")
-                                .font(.caption)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.secondary)
                         }
                         .disabled(settings.enterResultAction == .nothing)

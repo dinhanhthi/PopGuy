@@ -72,7 +72,7 @@ struct PluginImportConsentView: View {
                             : "\(selectedIDs.count) of \(result.imported.count) selected",
                         systemImage: "plus.circle"
                     )
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.primary)
                 }
                 if !result.skipped.isEmpty {
@@ -82,7 +82,7 @@ struct PluginImportConsentView: View {
                             : "\(result.skipped.count) items skipped",
                         systemImage: "exclamationmark.triangle"
                     )
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.orange)
                 }
             }
@@ -209,7 +209,7 @@ private struct ImportedActionCard: View {
             isExpanded: $isExpanded,
             accessory: {
                 Text(action.type.displayName)
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -233,11 +233,11 @@ private struct ImportedActionCard: View {
         if !source.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 Text(executableLabel)
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
                 ScrollView([.vertical, .horizontal]) {
                     Text(source)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.system(.subheadline, design: .monospaced))
                         .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(8)
@@ -255,11 +255,11 @@ private struct ImportedActionCard: View {
         } else if action.type == .ai {
             VStack(alignment: .leading, spacing: 4) {
                 Text("System prompt")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
                 ScrollView(.vertical) {
                     Text(action.systemPrompt.isEmpty ? "(empty)" : action.systemPrompt)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.system(.subheadline, design: .monospaced))
                         .foregroundStyle(action.systemPrompt.isEmpty ? .secondary : .primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(8)
@@ -300,7 +300,7 @@ private struct ImportedActionCard: View {
                 MetadataRow(
                     label: "Shown when matches",
                     value: action.appliesWhenRegex,
-                    valueFont: .system(.caption, design: .monospaced)
+                    valueFont: .system(.subheadline, design: .monospaced)
                 )
             }
         }
@@ -317,7 +317,7 @@ private struct MetadataRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(label)
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
                 .frame(minWidth: 110, alignment: .leading)
             Text(value)
@@ -343,7 +343,7 @@ private struct SkippedItemRow: View {
                     .font(.callout)
                     .foregroundStyle(.primary)
                 Text(item.reason)
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         }

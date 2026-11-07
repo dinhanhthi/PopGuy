@@ -16,6 +16,15 @@
 
 import SwiftUI
 
+// MARK: - Settings caption font
+
+extension Font {
+    /// Small text in the Settings window: descriptions, warnings and errors,
+    /// footers, banners, badges and small button labels. One step above the
+    /// system caption (11 pt, not 10) and still below row titles (13 pt).
+    static let settingsCaption: Font = .subheadline
+}
+
 // MARK: - SettingsMetrics
 
 /// Shared metrics for the settings tabs (4pt base scale).
@@ -161,7 +170,7 @@ struct SettingsCard<Accessory: View, TitleAccessory: View, HeaderDetail: View, C
 
             // Title + optional title-adjacent accessory (e.g. "Built-in" badge),
             // with an optional description line beneath.
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(title)
                         .font(.headline)
@@ -169,7 +178,7 @@ struct SettingsCard<Accessory: View, TitleAccessory: View, HeaderDetail: View, C
                 }
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 }
             }

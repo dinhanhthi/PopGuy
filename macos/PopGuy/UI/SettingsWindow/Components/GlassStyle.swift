@@ -216,11 +216,11 @@ struct RowTextButtonStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .font(formRow ? .subheadline : .caption.weight(.medium))
+                .font(formRow ? .body : .callout.weight(.medium))
                 .foregroundStyle(prominent ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-                .padding(.horizontal, formRow ? 10 : 8)
-                .padding(.vertical, formRow ? 0 : 3)
-                .frame(height: formRow ? 22 : nil)
+                .padding(.horizontal, formRow ? 12 : 8)
+                .padding(.vertical, formRow ? 0 : 4)
+                .frame(height: formRow ? 24 : nil)
                 .background(
                     Capsule()
                         .fill(prominent ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Palette.inputSurface))
@@ -487,12 +487,12 @@ struct CapsuleTabs<Tab: Hashable>: View {
         let action: () -> Void
         @State private var hovered = false
         /// A toolbar button's highlight; a form row's control when compact.
-        private var height: CGFloat { compact ? 22 : 28 }
+        private var height: CGFloat { compact ? 24 : 28 }
 
         var body: some View {
             Button(action: action) {
                 title
-                    .font(compact ? .subheadline : .callout)
+                    .font(compact ? .body : .callout)
                     .lineLimit(1)
                     .foregroundStyle(selected ? Color.white : Color.secondary)
                     .padding(.horizontal, compact ? 10 : 12)

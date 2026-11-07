@@ -205,7 +205,7 @@ struct HistoryView: View {
             HStack(spacing: 8) {
                 let shown = history.records.count
                 Text("\(shown) record\(shown == 1 ? "" : "s")")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
 
                 Button(role: .destructive) {
@@ -247,7 +247,7 @@ struct HistoryView: View {
                 Group {
                     Text("Store full input & output text")
                     Text("When off, only the beginning and end of each text are kept as a preview.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                 }
                 .dimmedWhenDisabled()
             }
@@ -316,7 +316,7 @@ private struct HistoryRow: View {
                     Text(record.actionName)
                         .font(.headline)
                     Text(providerModelText)
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 }
                 HStack(spacing: 6) {
@@ -326,7 +326,7 @@ private struct HistoryRow: View {
                     Text("·")
                     Text("\(record.durationMs) ms")
                 }
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
             }
 
@@ -385,7 +385,7 @@ private struct HistoryRow: View {
         VStack(alignment: .leading, spacing: SettingsMetrics.contentSpacing) {
             if record.truncated {
                 Label("Preview only — full text was not stored.", systemImage: "scissors")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
 
@@ -404,7 +404,7 @@ private struct HistoryRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(title)
-                    .font(.caption.weight(.semibold))
+                    .font(.settingsCaption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 Button {

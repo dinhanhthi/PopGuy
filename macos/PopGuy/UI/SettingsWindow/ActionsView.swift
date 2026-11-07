@@ -1189,7 +1189,7 @@ struct ActionsView: View {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
                 Text(warning)
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -1265,7 +1265,7 @@ private struct CustomPromptField: View {
                     .lineLimit(3...6)
                 HStack {
                     Text(caption)
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                     Spacer()
                     // Reset — only when a predefined fallback exists (Improve).
@@ -1309,7 +1309,7 @@ private struct CustomPromptField: View {
 private struct BuiltinBadge: View {
     var body: some View {
         Text("Built-in")
-            .font(.caption2.weight(.medium))
+            .font(.settingsCaption.weight(.medium))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -1324,7 +1324,7 @@ private struct BuiltinBadge: View {
 private struct FromPluginBadge: View {
     var body: some View {
         Text("From plugin")
-            .font(.caption2.weight(.medium))
+            .font(.settingsCaption.weight(.medium))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -1458,7 +1458,7 @@ private struct ActionCard<Content: View>: View {
     private func headerSwitch(_ title: String, isOn: Binding<Bool>, locked: Bool = false) -> some View {
         HStack(spacing: 6) {
             Text(title)
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(locked ? .tertiary : .secondary)
             Toggle(title, isOn: isOn)
                 .toggleStyle(CompactSwitch())
@@ -1741,7 +1741,7 @@ private struct SpeakCardView: View {
             }
             if case .cloud = engineBinding.wrappedValue {
                 Text("Falls back to the System voice when the cloud key is missing, offline, or the text exceeds the cloud limit.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
 
@@ -1909,7 +1909,7 @@ private struct SpeakCardView: View {
                             )
                         }
                         Text("Each language uses its own voice; Default picks the best available.")
-                            .font(.caption)
+                            .font(.settingsCaption)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -1936,7 +1936,7 @@ private struct SpeakCardView: View {
                     .fixedSize()
                 }
                 Text("The accent used to read text aloud by default. Switch accents on the fly from the toolbar's accent menu.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
 
@@ -1967,7 +1967,7 @@ private struct SpeakCardView: View {
                 }
                 if voices.isEmpty {
                     Text("Download more voices in System Settings → Accessibility → Spoken Content.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 }
                 if engineBinding.wrappedValue != .system {
@@ -1977,7 +1977,7 @@ private struct SpeakCardView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                     }
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
                 }
             }
@@ -2006,11 +2006,11 @@ private struct SpeakCardView: View {
                 .disabled(!engineBinding.wrappedValue.supportsSpeed)
                 if engineBinding.wrappedValue.supportsSpeed {
                     Text("How fast synthesized speech plays. Lower is slower — useful for hearing each sound clearly.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 } else {
                     Text("The selected engine doesn't support a speed override; speech plays at the provider's default rate.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -2039,11 +2039,11 @@ private struct SpeakCardView: View {
                 .disabled(!engineBinding.wrappedValue.supportsPitch)
                 if engineBinding.wrappedValue.supportsPitch {
                     Text("The system voice's pitch. 1.0 is its natural tone; higher sounds brighter, lower sounds deeper.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 } else {
                     Text("The selected engine doesn't support a pitch override; speech plays at the provider's natural pitch.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -2137,7 +2137,7 @@ private struct SpeakPreviewRow: View {
 
             if coordinator.didFallBackToSystem && coordinator.phase != .idle {
                 Text("Cloud voice unavailable — previewing with the System voice.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -2271,7 +2271,7 @@ private struct CustomSpeechFields: View {
             }
             if case .cloud = engineBinding.wrappedValue {
                 Text("Falls back to the System voice when the cloud key is missing or offline.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
 
@@ -2428,11 +2428,11 @@ private struct CustomSpeechFields: View {
                 .disabled(!engineBinding.wrappedValue.supportsSpeed)
                 if engineBinding.wrappedValue.supportsSpeed {
                     Text("How fast the system voice speaks.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 } else {
                     Text("The selected engine doesn't support a speed override; speech plays at the provider's default rate.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -2457,11 +2457,11 @@ private struct CustomSpeechFields: View {
                 .disabled(!engineBinding.wrappedValue.supportsPitch)
                 if engineBinding.wrappedValue.supportsPitch {
                     Text("The system voice's pitch. 1.0 is its natural tone; higher sounds brighter, lower sounds deeper.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 } else {
                     Text("The selected engine doesn't support a pitch override; speech plays at the provider's natural pitch.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -2549,7 +2549,7 @@ struct DraftSpeechFields: View {
             }
             if case .cloud = engineBinding.wrappedValue {
                 Text("Falls back to the System voice when the cloud key is missing or offline.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
 
@@ -2696,11 +2696,11 @@ struct DraftSpeechFields: View {
                 .disabled(!engineBinding.wrappedValue.supportsSpeed)
                 if engineBinding.wrappedValue.supportsSpeed {
                     Text("How fast the system voice speaks.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 } else {
                     Text("The selected engine doesn't support a speed override; speech plays at the provider's default rate.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -2725,11 +2725,11 @@ struct DraftSpeechFields: View {
                 .disabled(!engineBinding.wrappedValue.supportsPitch)
                 if engineBinding.wrappedValue.supportsPitch {
                     Text("The system voice's pitch. 1.0 is its natural tone; higher sounds brighter, lower sounds deeper.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 } else {
                     Text("The selected engine doesn't support a pitch override; speech plays at the provider's natural pitch.")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -2818,7 +2818,7 @@ private struct DraftSpeechPreviewRow: View {
 
             if coordinator.didFallBackToSystem && coordinator.phase != .idle {
                 Text("Cloud voice unavailable — previewing with the System voice.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -2898,7 +2898,7 @@ private struct CustomSpeechPreviewRow: View {
 
             if coordinator.didFallBackToSystem && coordinator.phase != .idle {
                 Text("Cloud voice unavailable — previewing with the System voice.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
         }

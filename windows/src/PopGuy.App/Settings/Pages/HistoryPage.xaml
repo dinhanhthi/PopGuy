@@ -13,11 +13,11 @@
     xmlns:pgc="using:PopGuy.Controls">
 
     <Page.Resources>
-        <Style x:Key="CaptionStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+        <Style x:Key="CaptionStyle" TargetType="TextBlock" BasedOn="{StaticResource SettingsCaptionTextBlockStyle}">
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
-        <Style x:Key="SectionTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+        <Style x:Key="SectionTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource SettingsCaptionTextBlockStyle}">
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="VerticalAlignment" Value="Center" />

@@ -96,7 +96,7 @@ struct TerminalComposerView: View {
             } label: {
                 Text("Enable Terminal Composer")
                 Text("Edit terminal prompts in a PopGuy window. CLIs like Claude Code (Ctrl+G), git and zsh open it as their editor.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
 
@@ -117,7 +117,7 @@ struct TerminalComposerView: View {
             SettingsDivider()
 
             Text("Set up shell does this for you. To do it by hand, paste one line into your shell config. Most people only need the first one.")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -177,7 +177,7 @@ struct TerminalComposerView: View {
             .disabled(!settings.terminalComposerEnabled)
 
             Text("Opens an empty composer from any app; Done pastes the text into the app you were in. Also available from the menu bar icon.")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -202,15 +202,15 @@ struct TerminalComposerView: View {
         } label: {
             Text("Command")
             Text(statusText)
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
             if let commandError {
                 Text(commandError)
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.red)
             }
             Text("Open a new terminal after installing.")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -305,15 +305,15 @@ struct TerminalComposerView: View {
         } label: {
             Text("Shell")
             Text(shellStatusText)
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
             if let shellError {
                 Text(shellError)
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.red)
             }
             Text("Adds the PATH and VISUAL lines to your shell config, between PopGuy markers. Open a new terminal afterwards.")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
             Text("\u{1F4A1} How it works: press Ctrl+G in Claude Code, Codex or Gemini CLI (or set it as git's editor). Done writes the text back and returns to the terminal; Cancel or Esc keeps the original.")
                 .font(.callout)
@@ -385,10 +385,10 @@ struct TerminalComposerView: View {
         } label: {
             Text(title)
             Text(caption)
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
             Text(text)
-                .font(.system(.caption, design: .monospaced))
+                .font(.system(.subheadline, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
         }

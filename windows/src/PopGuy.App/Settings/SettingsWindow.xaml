@@ -41,7 +41,7 @@
             <TextBlock
                 VerticalAlignment="Center"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Style="{StaticResource CaptionTextBlockStyle}"
+                Style="{StaticResource SettingsCaptionTextBlockStyle}"
                 Text="PopGuy Settings" />
         </StackPanel>
 
@@ -206,27 +206,27 @@
                             x:Name="VersionText"
                             VerticalAlignment="Center"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Style="{StaticResource CaptionTextBlockStyle}" />
+                            Style="{StaticResource SettingsCaptionTextBlockStyle}" />
                         <TextBlock
                             VerticalAlignment="Center"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Style="{StaticResource SettingsCaptionTextBlockStyle}"
                             Text="·" />
                         <HyperlinkButton x:Name="CheckUpdatesButton" Padding="4,2,4,2">
-                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Check for Updates" />
+                            <TextBlock Style="{StaticResource SettingsCaptionTextBlockStyle}" Text="Check for Updates" />
                         </HyperlinkButton>
                     </StackPanel>
                     <HyperlinkButton
                         Grid.Column="2"
                         Padding="4,2,4,2"
                         NavigateUri="https://dinhanhthi.com">
-                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Anh-Thi DINH" />
+                        <TextBlock Style="{StaticResource SettingsCaptionTextBlockStyle}" Text="Anh-Thi DINH" />
                     </HyperlinkButton>
                     <TextBlock
                         Grid.Column="3"
                         VerticalAlignment="Center"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Style="{StaticResource SettingsCaptionTextBlockStyle}"
                         Text="·" />
                     <HyperlinkButton
                         Grid.Column="4"
@@ -234,7 +234,7 @@
                         NavigateUri="https://github.com/dinhanhthi/PopGuy">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                             <FontIcon FontSize="12" Glyph="&#xE943;" />
-                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="GitHub" />
+                            <TextBlock Style="{StaticResource SettingsCaptionTextBlockStyle}" Text="GitHub" />
                         </StackPanel>
                     </HyperlinkButton>
                 </Grid>

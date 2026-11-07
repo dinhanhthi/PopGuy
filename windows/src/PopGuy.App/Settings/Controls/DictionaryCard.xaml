@@ -23,7 +23,7 @@
             <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
             <Setter Property="BorderThickness" Value="1" />
         </Style>
-        <Style x:Key="CaptionStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+        <Style x:Key="CaptionStyle" TargetType="TextBlock" BasedOn="{StaticResource SettingsCaptionTextBlockStyle}">
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
@@ -71,7 +71,7 @@
                 <TextBlock
                     x:Name="NoVoicesNote"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Style="{StaticResource SettingsCaptionTextBlockStyle}"
                     Text="No voices installed. Add voices in Windows Settings → Time &amp; language → Speech."
                     TextWrapping="Wrap"
                     Visibility="Collapsed" />
@@ -137,17 +137,17 @@
             <StackPanel Spacing="4">
                 <TextBlock
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Style="{StaticResource SettingsCaptionTextBlockStyle}"
                     Text="minhqnd: online, Vietnamese-focused (VI / EN / ZH)."
                     TextWrapping="Wrap" />
                 <TextBlock
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Style="{StaticResource SettingsCaptionTextBlockStyle}"
                     Text="Free Dictionary API: online, Wiktionary-based (EN / FR / ES)."
                     TextWrapping="Wrap" />
                 <TextBlock
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Style="{StaticResource SettingsCaptionTextBlockStyle}"
                     Text="Babylon (BGL): offline, the .bgl files below, while one is enabled."
                     TextWrapping="Wrap" />
             </StackPanel>
@@ -215,7 +215,7 @@
                         Grid.Column="1"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         IsTextSelectionEnabled="True"
-                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Style="{StaticResource SettingsCaptionTextBlockStyle}"
                         TextWrapping="Wrap" />
                 </Grid>
                 <StackPanel
@@ -228,7 +228,7 @@
                         Glyph="&#xE7B8;" />
                     <TextBlock
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Style="{StaticResource SettingsCaptionTextBlockStyle}"
                         Text="No dictionaries loaded" />
                 </StackPanel>
                 <StackPanel x:Name="FilesPanel" Spacing="8" />

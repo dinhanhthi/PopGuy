@@ -22,13 +22,13 @@
                     <TextBlock
                         x:Name="EngineNote"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Style="{StaticResource SettingsCaptionTextBlockStyle}"
                         TextWrapping="Wrap"
                         Visibility="Collapsed" />
                     <TextBlock
                         x:Name="PrivacyNote"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Style="{StaticResource SettingsCaptionTextBlockStyle}"
                         TextWrapping="Wrap"
                         Visibility="Collapsed" />
                 </StackPanel>
@@ -97,7 +97,7 @@
                 <TextBlock
                     x:Name="AccentNote"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Style="{StaticResource SettingsCaptionTextBlockStyle}"
                     Text="The accent used to read text aloud by default."
                     TextWrapping="Wrap" />
             </controls:SettingsCard.Description>
@@ -114,7 +114,7 @@
                     <TextBlock
                         x:Name="NoVoicesNote"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Style="{StaticResource SettingsCaptionTextBlockStyle}"
                         Text="Add more voices in Windows Settings → Time &amp; language → Speech."
                         TextWrapping="Wrap"
                         Visibility="Collapsed" />
@@ -135,7 +135,7 @@
                         <TextBlock
                             Grid.Column="1"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Style="{StaticResource SettingsCaptionTextBlockStyle}"
                             Text="The System voice is still used as a fallback when the cloud voice is unavailable — missing API key, offline, or text longer than the cloud limit."
                             TextWrapping="Wrap" />
                     </Grid>
@@ -153,7 +153,7 @@
                 <TextBlock
                     x:Name="SpeedNote"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Style="{StaticResource SettingsCaptionTextBlockStyle}"
                     TextWrapping="Wrap" />
             </controls:SettingsCard.Description>
             <StackPanel Orientation="Horizontal" Spacing="12">
@@ -180,7 +180,7 @@
                 <TextBlock
                     x:Name="PitchNote"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Style="{StaticResource SettingsCaptionTextBlockStyle}"
                     TextWrapping="Wrap" />
             </controls:SettingsCard.Description>
             <StackPanel Orientation="Horizontal" Spacing="12">
@@ -233,7 +233,7 @@
                 <TextBlock
                     x:Name="PreviewFallbackText"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Style="{StaticResource SettingsCaptionTextBlockStyle}"
                     Text="Cloud voice unavailable — previewing with the System voice."
                     TextWrapping="Wrap"
                     Visibility="Collapsed" />

@@ -48,15 +48,15 @@ struct LocalModelsView: View {
             // Subtitle row with "Read more" link alongside it.
             HStack(spacing: 0) {
                 Text("Run AI privately — no API key, no internet required.")
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
                 Text(" ")
-                    .font(.caption)
+                    .font(.settingsCaption)
                 Button("Read more: how models use memory") {
                     onReadMore()
                 }
                 .buttonStyle(.plain)
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(Color.accentColor)
                 .hoverTooltip("Learn how on-device models load, use, and release memory")
                 Spacer(minLength: 0)
@@ -86,7 +86,7 @@ struct LocalModelsView: View {
                 Text("Not available on your Mac")
                     .font(.callout)
                 Text(MLXCapability.unsupportedReason)
-                    .font(.caption)
+                    .font(.settingsCaption)
                     .foregroundStyle(.secondary)
             }
 
@@ -181,7 +181,7 @@ struct LocalModelsView: View {
             }
 
             Text("Idle models are unloaded and the background engine quits to free memory.")
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -194,7 +194,7 @@ struct LocalModelsView: View {
                 .foregroundStyle(.orange)
                 .font(.callout)
             Text(message)
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -232,7 +232,7 @@ struct LocalModelsView: View {
                                 .font(.system(size: 6))
                                 .foregroundStyle(.green)
                             Text("In memory")
-                                .font(.caption2)
+                                .font(.settingsCaption)
                                 .foregroundStyle(.green)
                         }
                         .hoverTooltip("Loaded in memory and ready to use")
@@ -249,7 +249,7 @@ struct LocalModelsView: View {
                         systemImage: "memorychip"
                     )
                 }
-                .font(.caption)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
                 .labelStyle(.titleAndIcon)
 
@@ -257,7 +257,7 @@ struct LocalModelsView: View {
                 // picker of the action installed from their Library preset.
                 if model.dedicatedPresetID != nil {
                     Text("Rewrites AI-sounding text so it reads like a person wrote it (English and Chinese). Works only with the Humanize action: in Settings → Actions, open the Action Library, install Humanize from AI Writing, then pick this model as its Local (MLX) model.")
-                        .font(.caption2)
+                        .font(.settingsCaption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -310,7 +310,7 @@ struct LocalModelsView: View {
                 // Installed: indicator + optional Unload + Delete button
                 HStack(spacing: 8) {
                     Label("Installed", systemImage: "checkmark.circle.fill")
-                        .font(.caption)
+                        .font(.settingsCaption)
                         .foregroundStyle(.green)
                         .labelStyle(.titleAndIcon)
 
@@ -363,7 +363,7 @@ struct LocalModelsView: View {
             }
             .progressViewStyle(.linear)
             Text(label)
-                .font(.caption2)
+                .font(.settingsCaption)
                 .foregroundStyle(.secondary)
         }
     }
