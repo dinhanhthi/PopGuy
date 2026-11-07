@@ -40,7 +40,7 @@ struct HeaderButtonGroup<Content: View>: View {
 /// filter menu, shown only while open) and a close button. Esc or the close
 /// button clears the text, resets the page's filter (`onClose`) and shrinks it
 /// back, so a filter is never active while hidden. Cmd-F opens it and focuses
-/// the field, except while a Settings slide-over panel is open
+/// the field, except while a Settings modal is open
 /// (`settingsPanelOpen`). It starts open when the bound text is not empty or
 /// a filter is active (`isFilterActive`).
 ///
@@ -81,7 +81,7 @@ struct HeaderSearchCapsule<Accessory: View>: View {
         // magnifier slides with its leading edge instead of being replaced.
         HStack(spacing: 0) {
             HeaderIconButton(systemImage: "magnifyingglass", tooltip: "Search", action: open)
-                // Off behind a slide-over panel: the page stays in the tree.
+                // Off behind a modal: the page stays in the tree.
                 .keyboardShortcut(panelOpen ? nil : SwiftUI.KeyboardShortcut("f", modifiers: .command))
 
             if expanded {
@@ -126,7 +126,7 @@ struct HeaderSearchCapsule<Accessory: View>: View {
             .allowsHitTesting(false)
         }
         .onExitCommand(perform: close)
-        // A panel slid over the page: the hidden field gives up the focus.
+        // A modal covers the page: the hidden field gives up the focus.
         .onChange(of: panelOpen) { open in
             if open { fieldFocused = false }
         }
@@ -166,7 +166,7 @@ private struct SettingsPanelOpenKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// True while a Settings slide-over panel (Add/Edit Action, Action
+    /// True while a Settings modal (Add/Edit Action, Action
     /// Library, memory info) covers the page; set by `SettingsView`.
     var settingsPanelOpen: Bool {
         get { self[SettingsPanelOpenKey.self] }

@@ -57,7 +57,7 @@ struct LocalModelsView: View {
                 }
                 .buttonStyle(.plain)
                 .font(.caption)
-                .foregroundStyle(.blue.opacity(0.85))
+                .foregroundStyle(Color.accentColor)
                 .hoverTooltip("Learn how on-device models load, use, and release memory")
                 Spacer(minLength: 0)
             }

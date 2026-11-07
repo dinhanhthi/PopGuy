@@ -825,13 +825,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             window.toolbar = NSToolbar(identifier: "SettingsHeader")
             window.toolbarStyle = .unified
             window.titlebarSeparatorStyle = .none
-            window.setContentSize(NSSize(width: 900, height: 640))
+            // Default size, at most 90% of the screen it opens on (no frame
+            // autosave: every new Settings window opens at this size).
+            let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
+            window.setContentSize(NSSize(width: min(1040, (visible?.width ?? 1040) * 0.9),
+                                         height: min(760, (visible?.height ?? 760) * 0.9)))
             window.center()
             window.delegate = self
             window.isReleasedWhenClosed = false
             settingsWindow = window
         }
         #if DEBUG
+        if let size = Self.debugQASettingsSize {
+            // QA: `--settings-size=<W>x<H>` sets the content size (AppKit
+            // clamps it to the SwiftUI minimum: 720 wide, ~450 tall).
+            settingsWindow?.setContentSize(size)
+        }
         if let screen = Self.debugQAScreen, let window = settingsWindow {
             // QA screenshots: show the window on the named display without
             // activating the app, so it never takes the user's focus.
@@ -856,6 +865,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--settings-screen=") }) else { return nil }
         let name = String(arg.dropFirst("--settings-screen=".count))
         return NSScreen.screens.first { $0.localizedName.localizedCaseInsensitiveContains(name) }
+    }
+
+    /// QA hook: `--settings-size=<W>x<H>` (e.g. 720x460) sets the Settings
+    /// window's content size, so its minimum can be screenshotted.
+    private static var debugQASettingsSize: NSSize? {
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--settings-size=") }) else { return nil }
+        let parts = arg.dropFirst("--settings-size=".count).split(separator: "x")
+        guard parts.count == 2, let w = Double(parts[0]), let h = Double(parts[1]) else { return nil }
+        return NSSize(width: w, height: h)
     }
 
     /// QA hook for `--snapshot-out=`: draws the Settings window's content view

@@ -134,7 +134,7 @@ struct ToolbarLayoutEditorView: View {
     /// Visible width of the preview (the horizontal ScrollView's own width).
     @State private var availableWidth: CGFloat = 0
 
-    private let dragAnimation = Animation.interactiveSpring(response: 0.28, dampingFraction: 0.86)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Pointer slack (pt) above the More card that still counts as the More zone.
     private let moreZoneSlack: CGFloat = 8
@@ -454,7 +454,8 @@ struct ToolbarLayoutEditorView: View {
         dragSession = session
 
         if slotChanged {
-            withAnimation(dragAnimation) {
+            // The other actions slide to open the drop slot; they jump there under Reduce Motion.
+            withAnimation(reduceMotion ? nil : Motion.drag) {
                 applyPreview(of: session)
             }
         }

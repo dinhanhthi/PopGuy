@@ -51,12 +51,24 @@ enum SettingsMetrics {
     /// content by `pagePadding` (20 pt); pulling them 8 pt left leaves 12 pt to
     /// the card, like the card's own 12 pt inset from the window edge.
     static let pageContentPullLeading: CGFloat = 8
-    /// Uniform icon-content box for the Actions toolbar icon buttons (export,
-    /// import, plugin import). Normalises differently-sized SF Symbols to the same
-    /// button size; the narrow width tightens horizontal padding, the taller height
-    /// gives a bit more vertical presence so the row lines up with the picker.
-    static let toolbarIconWidth: CGFloat = 14
-    static let toolbarIconHeight: CGFloat = 18
+}
+
+// MARK: - Disabled row label
+
+extension View {
+    /// Dims a row's title and caption when the row is `.disabled`, as much as its
+    /// `CompactSwitch` dims itself. Apply to the label of a `LabeledContent` row.
+    func dimmedWhenDisabled() -> some View {
+        modifier(DimmedWhenDisabled())
+    }
+}
+
+private struct DimmedWhenDisabled: ViewModifier {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        content.opacity(isEnabled ? 1 : 0.45)
+    }
 }
 
 // MARK: - SettingsCard

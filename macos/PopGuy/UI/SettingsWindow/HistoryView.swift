@@ -244,9 +244,12 @@ struct HistoryView: View {
                     .labelsHidden()
                     .frame(maxWidth: .infinity, alignment: .trailing)
             } label: {
-                Text("Store full input & output text")
-                Text("When off, only the beginning and end of each text are kept as a preview.")
-                    .font(.caption)
+                Group {
+                    Text("Store full input & output text")
+                    Text("When off, only the beginning and end of each text are kept as a preview.")
+                        .font(.caption)
+                }
+                .dimmedWhenDisabled()
             }
             .disabled(!settings.historyEnabled)
         }

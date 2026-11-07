@@ -94,34 +94,39 @@ struct SettingsView: View {
     @ObservedObject var screenRecordingPermission: ScreenRecordingPermission
     let onReplayOnboarding: () -> Void
 
-    /// When non-nil, the Add/Edit Action panel slides in from the right edge
-    /// over the whole window. Lifted here (not in ActionsView) so the panel can
-    /// cover the sidebar list and footer. Set by ActionsView via a binding.
+    /// When non-nil, the Add/Edit Action modal covers the whole window. Lifted
+    /// here (not in ActionsView) so its scrim covers the sidebar and footer too.
+    /// Set by ActionsView via a binding.
     @State private var editingAction: CustomAction?
 
-    /// When true, the Action Library gallery panel slides in from the right edge,
-    /// matching the Add/Edit Action panel. Lifted here (not in ActionsView) so it
-    /// covers the whole window. Set by ActionsView's "Browse Library" button.
+    /// When true, the Action Library gallery modal is shown, like the Add/Edit
+    /// Action modal. Lifted here (not in ActionsView) so it covers the whole
+    /// window. Set by ActionsView's "Browse Library" button.
     @State private var showingLibrary = false
 
-    /// When true, the Local AI memory info panel slides in from the right edge.
+    /// When true, the Local AI memory info modal is shown.
     /// Triggered by the "Read more: how models use memory" link in LocalModelsView.
     @State private var showingMemoryInfo = false
 
     private static let galleryLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PopGuy", category: "action-library")
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     /// Keyboard focus of the sidebar, so the arrow keys move the selection.
     @FocusState private var sidebarFocused: Bool
 
-    /// Shared slide animation for the slide-over panels (open and dismiss);
-    /// none under Reduce Motion.
-    private var panelAnimation: Animation? { reduceMotion ? nil : Motion.sheet }
+    /// Shared animation for the modals (open and dismiss). `SettingsModal`'s
+    /// transitions turn it into a plain fade under Reduce Motion.
+    private var panelAnimation: Animation { Motion.sheet }
 
-    /// Live window width, read from the main content, used to size the slide-over
-    /// panel at 2/3 of the window.
+    /// True while one of the modals covers the page.
+    private var panelOpen: Bool { editingAction != nil || showingLibrary || showingMemoryInfo }
+
+    /// Live window width, read from the main content, used to size the modals.
     @State private var containerWidth: CGFloat = 0
+
+    /// Blur of the page behind an open modal. Its own state, animated alone in
+    /// `.onChange(of: panelOpen)`, so the fade never animates the page's other
+    /// changes (e.g. the Actions list updated by Save keeps its own animation).
+    @State private var backdropBlur: CGFloat = 0
 
     var body: some View {
         // A plain fixed-width sidebar card instead of NavigationSplitView: the
@@ -136,9 +141,9 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         // Every page's SettingsPageLayout shows the update banner from it.
                         .environment(\.settingsUpdater, updater)
-                        // The slide-over panels leave the page in the tree:
-                        // its header search turns off Cmd-F behind them.
-                        .environment(\.settingsPanelOpen, editingAction != nil || showingLibrary || showingMemoryInfo)
+                        // The modals leave the page in the tree: its header
+                        // search turns off Cmd-F behind them.
+                        .environment(\.settingsPanelOpen, panelOpen)
                 }
                 .frame(maxHeight: .infinity)
 
@@ -150,7 +155,15 @@ struct SettingsView: View {
             // ourselves: AppKit reports a taller inset (66 pt) than the band.
             .ignoresSafeArea(.container, edges: .top)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // Track the window width so the slide-over panel can size itself to 2/3.
+            // Behind an open modal the page leaves the key-view loop and the
+            // accessibility tree: Tab stays in the card, VoiceOver reads only it.
+            .disabled(panelOpen)
+            .accessibilityHidden(panelOpen)
+            // The user asked for the page behind an open modal to be lightly
+            // blurred (still faintly readable under the scrim). Fades with the
+            // scrim: in with Motion.sheet, out with Motion.exit (see onChange).
+            .blur(radius: backdropBlur, opaque: false)
+            // Track the window width so the modals can size themselves.
             .background(
                 GeometryReader { geo in
                     Color.clear
@@ -159,20 +172,21 @@ struct SettingsView: View {
                 }
             )
 
-            // Add/Edit Action panel — slides in from the right edge.
-            // Floor at 480 to honour CustomActionEditSheet's own minWidth
-            // (avoids horizontal clipping when the window is near its minimum).
+            // Add/Edit Action modal. Floor at 480 to honour
+            // CustomActionEditSheet's own minWidth.
             //
             // Driven directly off `editingAction`: SwiftUI keeps the outgoing
-            // view's snapshot during the .move transition, so the form stays
-            // visible while sliding out (same as the Action Library panel).
-            SlideOverPanel(
+            // view during the removal transition, so the form stays visible
+            // while it fades out (same as the Action Library modal).
+            SettingsModal(
                 isPresented: editingAction != nil,
                 containerWidth: containerWidth,
-                widthFraction: 3.0 / 4.0,
                 minWidth: 480,
+                // A stray click outside must not drop an unsaved draft: only
+                // Cancel, Esc and Save close it.
+                dismissOnBackdropTap: false,
                 onDismiss: {
-                    // SlideOverPanel already wraps this call in withAnimation.
+                    // SettingsModal already wraps this call in withAnimation.
                     editingAction = nil
                 }
             ) {
@@ -196,13 +210,11 @@ struct SettingsView: View {
                 }
             }
 
-            // Action Library gallery — slides in from the right edge as a 2/3-width
-            // slide-over, matching the Add/Edit Action panel. Install routes
-            // through ActionLibrary.installableAction → addCustomAction.
-            SlideOverPanel(
+            // Action Library gallery modal. Install routes through
+            // ActionLibrary.installableAction → addCustomAction.
+            SettingsModal(
                 isPresented: showingLibrary,
                 containerWidth: containerWidth,
-                widthFraction: 3.0 / 4.0,
                 minWidth: 560,
                 onDismiss: { showingLibrary = false }
             ) {
@@ -228,9 +240,9 @@ struct SettingsView: View {
                 )
             }
 
-            // Local AI memory info panel — slides in from the right edge.
+            // Local AI memory info modal.
             // Triggered by "Read more: how models use memory" in LocalModelsView.
-            SlideOverPanel(
+            SettingsModal(
                 isPresented: showingMemoryInfo,
                 containerWidth: containerWidth,
                 onDismiss: { showingMemoryInfo = false }
@@ -244,15 +256,44 @@ struct SettingsView: View {
         }
         .background(WindowGlass().ignoresSafeArea())
         .modifier(HardTopScrollEdge())
-        .frame(minWidth: 720, idealWidth: 900, minHeight: 460, idealHeight: 640)
+        // No minHeight: the window's minimum height is the layout's own (the
+        // sidebar card, the band and the footer: ~450 pt on macOS 27). The
+        // hosting view adds the titlebar's top safe-area inset (66 pt) to a
+        // declared minHeight, so 460 here made a 526 pt minimum window.
+        .frame(minWidth: 720, idealWidth: 1040, idealHeight: 760)
+        // Fallback: Esc while the keyboard focus is not inside the card (e.g.
+        // the moment before the card's own initial focus lands) closes the
+        // open modal. Focus inside the card reaches the card's handler first.
+        .onExitCommand(perform: dismissPanel)
+        // Each modal puts the focus inside its card on the next run-loop turn
+        // (Edit: Name, Library: its search, memory info: the card). Once it
+        // closes, the focus goes back to the sidebar so the arrow keys work;
+        // next turn, as the sidebar was disabled behind the modal until now.
+        .onChange(of: panelOpen) { open in
+            if !open { DispatchQueue.main.async { sidebarFocused = true } }
+            // A fade, not movement: animated under Reduce Motion too.
+            withAnimation(open ? Motion.sheet : Motion.exit) {
+                backdropBlur = open ? SettingsModalBackdrop.blurRadius : 0
+            }
+        }
         #if DEBUG
         .onAppear(perform: openDebugPanel)
         #endif
     }
 
+    /// Closes whichever modal is open (Esc); nothing when none is.
+    private func dismissPanel() {
+        guard panelOpen else { return }
+        withAnimation(panelAnimation) {
+            editingAction = nil
+            showingLibrary = false
+            showingMemoryInfo = false
+        }
+    }
+
     #if DEBUG
-    /// DEBUG-only QA hook: `--open-panel=edit|library|memory` opens a slide-over
-    /// panel when the window appears, for screenshots from a shell.
+    /// DEBUG-only QA hook: `--open-panel=edit|library|memory` opens a modal
+    /// when the window appears, for screenshots from a shell.
     private func openDebugPanel() {
         let prefix = "--open-panel="
         guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) }) else { return }
@@ -322,8 +363,8 @@ struct SettingsView: View {
 
     /// Up/down arrow: the previous/next section, stopping at the ends.
     private func moveSelection(_ direction: MoveCommandDirection) {
-        // A slide-over panel covers the page: leave the section as it is.
-        guard editingAction == nil, !showingLibrary, !showingMemoryInfo else { return }
+        // A modal covers the page: leave the section as it is.
+        guard !panelOpen else { return }
         let sections = SettingsSection.allCases
         guard let index = sections.firstIndex(of: navigator.section) else { return }
         switch direction {
@@ -357,8 +398,8 @@ struct SettingsView: View {
             AppsView(settings: settings)
                 .id(section)
         case .general, .triggers, .appearance, .about:
-            // The page's header row sits in the titlebar band; its own ScrollView /
-            // Form scrolls in the area below it. No header controls here.
+            // The page's header row sits in the titlebar band; its own
+            // ScrollView scrolls in the area below it. No header controls here.
             SettingsPageLayout {
                 // Build the (heavy) page one runloop turn after a loading
                 // placeholder paints, so the panel responds to the click instantly.
@@ -380,8 +421,9 @@ struct SettingsView: View {
 // MARK: - NoFocusRing
 
 /// Hides the focus ring of the focusable sidebar (the selection capsule already
-/// shows where the arrow keys act). macOS 13 has no API for it and keeps the ring.
-private struct NoFocusRing: ViewModifier {
+/// shows where the arrow keys act) and of other focusable Settings views. macOS
+/// 13 has no API for it and keeps the ring.
+struct NoFocusRing: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 14, *) {
             content.focusEffectDisabled()
@@ -687,7 +729,7 @@ private struct APIKeysTab: View {
             HStack(spacing: 8) {
                 Text("Base URL")
                 TextField("", text: $settings.ollamaBaseURL)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.settings)
                     .frame(maxWidth: .infinity)
             }
             Text("Ollama does not require an API key.")
@@ -699,7 +741,7 @@ private struct APIKeysTab: View {
             HStack(spacing: 8) {
                 Text("Path")
                 TextField("e.g. ~/.local/bin/claude", text: $settings.claudeCLIPath)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.settings)
                     .frame(maxWidth: .infinity)
                 Button("Detect") {
                     let detected = SettingsStore.detectCLIPath("claude")
@@ -717,7 +759,7 @@ private struct APIKeysTab: View {
             HStack(spacing: 8) {
                 Text("Path")
                 TextField("e.g. ~/.nvm/versions/node/.../bin/codex", text: $settings.codexCLIPath)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.settings)
                     .frame(maxWidth: .infinity)
                 Button("Detect") {
                     let detected = SettingsStore.detectCLIPath("codex")
@@ -735,7 +777,7 @@ private struct APIKeysTab: View {
             HStack(spacing: 8) {
                 Text("Path")
                 TextField("e.g. ~/.nvm/versions/node/.../bin/gemini", text: $settings.geminiCLIPath)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.settings)
                     .frame(maxWidth: .infinity)
                 Button("Detect") {
                     let detected = SettingsStore.detectCLIPath("gemini")
@@ -754,7 +796,7 @@ private struct APIKeysTab: View {
                 Text("Base URL")
                 InfoTooltip(text: "OpenAI-compatible endpoint for your custom provider, e.g. \"http://localhost:8080/v1\".")
                 TextField("http://localhost:8080/v1", text: $settings.customBaseURL)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.settings)
                     .frame(maxWidth: .infinity)
             }
             KeyEntryRow(
@@ -1046,7 +1088,7 @@ private struct APIKeysTab: View {
                     }
                 )
                 TextField("e.g. eastus", text: regionBinding)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.settings)
                     .frame(maxWidth: .infinity)
             }
             Text("Azure region, e.g. eastus — required.")
@@ -1279,7 +1321,7 @@ private struct BabylonDictionarySettingsRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 TextField("en", text: languageBinding(\.sourceLanguage))
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.settings)
                     .frame(width: 64)
                 Image(systemName: "arrow.right")
                     .font(.caption2)
@@ -1288,7 +1330,7 @@ private struct BabylonDictionarySettingsRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 TextField("vi", text: languageBinding(\.targetLanguage))
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.settings)
                     .frame(width: 64)
             }
 
@@ -1299,11 +1341,11 @@ private struct BabylonDictionarySettingsRow: View {
         .padding(8)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.035))
+                .fill(Palette.inputSurface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+                .strokeBorder(Palette.surfaceBorder, lineWidth: 1)
         )
     }
 
@@ -1422,12 +1464,17 @@ private struct AppearanceView: View {
     @State private var inlineSystemButtons: Bool = false
     @State private var showLogoOnly: Bool = false
     @State private var toolbarStyle: ToolbarStyle = .bar
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The preview's font size change: `Motion.hover`'s short ease-out (its value since
+    /// before the redesign), off under Reduce Motion because the text reflows.
+    private var previewAnimation: Animation? { reduceMotion ? nil : Motion.hover }
 
     var body: some View {
-        Form {
-            Section(header: Text("Toolbar Style")) {
-                VStack(alignment: .leading, spacing: 8) {
-                    LabeledContent("Toolbar style") {
+        ScrollView {
+            VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
+                SettingsGroup("Toolbar Style") {
+                    LabeledContent {
                         CapsuleTabs(
                             selection: $toolbarStyle,
                             tabs: Array(ToolbarStyle.allCases),
@@ -1441,51 +1488,55 @@ private struct AppearanceView: View {
                         .onChange(of: settings.toolbarStyle) { newValue in
                             toolbarStyle = newValue
                         }
+                    } label: {
+                        Text("Toolbar style")
+                        Text(toolbarStyle == .menu
+                             ? "Actions appear in a list like a context menu; extra actions open from More actions."
+                             : "Actions appear in a horizontal toolbar.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
 
-                    Text(toolbarStyle == .menu
-                         ? "Actions appear in a list like a context menu; extra actions open from More actions."
-                         : "Actions appear in a horizontal toolbar.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    SettingsDivider()
+
+                    LabeledContent {
+                        Toggle("Show logo only", isOn: $showLogoOnly)
+                            .toggleStyle(CompactSwitch())
+                            .labelsHidden()
+                            .onChange(of: showLogoOnly) { newValue in
+                                settings.showLogoOnly = newValue
+                            }
+                            // Also toggled from the menu bar while this tab is open.
+                            .onChange(of: settings.showLogoOnly) { newValue in
+                                showLogoOnly = newValue
+                            }
+                    } label: {
+                        Text("Show logo only")
+                        Text(toolbarStyle == .menu
+                             ? "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the menu."
+                             : "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the full toolbar.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    SettingsDivider()
+
+                    LabeledContent {
+                        // Bound straight to the store, like before on the Actions
+                        // page: a Toggle writes on the click, not during an update.
+                        Toggle("Show Settings button on toolbar", isOn: $settings.showToolbarSettingsButton)
+                            .toggleStyle(CompactSwitch())
+                            .labelsHidden()
+                    } label: {
+                        Text("Show Settings button on toolbar")
+                        Text("Settings stay available from the PopGuy menu bar icon")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
-                LabeledContent {
-                    Toggle("Show logo only", isOn: $showLogoOnly)
-                        .toggleStyle(CompactSwitch())
-                        .labelsHidden()
-                        .onChange(of: showLogoOnly) { newValue in
-                            settings.showLogoOnly = newValue
-                        }
-                        // Also toggled from the menu bar while this tab is open.
-                        .onChange(of: settings.showLogoOnly) { newValue in
-                            showLogoOnly = newValue
-                        }
-                } label: {
-                    Text("Show logo only")
-                    Text(toolbarStyle == .menu
-                         ? "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the menu."
-                         : "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the full toolbar.")
-                }
-
-                LabeledContent {
-                    // Bound straight to the store, like before on the Actions
-                    // page: a Toggle writes on the click, not during an update.
-                    Toggle("Show Settings button on toolbar", isOn: $settings.showToolbarSettingsButton)
-                        .toggleStyle(CompactSwitch())
-                        .labelsHidden()
-                } label: {
-                    Text("Show Settings button on toolbar")
-                    Text("Settings stay available from the PopGuy menu bar icon")
-                }
-            }
-
-            Section(header: Text("Toolbar Zoom")) {
-                // A setting and its description live in one cell so no divider
-                // splits them; the grouped Form still draws a divider between
-                // cells (i.e. between settings).
-                VStack(alignment: .leading, spacing: 8) {
-                    LabeledContent("Zoom level") {
+                SettingsGroup("Toolbar Zoom") {
+                    LabeledContent {
                         CapsuleTabs(
                             selection: $toolbarZoom,
                             tabs: Array(ToolbarZoom.allCases),
@@ -1496,90 +1547,108 @@ private struct AppearanceView: View {
                         .onChange(of: toolbarZoom) { newValue in
                             settings.toolbarZoom = newValue
                         }
+                    } label: {
+                        Text("Zoom level")
+                        Text("Zoom level scales the entire floating toolbar — buttons, icons, and spacing — making it easier to see and click. 1× is the default size; higher levels make everything proportionally larger.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
 
-                    Text("Zoom level scales the entire floating toolbar — buttons, icons, and spacing — making it easier to see and click. 1× is the default size; higher levels make everything proportionally larger.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                    SettingsDivider()
 
-                LabeledContent {
-                    Toggle("Include font size in zoom", isOn: $zoomIncludesFontSize)
-                        .toggleStyle(CompactSwitch())
-                        .labelsHidden()
-                        .onChange(of: zoomIncludesFontSize) { newValue in
-                            settings.zoomIncludesFontSize = newValue
-                        }
-                } label: {
-                    Text("Include font size in zoom")
-                    Text("Turn off to keep the result text at its chosen size while everything else grows.")
-                }
-
-                LabeledContent {
-                    Toggle("Hide logo", isOn: $hideLogo)
-                        .toggleStyle(CompactSwitch())
-                        .labelsHidden()
-                        .onChange(of: hideLogo) { newValue in
-                            settings.hideToolbarLogo = newValue
-                        }
-                } label: {
-                    Text("Hide logo")
-                    Text(showLogoOnly
-                         ? "The logo always shows while Show logo only is on."
-                         : "Hide the PopGuy logo to save space on the toolbar.")
-                }
-                // The toolbar expands from the logo in "Show logo only" mode.
-                .disabled(showLogoOnly)
-
-                LabeledContent {
-                    Toggle("Remove gap before system buttons", isOn: $inlineSystemButtons)
-                        .toggleStyle(CompactSwitch())
-                        .labelsHidden()
-                        .onChange(of: inlineSystemButtons) { newValue in
-                            settings.inlineToolbarSystemButtons = newValue
-                        }
-                } label: {
-                    Text("Remove gap before system buttons")
-                    Text("Show the Ignore and Settings buttons right after the actions, separated by dividers like any other action, instead of after a gap.")
-                }
-
-                // Live preview at the toolbar's real on-screen size for the
-                // selected zoom (reuses the same ToolbarPreviewView as Actions).
-                ToolbarPreviewView(settings: settings)
-            }
-
-            Section(header: Text("Result Text")) {
-                VStack(alignment: .leading, spacing: 8) {
-                    LabeledContent("Font size") {
-                        CapsuleTabs(
-                            selection: $fontSize,
-                            tabs: Array(ResultFontSize.allCases),
-                            title: { Text($0.displayName) },
-                            compact: true
-                        )
-                        .fixedSize()
-                        .onChange(of: fontSize) { newValue in
-                            settings.resultFontSize = newValue
-                        }
+                    LabeledContent {
+                        Toggle("Include font size in zoom", isOn: $zoomIncludesFontSize)
+                            .toggleStyle(CompactSwitch())
+                            .labelsHidden()
+                            .onChange(of: zoomIncludesFontSize) { newValue in
+                                settings.zoomIncludesFontSize = newValue
+                            }
+                    } label: {
+                        Text("Include font size in zoom")
+                        Text("Turn off to keep the result text at its chosen size while everything else grows.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
 
-                    // Live preview so the choice is visible without triggering an
-                    // action. When "Include font size in zoom" is on, it also
-                    // reflects the toolbar zoom; turning the toggle off resets it.
-                    Text("The quick brown fox jumps over the lazy dog.")
-                        .font(fontSize.font(scale: zoomIncludesFontSize ? toolbarZoom.scale : 1))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .animation(.easeOut(duration: 0.12), value: toolbarZoom)
-                        .animation(.easeOut(duration: 0.12), value: zoomIncludesFontSize)
+                    SettingsDivider()
 
-                    Text("Applies to the result shown in the toolbar after an action runs.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    // The row style dims the label while the row is disabled.
+                    LabeledContent {
+                        Toggle("Hide logo", isOn: $hideLogo)
+                            .toggleStyle(CompactSwitch())
+                            .labelsHidden()
+                            .onChange(of: hideLogo) { newValue in
+                                settings.hideToolbarLogo = newValue
+                            }
+                    } label: {
+                        Text("Hide logo")
+                        Text(showLogoOnly
+                             ? "The logo always shows while Show logo only is on."
+                             : "Hide the PopGuy logo to save space on the toolbar.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    // The toolbar expands from the logo in "Show logo only" mode.
+                    .disabled(showLogoOnly)
+
+                    SettingsDivider()
+
+                    LabeledContent {
+                        Toggle("Remove gap before system buttons", isOn: $inlineSystemButtons)
+                            .toggleStyle(CompactSwitch())
+                            .labelsHidden()
+                            .onChange(of: inlineSystemButtons) { newValue in
+                                settings.inlineToolbarSystemButtons = newValue
+                            }
+                    } label: {
+                        Text("Remove gap before system buttons")
+                        Text("Show the Ignore and Settings buttons right after the actions, separated by dividers like any other action, instead of after a gap.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    SettingsDivider()
+
+                    // Live preview at the toolbar's real on-screen size for the
+                    // selected zoom (reuses the same ToolbarPreviewView as Actions).
+                    ToolbarPreviewView(settings: settings)
+                }
+
+                SettingsGroup("Result Text") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        LabeledContent {
+                            CapsuleTabs(
+                                selection: $fontSize,
+                                tabs: Array(ResultFontSize.allCases),
+                                title: { Text($0.displayName) },
+                                compact: true
+                            )
+                            .fixedSize()
+                            .onChange(of: fontSize) { newValue in
+                                settings.resultFontSize = newValue
+                            }
+                        } label: {
+                            Text("Font size")
+                            Text("Applies to the result shown in the toolbar after an action runs.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        // Live preview so the choice is visible without triggering an
+                        // action. When "Include font size in zoom" is on, it also
+                        // reflects the toolbar zoom; turning the toggle off resets it.
+                        Text("The quick brown fox jumps over the lazy dog.")
+                            .font(fontSize.font(scale: zoomIncludesFontSize ? toolbarZoom.scale : 1))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .animation(previewAnimation, value: toolbarZoom)
+                            .animation(previewAnimation, value: zoomIncludesFontSize)
+                    }
                 }
             }
+            .padding(SettingsMetrics.pagePadding)
         }
-        .formStyle(.grouped)
+        .labeledContentStyle(.settingsRow)
         .onAppear {
             fontSize = settings.resultFontSize
             toolbarZoom = settings.toolbarZoom
@@ -1806,7 +1875,7 @@ struct ModelField: View {
                 // No curated list (Ollama, Custom…) — always show plain TextField.
                 HStack(spacing: 6) {
                     TextField(placeholder, text: $model)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.settings)
                         .frame(maxWidth: 200)
                     checkButton
                 }
@@ -1963,7 +2032,7 @@ struct ModelField: View {
 
             if freeTextVisible {
                 TextField(placeholder, text: $model)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.settings)
                     .frame(maxWidth: 200)
                 checkButton
             }
@@ -2335,7 +2404,7 @@ private struct KeyEntryRow: View {
                 HStack(spacing: 8) {
                     Text("API Key")
                     SecureField("", text: $draft)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.settings)
                         .frame(maxWidth: .infinity)
                         .disabled(isValidating)
                         .onSubmit { commit() }

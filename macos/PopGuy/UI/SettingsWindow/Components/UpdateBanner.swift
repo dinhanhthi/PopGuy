@@ -38,9 +38,7 @@ struct UpdateBanner: View {
             Button("Update now") {
                 action()
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.accentColor)
-            .fontWeight(.medium)
+            .buttonStyle(RowTextButtonStyle(prominent: true))
         }
         .font(.caption)
         .padding(.horizontal, SettingsMetrics.pagePadding)

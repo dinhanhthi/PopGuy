@@ -44,12 +44,9 @@ struct SettingsPageLayout<Leading: View, Trailing: View, Content: View>: View {
                 UpdateBannerSlot()
                 content()
             }
-            // No background of the page's own: grouped Forms and lists show
-            // the window glass between their sections.
-            .scrollContentBackground(.hidden)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // Pages put `pagePadding` (a grouped Form ~20 pt) above their first
-            // section or card, so it lands at `contentTopInset`.
+            // Pages put `pagePadding` above their first section or card, so
+            // it lands at `contentTopInset`.
             .padding(.top, SettingsMetrics.contentTopInset - SettingsMetrics.pagePadding)
 
             // The titlebar band, over the content: the same glass as the window,

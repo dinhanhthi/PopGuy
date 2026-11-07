@@ -70,17 +70,15 @@ struct ActionsView: View {
     /// When non-nil, the edit panel is presented for this action.
     /// Add flow: set to a fresh CustomAction (new UUID, empty fields).
     /// Edit flow: set to an existing CustomAction (preserves id).
-    /// Owned by SettingsView so the panel can slide over the whole window.
+    /// Owned by SettingsView so the modal can cover the whole window.
     @Binding var editingAction: CustomAction?
 
-    /// Drives the Action Library gallery panel. Owned by SettingsView so the
-    /// panel slides over the whole window, matching the Add/Edit Action panel.
+    /// Drives the Action Library gallery modal. Owned by SettingsView so the
+    /// modal covers the whole window, like the Add/Edit Action modal.
     @Binding var showingLibrary: Bool
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    /// The slide-over panels' slide (`SlideOverPanel`); none under Reduce Motion.
-    private var panelAnimation: Animation? { reduceMotion ? nil : Motion.sheet }
+    /// The modals' open animation (`SettingsModal`), a plain fade under Reduce Motion.
+    private var panelAnimation: Animation { Motion.sheet }
 
     /// Filters the action list by type. `.all` shows every action.
     @State private var typeFilter: ActionTypeFilter = ActionsView.initialTypeFilter
@@ -211,6 +209,12 @@ struct ActionsView: View {
         // Checked on appear and whenever the navigator publishes a new URL.
         .onAppear {
             consumePendingImportURL()
+            #if DEBUG
+            // QA hook: `--open-consent-sample` shows the consent sheet with a built-in sample.
+            if ProcessInfo.processInfo.arguments.contains("--open-consent-sample") {
+                pendingConsent = .debugSample
+            }
+            #endif
         }
         .onChange(of: navigator?.pendingPluginImportURL) { _ in
             consumePendingImportURL()
@@ -280,7 +284,7 @@ struct ActionsView: View {
                 .accessibilityLabel("Import plugin")
                 .hoverTooltip("Import plugin")
 
-                // Slides the gallery panel in from the right (owned by SettingsView).
+                // Opens the gallery modal (owned by SettingsView).
                 HeaderIconButton(systemImage: "books.vertical", tooltip: "Browse Action Library") {
                     withAnimation(panelAnimation) {
                         showingLibrary = true
@@ -1257,7 +1261,7 @@ private struct CustomPromptField: View {
 
             if showsInput {
                 TextField(placeholder, text: $text, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.settings)
                     .lineLimit(3...6)
                 HStack {
                     Text(caption)
@@ -1309,7 +1313,7 @@ private struct BuiltinBadge: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Capsule().fill(Color.primary.opacity(0.08)))
+            .background(Capsule().fill(Palette.inputSurface))
     }
 }
 
@@ -1324,7 +1328,7 @@ private struct FromPluginBadge: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Capsule().fill(Color.primary.opacity(0.08)))
+            .background(Capsule().fill(Palette.inputSurface))
     }
 }
 
@@ -1766,7 +1770,7 @@ private struct SpeakCardView: View {
                         )
                         if curated.isEmpty {
                             TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
-                                .textFieldStyle(.roundedBorder)
+                                .textFieldStyle(.settings)
                                 .frame(maxWidth: .infinity)
                         } else {
                             let pickerBinding = Binding<String>(
@@ -1805,7 +1809,7 @@ private struct SpeakCardView: View {
 
                                 if isModelCustom[keyAccount] ?? false {
                                     TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
-                                        .textFieldStyle(.roundedBorder)
+                                        .textFieldStyle(.settings)
                                         .frame(maxWidth: 200)
                                 }
                             }
@@ -2101,7 +2105,7 @@ private struct SpeakPreviewRow: View {
             Text("Preview")
 
             TextField("Sample text", text: $sampleText)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.settings)
 
             HStack(spacing: 8) {
                 if coordinator.phase == .idle {
@@ -2296,7 +2300,7 @@ private struct CustomSpeechFields: View {
                         )
                         if curated.isEmpty {
                             TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
-                                .textFieldStyle(.roundedBorder)
+                                .textFieldStyle(.settings)
                                 .frame(maxWidth: .infinity)
                         } else {
                             let pickerBinding = Binding<String>(
@@ -2334,7 +2338,7 @@ private struct CustomSpeechFields: View {
 
                                 if isModelCustom[keyAccount] ?? false {
                                     TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
-                                        .textFieldStyle(.roundedBorder)
+                                        .textFieldStyle(.settings)
                                         .frame(maxWidth: 200)
                                 }
                             }
@@ -2572,7 +2576,7 @@ struct DraftSpeechFields: View {
                         )
                         if curated.isEmpty {
                             TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
-                                .textFieldStyle(.roundedBorder)
+                                .textFieldStyle(.settings)
                                 .frame(maxWidth: .infinity)
                         } else {
                             let pickerBinding = Binding<String>(
@@ -2608,7 +2612,7 @@ struct DraftSpeechFields: View {
 
                                 if isModelCustom[keyAccount] ?? false {
                                     TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
-                                        .textFieldStyle(.roundedBorder)
+                                        .textFieldStyle(.settings)
                                         .frame(maxWidth: 200)
                                 }
                             }
@@ -2784,7 +2788,7 @@ private struct DraftSpeechPreviewRow: View {
             Text("Preview")
 
             TextField("Sample text", text: $sampleText)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.settings)
 
             HStack(spacing: 8) {
                 if coordinator.phase == .idle {
@@ -2864,7 +2868,7 @@ private struct CustomSpeechPreviewRow: View {
             Text("Preview")
 
             TextField("Sample text", text: $sampleText)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.settings)
 
             HStack(spacing: 8) {
                 if coordinator.phase == .idle {
@@ -2940,13 +2944,8 @@ private struct SnippetInputSheet: View {
                 .foregroundStyle(.secondary)
             TextEditor(text: $snippetText)
                 .font(.system(.body, design: .monospaced))
-                // Keep the editor's own text background (see GeneralView's Global Prompt).
-                .scrollContentBackground(.visible)
                 .frame(minHeight: 200)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
-                )
+                .settingsTextEditor()
 
             HStack {
                 Spacer()

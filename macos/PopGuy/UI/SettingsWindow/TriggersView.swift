@@ -32,47 +32,58 @@ struct TriggersView: View {
     /// Whether the OCR shortcut recorder is active.
     @State private var isRecordingOCRShortcut = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// ScrollViewReader anchor for the OCR section (see `navigator.focusOCRSection`).
     private static let ocrSectionAnchor = "ocrSection"
 
     var body: some View {
         ScrollViewReader { proxy in
-        Form {
-            // MARK: On text selection
-            Section(header: Text("On Text Selection")) {
-                // A setting and its description/warning live in one cell so no
-                // divider splits them; the grouped Form still draws a divider
-                // between cells (i.e. between settings).
-                VStack(alignment: .leading, spacing: 8) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
+                // MARK: On text selection
+                SettingsGroup("On Text Selection") {
+                    // A setting and its description/warning live in one row so
+                    // no divider splits them; dividers go between settings.
+                    VStack(alignment: .leading, spacing: 8) {
+                        LabeledContent {
+                            Toggle("Show toolbar when text is selected", isOn: $settings.triggerOnSelectEnabled)
+                                .toggleStyle(CompactSwitch())
+                                .labelsHidden()
+                        } label: {
+                            Text("Show toolbar when text is selected")
+                            Text("When on, selecting text shows the toolbar — in editable fields only, or in any app when the option below is off.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                            Text("This feature may not work well with some editors (e.g., Cursor, VS Code, Notion), especially when you select a large amount of text. Use the Cmd+C+C shortcut in those apps instead.")
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .font(.caption)
+                    }
+
+                    SettingsDivider()
+
+                    // The row style dims the label while the row is disabled.
                     LabeledContent {
-                        Toggle("Show toolbar when text is selected", isOn: $settings.triggerOnSelectEnabled)
+                        Toggle("Only in editable text", isOn: $settings.triggerOnSelectEditableOnly)
                             .toggleStyle(CompactSwitch())
                             .labelsHidden()
                     } label: {
-                        Text("Show toolbar when text is selected")
-                        Text("When on, selecting text shows the toolbar — in editable fields only, or in any app when the option below is off.")
-                    }
-
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                        Text("This feature may not work well with some editors (e.g., Cursor, VS Code, Notion), especially when you select a large amount of text. Use the Cmd+C+C shortcut in those apps instead.")
+                        Text("Only in editable text")
+                        Text("When on, the toolbar appears only for text selected inside a field you can type in (text boxes, editors, compose areas). Selecting read-only text — web page content, chat messages — does nothing, so other apps' own selection features are not interrupted. Cmd+C+C and hotkeys still work on any text.")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .font(.caption)
-                }
+                    .disabled(!settings.triggerOnSelectEnabled)
 
-                LabeledContent {
-                    Toggle("Only in editable text", isOn: $settings.triggerOnSelectEditableOnly)
-                        .toggleStyle(CompactSwitch())
-                        .labelsHidden()
-                } label: {
-                    Text("Only in editable text")
-                    Text("When on, the toolbar appears only for text selected inside a field you can type in (text boxes, editors, compose areas). Selecting read-only text — web page content, chat messages — does nothing, so other apps' own selection features are not interrupted. Cmd+C+C and hotkeys still work on any text.")
-                }
-                .disabled(!settings.triggerOnSelectEnabled)
+                    SettingsDivider()
 
-                VStack(alignment: .leading, spacing: 8) {
                     LabeledContent {
                         Toggle("Show toolbar on double-click (single word)", isOn: $settings.triggerDoubleClickEnabled)
                             .toggleStyle(CompactSwitch())
@@ -80,86 +91,92 @@ struct TriggersView: View {
                     } label: {
                         Text("Show toolbar on double-click (single word)")
                         Text("When on, double-clicking a word shows the toolbar — handy for quickly checking a word's meaning or hearing it. Use it on its own, or alongside \"Show toolbar when text is selected\": a double-click shows the toolbar once (even on read-only text), while selecting a range of text still follows the options above.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
 
                     if ToolbarLimits.doubleClickActionFeatureEnabled, settings.triggerDoubleClickEnabled {
+                        SettingsDivider()
                         doubleClickActionPicker()
                     }
                 }
-            }
 
-            // MARK: Keyboard shortcut
-            Section(header: Text("Keyboard Shortcut")) {
-                LabeledContent {
-                    Toggle("Show toolbar with Cmd+C+C", isOn: $settings.triggerChordEnabled)
-                        .toggleStyle(CompactSwitch())
-                        .labelsHidden()
-                } label: {
-                    Text("Show toolbar with Cmd+C+C")
-                }
+                // MARK: Keyboard shortcut
+                SettingsGroup("Keyboard Shortcut") {
+                    LabeledContent {
+                        Toggle("Show toolbar with Cmd+C+C", isOn: $settings.triggerChordEnabled)
+                            .toggleStyle(CompactSwitch())
+                            .labelsHidden()
+                    } label: {
+                        Text("Show toolbar with Cmd+C+C")
+                    }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    // Chord replacement row — disabled when chord trigger is off.
-                    // 10 pt apart: the icon buttons' hover highlights reach 5 pt past each icon.
-                    HStack(spacing: 10) {
-                        Text("Use a different shortcut")
-                            .foregroundStyle(settings.triggerChordEnabled ? .primary : .secondary)
+                    SettingsDivider()
 
-                        Spacer()
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Chord replacement row — disabled when chord trigger is off.
+                        // 10 pt apart: the icon buttons' hover highlights reach 5 pt past each icon.
+                        HStack(spacing: 10) {
+                            Text("Use a different shortcut")
+                                .foregroundStyle(settings.triggerChordEnabled ? .primary : .secondary)
 
-                        if isRecordingChord {
-                            ShortcutRecorder(
-                                onCapture: { shortcut in
-                                    settings.chordReplacementShortcut = shortcut
-                                    isRecordingChord = false
-                                },
-                                onCancel: {
-                                    isRecordingChord = false
+                            Spacer()
+
+                            if isRecordingChord {
+                                ShortcutRecorder(
+                                    onCapture: { shortcut in
+                                        settings.chordReplacementShortcut = shortcut
+                                        isRecordingChord = false
+                                    },
+                                    onCancel: {
+                                        isRecordingChord = false
+                                    }
+                                )
+                            } else {
+                                // Show current shortcut badge or nothing.
+                                if let shortcut = settings.chordReplacementShortcut {
+                                    ShortcutBadge(text: shortcut.displayString)
+
+                                    // Clear button — reverts to Cmd+C+C.
+                                    Button {
+                                        settings.chordReplacementShortcut = nil
+                                    } label: {
+                                        Image(systemName: "xmark.circle")
+                                    }
+                                    .buttonStyle(RowIconButtonStyle())
+                                    .hoverTooltip("Clear — revert to Cmd+C+C")
+                                    .disabled(!settings.triggerChordEnabled)
                                 }
-                            )
-                        } else {
-                            // Show current shortcut badge or nothing.
-                            if let shortcut = settings.chordReplacementShortcut {
-                                ShortcutBadge(text: shortcut.displayString)
 
-                                // Clear button — reverts to Cmd+C+C.
+                                // Record button.
                                 Button {
-                                    settings.chordReplacementShortcut = nil
+                                    isRecordingChord = true
                                 } label: {
-                                    Image(systemName: "xmark.circle")
+                                    Image(systemName: "record.circle")
                                 }
                                 .buttonStyle(RowIconButtonStyle())
-                                .hoverTooltip("Clear — revert to Cmd+C+C")
+                                .hoverTooltip("Record a replacement shortcut (e.g. ⌘⇧Space)")
                                 .disabled(!settings.triggerChordEnabled)
                             }
-
-                            // Record button.
-                            Button {
-                                isRecordingChord = true
-                            } label: {
-                                Image(systemName: "record.circle")
-                            }
-                            .buttonStyle(RowIconButtonStyle())
-                            .hoverTooltip("Record a replacement shortcut (e.g. ⌘⇧Space)")
-                            .disabled(!settings.triggerChordEnabled)
                         }
+                        .disabled(!settings.triggerChordEnabled)
+
+                        Text("Replaces Cmd+C+C with a single key combo (e.g. ⌘⇧Space). A repeated-key chord like Cmd+C+C cannot be recorded — use one modifier + a key.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .disabled(!settings.triggerChordEnabled)
-
-                    Text("Replaces Cmd+C+C with a single key combo (e.g. ⌘⇧Space). A repeated-key chord like Cmd+C+C cannot be recorded — use one modifier + a key.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
-            }
 
-            // MARK: Screen Text Capture (OCR)
-            Section(header: ocrSectionHeader()) {
-                ocrSectionContent()
+                // MARK: Screen Text Capture (OCR)
+                SettingsGroup("Screen Text Capture (OCR)") {
+                    ocrSectionContent()
+                }
+                .id(Self.ocrSectionAnchor)
             }
-            .id(Self.ocrSectionAnchor)
-
+            .padding(SettingsMetrics.pagePadding)
         }
-        .formStyle(.grouped)
+        .labeledContentStyle(.settingsRow)
         .onAppear {
             #if DEBUG
             // DEBUG-only QA hook: `--triggers-ocr` scrolls to the OCR section, for screenshots from a shell.
@@ -180,11 +197,11 @@ struct TriggersView: View {
 
     /// Scroll to the OCR section when AppDelegate requested focus (menu-bar item
     /// picked while OCR is disabled/locked), then clear the one-shot flag. The
-    /// scroll is deferred to the next runloop tick so the Form has laid out.
+    /// scroll is deferred to the next runloop tick so the page has laid out.
     private func scrollToOCRSectionIfRequested(_ proxy: ScrollViewProxy) {
         guard navigator.focusOCRSection else { return }
         DispatchQueue.main.async {
-            withAnimation {
+            withAnimation(reduceMotion ? nil : Motion.standard) {
                 proxy.scrollTo(Self.ocrSectionAnchor, anchor: .top)
             }
             navigator.focusOCRSection = false
@@ -192,11 +209,6 @@ struct TriggersView: View {
     }
 
     // MARK: - Screen Text Capture (OCR)
-
-    @ViewBuilder
-    private func ocrSectionHeader() -> some View {
-        Text("Screen Text Capture (OCR)")
-    }
 
     @ViewBuilder
     private func ocrSectionContent() -> some View {
@@ -208,8 +220,12 @@ struct TriggersView: View {
             } label: {
                 Text("Enable Screen Text Capture")
                 Text("Select any region of the screen and PopGuy recognizes the text in it, then hands it to the toolbar to copy. Useful for text you can't select normally — images, PDFs, video captions.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
+
+        SettingsDivider()
 
         VStack(alignment: .leading, spacing: 8) {
             // 10 pt apart: the icon buttons' hover highlights reach 5 pt past each icon.
@@ -260,7 +276,10 @@ struct TriggersView: View {
             Text("Assign a shortcut to start a capture from anywhere (e.g. ⌘⇧2). Also available from the menu bar.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+
+        SettingsDivider()
 
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
@@ -287,24 +306,29 @@ struct TriggersView: View {
             Text("macOS requires Screen Recording permission to capture the screen region for OCR. PopGuy only captures the region you select.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     /// Picker to assign a default action to the double-click trigger.
-    @ViewBuilder
     private func doubleClickActionPicker() -> some View {
-        Picker(selection: $settings.doubleClickAssignedAction) {
-            Text("Unassign (show toolbar)").tag(ActionIdentifier?.none)
-            ForEach(settings.actionOrder, id: \.self) { id in
-                Text(actionLabel(for: id)).tag(ActionIdentifier?.some(id))
+        LabeledContent {
+            Picker(selection: $settings.doubleClickAssignedAction) {
+                Text("Unassign (show toolbar)").tag(ActionIdentifier?.none)
+                ForEach(settings.actionOrder, id: \.self) { id in
+                    Text(actionLabel(for: id)).tag(ActionIdentifier?.some(id))
+                }
+            } label: {
+                Text("Default action")
             }
+            .labelsHidden()
+            .fixedSize()
         } label: {
             Text("Default action")
+            Text("When assigned, double-clicking a word runs this action directly instead of showing the toolbar.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
-
-        Text("When assigned, double-clicking a word runs this action directly instead of showing the toolbar.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
     }
 
     /// User-visible label for an action in the double-click assignment picker.

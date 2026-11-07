@@ -31,8 +31,8 @@ enum Palette {
     static let pressedFill = dynamic(dark: .white.withAlphaComponent(0.2), light: .black.withAlphaComponent(0.12))
     /// Darkens a pressed button over its own fill.
     static let pressedOverlay = dynamic(dark: .black.withAlphaComponent(0.2), light: .black.withAlphaComponent(0.1))
-    /// Dims the window behind an in-window panel (a solid wash, no blur).
-    static let scrim = dynamic(dark: .black.withAlphaComponent(0.35), light: .black.withAlphaComponent(0.2))
+    /// Dims the window behind an in-window modal, over the modal's backdrop blur.
+    static let scrim = dynamic(dark: .black.withAlphaComponent(0.45), light: .black.withAlphaComponent(0.28))
     static let switchOffFill = dynamic(dark: .white.withAlphaComponent(0.22), light: .black.withAlphaComponent(0.15))
     /// The shadow of the switch's white knob, the same in both modes.
     static let knobShadow = Color.black.opacity(0.2)
@@ -107,6 +107,9 @@ enum Motion {
         if #available(macOS 14, *) { return .snappy(duration: 0.2) }
         return .spring(response: 0.2, dampingFraction: 0.85) // approximation of snappy for macOS 13
     }()
+    /// Items reflowing under a drag: an interactive spring that retargets on every move (available on macOS 13,
+    /// no fallback needed).
+    static let drag = Animation.interactiveSpring(response: 0.28, dampingFraction: 0.86)
 }
 
 /// A raised button like the toolbar's: `height` tall (a circle for an icon, with no `horizontalPadding`). Liquid Glass
@@ -517,23 +520,31 @@ struct CompactSwitch: ToggleStyle {
         @Environment(\.isEnabled) private var isEnabled
 
         var body: some View {
-            Capsule()
-                .fill(configuration.isOn ? Color.accentColor : Palette.switchOffFill)
-                .frame(width: 34, height: CompactSwitch.height)
-                .overlay(alignment: configuration.isOn ? .trailing : .leading) {
-                    Circle()
-                        .fill(.white)
-                        .shadow(color: Palette.knobShadow, radius: 0.5, y: 0.5)
-                        .padding(1.5)
-                }
-                .animation(reduceMotion ? nil : Motion.toggle, value: configuration.isOn)
-                .contentShape(Capsule())
-                .opacity(isEnabled ? 1 : 0.45)
-                .onTapGesture { configuration.isOn.toggle() }
-                .accessibilityRepresentation {
-                    Toggle(isOn: configuration.$isOn) { configuration.label }
-                }
+            // A Button, not a tap gesture: keyboard navigation reaches it and Space toggles it.
+            Button { configuration.isOn.toggle() } label: {
+                Capsule()
+                    .fill(configuration.isOn ? Color.accentColor : Palette.switchOffFill)
+                    .frame(width: 34, height: CompactSwitch.height)
+                    .overlay(alignment: configuration.isOn ? .trailing : .leading) {
+                        Circle()
+                            .fill(.white)
+                            .shadow(color: Palette.knobShadow, radius: 0.5, y: 0.5)
+                            .padding(1.5)
+                    }
+                    .animation(reduceMotion ? nil : Motion.toggle, value: configuration.isOn)
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(Bare())
+            .opacity(isEnabled ? 1 : 0.45)
+            .accessibilityRepresentation {
+                Toggle(isOn: configuration.$isOn) { configuration.label }
+            }
         }
+    }
+
+    /// The label as is: `.plain` dims a disabled label on top of the switch's own dimming.
+    private struct Bare: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View { configuration.label }
     }
 }
 

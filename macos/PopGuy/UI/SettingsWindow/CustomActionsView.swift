@@ -23,6 +23,8 @@ struct CustomActionEditSheet: View {
     /// own `afterRun` is assigned in the same pass; without this flag, the onChange
     /// fires in the next SwiftUI update pass and overwrites it.
     @State private var suppressAfterRunReset = false
+    /// The Name field takes the keyboard focus when the modal opens.
+    @FocusState private var nameFocused: Bool
     @ObservedObject var settings: SettingsStore
     let keychain: KeychainManager
     let onSave: (CustomAction) -> Void
@@ -79,6 +81,10 @@ struct CustomActionEditSheet: View {
         // systemPrompt (unused by scriptable presets), and provider/model/speech/etc.
     }
 
+    /// The header's capsule buttons, shorter than a bottom bar's so the header
+    /// keeps its height.
+    private static var headerButtonHeight: CGFloat { 28 }
+
     // MARK: - Save validation
 
     private var saveDisabled: Bool { !draft.isSaveable }
@@ -95,17 +101,27 @@ struct CustomActionEditSheet: View {
                 Text(draft.title.isEmpty ? "New Action" : draft.title)
                     .font(.headline)
                 Spacer()
-                Menu("Examples") {
+                Menu {
                     ForEach(ScriptActionPresets.all()) { preset in
                         Button(preset.title) {
                             applyPreset(preset)
                         }
                     }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("Examples")
+                        MenuChevron()
+                    }
                 }
-                .menuStyle(.borderlessButton)
+                // A button-style menu draws the label through the button style;
+                // a borderless one drops the capsule.
+                .menuStyle(.button)
+                .buttonStyle(BottomBarButtonStyle(
+                    height: Self.headerButtonHeight, horizontalPadding: 12, menu: true))
+                .menuIndicator(.hidden)
                 .fixedSize()
                 Button("Cancel", action: onCancel)
-                    .buttonStyle(.bordered)
+                    .buttonStyle(BottomBarButtonStyle(height: Self.headerButtonHeight, horizontalPadding: 12))
                 Button("Save") {
                     var saved = draft
                     saved.speakSettings = saved.speakSettings.resolvingCloudGate(
@@ -116,13 +132,13 @@ struct CustomActionEditSheet: View {
                     )
                     onSave(saved)
                 }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(BottomBarButtonStyle(
+                        height: Self.headerButtonHeight, prominent: true, horizontalPadding: 12))
                     .disabled(saveDisabled)
             }
-            // Centered in the titlebar's header row (symmetric, on the traffic
-            // lights at y = 26), matching the ActionLibraryView baseline.
+            // At the top of the modal card, symmetric vertical padding.
             .padding(.horizontal, SettingsMetrics.cardPadding)
-            .frame(minHeight: SettingsMetrics.headerRowHeight)
+            .padding(.vertical, SettingsMetrics.cardPadding + 6)
 
             Divider()
 
@@ -186,12 +202,11 @@ struct CustomActionEditSheet: View {
                         // enabled wrapper so it still shows while locked.
                         let isLastEnabled = settings.isLastEnabledAction(.custom(draft.id))
                         HStack {
-                            Toggle("", isOn: $draft.isEnabled)
+                            // CompactSwitch dims itself while disabled.
+                            Toggle("Enabled", isOn: $draft.isEnabled)
                                 .labelsHidden()
-                                .toggleStyle(.switch)
-                                .controlSize(.mini)
+                                .toggleStyle(CompactSwitch())
                                 .disabled(isLastEnabled)
-                                .opacity(isLastEnabled ? 0.35 : 1)
                         }
                         .contentShape(Rectangle())
                         .hoverTooltip(isLastEnabled
@@ -201,14 +216,15 @@ struct CustomActionEditSheet: View {
                         HStack(spacing: 8) {
                             Text("Name")
                             TextField("e.g. Summarise", text: $draft.title)
-                                .textFieldStyle(.roundedBorder)
+                                .textFieldStyle(.settings)
                                 .frame(maxWidth: .infinity)
+                                .focused($nameFocused)
                         }
 
                         HStack(spacing: 8) {
                             Text("Description")
                             TextField("Optional — short description", text: $draft.actionDescription)
-                                .textFieldStyle(.roundedBorder)
+                                .textFieldStyle(.settings)
                                 .frame(maxWidth: .infinity)
                         }
 
@@ -224,8 +240,7 @@ struct CustomActionEditSheet: View {
                                     Text("Add")
                                 }
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
+                            .buttonStyle(RowTextButtonStyle())
                             .popover(isPresented: $showIconPicker, arrowEdge: .bottom) {
                                 IconPickerView(selection: $draft.icon)
                                     .frame(width: 320)
@@ -273,10 +288,11 @@ struct CustomActionEditSheet: View {
             // top inset (pagePadding).
             .padding(.bottom, SettingsMetrics.pagePadding)
         }
-        .frame(minWidth: 480, minHeight: 520)
-        // Match the ActionLibraryView baseline: extend to the panel's top edge so the
-        // header's top gap stays fixed (and equal to its bottom gap) as the window resizes.
-        .ignoresSafeArea(.container, edges: .top)
+        // No minimum height: the modal card sets the height, the form scrolls.
+        .frame(minWidth: 480)
+        // Focus the Name field on the next run-loop turn, once the modal is in
+        // the view tree.
+        .onAppear { DispatchQueue.main.async { nameFocused = true } }
     }
 
     // MARK: - AI fields
@@ -287,13 +303,7 @@ struct CustomActionEditSheet: View {
             TextEditor(text: $draft.systemPrompt)
                 .font(.body)
                 .frame(minHeight: 100)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(.separator, lineWidth: 1)
-                )
-                // Pull the editor closer to the card edges — less margin around the input box.
-                .padding(.horizontal, -6)
-                .padding(.top, -6)
+                .settingsTextEditor()
             Text("Use {{text}} for the selected text. Also available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -374,7 +384,7 @@ struct CustomActionEditSheet: View {
                         text: $draft.systemPrompt,
                         axis: .vertical
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.settings)
                     .lineLimit(3...6)
                     Text("Added on top of the default translation prompt.")
                         .font(.caption)
@@ -408,15 +418,14 @@ struct CustomActionEditSheet: View {
                     "https://www.google.com/search?q={text}",
                     text: $draft.scriptSource
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.settings)
                 .font(.system(.body, design: .monospaced))
 
                 HStack(spacing: 8) {
                     Button("Insert \(PlaceholderExpander.textToken)") {
                         draft.scriptSource += PlaceholderExpander.textToken
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                     .hoverTooltip("Append the {text} placeholder at the end of the URL")
 
                     Spacer()
@@ -440,7 +449,7 @@ struct CustomActionEditSheet: View {
                 HStack(spacing: 8) {
                     Text("Shortcut name")
                     TextField("e.g. My Shortcut", text: $draft.scriptSource)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.settings)
                         .frame(maxWidth: .infinity)
                 }
 
@@ -472,17 +481,13 @@ struct CustomActionEditSheet: View {
                 TextEditor(text: $draft.scriptSource)
                     .font(.system(.body, design: .monospaced))
                     .frame(minHeight: 120)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .stroke(.separator, lineWidth: 1)
-                    )
+                    .settingsTextEditor()
 
                 HStack(spacing: 8) {
                     Button("Insert \(PlaceholderExpander.textToken)") {
                         draft.scriptSource += PlaceholderExpander.textToken
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(RowTextButtonStyle())
                     .hoverTooltip("Append the {text} placeholder — becomes a quoted AppleScript string at runtime")
 
                     Spacer()
@@ -516,10 +521,7 @@ struct CustomActionEditSheet: View {
                 TextEditor(text: $draft.scriptSource)
                     .font(.system(.body, design: .monospaced))
                     .frame(minHeight: 120)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .stroke(.separator, lineWidth: 1)
-                    )
+                    .settingsTextEditor()
 
                 afterRunPicker
 
@@ -557,7 +559,7 @@ struct CustomActionEditSheet: View {
                     "Leave empty to always show",
                     text: $draft.appliesWhenRegex
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.settings)
                 // Cap to match the import sanitizer's 500-char bound.
                 .onChange(of: draft.appliesWhenRegex) { _ in
                     if draft.appliesWhenRegex.count > 500 {
