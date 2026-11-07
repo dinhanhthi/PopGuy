@@ -76,6 +76,7 @@ struct ComposerTextView: NSViewRepresentable {
         // Markdown highlighting runs on every character edit, including this first text.
         textView.textStorage?.delegate = coordinator
         textView.string = text
+        textView.moveCaretToEnd()
         textView.delegate = coordinator
         return scrollView
     }
@@ -87,6 +88,7 @@ struct ComposerTextView: NSViewRepresentable {
         // Push only real external changes, so selection and undo survive normal updates.
         if textView.string != text, !textView.hasMarkedText() {
             textView.string = text
+            textView.moveCaretToEnd()
         }
     }
 
@@ -135,6 +137,13 @@ final class ComposerNSTextView: NSTextView {
     /// Esc (NSTextView would otherwise start completion).
     override func cancelOperation(_ sender: Any?) {
         onCancel()
+    }
+
+    /// The caret after the last character, scrolled into view, to go on writing.
+    func moveCaretToEnd() {
+        let end = NSRange(location: (string as NSString).length, length: 0)
+        setSelectedRange(end)
+        scrollRangeToVisible(end)
     }
 
     /// Return continues or ends a Markdown list (ListContinuation).
