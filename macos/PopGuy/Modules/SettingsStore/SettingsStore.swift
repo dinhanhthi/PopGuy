@@ -200,6 +200,8 @@ final class SettingsStore: ObservableObject {
         static let chordReplacementShortcut   = "settings.chordReplacementShortcut"
         static let ocrEnabled                 = "settings.ocrEnabled"
         static let ocrShortcut                = "settings.ocrShortcut"
+        static let terminalComposerEnabled    = "settings.terminalComposerEnabled"
+        static let composeShortcut            = "settings.composeShortcut"
         static let confirmCloseAfterResult    = "settings.confirmCloseAfterResult"
         static let enterResultAction          = "settings.enterResultAction"
         static let enterResultFallback        = "settings.enterResultFallback"
@@ -576,6 +578,16 @@ final class SettingsStore: ObservableObject {
         didSet { saveOptional(ocrShortcut, key: Keys.ocrShortcut) }
     }
 
+    /// Whether the Terminal Composer (PopGuy as the `$VISUAL` editor for terminal CLIs) is opted in (default: false).
+    @Published var terminalComposerEnabled: Bool {
+        didSet { defaults.set(terminalComposerEnabled, forKey: Keys.terminalComposerEnabled) }
+    }
+
+    /// Optional shortcut that opens the Terminal Composer (default: nil).
+    @Published var composeShortcut: KeyboardShortcut? {
+        didSet { saveOptional(composeShortcut, key: Keys.composeShortcut) }
+    }
+
     /// When true, clicking outside (or pressing Escape) after a result has
     /// finished generating asks for confirmation instead of closing the toolbar,
     /// so a ready result isn't dismissed by accident (default: true).
@@ -771,6 +783,8 @@ final class SettingsStore: ObservableObject {
         chordReplacementShortcut = Self.load(KeyboardShortcut.self, key: Keys.chordReplacementShortcut, from: defaults)
         ocrEnabled               = defaults.object(forKey: Keys.ocrEnabled) as? Bool ?? false
         ocrShortcut              = Self.load(KeyboardShortcut.self, key: Keys.ocrShortcut, from: defaults)
+        terminalComposerEnabled  = defaults.object(forKey: Keys.terminalComposerEnabled) as? Bool ?? false
+        composeShortcut          = Self.load(KeyboardShortcut.self, key: Keys.composeShortcut, from: defaults)
         confirmCloseAfterResult  = defaults.object(forKey: Keys.confirmCloseAfterResult) as? Bool ?? true
         enterResultAction        = defaults.string(forKey: Keys.enterResultAction).flatMap(EnterResultAction.init(rawValue:)) ?? .pasteBack
         enterResultFallback      = defaults.string(forKey: Keys.enterResultFallback).flatMap(EnterResultAction.init(rawValue:)) ?? .nothing
