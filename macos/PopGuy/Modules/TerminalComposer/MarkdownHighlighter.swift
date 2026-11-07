@@ -319,9 +319,9 @@ enum MarkdownStyler {
         case .codeFence:
             storage.addAttributes([.font: code, .backgroundColor: codeBackground,
                                    .foregroundColor: NSColor.secondaryLabelColor], range: run.range)
-        case .heading(let level):
-            let size = baseFont.pointSize + CGFloat(max(0, 4 - level)) * 2
-            storage.addAttribute(.font, value: NSFont.boldSystemFont(ofSize: size), range: run.range)
+        case .heading:
+            // Simple Markdown: the whole heading line, `#`s included, is bold at the base size.
+            storage.addAttribute(.font, value: NSFont.boldSystemFont(ofSize: baseFont.pointSize), range: run.range)
         case .bold:
             addTrait(.boldFontMask, to: run.range, in: storage, baseFont: baseFont)
         case .italic:
