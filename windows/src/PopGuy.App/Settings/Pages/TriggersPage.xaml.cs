@@ -2,9 +2,11 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using PopGuy.Composer;
 using PopGuy.Controls;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Settings;
+using PopGuy.Platform.Capture;
 using PopGuy.Platform.Input;
 using PopGuy.Services;
 
@@ -17,7 +19,8 @@ namespace PopGuy.Settings.Pages;
 /// the replacement or the Screen Text Capture shortcut records, PopGuy's own hotkeys and chord are off
 /// (<see cref="AppServices.SetHotkeysSuspended"/>) so a combo PopGuy owns reaches the recorder; after each apply each
 /// one's registration status shows under its row. A change from elsewhere (the tray) shows while the page is open; the
-/// tray's Capture Screen Text… scrolls to the OCR section (<see cref="FocusOcrSection"/>).
+/// tray's Capture Screen Text… scrolls to the OCR section (<see cref="FocusOcrSection"/>). The Terminal Composer's
+/// Compose shortcut follows the same pattern; its command row installs or removes popguy-edit off the UI thread.
 /// </summary>
 public sealed partial class TriggersPage : Page
 {
@@ -32,6 +35,13 @@ public sealed partial class TriggersPage : Page
 
     /// <summary>The OCR section is to scroll into view once the page has loaded.</summary>
     private bool _focusOcrPending;
+
+    private const string PowerShellSnippet = "setx VISUAL popguy-edit";
+    private const string ClaudeSnippet = "{ \"env\": { \"VISUAL\": \"popguy-edit\" } }";
+    private const string GitSnippet = "git config --global core.editor popguy-edit";
+
+    /// <summary>An Install or Remove of the popguy-edit command is running.</summary>
+    private bool _commandBusy;
 
     public TriggersPage()
     {
@@ -57,6 +67,24 @@ public sealed partial class TriggersPage : Page
         HoverTooltip.SetText(RecordButton, "Record a replacement shortcut (e.g. Ctrl+Shift+Space)");
         HoverTooltip.SetText(OcrClearButton, "Remove shortcut");
         HoverTooltip.SetText(OcrRecordButton, "Record shortcut");
+        ComposerToggle.Toggled += (_, _) =>
+            Save("terminalComposerEnabled", s => s with { TerminalComposerEnabled = ComposerToggle.IsOn });
+        ComposeClearButton.Click += (_, _) => Save("composeShortcut", s => s with { ComposeShortcut = null });
+        ComposeRecordButton.Click += (_, _) => ComposeRecorder.Start();
+        ComposeRecorder.RecordingStarted += OnRecordingStarted;
+        ComposeRecorder.RecordingEnded += OnComposeRecordingEnded;
+        HoverTooltip.SetText(ComposeClearButton, "Remove shortcut");
+        HoverTooltip.SetText(ComposeRecordButton, "Record shortcut");
+        CommandButton.Click += (_, _) => OnCommandClick();
+        SnippetPowerShellText.Text = PowerShellSnippet;
+        SnippetClaudeText.Text = ClaudeSnippet;
+        SnippetGitText.Text = GitSnippet;
+        SnippetPowerShellCopyButton.Click += (_, _) => Copy(PowerShellSnippet, "powershell");
+        SnippetClaudeCopyButton.Click += (_, _) => Copy(ClaudeSnippet, "claude");
+        SnippetGitCopyButton.Click += (_, _) => Copy(GitSnippet, "git");
+        HoverTooltip.SetText(SnippetPowerShellCopyButton, "Copy");
+        HoverTooltip.SetText(SnippetClaudeCopyButton, "Copy");
+        HoverTooltip.SetText(SnippetGitCopyButton, "Copy");
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -117,9 +145,13 @@ public sealed partial class TriggersPage : Page
         // macOS: the shortcut row is disabled until the feature is on.
         OcrShortcutCard.IsEnabled = current.OcrEnabled;
         if (!OcrRecorder.IsRecording) OcrRecorder.Shortcut = current.OcrShortcut;
+        ComposerToggle.IsOn = current.TerminalComposerEnabled;
+        ComposeShortcutCard.IsEnabled = current.TerminalComposerEnabled;
+        if (!ComposeRecorder.IsRecording) ComposeRecorder.Shortcut = current.ComposeShortcut;
         _syncing = false;
         RefreshRecorderButtons();
         RefreshStatus();
+        RefreshCommand();
     }
 
     /// <summary>
@@ -231,11 +263,27 @@ public sealed partial class TriggersPage : Page
         RefreshRecorderButtons();
     }
 
+    /// <summary>As <see cref="OnRecordingEnded"/>, for the Terminal Composer's Compose shortcut.</summary>
+    private void OnComposeRecordingEnded(ShortcutKeyOutcome outcome, Shortcut? recorded)
+    {
+        if (outcome == ShortcutKeyOutcome.Record)
+        {
+            Save("composeShortcut", s => s with { ComposeShortcut = recorded });
+        }
+        else if (outcome == ShortcutKeyOutcome.Clear)
+        {
+            Save("composeShortcut", s => s with { ComposeShortcut = null });
+        }
+        _services?.SetHotkeysSuspended(false);
+        RefreshRecorderButtons();
+    }
+
     /// <summary>macOS: the clear button only with a shortcut; neither button while recording.</summary>
     private void RefreshRecorderButtons()
     {
         RefreshRecorderButtons(Recorder, ClearButton, RecordButton);
         RefreshRecorderButtons(OcrRecorder, OcrClearButton, OcrRecordButton);
+        RefreshRecorderButtons(ComposeRecorder, ComposeClearButton, ComposeRecordButton);
     }
 
     private static void RefreshRecorderButtons(ShortcutRecorder recorder, Button clear, Button record)
@@ -261,6 +309,10 @@ public sealed partial class TriggersPage : Page
         ShowStatus(OcrStatusText,
             !OcrRecorder.IsRecording && current.OcrEnabled && current.OcrShortcut is { } ocr
                 ? StatusMessage(current, registrations, HotkeyService.OcrCaptureId, ocr)
+                : null);
+        ShowStatus(ComposeStatusText,
+            !ComposeRecorder.IsRecording && current.TerminalComposerEnabled && current.ComposeShortcut is { } compose
+                ? StatusMessage(current, registrations, HotkeyService.ComposeId, compose)
                 : null);
     }
 
@@ -295,7 +347,59 @@ public sealed partial class TriggersPage : Page
     {
         if (id == HotkeyService.ChordReplacementId) return "the Ctrl+C+C replacement";
         if (id == HotkeyService.OcrCaptureId) return "Screen Text Capture";
+        if (id == HotkeyService.ComposeId) return "Terminal Composer";
         return current.ShortcutBindings.Any(b => b.Id == id) ? ActionLabel(current, id) : null;
+    }
+
+    // Terminal Composer command and snippets.
+
+    /// <summary>The popguy-edit command's status (a quick registry read) and the button that flips it.</summary>
+    private void RefreshCommand()
+    {
+        var installed = CommandInstaller.Status == CommandInstallStatus.Installed;
+        CommandStatusText.Text = installed ? "Installed — popguy-edit is on your PATH." : "Not installed.";
+        CommandButton.Content = installed ? "Remove" : "Install";
+        CommandButton.IsEnabled = !_commandBusy;
+    }
+
+    /// <summary>
+    /// Installs or removes the command off the UI thread (its environment broadcast can block for seconds); the button
+    /// stays disabled until it is done, then the status is read again.
+    /// </summary>
+    private void OnCommandClick()
+    {
+        if (_commandBusy || _services is not { } services) return;
+        var install = CommandInstaller.Status != CommandInstallStatus.Installed;
+        _commandBusy = true;
+        CommandButton.IsEnabled = false;
+        var queue = DispatcherQueue;
+        _ = Task.Run(() =>
+        {
+            var ok = install ? CommandInstaller.Install() : CommandInstaller.Remove();
+            services.Log.Write($"composer command {(install ? "install" : "remove")}: {(ok ? "done" : "failed")}");
+            queue.TryEnqueue(() =>
+            {
+                _commandBusy = false;
+                RefreshCommand();
+            });
+        });
+    }
+
+    /// <summary>A deliberate copy, as History's: off the UI thread; the log gets the outcome only.</summary>
+    private void Copy(string text, string what)
+    {
+        if (_services is not { } services) return;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                services.Log.Write($"snippet copy {what}: written {ClipboardGuard.WriteText(text, excludeFromHistory: false)}");
+            }
+            catch (Exception e)
+            {
+                services.Log.Write($"snippet copy {what}: failed, {e.GetType().Name}");
+            }
+        });
     }
 
     /// <summary>Saves one change; a failed write is logged and the controls go back to the saved settings.</summary>

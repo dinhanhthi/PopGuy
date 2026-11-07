@@ -1,6 +1,7 @@
 using System.Drawing;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media.Imaging;
+using PopGuy.Composer;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Dictionaries;
 using PopGuy.Core.Settings;
@@ -32,7 +33,9 @@ namespace PopGuy.Toolbar;
 /// While Ignored Domains is on, a selection in a browser reads the tab's host (<see cref="BrowserUrlReader"/>) before it
 /// is presented: the gate's ignored domains and <c>{{domain}}</c> use it (macOS reads it only then, too). The OCR
 /// hotkey and the tray's Capture Screen Text… start an <see cref="OcrCaptureController"/> capture, whose text shows
-/// like a selection with no source app, copy-only, under a thumbnail of the region (macOS handleOCRCapture).
+/// like a selection with no source app, copy-only, under a thumbnail of the region (macOS handleOCRCapture). The
+/// Compose hotkey opens a Terminal Composer for the foreground window. PopGuy's own windows are never a source, except
+/// the open composer: its selection shows the toolbar, and Paste back replaces it in-process.
 /// <para>
 /// Threading: the chord and hotkey events and the three input loops run on the thread pool; everything that touches the
 /// window, the view model or the presentation state runs on the UI thread (<see cref="DispatcherQueue"/>). Captures
@@ -52,6 +55,7 @@ internal sealed class ToolbarController : IDisposable
     private readonly ToolbarWindow _window;
     private readonly ToolbarViewModel _viewModel;
     private readonly OcrCaptureController _ocr;
+    private readonly ComposerController _composer;
     private readonly GlobalInput _input;
     private readonly ChordMonitor _chord;
     private readonly HotkeyService _hotkeys;
@@ -143,8 +147,8 @@ internal sealed class ToolbarController : IDisposable
 
     public ToolbarController(
         SettingsStore settings, ToolbarSession session, SpeakCoordinator speak, ToolbarWindow window, OcrCaptureController ocr,
-        GlobalInput input, ChordMonitor chord, HotkeyService hotkeys, SelectionPipeline pipeline, DispatcherQueue dispatcher,
-        Action<string> log)
+        ComposerController composer, GlobalInput input, ChordMonitor chord, HotkeyService hotkeys, SelectionPipeline pipeline,
+        DispatcherQueue dispatcher, Action<string> log)
     {
         _settings = settings;
         _session = session;
@@ -152,6 +156,7 @@ internal sealed class ToolbarController : IDisposable
         _window = window;
         _viewModel = window.ViewModel;
         _ocr = ocr;
+        _composer = composer;
         _input = input;
         _chord = chord;
         _hotkeys = hotkeys;
@@ -267,7 +272,10 @@ internal sealed class ToolbarController : IDisposable
             // The pipeline also captures for the double-click trigger alone: the routing drops what it does not want.
             _pipeline.Enabled = settings.PopGuyEnabled && (settings.TriggerOnSelectEnabled || settings.TriggerDoubleClickEnabled);
             var hotkeys = suspended
-                ? settings with { ShortcutBindings = [], ChordReplacementShortcut = null, OcrShortcut = null }
+                ? settings with
+                {
+                    ShortcutBindings = [], ChordReplacementShortcut = null, OcrShortcut = null, ComposeShortcut = null,
+                }
                 : settings;
             var refused = _hotkeys.Apply(hotkeys).Count(r => r.Status != HotkeyStatus.Registered);
             _log($"settings applied: chord {(_chord.Enabled ? "on" : "off")}, selection {(_pipeline.Enabled ? "on" : "off")}, "
@@ -360,7 +368,7 @@ internal sealed class ToolbarController : IDisposable
     /// </summary>
     private void OnChordFired(ChordFire fire)
     {
-        if (!_settings.Current.PopGuyEnabled || fire.App.IsOwnProcess || _shown) return;
+        if (!_settings.Current.PopGuyEnabled || !IsSource(fire.App) || _shown) return;
         if (Interlocked.Exchange(ref _capturing, 1) == 1)
         {
             _log("chord: ignored, a capture is running");
@@ -415,6 +423,16 @@ internal sealed class ToolbarController : IDisposable
             return;
         }
         var source = ForegroundApp.Snapshot();
+        if (id == HotkeyService.ComposeId)
+        {
+            // macOS: the source is read before anything activates PopGuy; the master switch and the opt-in at fire time.
+            _dispatcher.TryEnqueue(() =>
+            {
+                var settings = _settings.Current;
+                if (settings.PopGuyEnabled && settings.TerminalComposerEnabled) _composer.BeginCompose(source.Hwnd, allowSubmit: true);
+            });
+            return;
+        }
         _dispatcher.TryEnqueue(() => OnHotkey(id, source));
     }
 
@@ -450,7 +468,7 @@ internal sealed class ToolbarController : IDisposable
     /// <summary>A full capture (UI Automation, else the synthetic copy where the policy allows it), then the toolbar. UI thread.</summary>
     private void StartCapture(ForegroundApp source, ActionIdentifier? autoRun)
     {
-        if (source.IsOwnProcess) return;
+        if (!IsSource(source)) return;
         if (Interlocked.Exchange(ref _capturing, 1) == 1)
         {
             _log("hotkey: ignored, a capture is running");
@@ -579,7 +597,7 @@ internal sealed class ToolbarController : IDisposable
     private void RouteSelection(SelectionPipelineEvent selection)
     {
         var settings = _settings.Current;
-        if (!settings.PopGuyEnabled || selection.Source.IsOwnProcess) return;
+        if (!settings.PopGuyEnabled || !IsSource(selection.Source)) return;
         var result = selection.Capture;
         var anchor = selection.Anchor;
         var capture = new CapturedSelection(result.Text, result.IsEditable, FirstRect(result.SelectionRects), selection.Source,
@@ -1145,6 +1163,24 @@ internal sealed class ToolbarController : IDisposable
             else _viewModel.ShowNotice(note);
             return;
         }
+        if (_composer.IsComposerWindow(capture.Source.Hwnd))
+        {
+            // The composer is PopGuy's own window: its selection is replaced in-process, no clipboard or synthetic keys.
+            // A prompt or refine field that has the foreground gives it back to the composer first.
+            _window.EndTextInput(handBack: true);
+            var replaced = _composer.ReplaceSelection(capture.Source.Hwnd, text);
+            _log($"paste: composer {(replaced ? "replaced" : "closed")}, {text.Length} chars");
+            if (replaced)
+            {
+                if (!scriptResult) Hide();
+                return;
+            }
+            CopyInBackground(text, "paste refused, copied instead");
+            var closed = $"Copied instead — {RefusalReason("sourceGone")}";
+            if (scriptResult) _viewModel.Fail(closed);
+            else _viewModel.ShowNotice(closed);
+            return;
+        }
         _pasting = true;
         // Text input off first; PasteBack then gives the source the foreground back if the toolbar has it.
         _window.EndTextInput(handBack: false);
@@ -1238,6 +1274,13 @@ internal sealed class ToolbarController : IDisposable
         _log($"browser: {source.Exe}, {(host is null ? "no host" : "host found")}");
         return host;
     }
+
+    /// <summary>
+    /// A window the toolbar may work on: any app's, never PopGuy's own (Settings, the toolbar), except the open
+    /// composer's. The capture keeps <see cref="ForegroundApp.IsOwnProcess"/>, so the composer gets no "Ignore this app"
+    /// and no history source. Any thread.
+    /// </summary>
+    private bool IsSource(ForegroundApp app) => !app.IsOwnProcess || _composer.IsComposerWindow(app.Hwnd);
 
     private static bool IsBlocked(ForegroundApp app) => app.IsElevated && !Environment.IsPrivilegedProcess;
 

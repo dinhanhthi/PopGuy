@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using Microsoft.UI.Dispatching;
+using PopGuy.Composer;
 using PopGuy.Core;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Dictionaries;
@@ -38,10 +39,12 @@ internal sealed class AppServices : IDisposable
     private readonly SelectionPipeline _pipeline;
     private readonly ToolbarWindow _toolbar;
     private readonly OcrCaptureController _ocr;
+    private readonly ComposerController _composer;
     private readonly ToolbarController _controller;
     private readonly SpeakCoordinator _speak;
     private readonly SystemTts _systemTts = new();
     private readonly Dictionary<TtsProviderKind, ITtsProvider> _ttsProviders;
+    private readonly DispatcherQueue _dispatcher;
     private SpeakCoordinator? _speakPreview;
     private int _disposed;
 
@@ -49,6 +52,7 @@ internal sealed class AppServices : IDisposable
     {
         Log = log;
         Paths = paths;
+        _dispatcher = dispatcher;
         Settings = new SettingsStore(paths);
         History = new HistoryStore(paths);
         Credentials = new CredentialStore();
@@ -96,8 +100,11 @@ internal sealed class AppServices : IDisposable
             _toolbar = new ToolbarWindow(session);
             // Its overlays are made per capture; the controller wires its text to the toolbar.
             _ocr = new OcrCaptureController(log.Write);
+            // Its pipe server runs only while the Terminal Composer is on (SyncComposerServer).
+            _composer = new ComposerController(paths, new ComposeOutput(_input, log.Write), dispatcher, log.Write);
             _controller = new ToolbarController(
-                Settings, session, _speak, _toolbar, _ocr, _input, chord, _hotkeys, _pipeline, dispatcher, log.Write);
+                Settings, session, _speak, _toolbar, _ocr, _composer, _input, chord, _hotkeys, _pipeline, dispatcher,
+                log.Write);
         }
         catch
         {
@@ -169,6 +176,12 @@ internal sealed class AppServices : IDisposable
     public void CaptureScreenText() => _controller.BeginOcrCapture();
 
     /// <summary>
+    /// The tray's New Composer: an empty composer that pastes into <paramref name="sourceHwnd"/> (see
+    /// <see cref="ComposerController.BeginCompose"/>). UI thread.
+    /// </summary>
+    public void NewComposer(nint sourceHwnd, bool allowSubmit) => _composer.BeginCompose(sourceHwnd, allowSubmit);
+
+    /// <summary>
     /// Builds every service and starts the triggers. UI thread (the toolbar window is created here). Throws when Windows
     /// refuses the hooks or the clipboard listener (<see cref="Win32Exception"/>); the log then has the reason.
     /// </summary>
@@ -181,6 +194,8 @@ internal sealed class AppServices : IDisposable
         {
             var services = new AppServices(log, paths, dispatcher);
             services._controller.Start();
+            services.SyncComposerServer();
+            services.Settings.Changed += services.OnSettingsChanged;
             services.PrepareBabylonIndexes();
             services.Updates.Start();
             return services;
@@ -222,6 +237,18 @@ internal sealed class AppServices : IDisposable
                 }
             }
         });
+    }
+
+    /// <summary>A settings change may come from any thread; the composer is UI thread only.</summary>
+    private void OnSettingsChanged(object? sender, EventArgs e) => _dispatcher.TryEnqueue(SyncComposerServer);
+
+    /// <summary>The composer's pipe server listens while the Terminal Composer is on (macOS). UI thread.</summary>
+    private void SyncComposerServer()
+    {
+        if (Volatile.Read(ref _disposed) != 0) return;
+        var enabled = Settings.Current.TerminalComposerEnabled;
+        if (enabled && !_composer.IsServerRunning) _composer.StartServer();
+        else if (!enabled && _composer.IsServerRunning) _composer.StopServer();
     }
 
     private SpeakCoordinator CreateSpeakPreview()
@@ -266,11 +293,14 @@ internal sealed class AppServices : IDisposable
     }
 
     /// <summary>
-    /// Stops speech, then the triggers, then the input they read, then the toolbar; flushes history last. UI thread.
+    /// Saves the composer's draft and stops its pipe (while its window is still open), stops speech, then the triggers,
+    /// then the input they read, then the toolbar; flushes history last. UI thread.
     /// </summary>
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        Settings.Changed -= OnSettingsChanged;
+        _composer.Shutdown();
         Updates.Dispose();
         _speak.Stop();
         _speakPreview?.Stop();

@@ -21,7 +21,7 @@ public enum InputSendResult
 }
 
 /// <summary>
-/// Synthetic copy (Ctrl+Insert) and paste (Ctrl+V) into the foreground app, through SendInput. Every event carries
+/// Synthetic copy (Ctrl+Insert), paste (Ctrl+V) and Enter into the foreground app, through SendInput. Every event carries
 /// <see cref="Marker"/> in its extra info, so PopGuy's own low-level hooks can tell them from the user's keys.
 /// <para>
 /// The copy is Ctrl+Insert, not Ctrl+C: Ctrl+Insert is the standard Windows copy accelerator (edit controls, rich
@@ -94,17 +94,29 @@ public static class InputSynth
     public static InputSendResult SendPaste(Func<uint, bool>? isUserKeyDown = null, Func<bool>? stillAllowed = null) =>
         SendChord(VIRTUAL_KEY.VK_V, isUserKeyDown, stillAllowed);
 
-    private static InputSendResult SendChord(VIRTUAL_KEY key, Func<uint, bool>? isUserKeyDown, Func<bool>? stillAllowed)
+    /// <summary>
+    /// Sends a bare Enter, no modifier (the Terminal Composer's submit; held modifiers handled as described on the class,
+    /// so Ctrl+Enter never reaches the app). Blocks up to 500 ms: call it off the UI thread.
+    /// </summary>
+    /// <param name="isUserKeyDown">Whether the user still holds a virtual key (PopGuy's own events ignored); null: never press modifiers again.</param>
+    /// <param name="stillAllowed">Checked after the modifier wait, right before SendInput; false: nothing is sent (<see cref="InputSendResult.Aborted"/>).</param>
+    public static InputSendResult SendEnter(Func<uint, bool>? isUserKeyDown = null, Func<bool>? stillAllowed = null) =>
+        SendKeys(VIRTUAL_KEY.VK_RETURN, withControl: false, isUserKeyDown, stillAllowed);
+
+    private static InputSendResult SendChord(VIRTUAL_KEY key, Func<uint, bool>? isUserKeyDown, Func<bool>? stillAllowed) =>
+        SendKeys(key, withControl: true, isUserKeyDown, stillAllowed);
+
+    private static InputSendResult SendKeys(VIRTUAL_KEY key, bool withControl, Func<uint, bool>? isUserKeyDown, Func<bool>? stillAllowed)
     {
         var held = WaitForModifierRelease();
 
         var inputs = new List<INPUT>(16);
         if (held.Any(IsAltOrWin)) AddMaskTap(inputs);
         foreach (var vk in held) inputs.Add(Key(vk, up: true));
-        inputs.Add(Key(VIRTUAL_KEY.VK_LCONTROL, up: false));
+        if (withControl) inputs.Add(Key(VIRTUAL_KEY.VK_LCONTROL, up: false));
         inputs.Add(Key(key, up: false));
         inputs.Add(Key(key, up: true));
-        inputs.Add(Key(VIRTUAL_KEY.VK_LCONTROL, up: true));
+        if (withControl) inputs.Add(Key(VIRTUAL_KEY.VK_LCONTROL, up: true));
         // Last check, after the wait: nothing has been sent yet, so an abort needs no cleanup.
         if (stillAllowed is not null && !stillAllowed()) return InputSendResult.Aborted;
         // One call: the events reach the input stream together, never interleaved with the user's.

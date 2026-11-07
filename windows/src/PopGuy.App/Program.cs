@@ -1,6 +1,7 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppLifecycle;
+using PopGuy.Composer;
 using PopGuy.Platform.SystemServices;
 using PopGuy.Platform.Windowing;
 using Velopack;
@@ -33,8 +34,12 @@ public static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        // Uninstall removes the Run value too: it would start a PopGuy that is gone.
-        VelopackApp.Build().OnBeforeUninstallFastCallback(_ => DisableLaunchAtLogin()).Run();
+        // Uninstall removes the Run value too: it would start a PopGuy that is gone; and popguy-edit's PATH entry.
+        VelopackApp.Build().OnBeforeUninstallFastCallback(_ =>
+        {
+            DisableLaunchAtLogin();
+            RemoveComposerCommand();
+        }).Run();
         WinRT.ComWrappersSupport.InitializeComWrappers();
         if (!IsHarnessRun(args) && RedirectedToRunningInstance()) return;
 
@@ -95,6 +100,19 @@ public static class Program
         catch (Exception e)
         {
             System.Diagnostics.Debug.WriteLine($"Launch at login not removed: {e.GetType().Name}");
+        }
+    }
+
+    /// <summary>Any failure leaves the entry (a folder that is gone runs nothing): the uninstall must go on.</summary>
+    private static void RemoveComposerCommand()
+    {
+        try
+        {
+            if (!CommandInstaller.Remove()) System.Diagnostics.Debug.WriteLine("popguy-edit PATH entry not removed");
+        }
+        catch (Exception e)
+        {
+            System.Diagnostics.Debug.WriteLine($"popguy-edit PATH entry not removed: {e.GetType().Name}");
         }
     }
 

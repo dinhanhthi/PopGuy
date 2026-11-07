@@ -52,4 +52,25 @@ public sealed class CaptureFallbackPolicyTests
     [InlineData(ChromiumClass, "Code", null, "inputarea", null)]
     public void PasteTargetRefusal(string windowClass, string processName, bool? isEditable, string? hint, string? reason) =>
         Assert.Equal(reason, PasteBack.TargetRefusal(new UiaPasteTarget(isEditable, hint), windowClass, processName));
+
+    // Security: the Terminal Composer pastes into terminals (a terminal control has no value pattern), but never into a
+    // password field, and everywhere else it refuses exactly what the toolbar's paste refuses.
+    [Theory]
+    [InlineData("CASCADIA_HOSTING_WINDOW_CLASS", "WindowsTerminal", null, null, false, null)]
+    [InlineData("CASCADIA_HOSTING_WINDOW_CLASS", "WindowsTerminal", false, null, false, null)]
+    [InlineData(ChromiumClass, "Code", null, "xterm-helper-textarea", false, null)]
+    [InlineData("ConsoleWindowClass", "conhost", null, null, true, "passwordField")]
+    [InlineData("SunAwtFrame", "idea64", null, null, false, "editabilityUnknown")]
+    [InlineData("TscShellContainerClass", "mstsc", null, null, false, "remoteDesktop")]
+    public void ComposePasteTargetRefusal(
+        string windowClass, string processName, bool? isEditable, string? hint, bool isPassword, string? reason)
+    {
+        var target = new UiaPasteTarget(isEditable, hint, isPassword);
+
+        Assert.Equal(reason, PasteBack.TargetRefusal(target, windowClass, processName, forCompose: true));
+        if (CaptureFallbackPolicy.UnsafeTargetReason(windowClass, processName, hint) is not ("console" or "integratedTerminal"))
+        {
+            Assert.Equal(PasteBack.TargetRefusal(target, windowClass, processName), reason);
+        }
+    }
 }
