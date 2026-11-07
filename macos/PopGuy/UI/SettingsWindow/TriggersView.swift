@@ -173,6 +173,7 @@ struct TriggersView: View {
                     ocrSectionContent()
                 }
                 .id(Self.ocrSectionAnchor)
+                TerminalComposerSettingsSection(settings: settings)
             }
             .padding(SettingsMetrics.pagePadding)
         }
