@@ -29,6 +29,9 @@ enum Palette {
         light: NSColor(srgbRed: 245 / 255, green: 245 / 255, blue: 247 / 255, alpha: 0.6))
     static let hoverFill = dynamic(dark: .white.withAlphaComponent(0.1), light: .black.withAlphaComponent(0.06))
     static let pressedFill = dynamic(dark: .white.withAlphaComponent(0.2), light: .black.withAlphaComponent(0.12))
+    /// The selected sidebar row's capsule and its 1 pt edge (like Rex's sidebar: neutral, no accent).
+    static let selectedFill = dynamic(dark: .white.withAlphaComponent(0.14), light: .black.withAlphaComponent(0.07))
+    static let selectedBorder = dynamic(dark: .white.withAlphaComponent(0.12), light: .black.withAlphaComponent(0.08))
     /// Darkens a pressed button over its own fill.
     static let pressedOverlay = dynamic(dark: .black.withAlphaComponent(0.2), light: .black.withAlphaComponent(0.1))
     /// Dims the window behind an in-window modal, over the modal's backdrop blur.
@@ -268,8 +271,8 @@ struct RowIconButtonStyle: ButtonStyle {
     }
 }
 
-/// A row of a settings sidebar: the selected row is an accent capsule with white text, the others get a hover
-/// capsule. Rows sit in a `VStack(spacing: SidebarItemStyle.spacing)` instead of a `List(.sidebar)`, whose
+/// A row of a settings sidebar: the selected row is a neutral capsule with a 1 pt edge and full-strength text, the
+/// others have dimmed text and get a hover capsule. Rows sit in a `VStack(spacing: SidebarItemStyle.spacing)` instead of a `List(.sidebar)`, whose
 /// selection fills the whole row height, so neighbors touch however much padding the rows get.
 /// PopGuy: the capsule height comes from `height` (the template's 6 pt vertical padding around a body line); a row
 /// adds its own `SettingsMetrics.sidebarItemVerticalPadding` inside it.
@@ -290,7 +293,7 @@ struct SidebarItemStyle: ButtonStyle {
         @State private var hovered = false
 
         var body: some View {
-            let fill: Color = selected ? .accentColor
+            let fill: Color = selected ? Palette.selectedFill
                 : configuration.isPressed ? Palette.pressedFill
                 : hovered ? Palette.hoverFill : .clear
             configuration.label
@@ -299,6 +302,7 @@ struct SidebarItemStyle: ButtonStyle {
                 .frame(minHeight: SidebarItemStyle.height)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Capsule().fill(fill))
+                .overlay(Capsule().strokeBorder(selected ? Palette.selectedBorder : .clear, lineWidth: 1))
                 .contentShape(Capsule())
                 .animation(Motion.hover, value: hovered)
                 .onHover { hovered = $0 }
@@ -312,9 +316,9 @@ struct SidebarItemStyle: ButtonStyle {
             HStack(spacing: 8) {
                 configuration.icon
                     .frame(width: 20)
-                    .foregroundStyle(selected ? Color.white : Color.secondary)
+                    .foregroundStyle(selected ? Color.primary : Color.secondary)
                 configuration.title
-                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .foregroundStyle(selected ? Color.primary : Color.secondary)
             }
         }
     }
