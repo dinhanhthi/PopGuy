@@ -122,16 +122,27 @@ final class OutputHandler {
     /// Poll interval while waiting for the target app to become frontmost.
     private static let activationPollInterval: UInt64 = 30_000_000 // 30 ms
 
+    /// Outcome of `pasteIntoApp`.
+    enum ComposePasteResult {
+        /// Cmd+V was posted to the target app.
+        case pasted
+        /// Another paste was in progress; nothing was written to the pasteboard.
+        case busy
+        /// The target app is gone or never became frontmost.
+        case targetUnavailable
+    }
+
     /// Activate the app with `pid` and paste `text` into it via synthetic Cmd+V.
     ///
     /// The pasteboard is snapshotted first and restored afterwards (clipboard
     /// hygiene). The restore is skipped if the pasteboard changed after our
     /// write (the user copied something meanwhile).
     ///
-    /// - Returns: `true` if Cmd+V was posted; `false` if a paste is already in
-    ///   progress, the app is gone, or it never became frontmost.
-    func pasteIntoApp(_ text: String, pid: pid_t) async -> Bool {
-        guard !isPasting else { return false }
+    /// - Returns: `.pasted` if Cmd+V was posted; `.busy` if a paste is already in
+    ///   progress (the pasteboard is untouched); `.targetUnavailable` if the app
+    ///   is gone or never became frontmost.
+    func pasteIntoApp(_ text: String, pid: pid_t) async -> ComposePasteResult {
+        guard !isPasting else { return .busy }
         isPasting = true
         defer { isPasting = false }
 
@@ -148,7 +159,7 @@ final class OutputHandler {
         // 3. Activate the target and wait until it is frontmost.
         guard await activateAndWait(pid: pid) else {
             restoreIfUnchanged(snapshot, to: pasteboard, expectedChangeCount: ourChangeCount)
-            return false
+            return .targetUnavailable
         }
 
         // 4. Post Cmd+V.
@@ -157,7 +168,7 @@ final class OutputHandler {
         // 5. Restore after a best-effort delay (same race caveat as pasteBack).
         try? await Task.sleep(nanoseconds: Self.composePasteRestoreDelay)
         restoreIfUnchanged(snapshot, to: pasteboard, expectedChangeCount: ourChangeCount)
-        return true
+        return .pasted
     }
 
     /// Post a bare Return key press to `pid`, only if that app is alive and

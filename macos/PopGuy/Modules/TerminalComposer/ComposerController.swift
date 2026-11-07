@@ -9,8 +9,9 @@
 //     going away while the composer is open shows the "Session ended" state.
 //     Done & Submit waits for the CLI to confirm the write ("written") and exit,
 //     then presses Return in the source app.
-//   - Compose (hotkey): an empty composer; Done pastes into the source app,
-//     Done & Submit pastes and presses Return.
+//   - Compose (hotkey): an empty composer whose footer names the target app; Done
+//     pastes into it, Done & Submit pastes and presses Return. A failed paste copies
+//     the text instead. Without a target, Done is Copy & Close.
 //
 // Drafts: autosaved while the text differs from the opening text; saved at Done and
 // deleted once the text was delivered (the CLI confirmed the write after "done", or a
@@ -104,11 +105,14 @@ final class ComposerController: NSObject, ComposerServerDelegate, NSWindowDelega
             bringForward()
             return
         }
-        let pid = sourcePID == ProcessInfo.processInfo.processIdentifier ? nil : sourcePID
+        let target = sourcePID
+            .flatMap { $0 == ProcessInfo.processInfo.processIdentifier ? nil : NSRunningApplication(processIdentifier: $0) }
+            .flatMap { $0.isTerminated ? nil : $0 }
         let draftID = UUID()
-        state = .compose(sourcePID: pid, draftID: draftID)
-        Self.log.info("Composer: compose opened (source \(pid == nil ? "none" : "app", privacy: .public))")
-        open(text: "", sourceAppName: nil, draftID: draftID)
+        state = .compose(sourcePID: target?.processIdentifier, draftID: draftID)
+        Self.log.info("Composer: compose opened (source \(target == nil ? "none" : "app", privacy: .public))")
+        open(text: "", sourceAppName: nil, draftID: draftID,
+             compose: (noTarget: target == nil, targetName: target?.localizedName))
     }
 
     /// Brings the open composer to the front (no-op when none is open).
@@ -118,10 +122,14 @@ final class ComposerController: NSObject, ComposerServerDelegate, NSWindowDelega
         window.makeKeyAndOrderFront(nil)
     }
 
-    private func open(text: String, sourceAppName: String?, draftID: UUID) {
+    /// `compose` is set for Compose mode: whether it has no target, and the target's name.
+    private func open(text: String, sourceAppName: String?, draftID: UUID,
+                      compose: (noTarget: Bool, targetName: String?)? = nil) {
         model.text = text
         model.sourceAppName = sourceAppName
         model.sessionEnded = false
+        model.noTarget = compose?.noTarget ?? false
+        model.pasteTargetName = compose?.targetName
         model.draftAvailable = false
         // One window is reused: drop the previous composer's undo history.
         window.undoManager?.removeAllActions()
@@ -197,8 +205,24 @@ final class ComposerController: NSObject, ComposerServerDelegate, NSWindowDelega
             }
             Task { [weak self] in
                 guard let self else { return }
-                guard await outputHandler.pasteIntoApp(text, pid: sourcePID) else {
-                    Self.log.info("Composer: compose paste failed; draft kept")
+                switch await outputHandler.pasteIntoApp(text, pid: sourcePID) {
+                case .pasted:
+                    break
+                case .busy:
+                    // Another paste owns the pasteboard; writing to it now would
+                    // race that paste's Cmd+V and restore. Keep the draft only.
+                    Self.log.info("Composer: compose paste busy; draft kept, not copied")
+                    return
+                case .targetUnavailable:
+                    // Explicit fallback, like Copy & Close: the text stays on the
+                    // clipboard (no restore), the draft is kept, no Return. The
+                    // nspasteboard.org markers keep it out of clipboard managers.
+                    let pasteboard = NSPasteboard.general
+                    pasteboard.clearContents()
+                    pasteboard.setString(text, forType: .string)
+                    pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+                    pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
+                    Self.log.info("Composer: compose paste failed; text copied, draft kept")
                     return
                 }
                 store.delete(id: draftID)

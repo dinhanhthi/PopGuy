@@ -3,7 +3,8 @@
 //
 // SwiftUI content of the composer window: the text editor and a footer with the
 // source hint, "Restore draft", Cancel, Done and Done & Submit. When the terminal
-// session has ended, Done becomes "Copy & Close" and Done & Submit is hidden.
+// session has ended, or Compose has no target app, Done becomes "Copy & Close" and
+// Done & Submit is hidden.
 // The owner (the composer controller) holds the `ComposerModel` and its callbacks.
 
 import AppKit
@@ -19,6 +20,10 @@ final class ComposerModel: ObservableObject {
     @Published var sourceAppName: String?
     /// The CLI went away: the text can only be copied.
     @Published var sessionEnded = false
+    /// Compose mode: name of the app Done pastes into.
+    @Published var pasteTargetName: String?
+    /// Compose mode without a target app: the text can only be copied.
+    @Published var noTarget = false
     /// An older draft exists; shows "Restore draft".
     @Published var draftAvailable = false
 
@@ -32,6 +37,11 @@ final class ComposerModel: ObservableObject {
     init(text: String = "", sourceAppName: String? = nil) {
         self.text = text
         self.sourceAppName = sourceAppName
+    }
+
+    /// Done copies the text instead of delivering it.
+    var isCopyOnly: Bool {
+        sessionEnded || noTarget
     }
 
     /// The text cannot be sent back: it exceeds the protocol's size cap.
@@ -104,7 +114,7 @@ struct ComposerView: View {
     @ViewBuilder
     private var actionButtons: some View {
         footerButton("Cancel", tooltip: "Cancel (Esc)") { model.onCancel() }
-        if model.sessionEnded {
+        if model.isCopyOnly {
             footerButton("Copy & Close", tooltip: "Copy & Close (\u{2318}\u{21A9})", prominent: true, action: done)
                 .disabled(model.text.isEmpty)
         } else {
@@ -118,6 +128,12 @@ struct ComposerView: View {
     private var sourceHint: String {
         if let name = model.sourceAppName, !name.isEmpty {
             return "Editing for \(name)"
+        }
+        if model.noTarget {
+            return "Compose (no target: Copy & Close copies the text)"
+        }
+        if let name = model.pasteTargetName, !name.isEmpty {
+            return "Pasting into \(name)"
         }
         return "Compose"
     }
@@ -138,9 +154,10 @@ struct ComposerView: View {
 
     // MARK: Actions (buttons and keyboard)
 
-    /// Done, or Copy & Close once the session ended. Ignored while the text is too large.
+    /// Done, or Copy & Close once the session ended or without a Compose target.
+    /// Ignored while the text is too large.
     private func done() {
-        if model.sessionEnded {
+        if model.isCopyOnly {
             guard !model.text.isEmpty else { return }
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
@@ -156,7 +173,7 @@ struct ComposerView: View {
     }
 
     private func doneAndSubmit() {
-        guard !model.sessionEnded, !model.isTooLarge else {
+        guard !model.isCopyOnly, !model.isTooLarge else {
             NSSound.beep()
             return
         }
