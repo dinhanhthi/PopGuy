@@ -28,6 +28,15 @@ struct ComposerTextView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = Self.makeScrollView(text: text, coordinator: context.coordinator)
+        if let textView = scrollView.documentView as? ComposerNSTextView {
+            apply(callbacksTo: textView)
+        }
+        return scrollView
+    }
+
+    /// The scroll view and its text view, wired to `coordinator` (text storage and text view delegate).
+    static func makeScrollView(text: String, coordinator: Coordinator) -> NSScrollView {
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
@@ -64,11 +73,9 @@ struct ComposerTextView: NSViewRepresentable {
         textView.isIncrementalSearchingEnabled = true
 
         // Markdown highlighting runs on every character edit, including this first text.
-        context.coordinator.textView = textView
-        textView.textStorage?.delegate = context.coordinator
+        textView.textStorage?.delegate = coordinator
         textView.string = text
-        textView.delegate = context.coordinator
-        apply(callbacksTo: textView)
+        textView.delegate = coordinator
         return scrollView
     }
 
@@ -90,7 +97,6 @@ struct ComposerTextView: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextViewDelegate, NSTextStorageDelegate {
         var parent: ComposerTextView
-        weak var textView: NSTextView?
 
         init(parent: ComposerTextView) {
             self.parent = parent
@@ -102,12 +108,14 @@ struct ComposerTextView: NSViewRepresentable {
         }
 
         /// Attribute changes made here are not registered with the undo manager.
+        /// Runs inside the storage's edit pass, while the text view's selection still has
+        /// its pre-edit range: change storage attributes only, never text view state (setting
+        /// typing attributes here read out of range and left the storage stuck mid-edit).
+        /// Typed text needs no typing attributes: this pass restyles it before it is drawn.
         func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions,
                          range editedRange: NSRange, changeInLength delta: Int) {
             guard editedMask.contains(.editedCharacters) else { return }
             MarkdownStyler.highlight(textStorage, editedRange: editedRange, baseFont: ComposerTextView.baseFont)
-            // New text starts plain, not with the code/heading style next to the caret.
-            textView?.typingAttributes = MarkdownStyler.baseAttributes(ComposerTextView.baseFont)
         }
     }
 }
