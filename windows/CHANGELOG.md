@@ -21,6 +21,7 @@ Before 1.4.0 Windows had its own versions (0.1.0).
 ### Changed
 - General, Triggers and Appearance now use tabs like the Ignore page.
 - The Settings window opens smaller by default and has a larger minimum size.
+- Settings captions and row buttons are larger, and each group's description now sits above its card.
 
 ## [1.4.8] - 2026-11-05
 

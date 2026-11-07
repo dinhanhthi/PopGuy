@@ -27,6 +27,7 @@ heading, which the release body shows under `## Windows`.
 ### Changed
 - The Settings window has a new look: a glass sidebar with capsule rows, page tabs and buttons in the title bar row, and centered modal cards. General, Triggers and Appearance now use tabs like the Ignore page.
 - The Settings window opens smaller by default and has a larger minimum size.
+- Settings captions and row buttons are larger, and each group's description now sits above its card.
 
 ### Fixed
 - Settings modals no longer jump up after they open.
