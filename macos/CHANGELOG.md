@@ -15,6 +15,22 @@ heading, which the release body shows under `## Windows`.
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.4.9] - 2026-11-07
+
+### Added
+- Terminal Composer: write long prompts for terminal tools in a PopGuy window. Claude Code (Ctrl+G), Codex, Gemini CLI, git and zsh (Ctrl+X Ctrl+E) open it as their editor through the new `popguy-edit` command. Done sends the text back to the terminal, Cancel or Esc keeps the original, and drafts are autosaved.
+- Simple Markdown in the composer: headings are bold, including the `#`.
+- Compose shortcut (default Ctrl+Option+Command+E): opens an empty composer from any app and pastes the result into the app you were in, or copies it when pasting isn't possible.
+- A "Composer" page in Settings with the on/off switch, the shortcut, the command install, "Set up shell" (adds the PATH and VISUAL lines to your shell config between PopGuy markers, and removes them again) and copyable snippets for zsh, fish, Claude Code and git.
+- A "More actions" connector between the toolbar and the More card in the Actions preview.
+
+### Changed
+- The Settings window has a new look: a glass sidebar with capsule rows, page tabs and buttons in the title bar row, and centered modal cards. General, Triggers and Appearance now use tabs like the Ignore page.
+- The Settings window opens smaller by default and has a larger minimum size.
+
+### Fixed
+- Settings modals no longer jump up after they open.
+
 ## [1.4.8] - 2026-11-05
 
 ### Fixed

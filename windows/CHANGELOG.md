@@ -9,6 +9,19 @@ Before 1.4.0 Windows had its own versions (0.1.0).
 
 ## [Unreleased]
 
+## [1.4.9] - 2026-11-07
+
+### Added
+- Terminal Composer: write long prompts for terminal tools in a PopGuy window. Claude Code (Ctrl+G), Codex, Gemini CLI, git and PowerShell open it as their editor through the new `popguy-edit` command. Done sends the text back to the terminal, Cancel or Esc keeps the original, and drafts are autosaved.
+- Simple Markdown in the composer: headings are bold, including the `#`.
+- Compose shortcut (default Ctrl+Alt+Shift+E): opens an empty composer from any app and pastes the result into the app you were in, or copies it when pasting isn't possible (elevated, remote or non-terminal targets).
+- A "Composer" page in Settings with the on/off switch, the shortcut, the command install, the VISUAL editor variable and copyable snippets for PowerShell, Claude Code and git.
+- A "More actions" connector between the toolbar and the More card in the Actions preview.
+
+### Changed
+- General, Triggers and Appearance now use tabs like the Ignore page.
+- The Settings window opens smaller by default and has a larger minimum size.
+
 ## [1.4.8] - 2026-11-05
 
 ### Changed
