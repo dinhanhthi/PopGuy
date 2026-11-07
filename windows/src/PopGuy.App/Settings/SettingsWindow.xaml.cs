@@ -28,10 +28,10 @@ namespace PopGuy.Settings;
 public sealed partial class SettingsWindow : Window
 {
     // Wide enough that the Actions cards' text does not wrap word by word.
-    private const double MinWidth = 900;
-    private const double MinHeight = 460;
-    private const double DefaultWidth = 1250;
-    private const double DefaultHeight = 810;
+    private const double MinWidth = 960;
+    private const double MinHeight = 520;
+    private const double DefaultWidth = 1100;
+    private const double DefaultHeight = 720;
 
     /// <summary>The pages by sidebar item Tag, with their header glyph (Segoe Fluent Icons); a phase adds its page here.</summary>
     private static readonly Dictionary<string, (Type Page, string Glyph)> Pages = new()
@@ -41,6 +41,7 @@ public sealed partial class SettingsWindow : Window
         ["Actions"] = (typeof(ActionsPage), "\uE945"),
         ["History"] = (typeof(HistoryPage), "\uE81C"),
         ["Triggers"] = (typeof(TriggersPage), "\uE7C9"),
+        ["TerminalComposer"] = (typeof(TerminalComposerPage), "\uE756"),
         ["Appearance"] = (typeof(AppearancePage), "\uE771"),
         ["Ignore"] = (typeof(IgnorePage), "\uED1A"),
         ["About"] = (typeof(AboutPage), "\uE946"),
@@ -56,9 +57,9 @@ public sealed partial class SettingsWindow : Window
     private XamlRoot? _xamlRoot;
     private bool _closing;
 
-    /// <summary>Triggers' OCR section is to scroll into view once its page is up (<see cref="SelectSection"/>).</summary>
+    /// <summary>Triggers' OCR tab is to be selected once its page is up (<see cref="SelectSection"/>).</summary>
     private bool _focusOcrSection;
-    // The tray asked for the OCR section: each first-show re-attach resets the page's scroll, so it scrolls there again.
+    // The tray asked for the OCR tab: each first-show re-attach selects it again (idempotent).
     private bool _refocusOcrOnReattach;
 
     /// <summary>The one-shot re-realizations after the first show, kept so they tick.</summary>
@@ -122,7 +123,7 @@ public sealed partial class SettingsWindow : Window
     /// <summary>
     /// Picks the sidebar item <paramref name="tag"/> (a <see cref="Pages"/> key) as a click would (macOS
     /// SettingsNavigator.section): the tray's History, About PopGuy and Capture Screen Text… while OCR is off. With
-    /// <paramref name="focusOcrSection"/>, Triggers then scrolls to its OCR section (macOS focusOCRSection).
+    /// <paramref name="focusOcrSection"/>, Triggers then selects its OCR tab (macOS focusOCRSection).
     /// </summary>
     internal void SelectSection(string tag, bool focusOcrSection = false)
     {
@@ -169,7 +170,7 @@ public sealed partial class SettingsWindow : Window
         });
     }
 
-    /// <summary>The pending OCR focus, once Triggers is the page (it scrolls after its own layout).</summary>
+    /// <summary>The pending OCR focus, once Triggers is the page (it selects its OCR tab).</summary>
     private void FocusPendingSection()
     {
         if (!_focusOcrSection || ContentFrame.Content is not TriggersPage triggers) return;

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Settings → General (macOS GeneralView.swift): Enable PopGuy, Start at login, the Global Prompt and the close
-    confirmation and Setup Guide…, as Windows 11 Settings cards under the macOS section headers. The Dock toggle has no
-    Windows counterpart. The header is the window's.
+    Settings → General (macOS GeneralView.swift): a SelectorBar (tabs, as on the Ignore page) switches between App
+    (Enable PopGuy, Start at login, Setup Guide…), Global Prompt, Formatting and Closing the Toolbar (the close
+    confirmation and the Enter key on a result), as Windows 11 Settings cards; the bar names them, so no tab repeats its
+    name as a heading. The Dock toggle has no Windows counterpart. The header is the window's.
 -->
 <Page
     x:Class="PopGuy.Settings.Pages.GeneralPage"
@@ -10,109 +11,126 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:CommunityToolkit.WinUI.Controls">
 
-    <Page.Resources>
-        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
-            <Setter Property="Margin" Value="1,24,0,4" />
-        </Style>
-    </Page.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-    <ScrollViewer>
-        <StackPanel
-            MaxWidth="1000"
-            Margin="24,16,24,24"
-            Spacing="4">
+        <SelectorBar
+            x:Name="TabBar"
+            Grid.Row="0"
+            Margin="20,8,24,4"
+            AutomationProperties.Name="General sections">
+            <SelectorBarItem Text="App" />
+            <SelectorBarItem Text="Global prompt" />
+            <SelectorBarItem Text="Formatting" />
+            <SelectorBarItem Text="Closing the toolbar" />
+        </SelectorBar>
 
-            <TextBlock
-                Margin="1,0,0,4"
-                Style="{StaticResource SectionHeaderStyle}"
-                Text="App" />
+        <ScrollViewer x:Name="TabScroller" Grid.Row="1">
+            <!-- A stretched Grid takes the viewport width: a MaxWidth child placed straight in the ScrollViewer is centered by its narrower desired width and overflows the right edge on wide windows. -->
+            <Grid>
+                <Grid MaxWidth="1000" Margin="24,8,24,24">
+                    <StackPanel x:Name="AppTab" Spacing="4">
+                        <controls:SettingsCard
+                            Description="When off, every trigger — text selection, double-click, Ctrl+C+C, and hotkeys — is suppressed."
+                            Header="Enable PopGuy">
+                            <ToggleSwitch x:Name="EnabledToggle" AutomationProperties.Name="Enable PopGuy" />
+                        </controls:SettingsCard>
 
-            <controls:SettingsCard
-                Description="When off, every trigger — text selection, double-click, Ctrl+C+C, and hotkeys — is suppressed."
-                Header="Enable PopGuy">
-                <ToggleSwitch x:Name="EnabledToggle" AutomationProperties.Name="Enable PopGuy" />
-            </controls:SettingsCard>
+                        <controls:SettingsCard Header="Start at login">
+                            <controls:SettingsCard.Description>
+                                <StackPanel Spacing="2">
+                                    <TextBlock
+                                        x:Name="LoginErrorText"
+                                        Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                        TextWrapping="Wrap"
+                                        Visibility="Collapsed" />
+                                    <TextBlock Text="Automatically launch PopGuy when you log in." TextWrapping="Wrap" />
+                                </StackPanel>
+                            </controls:SettingsCard.Description>
+                            <ToggleSwitch x:Name="LoginToggle" AutomationProperties.Name="Start at login" />
+                        </controls:SettingsCard>
 
-            <controls:SettingsCard Header="Start at login">
-                <controls:SettingsCard.Description>
-                    <StackPanel Spacing="2">
-                        <TextBlock
-                            x:Name="LoginErrorText"
-                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                            TextWrapping="Wrap"
-                            Visibility="Collapsed" />
-                        <TextBlock Text="Automatically launch PopGuy when you log in." TextWrapping="Wrap" />
+                        <controls:SettingsCard
+                            Description="Opens the first-run walkthrough again. Settings stays open."
+                            Header="Setup Guide">
+                            <Button x:Name="SetupGuideButton" Content="Setup Guide…" />
+                        </controls:SettingsCard>
                     </StackPanel>
-                </controls:SettingsCard.Description>
-                <ToggleSwitch x:Name="LoginToggle" AutomationProperties.Name="Start at login" />
-            </controls:SettingsCard>
 
-            <controls:SettingsCard
-                Description="Opens the first-run walkthrough again. Settings stays open."
-                Header="Setup Guide">
-                <Button x:Name="SetupGuideButton" Content="Setup Guide…" />
-            </controls:SettingsCard>
+                    <StackPanel
+                        x:Name="PromptTab"
+                        Spacing="4"
+                        Visibility="Collapsed">
+                        <controls:SettingsCard
+                            ContentAlignment="Vertical"
+                            Description="Added to the beginning of every AI action's prompt — Improve, Shorten, Proofread, Translate, the Prompt action, and custom actions — so you don't repeat the same instruction in each one. Leave empty to disable. Available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on)."
+                            HorizontalContentAlignment="Stretch">
+                            <TextBox
+                                x:Name="PromptBox"
+                                MinHeight="80"
+                                HorizontalAlignment="Stretch"
+                                AcceptsReturn="True"
+                                AutomationProperties.Name="Global Prompt"
+                                TextWrapping="Wrap" />
+                        </controls:SettingsCard>
+                    </StackPanel>
 
-            <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Global Prompt" />
+                    <StackPanel
+                        x:Name="FormattingTab"
+                        Spacing="4"
+                        Visibility="Collapsed">
+                        <controls:SettingsCard
+                            Description="Render Markdown text styles and lists in the result. Bold, italic, strikethrough, inline code, and lists are supported."
+                            Header="Preserve &amp; render formatting">
+                            <ToggleSwitch x:Name="FormattingToggle" AutomationProperties.Name="Preserve &amp; render formatting" />
+                        </controls:SettingsCard>
+                    </StackPanel>
 
-            <controls:SettingsCard
-                ContentAlignment="Vertical"
-                Description="Added to the beginning of every AI action's prompt — Improve, Shorten, Proofread, Translate, the Prompt action, and custom actions — so you don't repeat the same instruction in each one. Leave empty to disable. Available: {{app}}, {{date}}, {{language}}, {{domain}} (only when Ignored Domains is on)."
-                HorizontalContentAlignment="Stretch">
-                <TextBox
-                    x:Name="PromptBox"
-                    MinHeight="80"
-                    HorizontalAlignment="Stretch"
-                    AcceptsReturn="True"
-                    AutomationProperties.Name="Global Prompt"
-                    TextWrapping="Wrap" />
-            </controls:SettingsCard>
+                    <StackPanel
+                        x:Name="ClosingTab"
+                        Spacing="4"
+                        Visibility="Collapsed">
+                        <controls:SettingsCard
+                            Description="When on, clicking outside or pressing Escape after a result is ready asks for confirmation, so you don't dismiss it by accident."
+                            Header="Confirm before closing a finished result">
+                            <ToggleSwitch x:Name="ConfirmCloseToggle" AutomationProperties.Name="Confirm before closing a finished result" />
+                        </controls:SettingsCard>
 
-            <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Formatting" />
+                        <!-- Items in EnterResultAction order: the selected index is the enum value. -->
+                        <controls:SettingsCard
+                            Description="What pressing Enter does while a result shows. When the action applies, the key does not reach the source app."
+                            Header="Enter on a result">
+                            <ComboBox
+                                x:Name="EnterActionBox"
+                                MinWidth="160"
+                                AutomationProperties.Name="Enter on a result">
+                                <ComboBoxItem Content="Paste back" />
+                                <ComboBoxItem Content="Copy and close" />
+                                <ComboBoxItem Content="Regenerate" />
+                                <ComboBoxItem Content="Do nothing" />
+                            </ComboBox>
+                        </controls:SettingsCard>
 
-            <controls:SettingsCard
-                Description="Render Markdown text styles and lists in the result. Bold, italic, strikethrough, inline code, and lists are supported."
-                Header="Preserve &amp; render formatting">
-                <ToggleSwitch x:Name="FormattingToggle" AutomationProperties.Name="Preserve &amp; render formatting" />
-            </controls:SettingsCard>
-
-            <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Closing the Toolbar" />
-
-            <controls:SettingsCard
-                Description="When on, clicking outside or pressing Escape after a result is ready asks for confirmation, so you don't dismiss it by accident."
-                Header="Confirm before closing a finished result">
-                <ToggleSwitch x:Name="ConfirmCloseToggle" AutomationProperties.Name="Confirm before closing a finished result" />
-            </controls:SettingsCard>
-
-            <!-- Items in EnterResultAction order: the selected index is the enum value. -->
-            <controls:SettingsCard
-                Description="What pressing Enter does while a result shows. When the action applies, the key does not reach the source app."
-                Header="Enter on a result">
-                <ComboBox
-                    x:Name="EnterActionBox"
-                    MinWidth="160"
-                    AutomationProperties.Name="Enter on a result">
-                    <ComboBoxItem Content="Paste back" />
-                    <ComboBoxItem Content="Copy and close" />
-                    <ComboBoxItem Content="Regenerate" />
-                    <ComboBoxItem Content="Do nothing" />
-                </ComboBox>
-            </controls:SettingsCard>
-
-            <controls:SettingsCard
-                x:Name="EnterFallbackCard"
-                Description="Used when the first choice does not apply to the result: Paste back needs an editable text field, and Regenerate needs an action that can run again."
-                Header="If that isn't available">
-                <ComboBox
-                    x:Name="EnterFallbackBox"
-                    MinWidth="160"
-                    AutomationProperties.Name="If that isn't available">
-                    <ComboBoxItem Content="Paste back" />
-                    <ComboBoxItem Content="Copy and close" />
-                    <ComboBoxItem Content="Regenerate" />
-                    <ComboBoxItem Content="Do nothing" />
-                </ComboBox>
-            </controls:SettingsCard>
-        </StackPanel>
-    </ScrollViewer>
+                        <controls:SettingsCard
+                            x:Name="EnterFallbackCard"
+                            Description="Used when the first choice does not apply to the result: Paste back needs an editable text field, and Regenerate needs an action that can run again."
+                            Header="If that isn't available">
+                            <ComboBox
+                                x:Name="EnterFallbackBox"
+                                MinWidth="160"
+                                AutomationProperties.Name="If that isn't available">
+                                <ComboBoxItem Content="Paste back" />
+                                <ComboBoxItem Content="Copy and close" />
+                                <ComboBoxItem Content="Regenerate" />
+                                <ComboBoxItem Content="Do nothing" />
+                            </ComboBox>
+                        </controls:SettingsCard>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
 </Page>

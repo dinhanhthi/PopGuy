@@ -17,7 +17,8 @@ namespace PopGuy.Settings.Pages;
 /// through <see cref="SettingsStore.Update"/> at once; the toolbar reads these settings on each presentation, so the
 /// next toolbar shows the change; the toolbar preview (the layout editor, preview-only) shows it at once. The sample
 /// sentence shows the result text's size: the font size, grown by the zoom when "Include font size in zoom" is on. A
-/// change from elsewhere (the tray's Show Logo Only too) shows while the page is open.
+/// change from elsewhere (the tray's Show Logo Only too) shows while the page is open. A SelectorBar (as on the Ignore
+/// page) shows the Toolbar Style, Toolbar Zoom or Result Text tab under the preview; a new page opens on Toolbar Style.
 /// </summary>
 public sealed partial class AppearancePage : Page
 {
@@ -33,6 +34,8 @@ public sealed partial class AppearancePage : Page
     public AppearancePage()
     {
         InitializeComponent();
+        TabBar.SelectedItem = TabBar.Items[0];
+        TabBar.SelectionChanged += (_, _) => ShowTab();
         ToolbarStyleBar.SelectionChanged += (_, _) => OnToolbarStyleChanged();
         ZoomBar.SelectionChanged += (_, _) => OnZoomChanged();
         FontSizeBar.SelectionChanged += (_, _) => OnFontSizeChanged();
@@ -80,6 +83,17 @@ public sealed partial class AppearancePage : Page
         if (_services is null || IsLoaded) return;
         _services.Settings.Changed -= OnSettingsChanged;
         _subscribed = false;
+    }
+
+    /// <summary>The picked tab's panel, scrolled to its top.</summary>
+    private void ShowTab()
+    {
+        var index = TabBar.Items.IndexOf(TabBar.SelectedItem);
+        if (index < 0) return;
+        StyleTab.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ZoomTab.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
+        ResultTextTab.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+        TabScroller.ChangeView(null, 0, null, disableAnimation: true);
     }
 
     /// <summary>Queued: a change may be saved from any thread.</summary>

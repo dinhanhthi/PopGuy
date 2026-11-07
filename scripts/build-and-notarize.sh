@@ -97,19 +97,22 @@ if /usr/libexec/PlistBuddy -c "Print :PGReleaseDate" "$INFO_PLIST" >/dev/null 2>
   echo "==> Stamped PGReleaseDate = $(date -u +%Y-%m-%d) (will be restored on exit)"
 fi
 
-# --- 2b. Guard the app target's Release settings (fail before the slow archive) --------------
+# --- 2b. Guard the Release settings of the app and its popguy-edit CLI (fail before the slow archive)
 # Xcode's "Update to recommended settings" sweep has twice rewritten these in the pbxproj:
 # Release CODE_SIGN_IDENTITY → "Apple Development" (breaks notarization) and
 # MACOSX_DEPLOYMENT_TARGET → $(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET) (14.0 on Xcode 27 — drops
-# macOS 13 users silently). Check, don't override: a command-line override would apply to every
-# target, including PopGuyMLXHelper (intentionally 14.6) and the SPM packages.
-APP_SETTINGS="$(xcodebuild -project macos/PopGuy.xcodeproj -target PopGuy -configuration Release -showBuildSettings 2>/dev/null)"
-APP_SIGN_ID="$(sed -n 's/^ *CODE_SIGN_IDENTITY = //p' <<<"$APP_SETTINGS" | head -1)"
-APP_MIN_OS="$(sed -n 's/^ *MACOSX_DEPLOYMENT_TARGET = //p' <<<"$APP_SETTINGS" | head -1)"
-[[ "$APP_SIGN_ID" == "Developer ID Application" ]] \
-  || { echo "error: PopGuy Release CODE_SIGN_IDENTITY is '${APP_SIGN_ID:-unset}', expected 'Developer ID Application' (Xcode recommended-settings sweep?)." >&2; exit 1; }
-[[ "$APP_MIN_OS" == "$MIN_MACOS" ]] \
-  || { echo "error: PopGuy Release MACOSX_DEPLOYMENT_TARGET is '${APP_MIN_OS:-unset}', expected '$MIN_MACOS' (Xcode recommended-settings sweep?)." >&2; exit 1; }
+# macOS 13 users silently). PopGuy and PopGuyEdit (the embedded popguy-edit CLI) are both checked.
+# Check, don't override: a command-line override would apply to every target, including
+# PopGuyMLXHelper (intentionally 14.6, not guarded here) and the SPM packages.
+for TARGET in PopGuy PopGuyEdit; do
+  APP_SETTINGS="$(xcodebuild -project macos/PopGuy.xcodeproj -target "$TARGET" -configuration Release -showBuildSettings 2>/dev/null)"
+  APP_SIGN_ID="$(sed -n 's/^ *CODE_SIGN_IDENTITY = //p' <<<"$APP_SETTINGS" | head -1)"
+  APP_MIN_OS="$(sed -n 's/^ *MACOSX_DEPLOYMENT_TARGET = //p' <<<"$APP_SETTINGS" | head -1)"
+  [[ "$APP_SIGN_ID" == "Developer ID Application" ]] \
+    || { echo "error: $TARGET Release CODE_SIGN_IDENTITY is '${APP_SIGN_ID:-unset}', expected 'Developer ID Application' (Xcode recommended-settings sweep?)." >&2; exit 1; }
+  [[ "$APP_MIN_OS" == "$MIN_MACOS" ]] \
+    || { echo "error: $TARGET Release MACOSX_DEPLOYMENT_TARGET is '${APP_MIN_OS:-unset}', expected '$MIN_MACOS' (Xcode recommended-settings sweep?)." >&2; exit 1; }
+done
 
 # --- 3. Archive (the heavy MLX/Metal build) --------------------------------
 # -skipMacroValidation: mlx-swift-lm's MLXHuggingFace uses a Swift macro that otherwise needs

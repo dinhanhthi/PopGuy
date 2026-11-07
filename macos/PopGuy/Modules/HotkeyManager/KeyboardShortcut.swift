@@ -93,7 +93,7 @@ extension KeyboardShortcut {
     ///
     /// Covers the most common shortcut keys. For uncovered codes, falls back
     /// to a decimal string so the UI always shows something.
-    private nonisolated static func keyCodeToGlyph(_ keyCode: UInt32) -> String {
+    nonisolated static func keyCodeToGlyph(_ keyCode: UInt32) -> String {
         switch keyCode {
         case 0:  return "A"
         case 1:  return "S"
@@ -199,5 +199,18 @@ extension ShortcutBinding {
             make(.translate, "t", fallback: 17),
             speakBinding,
         ]
+    }
+}
+
+// MARK: - Default Compose shortcut
+
+extension KeyboardShortcut {
+
+    /// Default Terminal Composer shortcut: ⌃⌥⌘E ("E" for Editor), the same modifiers as
+    /// `ShortcutBinding.defaultBuiltins`, the letter resolved for the current layout
+    /// (fallback: US-QWERTY E = 14).
+    @MainActor static var defaultCompose: KeyboardShortcut {
+        let mods: UInt = (1 << 18) | (1 << 19) | (1 << 20)
+        return KeyboardShortcut(keyCode: UInt32(virtualKeyCode(for: "e", fallback: 14)), modifierFlags: mods)
     }
 }

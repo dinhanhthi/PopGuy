@@ -57,6 +57,10 @@ jobs:
         run: |
           dotnet publish src/PopGuy.App/PopGuy.App.csproj -c Release -r "win-$env:ARCH" "-p:Platform=$env:PLATFORM_NAME" "-p:Version=$env:VERSION" "-p:PopGuyUpdateOverride=$env:OVERRIDE" -o publish
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # popguy-edit.exe (Terminal Composer CLI) in bin\, the folder Settings adds to the user PATH: it starts
+          # ..\PopGuy.exe. No .pdb, so bin\ holds only the exe.
+          dotnet publish src/PopGuy.Edit/PopGuy.Edit.csproj -c Release -r "win-$env:ARCH" "-p:Version=$env:VERSION" -p:DebugType=none -o publish\bin
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # vcredist143-<arch>: Setup.exe installs the MSVC runtime the llama.cpp natives need (a clean PC has none; the
       # runners do, so the tests can't catch its absence).

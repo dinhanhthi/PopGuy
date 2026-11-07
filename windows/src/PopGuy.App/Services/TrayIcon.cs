@@ -1,13 +1,16 @@
 using Microsoft.UI.Dispatching;
+using PopGuy.Composer;
 using PopGuy.Core.Settings;
 using PopGuy.Platform.SystemServices;
+using PopGuy.Platform.Windowing;
 
 namespace PopGuy.Services;
 
 /// <summary>
 /// The tray icon and its menu (spec-3 §5.9, the macOS status item, in its order): Disable/Enable PopGuy, Show on Text
-/// Selection, Show on Double-Click, Show Logo Only, Capture Screen Text…, Settings, History, About PopGuy, Setup Guide,
-/// Check for Updates and Quit PopGuy, with Update to vX… first while an update is ready; rebuilt each time it opens. The
+/// Selection, Show on Double-Click, Show Logo Only, Capture Screen Text…, New Composer (while the Terminal Composer is
+/// on), Settings, History, About PopGuy, Setup Guide, Check for Updates and Quit PopGuy, with Update to vX… first while
+/// an update is ready; rebuilt each time it opens. The
 /// macOS Accessibility items have no Windows counterpart. Capture Screen Text… is always enabled (macOS): with Screen
 /// Text Capture off it opens Settings › Triggers at the OCR section instead of capturing. The icon is the app's colour
 /// logo (PopGuy.ico), on a light or dark taskbar alike, and dims while PopGuy is disabled. A left click opens Settings.
@@ -24,6 +27,7 @@ internal sealed class TrayIcon : IDisposable
     private readonly Action _openSettings;
     private readonly Action<string, bool> _openSettingsSection;
     private readonly Action _captureScreenText;
+    private readonly Action<nint, bool> _newComposer;
     private readonly Action _openSetupGuide;
     private readonly Action _quit;
     private readonly Action<string> _log;
@@ -34,16 +38,20 @@ internal sealed class TrayIcon : IDisposable
 
     /// <param name="openSettings">Opens the Settings window. Runs from the dispatcher queue, after the menu closed.</param>
     /// <param name="openSettingsSection">
-    /// Opens Settings on a page (a sidebar tag), with Triggers scrolled to its OCR section when the flag is set. Runs from
+    /// Opens Settings on a page (a sidebar tag), with Triggers on its OCR tab when the flag is set. Runs from
     /// the dispatcher queue.
     /// </param>
     /// <param name="captureScreenText">Starts an OCR capture (Screen Text Capture is on). Runs from the dispatcher queue.</param>
+    /// <param name="newComposer">
+    /// Opens an empty composer that pastes into the given window (0: none, copy only); the flag allows Done &amp; Submit's
+    /// Enter (false for a Z-order guess, see <see cref="ComposeSource"/>). Runs from the dispatcher queue.
+    /// </param>
     /// <param name="openSetupGuide">Opens the first-launch wizard again. Runs from the dispatcher queue.</param>
     /// <param name="quit">Quit PopGuy. Runs from the dispatcher queue, never inside the icon's window procedure.</param>
     /// <exception cref="System.ComponentModel.Win32Exception">Windows refused the icon's window.</exception>
     public TrayIcon(
         SettingsStore settings, UpdateService updates, DispatcherQueue dispatcher, Action openSettings, Action<string, bool> openSettingsSection,
-        Action captureScreenText, Action openSetupGuide, Action quit, Action<string> log)
+        Action captureScreenText, Action<nint, bool> newComposer, Action openSetupGuide, Action quit, Action<string> log)
     {
         _settings = settings;
         _updates = updates;
@@ -51,6 +59,7 @@ internal sealed class TrayIcon : IDisposable
         _openSettings = openSettings;
         _openSettingsSection = openSettingsSection;
         _captureScreenText = captureScreenText;
+        _newComposer = newComposer;
         _openSetupGuide = openSetupGuide;
         _quit = quit;
         _log = log;
@@ -105,6 +114,16 @@ internal sealed class TrayIcon : IDisposable
                 Checked: current.ShowLogoOnly),
             // Queued like the others: a capture makes windows, which must not happen inside the icon's window procedure.
             new("Capture Screen Text…", () => _dispatcher.TryEnqueue(CaptureScreenText)),
+        ]);
+        // macOS: shown only while the Terminal Composer is on, not gated by the master switch. Its target is read now,
+        // before the menu takes the foreground (see ComposeSource).
+        if (current.TerminalComposerEnabled)
+        {
+            var target = ComposeSource.Find(ToolbarWindowStyle.ForegroundWindow());
+            items.Add(new("New Composer", () => _dispatcher.TryEnqueue(() => _newComposer(target.Hwnd, !target.FromZOrder))));
+        }
+        items.AddRange(
+        [
             NotifyIconMenuItem.Separator,
             new("Settings", () => _dispatcher.TryEnqueue(() => _openSettings())),
             new("History", () => _dispatcher.TryEnqueue(() => _openSettingsSection("History", false))),

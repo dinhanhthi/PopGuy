@@ -12,6 +12,7 @@
 		A043BAE1603803A839C0CB52 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = A5534EA92B26FA8ADC30543F /* Yams */; };
 		A6F3C8D429E54B1F8D7C6A5B /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = B7E4D9C52AF64C2E9B8D7A6C /* LICENSE */; };
 		D3132B4DA6DB4860A6AC /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = 946417FD3A4347A6B0AB /* Tokenizers */; };
+		C7DD0C2BEAB36CE754530204 /* popguy-edit in CopyFiles */ = {isa = PBXBuildFile; fileRef = 152C1B42BEC8FE88BE735048 /* popguy-edit */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		D3BD085B2FED9B1800078DEB /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = D3BD085A2FED9B1800078DEB /* MLXHuggingFace */; };
 		D3BD085D2FED9B1800078DEB /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = D3BD085C2FED9B1800078DEB /* MLXLLM */; };
 		D3BD085F2FED9B1800078DEB /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = D3BD085E2FED9B1800078DEB /* MLXLMCommon */; };
@@ -40,6 +41,13 @@
 			remoteGlobalIDString = D3BD084B2FED962E00078DEB;
 			remoteInfo = PopGuyMLXHelper;
 		};
+		EDBAD889B4FDFE303D4A229B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D342443E2FD4A56C001600A8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E3D372703EADACE20B83EA53;
+			remoteInfo = PopGuyEdit;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -59,12 +67,14 @@
 			dstSubfolderSpec = 1;
 			files = (
 				D3BD08632FED9C1200078DEB /* PopGuyMLXHelper in CopyFiles */,
+				C7DD0C2BEAB36CE754530204 /* popguy-edit in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		152C1B42BEC8FE88BE735048 /* popguy-edit */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "popguy-edit"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7E4D9C52AF64C2E9B8D7A6C /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE; path = ../LICENSE; sourceTree = SOURCE_ROOT; };
 		D34244462FD4A56C001600A8 /* PopGuy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PopGuy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D34244532FD4A56D001600A8 /* PopGuyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PopGuyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -106,6 +116,11 @@
 			path = PopGuyMLXHelper;
 			sourceTree = "<group>";
 		};
+		6F8B872990A06F34EF6544BA /* PopGuyEdit */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PopGuyEdit;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -144,6 +159,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		35F76B12E59A82A9F4C07D5D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -155,6 +177,7 @@
 				D34244562FD4A56D001600A8 /* PopGuyTests */,
 				D34244602FD4A56D001600A8 /* PopGuyUITests */,
 				D3BD084D2FED962E00078DEB /* PopGuyMLXHelper */,
+				6F8B872990A06F34EF6544BA /* PopGuyEdit */,
 				D34244472FD4A56C001600A8 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -166,6 +189,7 @@
 				D34244532FD4A56D001600A8 /* PopGuyTests.xctest */,
 				D342445D2FD4A56D001600A8 /* PopGuyUITests.xctest */,
 				D3BD084C2FED962E00078DEB /* PopGuyMLXHelper */,
+				152C1B42BEC8FE88BE735048 /* popguy-edit */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -187,6 +211,7 @@
 			);
 			dependencies = (
 				D3BD08652FED9C3700078DEB /* PBXTargetDependency */,
+				C83288B0E4C6B8684203C9EF /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				D34244482FD4A56C001600A8 /* PopGuy */,
@@ -273,6 +298,27 @@
 			productReference = D3BD084C2FED962E00078DEB /* PopGuyMLXHelper */;
 			productType = "com.apple.product-type.tool";
 		};
+		E3D372703EADACE20B83EA53 /* PopGuyEdit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6A076550EF9DD5066BEB4651 /* Build configuration list for PBXNativeTarget "PopGuyEdit" */;
+			buildPhases = (
+				DA90A18EE050F6F4A48CF958 /* Sources */,
+				35F76B12E59A82A9F4C07D5D /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				6F8B872990A06F34EF6544BA /* PopGuyEdit */,
+			);
+			name = PopGuyEdit;
+			packageProductDependencies = (
+			);
+			productName = PopGuyEdit;
+			productReference = 152C1B42BEC8FE88BE735048 /* popguy-edit */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -295,6 +341,9 @@
 						TestTargetID = D34244452FD4A56C001600A8;
 					};
 					D3BD084B2FED962E00078DEB = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					E3D372703EADACE20B83EA53 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -324,6 +373,7 @@
 				D34244522FD4A56D001600A8 /* PopGuyTests */,
 				D342445C2FD4A56D001600A8 /* PopGuyUITests */,
 				D3BD084B2FED962E00078DEB /* PopGuyMLXHelper */,
+				E3D372703EADACE20B83EA53 /* PopGuyEdit */,
 			);
 		};
 /* End PBXProject section */
@@ -403,6 +453,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DA90A18EE050F6F4A48CF958 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -420,6 +477,11 @@
 			isa = PBXTargetDependency;
 			target = D3BD084B2FED962E00078DEB /* PopGuyMLXHelper */;
 			targetProxy = D3BD08642FED9C3700078DEB /* PBXContainerItemProxy */;
+		};
+		C83288B0E4C6B8684203C9EF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E3D372703EADACE20B83EA53 /* PopGuyEdit */;
+			targetProxy = EDBAD889B4FDFE303D4A229B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -753,6 +815,43 @@
 			};
 			name = Release;
 		};
+		5003CE1EF2A078EF780F6E52 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 86H6CNLN4C;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dinh.thi.PopGuy.Edit;
+				PRODUCT_NAME = "popguy-edit";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		034A7302FF2141112DAC020C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 86H6CNLN4C;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dinh.thi.PopGuy.Edit;
+				PRODUCT_NAME = "popguy-edit";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -797,6 +896,15 @@
 			buildConfigurations = (
 				D3BD08502FED962F00078DEB /* Debug */,
 				D3BD08512FED962F00078DEB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6A076550EF9DD5066BEB4651 /* Build configuration list for PBXNativeTarget "PopGuyEdit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5003CE1EF2A078EF780F6E52 /* Debug */,
+				034A7302FF2141112DAC020C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

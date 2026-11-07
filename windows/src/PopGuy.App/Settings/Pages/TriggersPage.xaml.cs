@@ -1,4 +1,3 @@
-using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -16,8 +15,10 @@ namespace PopGuy.Settings.Pages;
 /// triggers and hotkeys. The double-click Default action lists every action of the action order, enabled or not. While
 /// the replacement or the Screen Text Capture shortcut records, PopGuy's own hotkeys and chord are off
 /// (<see cref="AppServices.SetHotkeysSuspended"/>) so a combo PopGuy owns reaches the recorder; after each apply each
-/// one's registration status shows under its row. A change from elsewhere (the tray) shows while the page is open; the
-/// tray's Capture Screen Text… scrolls to the OCR section (<see cref="FocusOcrSection"/>).
+/// one's registration status shows under its row. A change from elsewhere (the tray) shows while the page is open. A
+/// SelectorBar (as on the Ignore page) shows the On Text Selection, Keyboard Shortcut or Screen Text Capture (OCR) tab;
+/// a new page opens on On Text Selection, and the tray's Capture Screen Text… selects the OCR tab
+/// (<see cref="FocusOcrSection"/>).
 /// </summary>
 public sealed partial class TriggersPage : Page
 {
@@ -30,12 +31,11 @@ public sealed partial class TriggersPage : Page
     /// <summary>The Default action picker's ids, after its first "Unassign (show toolbar)" item.</summary>
     private IReadOnlyList<ActionIdentifier> _pickerIds = [];
 
-    /// <summary>The OCR section is to scroll into view once the page has loaded.</summary>
-    private bool _focusOcrPending;
-
     public TriggersPage()
     {
         InitializeComponent();
+        TabBar.SelectedItem = TabBar.Items[0];
+        TabBar.SelectionChanged += (_, _) => ShowTab();
         OnSelectToggle.Toggled += (_, _) =>
             Save("triggerOnSelect", s => s with { TriggerOnSelectEnabled = OnSelectToggle.IsOn });
         EditableOnlyToggle.Toggled += (_, _) =>
@@ -77,7 +77,6 @@ public sealed partial class TriggersPage : Page
         }
         _subscribed = true;
         Refresh();
-        if (_focusOcrPending) FocusOcrSection();
     }
 
     /// <summary>
@@ -122,20 +121,22 @@ public sealed partial class TriggersPage : Page
         RefreshStatus();
     }
 
-    /// <summary>
-    /// Scrolls the OCR section to the top (macOS scrollToOCRSectionIfRequested): on a later, low-priority turn when the
-    /// page is up (after its layout, and the window's first-show re-attach), else once it has loaded.
-    /// </summary>
+    /// <summary>Selects the OCR tab (macOS scrollToOCRSectionIfRequested), loaded or not.</summary>
     internal void FocusOcrSection()
     {
-        _focusOcrPending = true;
-        if (!IsLoaded) return;
-        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
-        {
-            if (!_focusOcrPending || !IsLoaded) return;
-            _focusOcrPending = false;
-            OcrHeader.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0, AnimationDesired = true });
-        });
+        TabBar.SelectedItem = TabBar.Items[2];
+        ShowTab();
+    }
+
+    /// <summary>The picked tab's panel, scrolled to its top.</summary>
+    private void ShowTab()
+    {
+        var index = TabBar.Items.IndexOf(TabBar.SelectedItem);
+        if (index < 0) return;
+        SelectionTab.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ShortcutTab.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
+        OcrTab.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+        TabScroller.ChangeView(null, 0, null, disableAnimation: true);
     }
 
     // Default action (macOS doubleClickActionPicker).
@@ -147,7 +148,8 @@ public sealed partial class TriggersPage : Page
     private void RefreshPicker(AppSettings current)
     {
         _pickerIds = current.ActionOrder;
-        List<string> labels = ["Unassign (show toolbar)", .. _pickerIds.Select(id => ActionLabel(current, id))];
+        List<string> labels =
+            ["Unassign (show toolbar)", .. _pickerIds.Select(id => ShortcutRowStatus.ActionLabel(current, id))];
         if (!labels.SequenceEqual(DefaultActionBox.Items.OfType<string>()))
         {
             DefaultActionBox.Items.Clear();
@@ -173,23 +175,6 @@ public sealed partial class TriggersPage : Page
         }
         return -1;
     }
-
-    /// <summary>The picker's label for an action (macOS TriggersView.actionLabel).</summary>
-    private static string ActionLabel(AppSettings settings, ActionIdentifier id) => id.Type switch
-    {
-        ActionIdentifierType.Builtin => id.BuiltinKind switch
-        {
-            ActionKind.Improve => "Improve",
-            ActionKind.Shorten => "Shorten",
-            ActionKind.Proofread => "Proofread",
-            ActionKind.Translate => "Translate",
-            ActionKind.Prompt => "Prompt",
-            _ => "Custom",
-        },
-        ActionIdentifierType.Speak => "Speak",
-        ActionIdentifierType.Dictionary => "Look up",
-        _ => settings.CustomActions.FirstOrDefault(a => a.Id == id.CustomId)?.Title ?? "Custom",
-    };
 
     // Replacement and Screen Text Capture shortcuts.
 
@@ -231,18 +216,10 @@ public sealed partial class TriggersPage : Page
         RefreshRecorderButtons();
     }
 
-    /// <summary>macOS: the clear button only with a shortcut; neither button while recording.</summary>
     private void RefreshRecorderButtons()
     {
-        RefreshRecorderButtons(Recorder, ClearButton, RecordButton);
-        RefreshRecorderButtons(OcrRecorder, OcrClearButton, OcrRecordButton);
-    }
-
-    private static void RefreshRecorderButtons(ShortcutRecorder recorder, Button clear, Button record)
-    {
-        var recording = recorder.IsRecording;
-        clear.Visibility = !recording && recorder.Shortcut is not null ? Visibility.Visible : Visibility.Collapsed;
-        record.Visibility = recording ? Visibility.Collapsed : Visibility.Visible;
+        ShortcutRowStatus.RefreshButtons(Recorder, ClearButton, RecordButton);
+        ShortcutRowStatus.RefreshButtons(OcrRecorder, OcrClearButton, OcrRecordButton);
     }
 
     /// <summary>
@@ -254,48 +231,14 @@ public sealed partial class TriggersPage : Page
         if (_services is null) return;
         var current = _services.Settings.Current;
         var registrations = _services.HotkeyRegistrations;
-        ShowStatus(ReplacementStatusText,
+        ShortcutRowStatus.Show(ReplacementStatusText,
             !Recorder.IsRecording && current.TriggerChordEnabled && current.ChordReplacementShortcut is { } replacement
-                ? StatusMessage(current, registrations, HotkeyService.ChordReplacementId, replacement)
+                ? ShortcutRowStatus.Message(current, registrations, HotkeyService.ChordReplacementId, replacement)
                 : null);
-        ShowStatus(OcrStatusText,
+        ShortcutRowStatus.Show(OcrStatusText,
             !OcrRecorder.IsRecording && current.OcrEnabled && current.OcrShortcut is { } ocr
-                ? StatusMessage(current, registrations, HotkeyService.OcrCaptureId, ocr)
+                ? ShortcutRowStatus.Message(current, registrations, HotkeyService.OcrCaptureId, ocr)
                 : null);
-    }
-
-    private static void ShowStatus(TextBlock text, string? message)
-    {
-        text.Text = message ?? "";
-        text.Visibility = message is null ? Visibility.Collapsed : Visibility.Visible;
-    }
-
-    /// <summary>
-    /// <paramref name="id"/>'s refusal, if Windows refused it: "Already used by" the PopGuy hotkey that registered the
-    /// same keys first (an action, or the Ctrl+C+C replacement for the OCR shortcut), else "another app".
-    /// </summary>
-    private static string? StatusMessage(
-        AppSettings current, IReadOnlyList<HotkeyRegistration> registrations, ActionIdentifier id, Shortcut shortcut)
-    {
-        var status = registrations.FirstOrDefault(r => r.Id == id && r.Shortcut == shortcut)?.Status;
-        var owner = registrations
-            .Where(r => r.Id != id && r.Status == HotkeyStatus.Registered && r.Shortcut == shortcut)
-            .Select(r => OwnerLabel(current, r.Id))
-            .FirstOrDefault(label => label is not null);
-        return status switch
-        {
-            HotkeyStatus.InUse => owner is null ? "Shortcut in use by another app" : $"Already used by {owner}",
-            HotkeyStatus.Invalid => "Windows refused this shortcut",
-            _ => null,
-        };
-    }
-
-    /// <summary>A registered hotkey's name in "Already used by …"; null for an id no longer in the settings.</summary>
-    private static string? OwnerLabel(AppSettings current, ActionIdentifier id)
-    {
-        if (id == HotkeyService.ChordReplacementId) return "the Ctrl+C+C replacement";
-        if (id == HotkeyService.OcrCaptureId) return "Screen Text Capture";
-        return current.ShortcutBindings.Any(b => b.Id == id) ? ActionLabel(current, id) : null;
     }
 
     /// <summary>Saves one change; a failed write is logged and the controls go back to the saved settings.</summary>

@@ -34,6 +34,9 @@ public sealed record ForegroundApp(nint Hwnd, uint ProcessId, string? Exe, strin
     /// </summary>
     public static ForegroundApp Snapshot() => OfWindow(ToolbarWindowStyle.ForegroundWindow()).App;
 
+    /// <summary><paramref name="hwnd"/>'s app by the same rules as <see cref="Snapshot"/>. Any thread.</summary>
+    public static ForegroundApp Of(nint hwnd) => OfWindow(hwnd).App;
+
     /// <summary>
     /// <paramref name="hwnd"/>'s app by the same rules as <see cref="Snapshot"/>, with the executable's full path (null
     /// when it cannot be read). Any thread.

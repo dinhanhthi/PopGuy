@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The Terminal Composer window (macOS ComposerWindow.swift + ComposerView.swift): a find bar (hidden until Ctrl+F),
+    the plain-text editor and a footer with the source hint, the notices and the buttons. The editor's highlighting and
+    the keys are in ComposerWindow.xaml.cs.
+-->
+<Window
+    x:Class="PopGuy.Composer.ComposerWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="PopGuy Composer">
+
+    <!-- The solid base background, as the Settings window (never Mica, which takes a tint from the wallpaper). -->
+    <Grid x:Name="RootGrid" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Find bar: Enter is next, Shift+Enter previous, Esc closes it. -->
+        <Grid
+            x:Name="FindBar"
+            Grid.Row="0"
+            Padding="12,8,12,8"
+            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="0,0,0,1"
+            ColumnSpacing="6"
+            Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox
+                x:Name="FindBox"
+                ContextFlyout="{x:Null}"
+                IsSpellCheckEnabled="False"
+                IsTextPredictionEnabled="False"
+                PlaceholderText="Find"
+                SelectionFlyout="{x:Null}" />
+            <TextBlock
+                x:Name="FindStatus"
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="No matches"
+                Visibility="Collapsed" />
+            <Button
+                x:Name="FindPreviousButton"
+                Grid.Column="2"
+                Style="{StaticResource SubtleButtonStyle}">
+                <FontIcon FontSize="12" Glyph="&#xE70E;" />
+            </Button>
+            <Button
+                x:Name="FindNextButton"
+                Grid.Column="3"
+                Style="{StaticResource SubtleButtonStyle}">
+                <FontIcon FontSize="12" Glyph="&#xE70D;" />
+            </Button>
+            <Button
+                x:Name="FindCloseButton"
+                Grid.Column="4"
+                Style="{StaticResource SubtleButtonStyle}">
+                <FontIcon FontSize="12" Glyph="&#xE711;" />
+            </Button>
+        </Grid>
+
+        <!-- Plain text only: no formatting shortcuts, no rich copy, no context or selection menu (their AppBarButtons
+             attach default tooltips); the window background shows through in every state. -->
+        <RichEditBox
+            x:Name="Editor"
+            Grid.Row="1"
+            Padding="16,12,16,12"
+            BorderThickness="0"
+            ClipboardCopyFormat="PlainText"
+            ContextFlyout="{x:Null}"
+            DisabledFormattingAccelerators="All"
+            FontFamily="Segoe UI"
+            IsSpellCheckEnabled="False"
+            IsTextPredictionEnabled="False"
+            SelectionFlyout="{x:Null}"
+            SelectionHighlightColorWhenNotFocused="{ThemeResource TextControlSelectionHighlightColor}"
+            TextWrapping="Wrap">
+            <RichEditBox.Resources>
+                <StaticResource x:Key="TextControlBackground" ResourceKey="SubtleFillColorTransparentBrush" />
+                <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="SubtleFillColorTransparentBrush" />
+                <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="SubtleFillColorTransparentBrush" />
+                <StaticResource x:Key="TextControlBorderBrush" ResourceKey="SubtleFillColorTransparentBrush" />
+                <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="SubtleFillColorTransparentBrush" />
+                <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="SubtleFillColorTransparentBrush" />
+            </RichEditBox.Resources>
+        </RichEditBox>
+
+        <Grid
+            Grid.Row="2"
+            Padding="16,10,16,10"
+            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="0,1,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel
+                x:Name="SessionEndedNotice"
+                Grid.Row="0"
+                Grid.ColumnSpan="2"
+                Margin="0,0,0,8"
+                Orientation="Horizontal"
+                Spacing="6"
+                Visibility="Collapsed">
+                <FontIcon
+                    FontSize="14"
+                    Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                    Glyph="&#xE7BA;" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="The terminal session ended. Copy the text to keep it."
+                    TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel
+                x:Name="TooLargeNotice"
+                Grid.Row="1"
+                Grid.ColumnSpan="2"
+                Margin="0,0,0,8"
+                Orientation="Horizontal"
+                Spacing="6"
+                Visibility="Collapsed">
+                <FontIcon
+                    FontSize="14"
+                    Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                    Glyph="&#xE7BA;" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="Text is too large (max 1 MB)."
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <TextBlock
+                x:Name="SourceHint"
+                Grid.Row="2"
+                Margin="0,0,12,0"
+                VerticalAlignment="Center"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="Compose"
+                TextTrimming="CharacterEllipsis"
+                TextWrapping="NoWrap" />
+            <StackPanel
+                Grid.Row="2"
+                Grid.Column="1"
+                Orientation="Horizontal"
+                Spacing="8">
+                <Button
+                    x:Name="RestoreDraftButton"
+                    Content="Restore draft"
+                    Style="{StaticResource SubtleButtonStyle}"
+                    Visibility="Collapsed" />
+                <Button x:Name="CancelButton" Content="Cancel" />
+                <Button
+                    x:Name="DoneButton"
+                    Content="Done"
+                    Style="{StaticResource AccentButtonStyle}" />
+                <Button x:Name="DoneSubmitButton" Content="Done &amp; Submit" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

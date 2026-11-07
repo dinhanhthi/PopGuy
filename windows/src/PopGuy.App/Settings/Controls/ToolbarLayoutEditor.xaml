@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     The toolbar layout editor at the top of Settings → Actions (macOS ToolbarLayoutEditorView.swift). Row 1 is the real
-    toolbar (ToolbarView, not hit-testable) on its card, then the editor's own More actions card: beside the toolbar,
+    toolbar (ToolbarView, not hit-testable) on its card, then the editor's own More card: beside the toolbar,
     top aligned, when both fit the width, else on row 2 (the orientation and margin are set in code); both cards are
-    built in code (ToolbarLayoutEditor.xaml.cs). The surface takes the pointer for both cards (drag to reorder or move
+    built in code (ToolbarLayoutEditor.xaml.cs). Behind them, a "More actions" connector joins the cards: a straight
+    line with the label in its middle side by side, an elbow with the label on its horizontal run on row 2. The surface takes the pointer for both cards (drag to reorder or move
     between them); the overlay holds the hover targets over the toolbar's actions and the drag ghost. The soft width warning shows below. The backdrop is a mid-tone "wallpaper" that both card
     themes stand out on (macOS ToolbarPreviewBackdrop). Settings → Appearance uses it preview-only (Initialize): row 1
     alone, centered, with no drag, hover names or warning (macOS ToolbarPreviewView).
@@ -32,7 +33,33 @@
                     x:Name="Surface"
                     HorizontalAlignment="Left"
                     Background="Transparent">
-                    <StackPanel x:Name="SurfaceContent" Padding="12,8,12,16">
+                    <!-- The "More actions" connector, behind the cards; placed and shown in code (editable only).
+                         Hidden by opacity, not collapsed, so its label can be measured before it shows. -->
+                    <Canvas
+                        x:Name="Connector"
+                        IsHitTestVisible="False"
+                        Opacity="0">
+                        <Polyline
+                            x:Name="ConnectorLineA"
+                            Stroke="#CCFFFFFF"
+                            StrokeEndLineCap="Round"
+                            StrokeLineJoin="Round"
+                            StrokeStartLineCap="Round"
+                            StrokeThickness="1" />
+                        <Polyline
+                            x:Name="ConnectorLineB"
+                            Stroke="#CCFFFFFF"
+                            StrokeEndLineCap="Round"
+                            StrokeLineJoin="Round"
+                            StrokeStartLineCap="Round"
+                            StrokeThickness="1" />
+                        <TextBlock
+                            x:Name="ConnectorLabel"
+                            Foreground="#CCFFFFFF"
+                            Text="More actions" />
+                    </Canvas>
+                    <!-- The same space on every side of the cards. -->
+                    <StackPanel x:Name="SurfaceContent" Padding="12">
                         <!-- The toolbar's card: the preview sits in a Canvas sized to its zoomed card in code. -->
                         <Border
                             x:Name="ToolbarCard"
@@ -44,7 +71,7 @@
                             CornerRadius="8">
                             <Canvas x:Name="PreviewHost" />
                         </Border>
-                        <!-- More actions: the title, then one chip per action (or an empty slot), built in code. -->
+                        <!-- More actions: one chip per action (or an empty slot), built in code; titled by the connector. -->
                         <Border
                             x:Name="MoreCard"
                             Margin="0,6,0,0"
@@ -55,28 +82,10 @@
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                             BorderThickness="1"
                             CornerRadius="8">
-                            <StackPanel Spacing="4">
-                                <StackPanel
-                                    Margin="5,2,5,0"
-                                    Orientation="Horizontal"
-                                    Spacing="3">
-                                    <TextBlock
-                                        x:Name="MoreTitle"
-                                        VerticalAlignment="Center"
-                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                        Text="More actions" />
-                                    <FontIcon
-                                        x:Name="MoreChevron"
-                                        VerticalAlignment="Center"
-                                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                        Glyph="&#xE70D;" />
-                                </StackPanel>
-                                <StackPanel
-                                    x:Name="MoreRow"
-                                    Orientation="Horizontal"
-                                    Spacing="4" />
-                            </StackPanel>
+                            <StackPanel
+                                x:Name="MoreRow"
+                                Orientation="Horizontal"
+                                Spacing="4" />
                         </Border>
                     </StackPanel>
                     <Canvas x:Name="Overlay" />

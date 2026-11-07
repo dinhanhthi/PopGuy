@@ -99,37 +99,41 @@ struct SettingsModal<Content: View>: View {
     }
 
     var body: some View {
-        // Scrim
-        if isPresented {
-            Rectangle()
-                .fill(Palette.scrim)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    if dismissOnBackdropTap { dismiss() }
-                }
-                .transition(scrimTransition)
-                .zIndex(1)
-        }
+        // One layer that always ignores the safe area (AppKit reports a 66 pt
+        // top inset, taller than the 52 pt band), so the margins are measured
+        // from the window's edges. The safe-area ignore sits outside the
+        // `if`: on a view being inserted it only took effect once the
+        // transition ended, so the card animated in 66 pt too low, then
+        // jumped up.
+        ZStack {
+            // Scrim
+            if isPresented {
+                Rectangle()
+                    .fill(Palette.scrim)
+                    .onTapGesture {
+                        if dismissOnBackdropTap { dismiss() }
+                    }
+                    .transition(scrimTransition)
+                    .zIndex(1)
+            }
 
-        // Card
-        if isPresented {
-            let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-            content()
-                .frame(width: cardWidth)
-                .frame(maxHeight: .infinity)
-                // Clip before the card's background: dividers and scroll views
-                // stay inside the rounded corners, the shadow is not cut.
-                .clipShape(shape)
-                .modifier(GlassCard(cornerRadius: Self.cornerRadius, raised: true))
-                .onExitCommand(perform: dismiss)
-                // Centered in the window. The layer ignores the safe area (AppKit
-                // reports a 66 pt top inset, taller than the 52 pt band) so the
-                // margins are measured from the window's edges.
-                .padding(.vertical, Self.verticalMargin)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .ignoresSafeArea()
-                .transition(cardTransition)
-                .zIndex(2)
+            // Card, centered in the window.
+            if isPresented {
+                let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                content()
+                    .frame(width: cardWidth)
+                    .frame(maxHeight: .infinity)
+                    // Clip before the card's background: dividers and scroll views
+                    // stay inside the rounded corners, the shadow is not cut.
+                    .clipShape(shape)
+                    .modifier(GlassCard(cornerRadius: Self.cornerRadius, raised: true))
+                    .onExitCommand(perform: dismiss)
+                    .padding(.vertical, Self.verticalMargin)
+                    .transition(cardTransition)
+                    .zIndex(2)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
     }
 }

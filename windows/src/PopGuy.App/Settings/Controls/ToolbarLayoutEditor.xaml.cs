@@ -17,9 +17,11 @@ namespace PopGuy.Settings.Controls;
 /// <summary>
 /// The toolbar layout editor (macOS <c>ToolbarLayoutEditorView.swift</c>). Row 1 is the real <see cref="ToolbarView"/>,
 /// not hit-testable, bound to an editor-owned <see cref="ToolbarViewModel"/> presented with the current settings in
-/// idle state (its session is never run, so no provider, clipboard or history is touched). Then a More actions card of
+/// idle state (its session is never run, so no provider, clipboard or history is touched). Then a More card of
 /// icon chips: beside the toolbar, top aligned, when both fit the editor's width, else on row 2 (macOS
-/// moreFitsBesideToolbar; the arrangement holds still during a drag). Drag an action to reorder it, or to move it
+/// moreFitsBesideToolbar; the arrangement holds still during a drag). A "More actions" connector joins the two cards
+/// behind them: straight with the label in its middle side by side; on row 2, an elbow from the toolbar card's bottom
+/// into the More card's right edge, the label on its run. Drag an action to reorder it, or to move it
 /// between the rows (a 4 DIP threshold, pointer capture);
 /// the drop slot comes from the buttons' and chips' real bounds and shows live in the preview, then saves through
 /// <see cref="ToolbarLayout.MoveAction"/>; a click without a drag does nothing (In More actions and Show label are switches
@@ -33,11 +35,11 @@ public sealed partial class ToolbarLayoutEditor : UserControl
     /// <summary>The pointer travel (DIP) before a press becomes a drag (macOS minimumDistance).</summary>
     private const double DragThreshold = 4;
 
-    /// <summary>Pointer slack (DIP) before the More card (above it, or left of it side by side) that still counts as the More zone.</summary>
-    private const double MoreZoneSlack = 8;
+    /// <summary>The connector's visible line (DIP, zoom 1) on each side of its label.</summary>
+    private const double ConnectorStub = 12;
 
-    /// <summary>The gap (DIP) between the toolbar card and the More card, beside it or below it.</summary>
-    private const double MoreGap = 6;
+    /// <summary>The space (DIP, zoom 1) between the connector's line and its label.</summary>
+    private const double ConnectorLabelPad = 6;
 
     /// <summary>The toolbar's button height at zoom 1 (the bar's 44 minus its padding): the More chips match it.</summary>
     private const double ControlHeight = 32;
@@ -63,6 +65,9 @@ public sealed partial class ToolbarLayoutEditor : UserControl
 
     /// <summary>The More card sits beside the toolbar (else below it); see <see cref="UpdateArrangement"/>.</summary>
     private bool _sideBySide;
+
+    /// <summary>The connector's last placement (the cards' bounds and the arrangement), so a layout pass that moved nothing sets nothing.</summary>
+    private (Rect Toolbar, Rect More, bool SideBySide)? _connectorPlacement;
 
     public ToolbarLayoutEditor()
     {
@@ -150,8 +155,7 @@ public sealed partial class ToolbarLayoutEditor : UserControl
     {
         if (_viewModel is null || !_isEditable) return;
         var zoom = _viewModel.Zoom;
-        MoreTitle.FontSize = 12 * zoom;
-        MoreChevron.FontSize = 10 * zoom;
+        if (ConnectorLabel.FontSize != 12 * zoom) ConnectorLabel.FontSize = 12 * zoom;
         MoreRow.Spacing = 4 * zoom;
         MoreRow.Children.Clear();
         _chips.Clear();
@@ -202,7 +206,11 @@ public sealed partial class ToolbarLayoutEditor : UserControl
         if (PreviewHost.Height != height) PreviewHost.Height = height;
         var wide = _isEditable && width > ToolbarLimits.ToolbarWidthWarningThreshold ? Visibility.Visible : Visibility.Collapsed;
         if (WidthWarning.Visibility != wide) WidthWarning.Visibility = wide;
-        if (_isEditable) SyncTargets();
+        if (_isEditable)
+        {
+            SyncTargets();
+            SyncConnector();
+        }
         if (!_tabStopsPending) return;
         _tabStopsPending = false;
         RemoveTabStops(_view);
@@ -224,11 +232,108 @@ public sealed partial class ToolbarLayoutEditor : UserControl
         var moreWidth = MoreCard.ActualWidth;
         var available = Viewport.ActualWidth - SurfaceContent.Padding.Left - SurfaceContent.Padding.Right;
         var sideBySide = toolbarWidth > 0 && moreWidth > 0 && available > 0
-            && ToolbarLayoutEditMath.MoreFitsBesideToolbar(toolbarWidth, moreWidth, MoreGap, available);
+            && ToolbarLayoutEditMath.MoreFitsBesideToolbar(toolbarWidth, moreWidth, ConnectorRun(), available);
+        // The gaps follow the zoom (the label's size), so the margin is checked even when the arrangement holds. Below,
+        // room on the right when the elbow passes the toolbar card (see SyncConnector).
+        var margin = sideBySide
+            ? new Thickness(ConnectorRun(), 0, 0, 0)
+            : new Thickness(0, WrappedGap, ElbowPastToolbar(toolbarWidth, moreWidth) ? ConnectorRun() : 0, 0);
+        if (!MoreCard.Margin.Equals(margin)) MoreCard.Margin = margin;
         if (sideBySide == _sideBySide) return;
         _sideBySide = sideBySide;
         SurfaceContent.Orientation = sideBySide ? Orientation.Horizontal : Orientation.Vertical;
-        MoreCard.Margin = sideBySide ? new Thickness(MoreGap, 0, 0, 0) : new Thickness(0, MoreGap, 0, 0);
+    }
+
+    // The "More actions" connector (macOS connector): the label is measured, not read from a layout pass, so the fit
+    // decision above never waits on one.
+
+    private Size ConnectorLabelSize()
+    {
+        ConnectorLabel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return ConnectorLabel.DesiredSize;
+    }
+
+    private double Zoom => _viewModel?.Zoom ?? 1;
+
+    /// <summary>The run that carries the label (stub, pad, label, pad, stub): the gap between the cards side by side.</summary>
+    private double ConnectorRun() => ConnectorLabelSize().Width + 2 * (ConnectorStub + ConnectorLabelPad) * Zoom;
+
+    /// <summary>The gap between the rows when the More card is below the toolbar: the label sits beside the More card,
+    /// so the gap is the preview's own padding.</summary>
+    private const double WrappedGap = 12;
+
+    /// <summary>
+    /// Below the toolbar, whether the toolbar card ends too soon for the elbow to drop from its bottom edge (the More
+    /// card plus the run is wider): the elbow then leaves from its right edge, right of both cards. Both cards start at
+    /// the same left edge.
+    /// </summary>
+    private bool ElbowPastToolbar(double toolbarWidth, double moreWidth) => moreWidth + ConnectorRun() > toolbarWidth - 8;
+
+    /// <summary>
+    /// Places the connector behind the cards. Side by side: straight, from the toolbar card's right edge to the More
+    /// card's left edge. Below: an elbow from the toolbar card's bottom down to the More card's middle, then left into its
+    /// right edge. The label sits in a break of the last run (no fill behind it, so the backdrop shows through).
+    /// Idempotent: called from every layout pass.
+    /// </summary>
+    private void SyncConnector()
+    {
+        if (Bounds(ToolbarCard) is not { } toolbar || Bounds(MoreCard) is not { } more
+            || toolbar.Width <= 0 || more.Width <= 0)
+        {
+            if (Connector.Opacity != 0) Connector.Opacity = 0;
+            return;
+        }
+        var placement = (toolbar, more, _sideBySide);
+        if (_connectorPlacement is { } last && last.Equals(placement)) return;
+        _connectorPlacement = placement;
+
+        var label = ConnectorLabelSize();
+        var half = label.Width / 2 + ConnectorLabelPad * Zoom;
+        Point[] points;
+        Point center;
+        if (_sideBySide)
+        {
+            // Level with the toolbar card's middle, kept within the More card.
+            var y = Math.Clamp(toolbar.Y + toolbar.Height / 2, more.Top + 4, Math.Max(more.Top + 4, more.Bottom - 4));
+            points = [new Point(toolbar.Right, y), new Point(more.Left, y)];
+            center = new Point((toolbar.Right + more.Left) / 2, y);
+        }
+        else
+        {
+            // The run ends at the More card's right edge, level with its middle, and starts the run to the right, where
+            // the line drops from the toolbar card's bottom; or, when the toolbar card ends before that, from its right
+            // edge (UpdateArrangement reserves the room).
+            var y = more.Y + more.Height / 2;
+            var end = new Point(more.Right, y);
+            if (ElbowPastToolbar(toolbar.Width, more.Width))
+            {
+                var x = Math.Max(more.Right + ConnectorRun(), toolbar.Right + ConnectorStub * Zoom);
+                var toolbarY = toolbar.Y + toolbar.Height / 2;
+                points = [new Point(toolbar.Right, toolbarY), new Point(x, toolbarY), new Point(x, y), end];
+                center = new Point((more.Right + x) / 2, y);
+            }
+            else
+            {
+                var x = more.Right + ConnectorRun();
+                points = [new Point(x, toolbar.Bottom), new Point(x, y), end];
+                center = new Point((more.Right + x) / 2, y);
+            }
+        }
+        // The label breaks the last run.
+        var breakIndex = points.Length - 2;
+        var direction = points[breakIndex + 1].X >= points[breakIndex].X ? 1 : -1;
+        ConnectorLineA.Points = ToPoints(points[..(breakIndex + 1)].Append(new Point(center.X - direction * half, center.Y)));
+        ConnectorLineB.Points = ToPoints(points[(breakIndex + 1)..].Prepend(new Point(center.X + direction * half, center.Y)));
+        Canvas.SetLeft(ConnectorLabel, center.X - label.Width / 2);
+        Canvas.SetTop(ConnectorLabel, center.Y - label.Height / 2);
+        if (Connector.Opacity != 1) Connector.Opacity = 1;
+    }
+
+    private static PointCollection ToPoints(IEnumerable<Point> points)
+    {
+        var collection = new PointCollection();
+        foreach (var point in points) collection.Add(point);
+        return collection;
     }
 
     private static void RemoveTabStops(DependencyObject parent)
@@ -376,7 +481,9 @@ public sealed partial class ToolbarLayoutEditor : UserControl
     /// </summary>
     private bool IsInMoreZone(Point position) =>
         Bounds(MoreCard) is { } more
-        && ToolbarLayoutEditMath.IsInMoreZone(position.X, position.Y, more.Left, more.Top, _sideBySide, MoreZoneSlack);
+        // Up to the middle of the gap (the connector's run, or the gap between the rows).
+        && ToolbarLayoutEditMath.IsInMoreZone(position.X, position.Y, more.Left, more.Top, _sideBySide,
+            _sideBySide ? ConnectorRun() / 2 : WrappedGap / 2);
 
     private (IReadOnlyList<ActionIdentifier>, IReadOnlyDictionary<ActionIdentifier, double>) ToolbarRow()
     {

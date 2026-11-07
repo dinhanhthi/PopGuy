@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Settings → Composer (macOS TerminalComposerView.swift): a one-line intro, the switch, its Compose shortcut, the
+    popguy-edit command, then "Set PopGuy as the editor": the VISUAL editor variable (with the how-it-works line)
+    and the editor snippets, as Windows 11 Settings cards. The header is the window's.
+-->
+<Page
+    x:Class="PopGuy.Settings.Pages.TerminalComposerPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:popguy="using:PopGuy.Controls">
+
+    <ScrollViewer>
+        <StackPanel
+            MaxWidth="1000"
+            Margin="24,16,24,24"
+            Spacing="4">
+
+            <TextBlock
+                Margin="1,0,0,12"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="Write long terminal prompts in a comfortable editor. When a terminal tool asks for an editor, PopGuy opens a Markdown window, then sends your text back to the terminal."
+                TextWrapping="Wrap" />
+
+            <controls:SettingsCard
+                Description="Edit terminal prompts in a PopGuy window. CLIs like Claude Code (Ctrl+G), git and PowerShell open it as their editor."
+                Header="Enable Terminal Composer">
+                <ToggleSwitch x:Name="ComposerToggle" AutomationProperties.Name="Enable Terminal Composer" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard x:Name="ComposeShortcutCard" Header="Compose shortcut">
+                <controls:SettingsCard.Description>
+                    <StackPanel Spacing="2">
+                        <TextBlock
+                            x:Name="ComposeStatusText"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            TextWrapping="Wrap"
+                            Visibility="Collapsed" />
+                        <TextBlock
+                            Text="Opens an empty composer from any app; Done pastes the text into the app you were in. Also available from the tray icon."
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </controls:SettingsCard.Description>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <popguy:ShortcutRecorder
+                        x:Name="ComposeRecorder"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Compose shortcut" />
+                    <Button
+                        x:Name="ComposeClearButton"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Remove shortcut"
+                        Style="{StaticResource SubtleButtonStyle}">
+                        <FontIcon FontSize="14" Glyph="&#xE894;" />
+                    </Button>
+                    <Button
+                        x:Name="ComposeRecordButton"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Record shortcut"
+                        Style="{StaticResource SubtleButtonStyle}">
+                        <FontIcon FontSize="14" Glyph="&#xE7C8;" />
+                    </Button>
+                </StackPanel>
+            </controls:SettingsCard>
+
+            <controls:SettingsCard Header="Command">
+                <controls:SettingsCard.Description>
+                    <StackPanel Spacing="2">
+                        <TextBlock x:Name="CommandStatusText" TextWrapping="Wrap" />
+                        <TextBlock Text="Open a new terminal after installing." TextWrapping="Wrap" />
+                    </StackPanel>
+                </controls:SettingsCard.Description>
+                <Button x:Name="CommandButton" MinWidth="80" />
+            </controls:SettingsCard>
+
+            <TextBlock
+                Margin="1,24,0,4"
+                Style="{StaticResource BodyStrongTextBlockStyle}"
+                Text="Set PopGuy as the editor" />
+
+            <controls:SettingsCard Header="Editor variable">
+                <controls:SettingsCard.Description>
+                    <StackPanel Spacing="2">
+                        <TextBlock x:Name="EditorVariableStatusText" TextWrapping="Wrap" />
+                        <TextBlock Text="Terminal tools read VISUAL to pick their editor. Open a new terminal afterwards." TextWrapping="Wrap" />
+                        <TextBlock
+                            Margin="0,4,0,0"
+                            FontSize="14"
+                            Text="&#x1F4A1; How it works: press Ctrl+G in Claude Code, Codex or Gemini CLI (or set it as git's editor). Done writes the text back and returns to the terminal; Cancel or Esc keeps the original."
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </controls:SettingsCard.Description>
+                <Button x:Name="EditorVariableButton" MinWidth="80" />
+            </controls:SettingsCard>
+
+            <TextBlock
+                Margin="1,12,0,4"
+                Text="Set up does this for you. To do it by hand, run one line in your terminal. Most people only need the first one."
+                TextWrapping="Wrap" />
+
+            <controls:SettingsCard Header="PowerShell">
+                <controls:SettingsCard.Description>
+                    <StackPanel Spacing="2">
+                        <TextBlock
+                            Text="Recommended. Makes popguy-edit the editor for Claude Code, Codex, Gemini CLI, git and more (Install command adds it to PATH). Then open a new terminal."
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            x:Name="SnippetPowerShellText"
+                            FontFamily="Cascadia Mono, Consolas"
+                            IsTextSelectionEnabled="True"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </controls:SettingsCard.Description>
+                <Button
+                    x:Name="SnippetPowerShellCopyButton"
+                    AutomationProperties.Name="Copy"
+                    Style="{StaticResource SubtleButtonStyle}">
+                    <FontIcon FontSize="14" Glyph="&#xE8C8;" />
+                </Button>
+            </controls:SettingsCard>
+
+            <controls:SettingsCard Header="Claude Code (~/.claude/settings.json)">
+                <controls:SettingsCard.Description>
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Only if you don't set VISUAL: makes just Claude Code use PopGuy." TextWrapping="Wrap" />
+                        <TextBlock
+                            x:Name="SnippetClaudeText"
+                            FontFamily="Cascadia Mono, Consolas"
+                            IsTextSelectionEnabled="True"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </controls:SettingsCard.Description>
+                <Button
+                    x:Name="SnippetClaudeCopyButton"
+                    AutomationProperties.Name="Copy"
+                    Style="{StaticResource SubtleButtonStyle}">
+                    <FontIcon FontSize="14" Glyph="&#xE8C8;" />
+                </Button>
+            </controls:SettingsCard>
+
+            <controls:SettingsCard Header="git">
+                <controls:SettingsCard.Description>
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Only if git has its own core.editor, or to use PopGuy for git only." TextWrapping="Wrap" />
+                        <TextBlock
+                            x:Name="SnippetGitText"
+                            FontFamily="Cascadia Mono, Consolas"
+                            IsTextSelectionEnabled="True"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </controls:SettingsCard.Description>
+                <Button
+                    x:Name="SnippetGitCopyButton"
+                    AutomationProperties.Name="Copy"
+                    Style="{StaticResource SubtleButtonStyle}">
+                    <FontIcon FontSize="14" Glyph="&#xE8C8;" />
+                </Button>
+            </controls:SettingsCard>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

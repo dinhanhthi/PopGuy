@@ -7,6 +7,7 @@
 
 import Foundation
 import Testing
+@testable import PopGuy
 
 @Suite("SettingsSidebarLayout")
 struct SettingsSidebarLayoutTests {
@@ -33,6 +34,16 @@ struct SettingsSidebarLayoutTests {
             source.contains("static let sidebarItemVerticalPadding: CGFloat = 4"),
             "Expected Settings sidebar item vertical padding to use the shared 4pt scale."
         )
+    }
+
+    @Test("Terminal Composer has its own sidebar page right after Triggers")
+    @MainActor
+    func terminalComposerPageFollowsTriggers() throws {
+        let sections = SettingsSection.allCases
+        let triggers = try #require(sections.firstIndex(of: .triggers))
+        #expect(sections[triggers + 1] == .terminalComposer)
+        // The rawValue is what the DEBUG `--settings-section=` hook takes.
+        #expect(SettingsSection(rawValue: "terminalComposer") == .terminalComposer)
     }
 
     private func repositoryRoot() throws -> URL {

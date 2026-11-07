@@ -18,19 +18,24 @@ public enum HotkeyStatus
 }
 
 /// <summary>One hotkey from the settings and how its registration went.</summary>
-/// <param name="Id">The action it runs, or <see cref="HotkeyService.ChordReplacementId"/> / <see cref="HotkeyService.OcrCaptureId"/>.</param>
+/// <param name="Id">
+/// The action it runs, or <see cref="HotkeyService.ChordReplacementId"/> / <see cref="HotkeyService.OcrCaptureId"/> /
+/// <see cref="HotkeyService.ComposeId"/>.
+/// </param>
 /// <param name="Shortcut">The keys.</param>
 /// <param name="Status">Whether it works.</param>
 public sealed record HotkeyRegistration(ActionIdentifier Id, Shortcut Shortcut, HotkeyStatus Status);
 
 /// <summary>
 /// The settings' global hotkeys (spec-1 §1.5): every <see cref="AppSettings.ShortcutBindings"/> entry, the chord
-/// replacement (when the chord is on) and the OCR shortcut (when OCR is on), registered through
+/// replacement (when the chord is on), the OCR shortcut (when OCR is on) and the Compose shortcut (when the Terminal
+/// Composer is on, so its keys are not swallowed while it is off), registered through
 /// <see cref="GlobalInput.Register"/> (RegisterHotKey with MOD_NOREPEAT on the input thread's message-only window,
 /// so the hotkeys' keys also reach <see cref="GlobalInput.Keys"/> with their codes). Hotkeys consume the keystroke.
 /// <para>
 /// <see cref="Apply"/> unregisters everything, then registers everything again: call it on every change of the
-/// bindings, custom actions, the chord flag or replacement, or the OCR flag or shortcut. A refused hotkey is not an
+/// bindings, custom actions, the chord flag or replacement, the OCR flag or shortcut, or the Terminal Composer flag or
+/// Compose shortcut. A refused hotkey is not an
 /// error: its <see cref="HotkeyRegistration.Status"/> says why, and the others still work. Whether a fired action
 /// exists and is enabled (and whether PopGuy is on) is the App's check at fire time.
 /// </para>
@@ -51,6 +56,10 @@ public sealed class HotkeyService : IDisposable
     /// <summary>The OCR screen-text-capture hotkey's sentinel id (the macOS app's UUID).</summary>
     public static ActionIdentifier OcrCaptureId { get; } =
         ActionIdentifier.Custom(Guid.Parse("00000000-0000-0000-0000-00004F4352AA"));
+
+    /// <summary>The Terminal Composer's Compose hotkey's sentinel id (the macOS app's UUID).</summary>
+    public static ActionIdentifier ComposeId { get; } =
+        ActionIdentifier.Custom(Guid.Parse("00000000-0000-0000-0000-0000434F4D50"));
 
     private readonly GlobalInput _input;
     private readonly Action<string>? _log;
@@ -74,7 +83,7 @@ public sealed class HotkeyService : IDisposable
         _ = Task.Run(ReadHotKeysAsync);
     }
 
-    /// <summary>A registered hotkey was pressed: the action's id, or a sentinel (<see cref="ChordReplacementId"/>, <see cref="OcrCaptureId"/>).</summary>
+    /// <summary>A registered hotkey was pressed: the action's id, or a sentinel (<see cref="ChordReplacementId"/>, <see cref="OcrCaptureId"/>, <see cref="ComposeId"/>).</summary>
     public event Action<ActionIdentifier>? Fired;
 
     /// <summary>Every hotkey of the last <see cref="Apply"/>, in order, with its status. Any thread.</summary>
@@ -89,6 +98,7 @@ public sealed class HotkeyService : IDisposable
             wanted.Add((ChordReplacementId, replacement));
         }
         if (settings.OcrEnabled && settings.OcrShortcut is { } ocr) wanted.Add((OcrCaptureId, ocr));
+        if (settings.TerminalComposerEnabled && settings.ComposeShortcut is { } compose) wanted.Add((ComposeId, compose));
 
         lock (_applyLock)
         {

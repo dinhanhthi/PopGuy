@@ -281,4 +281,25 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(more[1], principal[2]);
         Assert.Equal([more[0], more[2]], ToolbarLayout.OverflowOrdered(store.Current));
     }
+
+    // macOS SettingsStoreTests.composeShortcutDefaultAndClear: a missing key is the default, a cleared one stays cleared.
+    [Fact]
+    public void ComposeShortcutDefaultsToCtrlAltShiftEAndStaysClearedAfterReload()
+    {
+        var store = new SettingsStore(_paths);
+        Assert.Equal("Ctrl+Alt+Shift+E", store.Current.ComposeShortcut?.ToString());
+
+        store.Update(s => s with { ComposeShortcut = null });
+
+        Assert.Null(new SettingsStore(_paths).Current.ComposeShortcut);
+    }
+
+    // macOS composeShortcutDefaultSkippedOnCollision: the default is dropped when another action already has those keys.
+    [Fact]
+    public void ComposeShortcutDefaultIsSkippedWhenAnotherActionHasTheKeys()
+    {
+        WriteSettingsFile("""{ "shortcutBindings": [ { "id": { "type": "builtin", "value": "improve" }, "shortcut": { "virtualKey": 69, "modifiers": 7 } } ] }""");
+
+        Assert.Null(new SettingsStore(_paths).Current.ComposeShortcut);
+    }
 }

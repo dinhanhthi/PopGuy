@@ -17,7 +17,8 @@ namespace PopGuy.Settings.Pages;
 /// Global Prompt saves 500 ms after the last keystroke, and when the box loses focus or the page goes, so typing does
 /// not re-apply the triggers on every key. A change from elsewhere (the tray) shows while the page is open. Start at
 /// login is the Run key's real state (<see cref="LaunchAtLogin"/>), read each time the page shows (macOS
-/// <c>onAppear</c>).
+/// <c>onAppear</c>). A SelectorBar (as on the Ignore page) shows the App, Global Prompt, Formatting or Closing the
+/// Toolbar tab; a new page opens on App.
 /// </summary>
 public sealed partial class GeneralPage : Page
 {
@@ -33,6 +34,8 @@ public sealed partial class GeneralPage : Page
     public GeneralPage()
     {
         InitializeComponent();
+        TabBar.SelectedItem = TabBar.Items[0];
+        TabBar.SelectionChanged += (_, _) => ShowTab();
         EnabledToggle.Toggled += (_, _) => Save("popGuyEnabled", s => s with { PopGuyEnabled = EnabledToggle.IsOn });
         FormattingToggle.Toggled += (_, _) =>
             Save("preserveFormatting", s => s with { PreserveFormatting = FormattingToggle.IsOn });
@@ -83,6 +86,18 @@ public sealed partial class GeneralPage : Page
         if (IsLoaded) return;
         _services.Settings.Changed -= OnSettingsChanged;
         _subscribed = false;
+    }
+
+    /// <summary>The picked tab's panel, scrolled to its top.</summary>
+    private void ShowTab()
+    {
+        var index = TabBar.Items.IndexOf(TabBar.SelectedItem);
+        if (index < 0) return;
+        AppTab.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
+        PromptTab.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
+        FormattingTab.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+        ClosingTab.Visibility = index == 3 ? Visibility.Visible : Visibility.Collapsed;
+        TabScroller.ChangeView(null, 0, null, disableAnimation: true);
     }
 
     /// <summary>Queued: a change may be saved from any thread.</summary>

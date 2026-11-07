@@ -63,6 +63,12 @@ public static class PasteBack
     /// </summary>
     private static readonly TimeSpan RestoreDelay = TimeSpan.FromMilliseconds(150);
 
+    /// <summary>
+    /// After the Composer's Ctrl+V: longer than <see cref="RestoreDelay"/>, since the target was just reactivated and may
+    /// read the clipboard late.
+    /// </summary>
+    private static readonly TimeSpan ComposeRestoreDelay = TimeSpan.FromMilliseconds(500);
+
     /// <summary>How long the source has to come to the front after PopGuy gave it the foreground.</summary>
     private static readonly TimeSpan ForegroundTimeout = TimeSpan.FromMilliseconds(300);
 
@@ -89,25 +95,46 @@ public static class PasteBack
     /// the last input. The rest runs on the thread pool; the result comes after the clipboard restore.
     /// </summary>
     /// <param name="isUserKeyDown">Whether the user still holds a key (<see cref="GlobalInput.IsUserKeyDown"/>), for Ctrl+V's held modifiers.</param>
-    public static Task<PasteBackResult> PasteAsync(string text, ForegroundApp source, Func<uint, bool>? isUserKeyDown = null)
+    public static Task<PasteBackResult> PasteAsync(string text, ForegroundApp source, Func<uint, bool>? isUserKeyDown = null) =>
+        Paste(text, source, isUserKeyDown, forCompose: false);
+
+    /// <summary>
+    /// The Terminal Composer's paste into <paramref name="target"/> (the window it was opened from, which the caller
+    /// already made the foreground window): <see cref="PasteAsync"/> with <see cref="TargetRefusal"/>'s Compose rules
+    /// (terminals are allowed, a password field is not) and a 500 ms clipboard restore. Same thread rule as
+    /// <see cref="PasteAsync"/>.
+    /// </summary>
+    /// <param name="isUserKeyDown">As in <see cref="PasteAsync"/>.</param>
+    /// <param name="log">Gets the reason code of a paste that did not go through (never the text); called on any thread.</param>
+    public static async Task<PasteBackResult> PasteForComposeAsync(
+        string text, nint target, Func<uint, bool>? isUserKeyDown = null, Action<string>? log = null)
+    {
+        var result = await Paste(text, ForegroundApp.OfWindow(target).App, isUserKeyDown, forCompose: true).ConfigureAwait(false);
+        if (result.Status != PasteBackStatus.Pasted) log?.Invoke($"compose paste: {result.Status} ({result.Reason})");
+        return result;
+    }
+
+    private static Task<PasteBackResult> Paste(string text, ForegroundApp source, Func<uint, bool>? isUserKeyDown, bool forCompose)
     {
         if (source.IsElevated && !Environment.IsPrivilegedProcess) return Task.FromResult(new PasteBackResult(PasteBackStatus.Blocked, "uipi"));
         if (string.IsNullOrEmpty(text)) return Task.FromResult(Refused("empty"));
         var windowClass = CaptureFallbackPolicy.ClassNameOf(source.Hwnd);
         var processName = source.Exe is null ? null : Path.GetFileNameWithoutExtension(source.Exe);
         // Before the foreground moves: a terminal or remote session is never brought to the front for nothing.
-        if (CaptureFallbackPolicy.UnsafeTargetReason(windowClass, processName, null) is { } unsafeReason)
+        if (CaptureFallbackPolicy.UnsafeTargetReason(windowClass, processName, null) is { } unsafeReason
+            && !(forCompose && IsTerminalReason(unsafeReason)))
         {
             return Task.FromResult(Refused(unsafeReason));
         }
         if (!ToolbarWindowStyle.IsAlive(source.Hwnd)) return Task.FromResult(Refused("sourceGone"));
         var switched = !ForegroundGuard.IsStill(source.Hwnd);
         if (switched) ToolbarWindowStyle.SetForeground(source.Hwnd);
-        return Task.Run(() => PasteCoreAsync(text, source.Hwnd, windowClass, processName, switched, isUserKeyDown));
+        return Task.Run(() => PasteCoreAsync(text, source.Hwnd, windowClass, processName, switched, isUserKeyDown, forCompose));
     }
 
     private static async Task<PasteBackResult> PasteCoreAsync(
-        string text, nint source, string? windowClass, string? processName, bool switched, Func<uint, bool>? isUserKeyDown)
+        string text, nint source, string? windowClass, string? processName, bool switched, Func<uint, bool>? isUserKeyDown,
+        bool forCompose)
     {
         if (switched)
         {
@@ -115,7 +142,7 @@ public static class PasteBack
             await Task.Delay(ForegroundSettleDelay).ConfigureAwait(false);
         }
         // Only now: before the source is in front, the focused element is another window's (the toolbar's).
-        if (TargetRefusal(UiaSelectionReader.ProbePasteTarget(), windowClass, processName) is { } refusal) return Refused(refusal);
+        if (TargetRefusal(UiaSelectionReader.ProbePasteTarget(), windowClass, processName, forCompose) is { } refusal) return Refused(refusal);
 
         if (!ClipboardTransaction.TryBegin(out var transaction, out var beginRefusal)) return Refused(beginRefusal);
         using (transaction)
@@ -132,7 +159,7 @@ public static class PasteBack
             {
                 // The focus may have moved during the modifier wait: probe again with the same rules, the foreground
                 // check last.
-                if (TargetRefusal(UiaSelectionReader.ProbePasteTarget(), windowClass, processName) is { } late)
+                if (TargetRefusal(UiaSelectionReader.ProbePasteTarget(), windowClass, processName, forCompose) is { } late)
                 {
                     abortReason = late;
                     return false;
@@ -141,7 +168,7 @@ public static class PasteBack
             });
             if (sent == InputSendResult.Aborted) return Refused(abortReason) with { ClipboardRestore = transaction.Restore() };
 
-            await Task.Delay(RestoreDelay).ConfigureAwait(false);
+            await Task.Delay(forCompose ? ComposeRestoreDelay : RestoreDelay).ConfigureAwait(false);
             var restore = transaction.Restore();
             return sent == InputSendResult.Sent
                 ? new PasteBackResult(PasteBackStatus.Pasted, "pasted", restore)
@@ -154,17 +181,22 @@ public static class PasteBack
     /// its hint, an xterm.js-hosting editor without a hint, a password field, a read-only value pattern, or an unknown
     /// editability outside <see cref="KnownEditableHosts"/>; null to paste. Pure: no system calls.
     /// </summary>
-    internal static string? TargetRefusal(UiaPasteTarget target, string? windowClass, string? processName)
+    /// <param name="forCompose">
+    /// The Terminal Composer's paste: terminals are its target, so "console", "integratedTerminal" and
+    /// "unknownFocusInEditor" do not refuse, nor does the editability of a console or integrated terminal (a terminal
+    /// control has no value pattern). A password field and every other refusal still apply.
+    /// </param>
+    internal static string? TargetRefusal(UiaPasteTarget target, string? windowClass, string? processName, bool forCompose = false)
     {
-        if (CaptureFallbackPolicy.UnsafeTargetReason(windowClass, processName, target.FocusedElementHint) is { } unsafeReason)
-        {
-            return unsafeReason;
-        }
-        if (CaptureFallbackPolicy.HostsXtermTerminals(processName) && string.IsNullOrEmpty(target.FocusedElementHint))
+        var unsafeReason = CaptureFallbackPolicy.UnsafeTargetReason(windowClass, processName, target.FocusedElementHint);
+        var composeTerminal = forCompose && IsTerminalReason(unsafeReason);
+        if (unsafeReason is not null && !composeTerminal) return unsafeReason;
+        if (!forCompose && CaptureFallbackPolicy.HostsXtermTerminals(processName) && string.IsNullOrEmpty(target.FocusedElementHint))
         {
             return "unknownFocusInEditor";
         }
         if (target.IsPassword) return "passwordField";
+        if (composeTerminal) return null;
         if (target.IsEditable == false) return "readOnly";
         return target.IsEditable is null && (processName is null || !KnownEditableHosts.Contains(processName)) ? "editabilityUnknown" : null;
     }
@@ -180,6 +212,9 @@ public static class PasteBack
         }
         return true;
     }
+
+    /// <summary>The <see cref="CaptureFallbackPolicy.UnsafeTargetReason"/> of a terminal (the Composer's target).</summary>
+    private static bool IsTerminalReason(string? reason) => reason is "console" or "integratedTerminal";
 
     private static PasteBackResult Refused(string reason) => new(PasteBackStatus.Refused, reason);
 }

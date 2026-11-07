@@ -75,7 +75,7 @@ public partial class App : Application
         {
             _tray = new TrayIcon(
                 _services.Settings, _services.Updates, _dispatcher, ShowSettings, ShowSettingsSection, CaptureScreenText,
-                ShowOnboarding, Shutdown, _services.Log.Write);
+                NewComposer, ShowOnboarding, Shutdown, _services.Log.Write);
             _tray.SessionEnding += OnSessionEnding;
         }
         catch (System.ComponentModel.Win32Exception e)
@@ -155,6 +155,12 @@ public partial class App : Application
     private void CaptureScreenText()
     {
         if (!_shutDown) _services?.CaptureScreenText();
+    }
+
+    /// <summary>The tray's New Composer, for the window that was in front. UI thread.</summary>
+    private void NewComposer(nint sourceHwnd, bool allowSubmit)
+    {
+        if (!_shutDown) _services?.NewComposer(sourceHwnd, allowSubmit);
     }
 
     /// <summary>Settings closed: PopGuy runs on in the tray (it quits only from Quit PopGuy, or here without a tray icon).</summary>
