@@ -1,11 +1,11 @@
 // TerminalComposerView.swift
 // PopGuy — UI/SettingsWindow
 //
-// The Settings → Composer page (Terminal Composer): the enable switch, the Compose shortcut,
-// the `popguy-edit` command (install / re-install / remove), the shell setup (the
-// PATH/VISUAL lines in the shell config, confirmed in a SettingsModal shown by
-// SettingsView) and copyable snippets, each with a caption, that set it as the editor
-// of shells, Claude Code and git.
+// The Settings → Composer page (Terminal Composer): a one-line intro, the enable switch,
+// the Compose shortcut, the `popguy-edit` command (install / re-install / remove), then
+// "Set PopGuy as the editor": the shell setup (the PATH/VISUAL lines in the shell config,
+// confirmed in a SettingsModal shown by SettingsView, with the how-it-works line) and
+// copyable snippets, each with a caption, for shells, Claude Code and git.
 //
 // The command's and the shell's status are read and changed off the main thread (file
 // system I/O); the buttons react at once and show a busy label until the work is done.
@@ -67,6 +67,10 @@ struct TerminalComposerView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
+                Text("Write long terminal prompts in a comfortable editor. When a terminal tool asks for an editor, PopGuy opens a Markdown window, then sends your text back to the terminal.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, SettingsMetrics.cardPadding)
                 composerGroup
                 snippetsGroup
             }
@@ -84,10 +88,7 @@ struct TerminalComposerView: View {
 
     /// No title: the page header already reads "Composer" (the sidebar title).
     private var composerGroup: some View {
-        SettingsGroup(
-            nil,
-            footer: "How it works: press Ctrl+G in Claude Code, Codex or Gemini CLI (or set it as git's editor). Done writes the text back and returns to the terminal; Cancel or Esc keeps the original."
-        ) {
+        SettingsGroup(nil) {
             LabeledContent {
                 Toggle("Enable Terminal Composer", isOn: $settings.terminalComposerEnabled)
                     .toggleStyle(CompactSwitch())
@@ -106,15 +107,15 @@ struct TerminalComposerView: View {
             SettingsDivider()
 
             commandRow()
-
-            SettingsDivider()
-
-            shellRow()
         }
     }
 
     private var snippetsGroup: some View {
         SettingsGroup("Set PopGuy as the editor") {
+            shellRow()
+
+            SettingsDivider()
+
             Text("Set up shell does this for you. To do it by hand, paste one line into your shell config. Most people only need the first one.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -314,6 +315,10 @@ struct TerminalComposerView: View {
             Text("Adds the PATH and VISUAL lines to your shell config, between PopGuy markers. Open a new terminal afterwards.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            Text("\u{1F4A1} How it works: press Ctrl+G in Claude Code, Codex or Gemini CLI (or set it as git's editor). Done writes the text back and returns to the terminal; Cancel or Esc keeps the original.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
         }
     }
 
