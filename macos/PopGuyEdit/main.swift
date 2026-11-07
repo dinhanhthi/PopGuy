@@ -174,7 +174,7 @@ if connection == nil {
     }
 }
 guard let fd = connection else {
-    fail("Terminal Composer is off or PopGuy is not running — enable it in PopGuy Settings → Triggers.")
+    fail("Terminal Composer is off or PopGuy is not running — enable it in PopGuy Settings → Composer.")
 }
 
 let request: Data

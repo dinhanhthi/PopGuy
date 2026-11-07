@@ -38,10 +38,10 @@ final class SettingsNavigator: ObservableObject {
     /// (double-click or drag). Cleared by ActionsView after it has consumed it.
     @Published var pendingPluginImportURL: URL? = nil
 
-    /// When true, TriggersView scrolls to the Screen Text Capture (OCR) section
-    /// on appear / on change. Set by AppDelegate when the user picks the OCR
+    /// When true, TriggersView selects its Screen Text Capture (OCR) tab on
+    /// appear / on change. Set by AppDelegate when the user picks the OCR
     /// menu-bar item before the feature is enabled, so Settings opens focused on
-    /// the option they need to turn on. Cleared by TriggersView after scrolling.
+    /// the option they need to turn on. Cleared by TriggersView once selected.
     @Published var focusOCRSection: Bool = false
 }
 
@@ -52,6 +52,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     case actions
     case history
     case triggers
+    case terminalComposer
     case appearance
     case ignoredApps
     case about
@@ -65,6 +66,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         case .actions:     return "Actions"
         case .history:     return "History"
         case .triggers:    return "Triggers"
+        case .terminalComposer: return "Composer"
         case .appearance:  return "Appearance"
         case .ignoredApps: return "Ignore"
         case .about:       return "About"
@@ -78,6 +80,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         case .actions:     return "wand.and.stars"
         case .history:     return "clock.arrow.circlepath"
         case .triggers:    return "cursorarrow.rays"
+        case .terminalComposer: return "terminal"
         case .appearance:  return "paintbrush"
         case .ignoredApps: return "app.badge"
         case .about:       return "info.circle"
@@ -395,7 +398,16 @@ struct SettingsView: View {
         case .ignoredApps:
             AppsView(settings: settings)
                 .id(section)
-        case .general, .triggers, .appearance, .about:
+        case .general:
+            GeneralView(settings: settings, onReplayOnboarding: onReplayOnboarding)
+                .id(section)
+        case .triggers:
+            TriggersView(settings: settings, screenRecordingPermission: screenRecordingPermission, navigator: navigator)
+                .id(section)
+        case .appearance:
+            AppearanceView(settings: settings)
+                .id(section)
+        case .terminalComposer, .about:
             // The page's header row sits in the titlebar band; its own
             // ScrollView scrolls in the area below it. No header controls here.
             SettingsPageLayout {
@@ -403,11 +415,10 @@ struct SettingsView: View {
                 // placeholder paints, so the panel responds to the click instantly.
                 DeferredSectionContent {
                     switch section {
-                    case .general:    GeneralView(settings: settings, onReplayOnboarding: onReplayOnboarding)
-                    case .triggers:   TriggersView(settings: settings, screenRecordingPermission: screenRecordingPermission, navigator: navigator)
-                    case .appearance: AppearanceView(settings: settings)
+                    case .terminalComposer: TerminalComposerView(settings: settings)
                     case .about:      AboutView(updater: updater)
-                    case .providers, .actions, .history, .ignoredApps: EmptyView() // built above
+                    case .general, .providers, .actions, .history, .triggers, .appearance, .ignoredApps:
+                        EmptyView() // built above
                     }
                 }
                 .id(section)
@@ -1442,7 +1453,7 @@ struct VoiceTestButton: View {
 
 /// Settings tab for visual preferences of the floating toolbar.
 ///
-/// Sections:
+/// Sections (one header-row tab each, the page shows the selected one's card):
 ///   • Toolbar Style: Bar / Menu layout, "Show logo only" (a trigger shows
 ///     just the logo; click to expand), and the toolbar's Settings button.
 ///   • Toolbar Zoom: global scale for chrome and optionally the result font.
@@ -1462,6 +1473,8 @@ private struct AppearanceView: View {
     @State private var inlineSystemButtons: Bool = false
     @State private var showLogoOnly: Bool = false
     @State private var toolbarStyle: ToolbarStyle = .bar
+    /// The section the header-row tabs show.
+    @State private var tab: AppearanceTab = .style
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The preview's font size change: `Motion.hover`'s short ease-out (its value since
@@ -1469,178 +1482,205 @@ private struct AppearanceView: View {
     private var previewAnimation: Animation? { reduceMotion ? nil : Motion.hover }
 
     var body: some View {
+        // The page builds its own layout so its tabs paint in the click's
+        // frame; only the body below waits for the deferred turn. The tab is
+        // read here and passed down so the body depends on it explicitly
+        // (DeferredSectionContent builds its content in this body anyway).
+        let tab = tab
+        return SettingsPageLayout(leading: {
+            CapsuleTabs(selection: $tab, tabs: AppearanceTab.allCases, title: { Text($0.title) })
+                .fixedSize()
+        }) {
+            DeferredSectionContent { pageBody(tab) }
+        }
+        #if DEBUG
+        .onAppear(perform: applyDebugTab)
+        #endif
+    }
+
+    #if DEBUG
+    /// DEBUG-only QA hook: `--appearance-tab=style|zoom|resultText` selects a
+    /// tab when the page appears, for screenshots from a shell.
+    private func applyDebugTab() {
+        let prefix = "--appearance-tab="
+        guard let arg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) }),
+              let value = AppearanceTab(rawValue: String(arg.dropFirst(prefix.count))) else { return }
+        tab = value
+    }
+    #endif
+
+    private func pageBody(_ tab: AppearanceTab) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
-                SettingsGroup("Toolbar Style") {
-                    LabeledContent {
-                        CapsuleTabs(
-                            selection: $toolbarStyle,
-                            tabs: Array(ToolbarStyle.allCases),
-                            title: { Text($0.displayName) },
-                            compact: true
-                        )
-                        .fixedSize()
-                        .onChange(of: toolbarStyle) { newValue in
-                            settings.toolbarStyle = newValue
-                        }
-                        .onChange(of: settings.toolbarStyle) { newValue in
-                            toolbarStyle = newValue
-                        }
-                    } label: {
-                        Text("Toolbar style")
-                        Text(toolbarStyle == .menu
-                             ? "Actions appear in a list like a context menu; extra actions open from More actions."
-                             : "Actions appear in a horizontal toolbar.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    SettingsDivider()
-
-                    LabeledContent {
-                        Toggle("Show logo only", isOn: $showLogoOnly)
-                            .toggleStyle(CompactSwitch())
-                            .labelsHidden()
-                            .onChange(of: showLogoOnly) { newValue in
-                                settings.showLogoOnly = newValue
-                            }
-                            // Also toggled from the menu bar while this tab is open.
-                            .onChange(of: settings.showLogoOnly) { newValue in
-                                showLogoOnly = newValue
-                            }
-                    } label: {
-                        Text("Show logo only")
-                        Text(toolbarStyle == .menu
-                             ? "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the menu."
-                             : "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the full toolbar.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    SettingsDivider()
-
-                    LabeledContent {
-                        // Bound straight to the store, like before on the Actions
-                        // page: a Toggle writes on the click, not during an update.
-                        Toggle("Show Settings button on toolbar", isOn: $settings.showToolbarSettingsButton)
-                            .toggleStyle(CompactSwitch())
-                            .labelsHidden()
-                    } label: {
-                        Text("Show Settings button on toolbar")
-                        Text("Settings stay available from the PopGuy menu bar icon")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                SettingsGroup("Toolbar Zoom") {
-                    LabeledContent {
-                        CapsuleTabs(
-                            selection: $toolbarZoom,
-                            tabs: Array(ToolbarZoom.allCases),
-                            title: { Text($0.displayName) },
-                            compact: true
-                        )
-                        .fixedSize()
-                        .onChange(of: toolbarZoom) { newValue in
-                            settings.toolbarZoom = newValue
-                        }
-                    } label: {
-                        Text("Zoom level")
-                        Text("Zoom level scales the entire floating toolbar — buttons, icons, and spacing — making it easier to see and click. 1× is the default size; higher levels make everything proportionally larger.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    SettingsDivider()
-
-                    LabeledContent {
-                        Toggle("Include font size in zoom", isOn: $zoomIncludesFontSize)
-                            .toggleStyle(CompactSwitch())
-                            .labelsHidden()
-                            .onChange(of: zoomIncludesFontSize) { newValue in
-                                settings.zoomIncludesFontSize = newValue
-                            }
-                    } label: {
-                        Text("Include font size in zoom")
-                        Text("Turn off to keep the result text at its chosen size while everything else grows.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    SettingsDivider()
-
-                    // The row style dims the label while the row is disabled.
-                    LabeledContent {
-                        Toggle("Hide logo", isOn: $hideLogo)
-                            .toggleStyle(CompactSwitch())
-                            .labelsHidden()
-                            .onChange(of: hideLogo) { newValue in
-                                settings.hideToolbarLogo = newValue
-                            }
-                    } label: {
-                        Text("Hide logo")
-                        Text(showLogoOnly
-                             ? "The logo always shows while Show logo only is on."
-                             : "Hide the PopGuy logo to save space on the toolbar.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    // The toolbar expands from the logo in "Show logo only" mode.
-                    .disabled(showLogoOnly)
-
-                    SettingsDivider()
-
-                    LabeledContent {
-                        Toggle("Remove gap before system buttons", isOn: $inlineSystemButtons)
-                            .toggleStyle(CompactSwitch())
-                            .labelsHidden()
-                            .onChange(of: inlineSystemButtons) { newValue in
-                                settings.inlineToolbarSystemButtons = newValue
-                            }
-                    } label: {
-                        Text("Remove gap before system buttons")
-                        Text("Show the Ignore and Settings buttons right after the actions, separated by dividers like any other action, instead of after a gap.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    SettingsDivider()
-
-                    // Live preview at the toolbar's real on-screen size for the
-                    // selected zoom (reuses the same ToolbarPreviewView as Actions).
-                    ToolbarPreviewView(settings: settings)
-                }
-
-                SettingsGroup("Result Text") {
-                    VStack(alignment: .leading, spacing: 8) {
+                switch tab {
+                case .style:
+                    // No title: the header-row tab already names the section.
+                    SettingsGroup(nil) {
                         LabeledContent {
                             CapsuleTabs(
-                                selection: $fontSize,
-                                tabs: Array(ResultFontSize.allCases),
+                                selection: $toolbarStyle,
+                                tabs: Array(ToolbarStyle.allCases),
                                 title: { Text($0.displayName) },
                                 compact: true
                             )
                             .fixedSize()
-                            .onChange(of: fontSize) { newValue in
-                                settings.resultFontSize = newValue
+                            .onChange(of: toolbarStyle) { newValue in
+                                settings.toolbarStyle = newValue
                             }
                         } label: {
-                            Text("Font size")
-                            Text("Applies to the result shown in the toolbar after an action runs.")
+                            Text("Toolbar style")
+                            Text(toolbarStyle == .menu
+                                 ? "Actions appear in a list like a context menu; extra actions open from More actions."
+                                 : "Actions appear in a horizontal toolbar.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
 
-                        // Live preview so the choice is visible without triggering an
-                        // action. When "Include font size in zoom" is on, it also
-                        // reflects the toolbar zoom; turning the toggle off resets it.
-                        Text("The quick brown fox jumps over the lazy dog.")
-                            .font(fontSize.font(scale: zoomIncludesFontSize ? toolbarZoom.scale : 1))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .animation(previewAnimation, value: toolbarZoom)
-                            .animation(previewAnimation, value: zoomIncludesFontSize)
+                        SettingsDivider()
+
+                        LabeledContent {
+                            Toggle("Show logo only", isOn: $showLogoOnly)
+                                .toggleStyle(CompactSwitch())
+                                .labelsHidden()
+                                .onChange(of: showLogoOnly) { newValue in
+                                    settings.showLogoOnly = newValue
+                                }
+                        } label: {
+                            Text("Show logo only")
+                            Text(toolbarStyle == .menu
+                                 ? "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the menu."
+                                 : "When PopGuy is triggered, show only its logo next to the pointer. Click the logo to open the full toolbar.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        SettingsDivider()
+
+                        LabeledContent {
+                            // Bound straight to the store, like before on the Actions
+                            // page: a Toggle writes on the click, not during an update.
+                            Toggle("Show Settings button on toolbar", isOn: $settings.showToolbarSettingsButton)
+                                .toggleStyle(CompactSwitch())
+                                .labelsHidden()
+                        } label: {
+                            Text("Show Settings button on toolbar")
+                            Text("Settings stay available from the PopGuy menu bar icon")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                case .zoom:
+                    // No title: the header-row tab already names the section.
+                    SettingsGroup(nil) {
+                        LabeledContent {
+                            CapsuleTabs(
+                                selection: $toolbarZoom,
+                                tabs: Array(ToolbarZoom.allCases),
+                                title: { Text($0.displayName) },
+                                compact: true
+                            )
+                            .fixedSize()
+                            .onChange(of: toolbarZoom) { newValue in
+                                settings.toolbarZoom = newValue
+                            }
+                        } label: {
+                            Text("Zoom level")
+                            Text("Zoom level scales the entire floating toolbar — buttons, icons, and spacing — making it easier to see and click. 1× is the default size; higher levels make everything proportionally larger.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        SettingsDivider()
+
+                        LabeledContent {
+                            Toggle("Include font size in zoom", isOn: $zoomIncludesFontSize)
+                                .toggleStyle(CompactSwitch())
+                                .labelsHidden()
+                                .onChange(of: zoomIncludesFontSize) { newValue in
+                                    settings.zoomIncludesFontSize = newValue
+                                }
+                        } label: {
+                            Text("Include font size in zoom")
+                            Text("Turn off to keep the result text at its chosen size while everything else grows.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        SettingsDivider()
+
+                        // The row style dims the label while the row is disabled.
+                        LabeledContent {
+                            Toggle("Hide logo", isOn: $hideLogo)
+                                .toggleStyle(CompactSwitch())
+                                .labelsHidden()
+                                .onChange(of: hideLogo) { newValue in
+                                    settings.hideToolbarLogo = newValue
+                                }
+                        } label: {
+                            Text("Hide logo")
+                            Text(showLogoOnly
+                                 ? "The logo always shows while Show logo only is on."
+                                 : "Hide the PopGuy logo to save space on the toolbar.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        // The toolbar expands from the logo in "Show logo only" mode.
+                        .disabled(showLogoOnly)
+
+                        SettingsDivider()
+
+                        LabeledContent {
+                            Toggle("Remove gap before system buttons", isOn: $inlineSystemButtons)
+                                .toggleStyle(CompactSwitch())
+                                .labelsHidden()
+                                .onChange(of: inlineSystemButtons) { newValue in
+                                    settings.inlineToolbarSystemButtons = newValue
+                                }
+                        } label: {
+                            Text("Remove gap before system buttons")
+                            Text("Show the Ignore and Settings buttons right after the actions, separated by dividers like any other action, instead of after a gap.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        SettingsDivider()
+
+                        // Live preview at the toolbar's real on-screen size for the
+                        // selected zoom (reuses the same ToolbarPreviewView as Actions).
+                        ToolbarPreviewView(settings: settings)
+                    }
+                case .resultText:
+                    // No title: the header-row tab already names the section.
+                    SettingsGroup(nil) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            LabeledContent {
+                                CapsuleTabs(
+                                    selection: $fontSize,
+                                    tabs: Array(ResultFontSize.allCases),
+                                    title: { Text($0.displayName) },
+                                    compact: true
+                                )
+                                .fixedSize()
+                                .onChange(of: fontSize) { newValue in
+                                    settings.resultFontSize = newValue
+                                }
+                            } label: {
+                                Text("Font size")
+                                Text("Applies to the result shown in the toolbar after an action runs.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            // Live preview so the choice is visible without triggering an
+                            // action. When "Include font size in zoom" is on, it also
+                            // reflects the toolbar zoom; turning the toggle off resets it.
+                            Text("The quick brown fox jumps over the lazy dog.")
+                                .font(fontSize.font(scale: zoomIncludesFontSize ? toolbarZoom.scale : 1))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .animation(previewAnimation, value: toolbarZoom)
+                                .animation(previewAnimation, value: zoomIncludesFontSize)
+                        }
                     }
                 }
             }
@@ -1655,6 +1695,31 @@ private struct AppearanceView: View {
             inlineSystemButtons = settings.inlineToolbarSystemButtons
             showLogoOnly = settings.showLogoOnly
             toolbarStyle = settings.toolbarStyle
+        }
+        // Store-to-state syncs live on the page, not on a tab's control, so
+        // they also run while another tab shows (the Hide logo row reads
+        // showLogoOnly on the Toolbar zoom tab).
+        .onChange(of: settings.toolbarStyle) { newValue in
+            toolbarStyle = newValue
+        }
+        // Also toggled from the menu bar while this page is open.
+        .onChange(of: settings.showLogoOnly) { newValue in
+            showLogoOnly = newValue
+        }
+    }
+}
+
+// MARK: - AppearanceTab
+
+/// The Appearance page's tabs, one per section.
+private enum AppearanceTab: String, CaseIterable {
+    case style, zoom, resultText
+
+    var title: String {
+        switch self {
+        case .style:      "Toolbar style"
+        case .zoom:       "Toolbar zoom"
+        case .resultText: "Result text"
         }
     }
 }

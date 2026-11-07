@@ -105,7 +105,7 @@ macOS and Windows ship as one version and one GitHub release (`vX.Y.Z`, Latest);
 ## Constraints
 
 - **Unpackaged, self-contained:** `WindowsPackageType=None`, `SelfContained` and `WindowsAppSDKSelfContained`. Distribution is a direct download (Velopack's Setup.exe, per user, no administrator rights) with Velopack updates, unsigned. Velopack installs into `%LOCALAPPDATA%\PopGuy`; PopGuy's own data lives in `%APPDATA%\PopGuy` (settings, history) and `%LOCALAPPDATA%\PopGuyData` (log, models), which an uninstall keeps.
-- **Terminal Composer CLI:** `popguy-edit.exe` lives in `%LOCALAPPDATA%\PopGuy\current\bin\` (CI publishes it into a `bin` subfolder beside `PopGuy.exe`). Settings → Triggers → Install adds that `bin` folder to the user PATH; open a new terminal afterwards.
+- **Terminal Composer CLI:** `popguy-edit.exe` lives in `%LOCALAPPDATA%\PopGuy\current\bin\` (CI publishes it into a `bin` subfolder beside `PopGuy.exe`). Settings → Composer → Install adds that `bin` folder to the user PATH; open a new terminal afterwards.
 - **Windows App SDK component packages** (Base, Foundation, WinUI, InteractiveExperiences, DWrite) with central versions, not the metapackage.
 - **No trimming and no Native AOT in the App:** CsWin32's classic COM interop breaks under both. `popguy-edit.exe` is the one trimmed single-file binary: it references neither CsWin32 nor `PopGuy.Platform`.
 - **CsWin32:** generated types stay `internal`. List enum types in `NativeMethods.txt`, never enum members. APIs whose signature differs per architecture (`Shell_NotifyIcon`, `SHGetFileInfo`, `*Ptr` functions) are hand-declared, because Platform is AnyCPU.

@@ -125,6 +125,11 @@
                                 <FontIcon Glyph="&#xE7C9;" />
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
+                        <NavigationViewItem Content="Composer" Tag="TerminalComposer">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE756;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
                         <NavigationViewItem Content="Appearance" Tag="Appearance">
                             <NavigationViewItem.Icon>
                                 <FontIcon Glyph="&#xE771;" />

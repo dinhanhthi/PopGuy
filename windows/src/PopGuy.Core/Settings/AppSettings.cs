@@ -89,9 +89,12 @@ public sealed record AppSettings
 
     [JsonPropertyName("terminalComposerEnabled")] public bool TerminalComposerEnabled { get; init; }
 
+    /// <summary>
+    /// A missing key is the default; a cleared shortcut is written as <c>null</c> so it stays cleared. The default is
+    /// dropped on load when another hotkey already has those keys (<see cref="SettingsStore"/>).
+    /// </summary>
     [JsonPropertyName("composeShortcut")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public Shortcut? ComposeShortcut { get; init; }
+    public Shortcut? ComposeShortcut { get; init; } = ShortcutBinding.DefaultCompose;
 
     /// <summary>
     /// Windows only: the local model (a <c>gguf-…</c> catalog id) an action runs when its model id is empty or names

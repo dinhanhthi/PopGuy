@@ -583,9 +583,11 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(terminalComposerEnabled, forKey: Keys.terminalComposerEnabled) }
     }
 
-    /// Optional shortcut that opens the Terminal Composer (default: nil).
+    /// Optional shortcut that opens the Terminal Composer (default: ⌃⌥⌘E, unless another
+    /// shortcut already uses it). Cleared is saved as JSON `null` so it stays cleared; only a
+    /// missing key gets the default.
     @Published var composeShortcut: KeyboardShortcut? {
-        didSet { saveOptional(composeShortcut, key: Keys.composeShortcut) }
+        didSet { save(composeShortcut, key: Keys.composeShortcut) }
     }
 
     /// When true, clicking outside (or pressing Escape) after a result has
@@ -759,7 +761,8 @@ final class SettingsStore: ObservableObject {
         let rawCustomActions = Self.load([CustomAction].self, key: Keys.customActions, from: defaults) ?? []
         let loadedCustomActions = rawCustomActions.map(Self.migratedAction)
         customActions       = loadedCustomActions
-        shortcutBindings = Self.load([ShortcutBinding].self, key: Keys.shortcutBindings, from: defaults) ?? ShortcutBinding.defaultBuiltins
+        let loadedBindings = Self.load([ShortcutBinding].self, key: Keys.shortcutBindings, from: defaults) ?? ShortcutBinding.defaultBuiltins
+        shortcutBindings = loadedBindings
         hasOnboarded     = defaults.object(forKey: Keys.hasOnboarded) as? Bool ?? false
         ignoredAppBundleIDs      = Self.load([String].self, key: Keys.ignoredAppBundleIDs, from: defaults) ?? []
         ignoredDomains           = Self.load([String].self, key: Keys.ignoredDomains, from: defaults) ?? []
@@ -780,11 +783,22 @@ final class SettingsStore: ObservableObject {
         triggerChordEnabled      = defaults.object(forKey: Keys.triggerChord)    as? Bool ?? true
         historyEnabled           = defaults.object(forKey: Keys.historyEnabled)        as? Bool ?? true
         historyStoreFullText     = defaults.object(forKey: Keys.historyStoreFullText)  as? Bool ?? true
-        chordReplacementShortcut = Self.load(KeyboardShortcut.self, key: Keys.chordReplacementShortcut, from: defaults)
+        let loadedChordShortcut  = Self.load(KeyboardShortcut.self, key: Keys.chordReplacementShortcut, from: defaults)
+        chordReplacementShortcut = loadedChordShortcut
         ocrEnabled               = defaults.object(forKey: Keys.ocrEnabled) as? Bool ?? false
-        ocrShortcut              = Self.load(KeyboardShortcut.self, key: Keys.ocrShortcut, from: defaults)
+        let loadedOCRShortcut    = Self.load(KeyboardShortcut.self, key: Keys.ocrShortcut, from: defaults)
+        ocrShortcut              = loadedOCRShortcut
         terminalComposerEnabled  = defaults.object(forKey: Keys.terminalComposerEnabled) as? Bool ?? false
-        composeShortcut          = Self.load(KeyboardShortcut.self, key: Keys.composeShortcut, from: defaults)
+        // Missing key → the default, unless another shortcut already has it; a saved JSON
+        // `null` (cleared) decodes to nil and stays cleared.
+        if defaults.object(forKey: Keys.composeShortcut) == nil {
+            let fallback = KeyboardShortcut.defaultCompose
+            let taken = loadedBindings.contains { $0.shortcut == fallback }
+                || loadedChordShortcut == fallback || loadedOCRShortcut == fallback
+            composeShortcut = taken ? nil : fallback
+        } else {
+            composeShortcut = Self.load(KeyboardShortcut.self, key: Keys.composeShortcut, from: defaults)
+        }
         confirmCloseAfterResult  = defaults.object(forKey: Keys.confirmCloseAfterResult) as? Bool ?? true
         enterResultAction        = defaults.string(forKey: Keys.enterResultAction).flatMap(EnterResultAction.init(rawValue:)) ?? .pasteBack
         enterResultFallback      = defaults.string(forKey: Keys.enterResultFallback).flatMap(EnterResultAction.init(rawValue:)) ?? .nothing

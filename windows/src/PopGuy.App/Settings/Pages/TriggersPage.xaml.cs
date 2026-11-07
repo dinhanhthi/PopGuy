@@ -1,12 +1,9 @@
-using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
-using PopGuy.Composer;
 using PopGuy.Controls;
 using PopGuy.Core.Actions;
 using PopGuy.Core.Settings;
-using PopGuy.Platform.Capture;
 using PopGuy.Platform.Input;
 using PopGuy.Services;
 
@@ -18,9 +15,10 @@ namespace PopGuy.Settings.Pages;
 /// triggers and hotkeys. The double-click Default action lists every action of the action order, enabled or not. While
 /// the replacement or the Screen Text Capture shortcut records, PopGuy's own hotkeys and chord are off
 /// (<see cref="AppServices.SetHotkeysSuspended"/>) so a combo PopGuy owns reaches the recorder; after each apply each
-/// one's registration status shows under its row. A change from elsewhere (the tray) shows while the page is open; the
-/// tray's Capture Screen Text… scrolls to the OCR section (<see cref="FocusOcrSection"/>). The Terminal Composer's
-/// Compose shortcut follows the same pattern; its command row installs or removes popguy-edit off the UI thread.
+/// one's registration status shows under its row. A change from elsewhere (the tray) shows while the page is open. A
+/// SelectorBar (as on the Ignore page) shows the On Text Selection, Keyboard Shortcut or Screen Text Capture (OCR) tab;
+/// a new page opens on On Text Selection, and the tray's Capture Screen Text… selects the OCR tab
+/// (<see cref="FocusOcrSection"/>).
 /// </summary>
 public sealed partial class TriggersPage : Page
 {
@@ -33,19 +31,11 @@ public sealed partial class TriggersPage : Page
     /// <summary>The Default action picker's ids, after its first "Unassign (show toolbar)" item.</summary>
     private IReadOnlyList<ActionIdentifier> _pickerIds = [];
 
-    /// <summary>The OCR section is to scroll into view once the page has loaded.</summary>
-    private bool _focusOcrPending;
-
-    private const string PowerShellSnippet = "setx VISUAL popguy-edit";
-    private const string ClaudeSnippet = "{ \"env\": { \"VISUAL\": \"popguy-edit\" } }";
-    private const string GitSnippet = "git config --global core.editor popguy-edit";
-
-    /// <summary>An Install or Remove of the popguy-edit command is running.</summary>
-    private bool _commandBusy;
-
     public TriggersPage()
     {
         InitializeComponent();
+        TabBar.SelectedItem = TabBar.Items[0];
+        TabBar.SelectionChanged += (_, _) => ShowTab();
         OnSelectToggle.Toggled += (_, _) =>
             Save("triggerOnSelect", s => s with { TriggerOnSelectEnabled = OnSelectToggle.IsOn });
         EditableOnlyToggle.Toggled += (_, _) =>
@@ -67,24 +57,6 @@ public sealed partial class TriggersPage : Page
         HoverTooltip.SetText(RecordButton, "Record a replacement shortcut (e.g. Ctrl+Shift+Space)");
         HoverTooltip.SetText(OcrClearButton, "Remove shortcut");
         HoverTooltip.SetText(OcrRecordButton, "Record shortcut");
-        ComposerToggle.Toggled += (_, _) =>
-            Save("terminalComposerEnabled", s => s with { TerminalComposerEnabled = ComposerToggle.IsOn });
-        ComposeClearButton.Click += (_, _) => Save("composeShortcut", s => s with { ComposeShortcut = null });
-        ComposeRecordButton.Click += (_, _) => ComposeRecorder.Start();
-        ComposeRecorder.RecordingStarted += OnRecordingStarted;
-        ComposeRecorder.RecordingEnded += OnComposeRecordingEnded;
-        HoverTooltip.SetText(ComposeClearButton, "Remove shortcut");
-        HoverTooltip.SetText(ComposeRecordButton, "Record shortcut");
-        CommandButton.Click += (_, _) => OnCommandClick();
-        SnippetPowerShellText.Text = PowerShellSnippet;
-        SnippetClaudeText.Text = ClaudeSnippet;
-        SnippetGitText.Text = GitSnippet;
-        SnippetPowerShellCopyButton.Click += (_, _) => Copy(PowerShellSnippet, "powershell");
-        SnippetClaudeCopyButton.Click += (_, _) => Copy(ClaudeSnippet, "claude");
-        SnippetGitCopyButton.Click += (_, _) => Copy(GitSnippet, "git");
-        HoverTooltip.SetText(SnippetPowerShellCopyButton, "Copy");
-        HoverTooltip.SetText(SnippetClaudeCopyButton, "Copy");
-        HoverTooltip.SetText(SnippetGitCopyButton, "Copy");
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -105,7 +77,6 @@ public sealed partial class TriggersPage : Page
         }
         _subscribed = true;
         Refresh();
-        if (_focusOcrPending) FocusOcrSection();
     }
 
     /// <summary>
@@ -145,29 +116,27 @@ public sealed partial class TriggersPage : Page
         // macOS: the shortcut row is disabled until the feature is on.
         OcrShortcutCard.IsEnabled = current.OcrEnabled;
         if (!OcrRecorder.IsRecording) OcrRecorder.Shortcut = current.OcrShortcut;
-        ComposerToggle.IsOn = current.TerminalComposerEnabled;
-        ComposeShortcutCard.IsEnabled = current.TerminalComposerEnabled;
-        if (!ComposeRecorder.IsRecording) ComposeRecorder.Shortcut = current.ComposeShortcut;
         _syncing = false;
         RefreshRecorderButtons();
         RefreshStatus();
-        RefreshCommand();
     }
 
-    /// <summary>
-    /// Scrolls the OCR section to the top (macOS scrollToOCRSectionIfRequested): on a later, low-priority turn when the
-    /// page is up (after its layout, and the window's first-show re-attach), else once it has loaded.
-    /// </summary>
+    /// <summary>Selects the OCR tab (macOS scrollToOCRSectionIfRequested), loaded or not.</summary>
     internal void FocusOcrSection()
     {
-        _focusOcrPending = true;
-        if (!IsLoaded) return;
-        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
-        {
-            if (!_focusOcrPending || !IsLoaded) return;
-            _focusOcrPending = false;
-            OcrHeader.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0, AnimationDesired = true });
-        });
+        TabBar.SelectedItem = TabBar.Items[2];
+        ShowTab();
+    }
+
+    /// <summary>The picked tab's panel, scrolled to its top.</summary>
+    private void ShowTab()
+    {
+        var index = TabBar.Items.IndexOf(TabBar.SelectedItem);
+        if (index < 0) return;
+        SelectionTab.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ShortcutTab.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
+        OcrTab.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+        TabScroller.ChangeView(null, 0, null, disableAnimation: true);
     }
 
     // Default action (macOS doubleClickActionPicker).
@@ -179,7 +148,8 @@ public sealed partial class TriggersPage : Page
     private void RefreshPicker(AppSettings current)
     {
         _pickerIds = current.ActionOrder;
-        List<string> labels = ["Unassign (show toolbar)", .. _pickerIds.Select(id => ActionLabel(current, id))];
+        List<string> labels =
+            ["Unassign (show toolbar)", .. _pickerIds.Select(id => ShortcutRowStatus.ActionLabel(current, id))];
         if (!labels.SequenceEqual(DefaultActionBox.Items.OfType<string>()))
         {
             DefaultActionBox.Items.Clear();
@@ -205,23 +175,6 @@ public sealed partial class TriggersPage : Page
         }
         return -1;
     }
-
-    /// <summary>The picker's label for an action (macOS TriggersView.actionLabel).</summary>
-    private static string ActionLabel(AppSettings settings, ActionIdentifier id) => id.Type switch
-    {
-        ActionIdentifierType.Builtin => id.BuiltinKind switch
-        {
-            ActionKind.Improve => "Improve",
-            ActionKind.Shorten => "Shorten",
-            ActionKind.Proofread => "Proofread",
-            ActionKind.Translate => "Translate",
-            ActionKind.Prompt => "Prompt",
-            _ => "Custom",
-        },
-        ActionIdentifierType.Speak => "Speak",
-        ActionIdentifierType.Dictionary => "Look up",
-        _ => settings.CustomActions.FirstOrDefault(a => a.Id == id.CustomId)?.Title ?? "Custom",
-    };
 
     // Replacement and Screen Text Capture shortcuts.
 
@@ -263,34 +216,10 @@ public sealed partial class TriggersPage : Page
         RefreshRecorderButtons();
     }
 
-    /// <summary>As <see cref="OnRecordingEnded"/>, for the Terminal Composer's Compose shortcut.</summary>
-    private void OnComposeRecordingEnded(ShortcutKeyOutcome outcome, Shortcut? recorded)
-    {
-        if (outcome == ShortcutKeyOutcome.Record)
-        {
-            Save("composeShortcut", s => s with { ComposeShortcut = recorded });
-        }
-        else if (outcome == ShortcutKeyOutcome.Clear)
-        {
-            Save("composeShortcut", s => s with { ComposeShortcut = null });
-        }
-        _services?.SetHotkeysSuspended(false);
-        RefreshRecorderButtons();
-    }
-
-    /// <summary>macOS: the clear button only with a shortcut; neither button while recording.</summary>
     private void RefreshRecorderButtons()
     {
-        RefreshRecorderButtons(Recorder, ClearButton, RecordButton);
-        RefreshRecorderButtons(OcrRecorder, OcrClearButton, OcrRecordButton);
-        RefreshRecorderButtons(ComposeRecorder, ComposeClearButton, ComposeRecordButton);
-    }
-
-    private static void RefreshRecorderButtons(ShortcutRecorder recorder, Button clear, Button record)
-    {
-        var recording = recorder.IsRecording;
-        clear.Visibility = !recording && recorder.Shortcut is not null ? Visibility.Visible : Visibility.Collapsed;
-        record.Visibility = recording ? Visibility.Collapsed : Visibility.Visible;
+        ShortcutRowStatus.RefreshButtons(Recorder, ClearButton, RecordButton);
+        ShortcutRowStatus.RefreshButtons(OcrRecorder, OcrClearButton, OcrRecordButton);
     }
 
     /// <summary>
@@ -302,104 +231,14 @@ public sealed partial class TriggersPage : Page
         if (_services is null) return;
         var current = _services.Settings.Current;
         var registrations = _services.HotkeyRegistrations;
-        ShowStatus(ReplacementStatusText,
+        ShortcutRowStatus.Show(ReplacementStatusText,
             !Recorder.IsRecording && current.TriggerChordEnabled && current.ChordReplacementShortcut is { } replacement
-                ? StatusMessage(current, registrations, HotkeyService.ChordReplacementId, replacement)
+                ? ShortcutRowStatus.Message(current, registrations, HotkeyService.ChordReplacementId, replacement)
                 : null);
-        ShowStatus(OcrStatusText,
+        ShortcutRowStatus.Show(OcrStatusText,
             !OcrRecorder.IsRecording && current.OcrEnabled && current.OcrShortcut is { } ocr
-                ? StatusMessage(current, registrations, HotkeyService.OcrCaptureId, ocr)
+                ? ShortcutRowStatus.Message(current, registrations, HotkeyService.OcrCaptureId, ocr)
                 : null);
-        ShowStatus(ComposeStatusText,
-            !ComposeRecorder.IsRecording && current.TerminalComposerEnabled && current.ComposeShortcut is { } compose
-                ? StatusMessage(current, registrations, HotkeyService.ComposeId, compose)
-                : null);
-    }
-
-    private static void ShowStatus(TextBlock text, string? message)
-    {
-        text.Text = message ?? "";
-        text.Visibility = message is null ? Visibility.Collapsed : Visibility.Visible;
-    }
-
-    /// <summary>
-    /// <paramref name="id"/>'s refusal, if Windows refused it: "Already used by" the PopGuy hotkey that registered the
-    /// same keys first (an action, or the Ctrl+C+C replacement for the OCR shortcut), else "another app".
-    /// </summary>
-    private static string? StatusMessage(
-        AppSettings current, IReadOnlyList<HotkeyRegistration> registrations, ActionIdentifier id, Shortcut shortcut)
-    {
-        var status = registrations.FirstOrDefault(r => r.Id == id && r.Shortcut == shortcut)?.Status;
-        var owner = registrations
-            .Where(r => r.Id != id && r.Status == HotkeyStatus.Registered && r.Shortcut == shortcut)
-            .Select(r => OwnerLabel(current, r.Id))
-            .FirstOrDefault(label => label is not null);
-        return status switch
-        {
-            HotkeyStatus.InUse => owner is null ? "Shortcut in use by another app" : $"Already used by {owner}",
-            HotkeyStatus.Invalid => "Windows refused this shortcut",
-            _ => null,
-        };
-    }
-
-    /// <summary>A registered hotkey's name in "Already used by …"; null for an id no longer in the settings.</summary>
-    private static string? OwnerLabel(AppSettings current, ActionIdentifier id)
-    {
-        if (id == HotkeyService.ChordReplacementId) return "the Ctrl+C+C replacement";
-        if (id == HotkeyService.OcrCaptureId) return "Screen Text Capture";
-        if (id == HotkeyService.ComposeId) return "Terminal Composer";
-        return current.ShortcutBindings.Any(b => b.Id == id) ? ActionLabel(current, id) : null;
-    }
-
-    // Terminal Composer command and snippets.
-
-    /// <summary>The popguy-edit command's status (a quick registry read) and the button that flips it.</summary>
-    private void RefreshCommand()
-    {
-        var installed = CommandInstaller.Status == CommandInstallStatus.Installed;
-        CommandStatusText.Text = installed ? "Installed — popguy-edit is on your PATH." : "Not installed.";
-        CommandButton.Content = installed ? "Remove" : "Install";
-        CommandButton.IsEnabled = !_commandBusy;
-    }
-
-    /// <summary>
-    /// Installs or removes the command off the UI thread (its environment broadcast can block for seconds); the button
-    /// stays disabled until it is done, then the status is read again.
-    /// </summary>
-    private void OnCommandClick()
-    {
-        if (_commandBusy || _services is not { } services) return;
-        var install = CommandInstaller.Status != CommandInstallStatus.Installed;
-        _commandBusy = true;
-        CommandButton.IsEnabled = false;
-        var queue = DispatcherQueue;
-        _ = Task.Run(() =>
-        {
-            var ok = install ? CommandInstaller.Install() : CommandInstaller.Remove();
-            services.Log.Write($"composer command {(install ? "install" : "remove")}: {(ok ? "done" : "failed")}");
-            queue.TryEnqueue(() =>
-            {
-                _commandBusy = false;
-                RefreshCommand();
-            });
-        });
-    }
-
-    /// <summary>A deliberate copy, as History's: off the UI thread; the log gets the outcome only.</summary>
-    private void Copy(string text, string what)
-    {
-        if (_services is not { } services) return;
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                services.Log.Write($"snippet copy {what}: written {ClipboardGuard.WriteText(text, excludeFromHistory: false)}");
-            }
-            catch (Exception e)
-            {
-                services.Log.Write($"snippet copy {what}: failed, {e.GetType().Name}");
-            }
-        });
     }
 
     /// <summary>Saves one change; a failed write is logged and the controls go back to the saved settings.</summary>

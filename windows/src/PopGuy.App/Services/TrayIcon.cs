@@ -38,7 +38,7 @@ internal sealed class TrayIcon : IDisposable
 
     /// <param name="openSettings">Opens the Settings window. Runs from the dispatcher queue, after the menu closed.</param>
     /// <param name="openSettingsSection">
-    /// Opens Settings on a page (a sidebar tag), with Triggers scrolled to its OCR section when the flag is set. Runs from
+    /// Opens Settings on a page (a sidebar tag), with Triggers on its OCR tab when the flag is set. Runs from
     /// the dispatcher queue.
     /// </param>
     /// <param name="captureScreenText">Starts an OCR capture (Screen Text Capture is on). Runs from the dispatcher queue.</param>

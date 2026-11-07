@@ -116,6 +116,9 @@ public sealed record ShortcutBinding(
         new(ActionIdentifier.Speak, new('K', DefaultModifiers)),
     ];
 
+    /// <summary>The fresh-install Terminal Composer hotkey, Ctrl+Alt+Shift+E (macOS Ctrl+Option+Cmd+E).</summary>
+    public static Shortcut DefaultCompose { get; } = new('E', DefaultModifiers);
+
     /// <summary>
     /// <paramref name="bindings"/> with <paramref name="id"/>'s hotkey set to <paramref name="shortcut"/> (macOS
     /// setShortcut: the same keys are taken from any other action; the binding keeps its place or is appended), or

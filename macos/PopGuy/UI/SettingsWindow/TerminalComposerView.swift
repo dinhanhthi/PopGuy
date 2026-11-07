@@ -1,9 +1,9 @@
-// TerminalComposerSettingsSection.swift
+// TerminalComposerView.swift
 // PopGuy — UI/SettingsWindow
 //
-// The "Terminal Composer" section of the Triggers page: the enable switch, the
-// Compose shortcut, the `popguy-edit` command (install / re-install / remove) and
-// copyable snippets that set it as the editor of shells, Claude Code and git.
+// The Settings → Composer page (Terminal Composer): the enable switch, the Compose shortcut,
+// the `popguy-edit` command (install / re-install / remove) and copyable snippets,
+// each with a caption, that set it as the editor of shells, Claude Code and git.
 //
 // The command's status is read and changed off the main thread (file system I/O);
 // the buttons react at once and show a busy label until the work is done.
@@ -13,7 +13,7 @@
 import AppKit
 import SwiftUI
 
-struct TerminalComposerSettingsSection: View {
+struct TerminalComposerView: View {
 
     @ObservedObject var settings: SettingsStore
 
@@ -33,17 +33,43 @@ struct TerminalComposerSettingsSection: View {
     /// Gatekeeper runs a quarantined app from a temporary path: a link to it would dangle.
     private let isTranslocated = Bundle.main.bundlePath.contains("/AppTranslocation/")
 
-    private static let snippets: [(title: String, text: String)] = [
-        ("zsh (~/.zshrc)", "export PATH=\"$HOME/.local/bin:$PATH\"\nexport VISUAL=popguy-edit"),
-        ("fish", "fish_add_path ~/.local/bin; set -Ux VISUAL popguy-edit"),
-        ("Claude Code (~/.claude/settings.json)", "\"env\": { \"VISUAL\": \"popguy-edit\" }"),
-        ("git", "git config --global core.editor popguy-edit"),
-        ("zsh edit-command-line (Ctrl+X Ctrl+E)", "autoload -U edit-command-line; zle -N edit-command-line; bindkey '^x^e' edit-command-line"),
+    private static let snippets: [(title: String, caption: String, text: String)] = [
+        ("zsh (~/.zshrc)",
+         "Recommended. Adds popguy-edit to PATH and makes it the editor for Claude Code, Codex, Gemini CLI, git and more. Then open a new terminal.",
+         "export PATH=\"$HOME/.local/bin:$PATH\"\nexport VISUAL=popguy-edit"),
+        ("fish",
+         "The same for fish shell.",
+         "fish_add_path ~/.local/bin; set -Ux VISUAL popguy-edit"),
+        ("Claude Code (~/.claude/settings.json)",
+         "Only if you don't set VISUAL in your shell: makes just Claude Code use PopGuy.",
+         "\"env\": { \"VISUAL\": \"popguy-edit\" }"),
+        ("git",
+         "Only if git has its own core.editor, or to use PopGuy for git only.",
+         "git config --global core.editor popguy-edit"),
+        ("zsh edit-command-line (Ctrl+X Ctrl+E)",
+         "Optional: press Ctrl+X Ctrl+E at the zsh prompt to edit the current command in PopGuy.",
+         "autoload -U edit-command-line; zle -N edit-command-line; bindkey '^x^e' edit-command-line"),
     ]
 
     var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
+                composerGroup
+                snippetsGroup
+            }
+            .padding(SettingsMetrics.pagePadding)
+        }
+        .labeledContentStyle(.settingsRow)
+        .task { await refreshStatus() }
+        .onDisappear { isRecordingShortcut = false }
+    }
+
+    // MARK: - Groups
+
+    /// No title: the page header already reads "Composer" (the sidebar title).
+    private var composerGroup: some View {
         SettingsGroup(
-            "Terminal Composer",
+            nil,
             footer: "How it works: press Ctrl+G in Claude Code, Codex or Gemini CLI (or set it as git's editor). Done writes the text back and returns to the terminal; Cancel or Esc keeps the original."
         ) {
             LabeledContent {
@@ -64,14 +90,21 @@ struct TerminalComposerSettingsSection: View {
             SettingsDivider()
 
             commandRow()
+        }
+    }
+
+    private var snippetsGroup: some View {
+        SettingsGroup("Set PopGuy as the editor") {
+            Text("Paste one line into your shell config so terminal tools open PopGuy as their editor. Most people only need the first one.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             ForEach(Self.snippets, id: \.title) { snippet in
                 SettingsDivider()
-                snippetRow(title: snippet.title, text: snippet.text)
+                snippetRow(title: snippet.title, caption: snippet.caption, text: snippet.text)
             }
         }
-        .task { await refreshStatus() }
-        .onDisappear { isRecordingShortcut = false }
     }
 
     // MARK: - Compose shortcut
@@ -232,7 +265,7 @@ struct TerminalComposerSettingsSection: View {
 
     // MARK: - Snippets
 
-    private func snippetRow(title: String, text: String) -> some View {
+    private func snippetRow(title: String, caption: String, text: String) -> some View {
         LabeledContent {
             Button {
                 let pasteboard = NSPasteboard.general
@@ -245,6 +278,9 @@ struct TerminalComposerSettingsSection: View {
             .hoverTooltip("Copy")
         } label: {
             Text(title)
+            Text(caption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Text(text)
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)

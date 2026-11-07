@@ -1248,4 +1248,31 @@ struct SettingsStoreTests {
         #expect(store.customActions.last?.model == "gpt-6.1-sol")
         #expect(store.customActions.last?.ttsConfig.model == "gpt-4o-mini-tts")
     }
+
+    // MARK: - Compose shortcut default
+
+    @Test("composeShortcut defaults to ⌃⌥⌘E, and a cleared one stays cleared after reload")
+    func composeShortcutDefaultAndClear() {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let store1 = SettingsStore(defaults: suite)
+        #expect(store1.composeShortcut == KeyboardShortcut.defaultCompose)
+        store1.composeShortcut = nil
+
+        let store2 = SettingsStore(defaults: suite)
+        #expect(store2.composeShortcut == nil)
+    }
+
+    @Test("composeShortcut default is skipped when another action already uses that combo")
+    func composeShortcutDefaultSkippedOnCollision() throws {
+        let (suite, name) = makeSuite()
+        defer { removeSuite(name) }
+
+        let taken = [ShortcutBinding(actionID: .builtin(.improve), shortcut: KeyboardShortcut.defaultCompose)]
+        suite.set(try JSONEncoder().encode(taken), forKey: "settings.shortcutBindings")
+
+        let store = SettingsStore(defaults: suite)
+        #expect(store.composeShortcut == nil)
+    }
 }

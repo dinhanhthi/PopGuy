@@ -16,7 +16,7 @@ namespace PopGuy.Edit;
 internal static partial class Program
 {
     private const string NotRunning =
-        "Terminal Composer is off or PopGuy is not running — enable it in PopGuy Settings → Triggers.";
+        "Terminal Composer is off or PopGuy is not running — enable it in PopGuy Settings → Composer.";
 
     private static int Main(string[] args)
     {
