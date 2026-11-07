@@ -87,6 +87,12 @@ public sealed record AppSettings
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Shortcut? OcrShortcut { get; init; }
 
+    [JsonPropertyName("terminalComposerEnabled")] public bool TerminalComposerEnabled { get; init; }
+
+    [JsonPropertyName("composeShortcut")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Shortcut? ComposeShortcut { get; init; }
+
     /// <summary>
     /// Windows only: the local model (a <c>gguf-…</c> catalog id) an action runs when its model id is empty or names
     /// no local model, set on Settings → Providers → Local AI; null is the catalog's default.

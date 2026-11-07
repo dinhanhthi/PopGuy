@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- popguy-edit.exe: the Terminal Composer's $VISUAL editor. Portable target, so it also builds on the Mac. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>popguy-edit</AssemblyName>
+    <RootNamespace>PopGuy.Edit</RootNamespace>
+    <!-- LibraryImport generates unsafe marshalling code. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <!-- The one trimmed binary: exempt from the App's no-trimming rule because it references neither CsWin32 nor
+       PopGuy.Platform. Only with a runtime identifier (publish -r), so a RID-less build does not fail (NETSDK1031). -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <PublishTrimmed>true</PublishTrimmed>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Linked, not a project reference to Core, to keep the exe small. -->
+    <Compile Include="..\PopGuy.Core\Composer\ComposerProtocol.cs" Link="Composer\ComposerProtocol.cs" />
+  </ItemGroup>
+</Project>

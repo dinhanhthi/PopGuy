@@ -177,6 +177,9 @@ jobs:
         run: |
           dotnet publish src/PopGuy.App/PopGuy.App.csproj -c Debug -r "win-$env:ARCH" "-p:Platform=$env:PLATFORM_NAME" "-p:Version=0.0.$env:RUN_NUMBER" -o $env:APP_DIR
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # popguy-edit.exe in bin\ (the folder Settings adds to the user PATH), built as windows-release.yml ships it.
+          dotnet publish src/PopGuy.Edit/PopGuy.Edit.csproj -c Release -r "win-$env:ARCH" "-p:Version=0.0.$env:RUN_NUMBER" -p:DebugType=none -o "$env:APP_DIR\bin"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # Fails unless the folder is a runnable unpackaged self-contained WinUI app for this architecture: the Windows
       # App SDK runtime and WinUI binaries, the llama.cpp natives, a .pri resource index, and the WinRT activatable-class
@@ -203,7 +206,12 @@ jobs:
             }
           }
 
-          foreach ($name in @('PopGuy.exe', 'Microsoft.ui.xaml.dll')) {
+          # The Terminal Composer CLI (popguy-edit.exe), in bin\ so the user PATH exposes only it.
+          if (-not (Test-Path -LiteralPath (Join-Path $env:APP_DIR 'bin\popguy-edit.exe'))) {
+            $errors += 'Missing bin\popguy-edit.exe in the publish folder'
+          }
+
+          foreach ($name in @('PopGuy.exe', 'Microsoft.ui.xaml.dll', 'bin\popguy-edit.exe')) {
             $path = Join-Path $env:APP_DIR $name
             if (-not (Test-Path -LiteralPath $path)) { continue }
             $machine = Get-PeMachine $path
