@@ -9,6 +9,17 @@ Before 1.4.0 Windows had its own versions (0.1.0).
 
 ## [Unreleased]
 
+## [1.4.10] - 2026-11-08
+
+### Added
+- Emoji picker: press Ctrl+; in any text field to open a small picker at the text cursor. Search emoji and symbols (English, Vietnamese, French and Spanish), browse by category, pick a skin tone and see your most used emoji first. Enter or a click types the emoji into the app you were in; if that isn't possible (an app running as administrator, or one that lost the focus) it is copied instead. It never opens in password fields and never types into remote sessions. Off by default: turn it on in Settings → Emoji or in the tray menu, where you can also change the shortcut. Country flags are hidden because Windows draws them as letters.
+- An "Emoji picker" step in the Setup Guide.
+- Composer: Enter continues a Markdown list and Backspace removes an empty bullet.
+- A step in the Setup Guide that offers the Terminal Composer (off by default).
+
+### Changed
+- The tray menu no longer has "Setup Guide" (it is still in Settings → General) and has an "Emoji Picker" switch.
+
 ## [1.4.9] - 2026-11-07
 
 ### Added

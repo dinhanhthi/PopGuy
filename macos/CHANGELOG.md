@@ -15,6 +15,19 @@ heading, which the release body shows under `## Windows`.
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.4.10] - 2026-11-08
+
+### Added
+- Emoji picker: press Command+; in any text field to open a small picker at the text cursor. Search emoji and symbols (English, Vietnamese, French and Spanish), browse by category, pick a skin tone and see your most used emoji first. Enter or a click types the emoji into the app you were in; if that isn't possible it is copied instead. It never opens in password fields or while Secure Input is on. Off by default: turn it on in Settings → Emoji or in the menu bar, where you can also change the shortcut.
+- An "Emoji picker" step in the Setup Guide.
+- Composer: Enter continues a Markdown list and Backspace removes an empty bullet, and the caret starts at the end of the text.
+- A step in the Setup Guide that offers the Terminal Composer (off by default).
+
+### Changed
+- Every dropdown in Settings is now a capsule, like the buttons.
+- The menu bar menu no longer has "Setup Guide" (it is still in Settings → General) and has an "Emoji Picker" switch.
+- The hovered sidebar row in Settings keeps a full-strength label in light mode.
+
 ## [1.4.9] - 2026-11-07
 
 ### Added
