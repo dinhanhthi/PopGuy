@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Settings → Emoji (macOS EmojiPickerSettingsView.swift): a one-line intro, the switch, the picker shortcut, the
+    default skin tone and the Frequently Used reset, as Windows 11 Settings cards. The header is the window's.
+-->
+<Page
+    x:Class="PopGuy.Settings.Pages.EmojiPickerPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:popguy="using:PopGuy.Controls">
+
+    <ScrollViewer>
+        <!-- A stretched Grid takes the viewport width: a MaxWidth child placed straight in the ScrollViewer is centered by its narrower desired width and overflows the right edge on wide windows. -->
+        <Grid>
+            <StackPanel
+                MaxWidth="1000"
+                Margin="24,16,24,24"
+                Spacing="4">
+
+                <TextBlock
+                    Margin="1,0,0,12"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="Press a shortcut in any text field to pick an emoji or symbol."
+                    TextWrapping="Wrap" />
+
+                <controls:SettingsCard
+                    Description="Off by default. Opens a picker at the text cursor; Enter or a click types the emoji into the app you're in."
+                    Header="Emoji picker">
+                    <ToggleSwitch x:Name="PickerToggle" AutomationProperties.Name="Emoji picker" />
+                </controls:SettingsCard>
+
+                <controls:SettingsCard x:Name="ShortcutCard" Header="Shortcut">
+                    <controls:SettingsCard.Description>
+                        <StackPanel Spacing="2">
+                            <TextBlock
+                                x:Name="ShortcutStatusText"
+                                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                TextWrapping="Wrap"
+                                Visibility="Collapsed" />
+                            <TextBlock
+                                Text="In Excel, Ctrl+; inserts the current date; PopGuy takes it over while the picker is on."
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </controls:SettingsCard.Description>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <popguy:ShortcutRecorder
+                            x:Name="PickerRecorder"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Emoji picker shortcut" />
+                        <Button
+                            x:Name="ShortcutClearButton"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Remove shortcut"
+                            Style="{StaticResource SubtleButtonStyle}">
+                            <FontIcon FontSize="14" Glyph="&#xE894;" />
+                        </Button>
+                        <Button
+                            x:Name="ShortcutRecordButton"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Record shortcut"
+                            Style="{StaticResource SubtleButtonStyle}">
+                            <FontIcon FontSize="14" Glyph="&#xE7C8;" />
+                        </Button>
+                    </StackPanel>
+                </controls:SettingsCard>
+
+                <!-- Items in SkinTone order: the selected index is the enum value. Each shows the toned raised hand (U+270B). -->
+                <controls:SettingsCard Header="Default skin tone">
+                    <ComboBox
+                        x:Name="SkinToneBox"
+                        MinWidth="160"
+                        AutomationProperties.Name="Default skin tone">
+                        <ComboBoxItem Content="&#x270B; Default" />
+                        <ComboBoxItem Content="&#x270B;&#x1F3FB; Light" />
+                        <ComboBoxItem Content="&#x270B;&#x1F3FC; Medium-Light" />
+                        <ComboBoxItem Content="&#x270B;&#x1F3FD; Medium" />
+                        <ComboBoxItem Content="&#x270B;&#x1F3FE; Medium-Dark" />
+                        <ComboBoxItem Content="&#x270B;&#x1F3FF; Dark" />
+                    </ComboBox>
+                </controls:SettingsCard>
+
+                <controls:SettingsCard
+                    Description="The emoji you pick most often show first in the picker."
+                    Header="Frequently Used">
+                    <Button x:Name="ClearFrequentlyUsedButton" MinWidth="80" Content="Clear" />
+                </controls:SettingsCard>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</Page>

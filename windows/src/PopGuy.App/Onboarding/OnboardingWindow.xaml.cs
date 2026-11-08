@@ -22,9 +22,10 @@ using DrawingPoint = System.Drawing.Point;
 namespace PopGuy.Onboarding;
 
 /// <summary>
-/// The first-launch wizard (spec-3 §6, macOS OnboardingView.swift): seven steps in the macOS order: Welcome, How PopGuy
+/// The first-launch wizard (spec-3 §6, macOS OnboardingView.swift): eight steps in the macOS order: Welcome, How PopGuy
 /// Reads Text (the Windows step in place of the Accessibility permission: Windows needs none), Set Up a Provider, How
-/// PopGuy Appears, Choose Your Actions, Terminal Composer (opt-in, off by default) and You're All Set. A 560×560 client area, centered, not resizable. Enter goes to
+/// PopGuy Appears, Choose Your Actions, Terminal Composer and Emoji picker (both opt-in, off by default) and You're All
+/// Set. A 560×560 client area, centered, not resizable. Enter goes to
 /// the next step unless the focus is in a text field, on a button or in the shortcut recorder (macOS: no default action
 /// while recording). Every switch saves through <see cref="SettingsStore.Update"/> at once, and a change from elsewhere
 /// (the tray, Settings) shows while the window is open. The App owns its lifetime and marks onboarding done when it
@@ -33,7 +34,7 @@ namespace PopGuy.Onboarding;
 public sealed partial class OnboardingWindow : Window
 {
     private const double ClientSize = 560;
-    private const int StepCount = 7;
+    private const int StepCount = 8;
 
     private readonly AppServices _services;
     private readonly Action _openSettings;
@@ -59,6 +60,9 @@ public sealed partial class OnboardingWindow : Window
 
     // Terminal Composer.
     private ToggleSwitch _composerToggle = null!;
+
+    // Emoji picker.
+    private ToggleSwitch _emojiToggle = null!;
 
     // Set Up a Provider.
     private OnboardingProviderPage _providerPage = null!;
@@ -90,6 +94,7 @@ public sealed partial class OnboardingWindow : Window
             AppearsStep(),
             ActionsStep(),
             ComposerStep(),
+            EmojiStep(),
             FinishStep(),
         ];
         _dots = new Ellipse[StepCount];
@@ -346,6 +351,33 @@ public sealed partial class OnboardingWindow : Window
                 "the VISUAL editor variable."));
     }
 
+    /// <summary>macOS OnboardingEmojiPage: what the emoji picker does, and its switch (off by default).</summary>
+    private UIElement EmojiStep()
+    {
+        _emojiToggle = Switch("Enable the emoji picker");
+        _emojiToggle.Toggled += (_, _) =>
+            Save("emojiPickerEnabled", s => s with { EmojiPickerEnabled = _emojiToggle.IsOn });
+
+        var how = new StackPanel { Spacing = 8 };
+        how.Children.Add(TourRow(
+            "\uE721",
+            "Type to search, use the arrow keys to move, and press Enter to insert. Esc closes the picker."));
+        how.Children.Add(TourRow("\uE917", "Emoji you use often show up first under Frequently Used."));
+
+        return StepPanel(
+            Header(
+                "\uE76E", "Emoji picker",
+                "Press Ctrl+; in any text field to open a small picker at the cursor. Search, pick, and the emoji or " +
+                "symbol is typed for you."),
+            Card(
+                _emojiToggle,
+                Secondary("Off by default. Turn it on to pick emoji and symbols from the keyboard in any app.")),
+            how,
+            Secondary(
+                "You can change the shortcut in Settings → Emoji. In Excel, Ctrl+; normally inserts the current date; " +
+                "while the picker is on, Ctrl+; opens the picker instead."));
+    }
+
     private UIElement FinishStep()
     {
         _loginToggle = Switch("Start PopGuy at login");
@@ -393,6 +425,7 @@ public sealed partial class OnboardingWindow : Window
         if (!_recorder.IsRecording) _recorder.Shortcut = current.ChordReplacementShortcut;
         _onSelectToggle.IsOn = current.TriggerOnSelectEnabled;
         _composerToggle.IsOn = current.TerminalComposerEnabled;
+        _emojiToggle.IsOn = current.EmojiPickerEnabled;
         foreach (var (id, toggle, wrapper) in _actionToggles)
         {
             // Locked while it is the only enabled action: the toolbar needs at least one (macOS isLastEnabledAction).

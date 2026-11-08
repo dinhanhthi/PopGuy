@@ -130,6 +130,11 @@
                                 <FontIcon Glyph="&#xE756;" />
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
+                        <NavigationViewItem Content="Emoji" Tag="EmojiPicker">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE76E;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
                         <NavigationViewItem Content="Appearance" Tag="Appearance">
                             <NavigationViewItem.Icon>
                                 <FontIcon Glyph="&#xE771;" />

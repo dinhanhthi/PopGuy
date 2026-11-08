@@ -42,6 +42,7 @@ public sealed partial class SettingsWindow : Window
         ["History"] = (typeof(HistoryPage), "\uE81C"),
         ["Triggers"] = (typeof(TriggersPage), "\uE7C9"),
         ["TerminalComposer"] = (typeof(TerminalComposerPage), "\uE756"),
+        ["EmojiPicker"] = (typeof(EmojiPickerPage), "\uE76E"),
         ["Appearance"] = (typeof(AppearancePage), "\uE771"),
         ["Ignore"] = (typeof(IgnorePage), "\uED1A"),
         ["About"] = (typeof(AboutPage), "\uE946"),

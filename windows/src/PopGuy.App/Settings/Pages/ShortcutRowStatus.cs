@@ -8,7 +8,7 @@ using PopGuy.Platform.Input;
 namespace PopGuy.Settings.Pages;
 
 /// <summary>
-/// The shortcut rows' shared parts on Triggers and Terminal Composer: a refused hotkey's message under its row, and the
+/// The shortcut rows' shared parts on Triggers, Terminal Composer and Emoji: a refused hotkey's message under its row, and the
 /// recorder's clear and record buttons.
 /// </summary>
 internal static class ShortcutRowStatus
@@ -53,6 +53,7 @@ internal static class ShortcutRowStatus
         if (id == HotkeyService.ChordReplacementId) return "the Ctrl+C+C replacement";
         if (id == HotkeyService.OcrCaptureId) return "Screen Text Capture";
         if (id == HotkeyService.ComposeId) return "Terminal Composer";
+        if (id == HotkeyService.EmojiPickerId) return "Emoji picker";
         return current.ShortcutBindings.Any(b => b.Id == id) ? ActionLabel(current, id) : null;
     }
 
