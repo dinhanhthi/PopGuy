@@ -13,4 +13,9 @@
     <!-- Babylon .bgl indexes; ships the native SQLite library for every runtime. -->
     <PackageReference Include="Microsoft.Data.Sqlite" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The emoji picker data, shared with macOS: linked, never copied. -->
+    <EmbeddedResource Include="../../../macos/PopGuy/Resources/Emoji/emoji.json" Link="Emoji/emoji.json" LogicalName="PopGuy.Core.Emoji.emoji.json" />
+    <EmbeddedResource Include="../../../macos/PopGuy/Resources/Emoji/symbols.json" Link="Emoji/symbols.json" LogicalName="PopGuy.Core.Emoji.symbols.json" />
+  </ItemGroup>
 </Project>

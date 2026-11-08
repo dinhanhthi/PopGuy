@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using PopGuy.Core.Actions;
+using PopGuy.Core.Emojis;
 using PopGuy.Core.Json;
 
 namespace PopGuy.Core.Settings;
@@ -95,6 +96,15 @@ public sealed record AppSettings
     /// </summary>
     [JsonPropertyName("composeShortcut")]
     public Shortcut? ComposeShortcut { get; init; } = ShortcutBinding.DefaultCompose;
+
+    [JsonPropertyName("emojiPickerEnabled")] public bool EmojiPickerEnabled { get; init; }
+
+    /// <summary>Same rule as <see cref="ComposeShortcut"/>: a missing key is the default, <c>null</c> stays cleared.</summary>
+    [JsonPropertyName("emojiPickerShortcut")]
+    public Shortcut? EmojiPickerShortcut { get; init; } = ShortcutBinding.DefaultEmojiPicker;
+
+    /// <summary>The skin tone the Emoji Picker applies to the people and hand emoji that take one.</summary>
+    [JsonPropertyName("emojiSkinTone")] public SkinTone EmojiSkinTone { get; init; } = SkinTone.None;
 
     /// <summary>
     /// Windows only: the local model (a <c>gguf-…</c> catalog id) an action runs when its model id is empty or names

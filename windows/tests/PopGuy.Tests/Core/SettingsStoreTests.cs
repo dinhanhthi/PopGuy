@@ -282,24 +282,35 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal([more[0], more[2]], ToolbarLayout.OverflowOrdered(store.Current));
     }
 
-    // macOS SettingsStoreTests.composeShortcutDefaultAndClear: a missing key is the default, a cleared one stays cleared.
+    // macOS SettingsStoreTests.composeShortcutDefaultAndClear: a missing key is the default, a cleared one stays cleared
+    // (Compose and Emoji Picker).
     [Fact]
-    public void ComposeShortcutDefaultsToCtrlAltShiftEAndStaysClearedAfterReload()
+    public void ComposeAndEmojiPickerShortcutsDefaultAndStayClearedAfterReload()
     {
         var store = new SettingsStore(_paths);
         Assert.Equal("Ctrl+Alt+Shift+E", store.Current.ComposeShortcut?.ToString());
+        Assert.Equal("Ctrl+;", store.Current.EmojiPickerShortcut?.ToString());
 
-        store.Update(s => s with { ComposeShortcut = null });
+        store.Update(s => s with { ComposeShortcut = null, EmojiPickerShortcut = null });
 
-        Assert.Null(new SettingsStore(_paths).Current.ComposeShortcut);
+        var reloaded = new SettingsStore(_paths).Current;
+        Assert.Null(reloaded.ComposeShortcut);
+        Assert.Null(reloaded.EmojiPickerShortcut);
     }
 
-    // macOS composeShortcutDefaultSkippedOnCollision: the default is dropped when another action already has those keys.
+    // macOS composeShortcutDefaultSkippedOnCollision: the Compose and Emoji Picker defaults are dropped when another
+    // action already has those keys.
     [Fact]
-    public void ComposeShortcutDefaultIsSkippedWhenAnotherActionHasTheKeys()
+    public void ComposeAndEmojiPickerShortcutDefaultsAreSkippedWhenAnotherActionHasTheKeys()
     {
-        WriteSettingsFile("""{ "shortcutBindings": [ { "id": { "type": "builtin", "value": "improve" }, "shortcut": { "virtualKey": 69, "modifiers": 7 } } ] }""");
+        WriteSettingsFile("""
+            { "shortcutBindings": [
+                { "id": { "type": "builtin", "value": "improve" }, "shortcut": { "virtualKey": 69, "modifiers": 7 } },
+                { "id": { "type": "builtin", "value": "shorten" }, "shortcut": { "virtualKey": 186, "modifiers": 2 } } ] }
+            """);
 
-        Assert.Null(new SettingsStore(_paths).Current.ComposeShortcut);
+        var loaded = new SettingsStore(_paths).Current;
+        Assert.Null(loaded.ComposeShortcut);
+        Assert.Null(loaded.EmojiPickerShortcut);
     }
 }

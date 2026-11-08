@@ -10,10 +10,12 @@ on:
     branches: [windows, main]
     paths:
       - 'windows/**'
+      - 'macos/PopGuy/Resources/Emoji/**'
       - '.github/workflows/windows.yml'
   pull_request:
     paths:
       - 'windows/**'
+      - 'macos/PopGuy/Resources/Emoji/**'
       - '.github/workflows/windows.yml'
   workflow_dispatch:
 

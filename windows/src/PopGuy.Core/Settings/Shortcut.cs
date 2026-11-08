@@ -75,6 +75,7 @@ public sealed record Shortcut(
         0x28 => "Down",
         0x2D => "Insert",
         0x2E => "Delete",
+        0xBA => ";", // US key label (VK_OEM_1)
         _ => $"0x{vk:X2}",
     };
 }
@@ -118,6 +119,9 @@ public sealed record ShortcutBinding(
 
     /// <summary>The fresh-install Terminal Composer hotkey, Ctrl+Alt+Shift+E (macOS Ctrl+Option+Cmd+E).</summary>
     public static Shortcut DefaultCompose { get; } = new('E', DefaultModifiers);
+
+    /// <summary>The fresh-install Emoji Picker hotkey, Ctrl+; (macOS Cmd+;).</summary>
+    public static Shortcut DefaultEmojiPicker { get; } = new(0xBA, ShortcutModifiers.Control);
 
     /// <summary>
     /// <paramref name="bindings"/> with <paramref name="id"/>'s hotkey set to <paramref name="shortcut"/> (macOS

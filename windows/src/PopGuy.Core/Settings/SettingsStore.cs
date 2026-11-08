@@ -119,7 +119,7 @@ public sealed class SettingsStore
             // ReadAllText drops a UTF-8 BOM, which the JSON reader refuses.
             if (JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_path), PopGuyJson.Options) is { } loaded
                 && !HasNullElement(loaded))
-                return WithoutTakenComposeShortcut(loaded);
+                return WithoutTakenEmojiPickerShortcut(WithoutTakenComposeShortcut(loaded));
         }
         catch (JsonException)
         {
@@ -139,6 +139,14 @@ public sealed class SettingsStore
         s.ComposeShortcut is { } compose
         && (s.ShortcutBindings.Any(b => b.Shortcut == compose) || s.ChordReplacementShortcut == compose || s.OcrShortcut == compose)
             ? s with { ComposeShortcut = null }
+            : s;
+
+    // Same rule for the Emoji Picker hotkey, also checking the (already resolved) Compose hotkey.
+    private static AppSettings WithoutTakenEmojiPickerShortcut(AppSettings s) =>
+        s.EmojiPickerShortcut is { } emoji
+        && (s.ShortcutBindings.Any(b => b.Shortcut == emoji) || s.ChordReplacementShortcut == emoji
+            || s.OcrShortcut == emoji || s.ComposeShortcut == emoji)
+            ? s with { EmojiPickerShortcut = null }
             : s;
 
     // The nullable annotations don't cover collection elements or dictionary values: a null there is corrupt too.

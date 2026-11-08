@@ -14,6 +14,9 @@ public sealed record AppPaths(string DataDirectory, string CacheDirectory)
 
     public string HistoryFile => Path.Combine(DataDirectory, "history.json");
 
+    /// <summary>The emoji picker's usage history (Frequently Used), kept out of settings.json.</summary>
+    public string EmojiUsageFile => Path.Combine(DataDirectory, "emoji-usage.json");
+
     public static AppPaths Resolve() => Resolve(Environment.GetEnvironmentVariable(DataRootVariable));
 
     /// <summary>The paths under <paramref name="dataRoot"/>, or the per-user folders when it is null or empty.</summary>
