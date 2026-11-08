@@ -22,9 +22,9 @@ using DrawingPoint = System.Drawing.Point;
 namespace PopGuy.Onboarding;
 
 /// <summary>
-/// The first-launch wizard (spec-3 §6, macOS OnboardingView.swift): six steps in the macOS order: Welcome, How PopGuy
+/// The first-launch wizard (spec-3 §6, macOS OnboardingView.swift): seven steps in the macOS order: Welcome, How PopGuy
 /// Reads Text (the Windows step in place of the Accessibility permission: Windows needs none), Set Up a Provider, How
-/// PopGuy Appears, Choose Your Actions and You're All Set. A 560×560 client area, centered, not resizable. Enter goes to
+/// PopGuy Appears, Choose Your Actions, Terminal Composer (opt-in, off by default) and You're All Set. A 560×560 client area, centered, not resizable. Enter goes to
 /// the next step unless the focus is in a text field, on a button or in the shortcut recorder (macOS: no default action
 /// while recording). Every switch saves through <see cref="SettingsStore.Update"/> at once, and a change from elsewhere
 /// (the tray, Settings) shows while the window is open. The App owns its lifetime and marks onboarding done when it
@@ -33,7 +33,7 @@ namespace PopGuy.Onboarding;
 public sealed partial class OnboardingWindow : Window
 {
     private const double ClientSize = 560;
-    private const int StepCount = 6;
+    private const int StepCount = 7;
 
     private readonly AppServices _services;
     private readonly Action _openSettings;
@@ -56,6 +56,9 @@ public sealed partial class OnboardingWindow : Window
 
     // Choose Your Actions: each switch with the wrapper that carries its tooltip (a disabled switch gets no pointer).
     private readonly List<(ActionIdentifier Id, ToggleSwitch Toggle, Grid Wrapper)> _actionToggles = [];
+
+    // Terminal Composer.
+    private ToggleSwitch _composerToggle = null!;
 
     // Set Up a Provider.
     private OnboardingProviderPage _providerPage = null!;
@@ -86,6 +89,7 @@ public sealed partial class OnboardingWindow : Window
             ProviderStep(),
             AppearsStep(),
             ActionsStep(),
+            ComposerStep(),
             FinishStep(),
         ];
         _dots = new Ellipse[StepCount];
@@ -312,6 +316,36 @@ public sealed partial class OnboardingWindow : Window
             ? ToolbarLayout.WithPrincipal(ToolbarLayout.WithEnabled(s, id, true), id, true)
             : ToolbarLayout.WithEnabled(s, id, false));
 
+    /// <summary>macOS OnboardingComposerPage: what the Terminal Composer is, and its switch (off by default).</summary>
+    private UIElement ComposerStep()
+    {
+        _composerToggle = Switch("Use Terminal Composer");
+        _composerToggle.Toggled += (_, _) =>
+            Save("terminalComposerEnabled", s => s with { TerminalComposerEnabled = _composerToggle.IsOn });
+
+        var how = new StackPanel { Spacing = 8 };
+        how.Children.Add(TourRow(
+            "\uE765",
+            "When a terminal tool asks for an editor (for example Ctrl+G in Claude Code), PopGuy opens a Markdown window."));
+        how.Children.Add(TourRow("\uE7A7", "Done sends your text back to the terminal. Cancel or Esc keeps the original."));
+        how.Children.Add(TourRow(
+            "\uE70F",
+            "A Compose shortcut also opens an empty composer from any app; Done pastes the text into the app you were in."));
+
+        return StepPanel(
+            Header(
+                "\uE756", "Terminal Composer",
+                "Write long prompts for terminal tools like Claude Code, Codex, Gemini CLI or git in a comfortable editor " +
+                "instead of the cramped terminal input."),
+            Card(
+                _composerToggle,
+                Secondary("Off by default. Turn it on if you write prompts or commit messages in the terminal.")),
+            how,
+            Secondary(
+                "After turning it on, finish the setup in Settings → Composer: install the popguy-edit command and set " +
+                "the VISUAL editor variable."));
+    }
+
     private UIElement FinishStep()
     {
         _loginToggle = Switch("Start PopGuy at login");
@@ -358,6 +392,7 @@ public sealed partial class OnboardingWindow : Window
         _replacementRow.Opacity = current.TriggerChordEnabled ? 1 : 0.5;
         if (!_recorder.IsRecording) _recorder.Shortcut = current.ChordReplacementShortcut;
         _onSelectToggle.IsOn = current.TriggerOnSelectEnabled;
+        _composerToggle.IsOn = current.TerminalComposerEnabled;
         foreach (var (id, toggle, wrapper) in _actionToggles)
         {
             // Locked while it is the only enabled action: the toolbar needs at least one (macOS isLastEnabledAction).

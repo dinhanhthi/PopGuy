@@ -8,7 +8,8 @@
 //   2. Provider setup — Local AI vs Cloud API key chooser.
 //   3. Triggers — Cmd+C+C chord + optional replacement + show-on-select.
 //   4. Actions — pick built-in toolbar actions.
-//   5. Finish — launch at login + feature tour.
+//   5. Composer — what the Terminal Composer is, opt-in switch (off by default).
+//   6. Finish — launch at login + feature tour.
 //
 // Isolation: @MainActor — all UI.
 // Plain static text only; no untrusted external content is rendered here.
@@ -50,7 +51,7 @@ struct OnboardingView: View {
     /// otherwise fire Next and skip the page).
     @State private var isRecordingChord = false
 
-    private let pageCount = 6
+    private let pageCount = 7
 
     var body: some View {
         VStack(spacing: 0) {
@@ -63,6 +64,7 @@ struct OnboardingView: View {
                     case 2: providerPage
                     case 3: triggersPage
                     case 4: actionsPage
+                    case 5: composerPage
                     default: finishPage
                     }
                 }
@@ -236,6 +238,20 @@ struct OnboardingView: View {
             )
 
             OnboardingActionsPage(settings: settings)
+
+            Spacer()
+        }
+    }
+
+    private var composerPage: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            OnboardingHeader(
+                systemImage: "terminal",
+                title: "Terminal Composer",
+                subtitle: "Write long prompts for terminal tools like Claude Code, Codex, Gemini CLI or git in a comfortable editor instead of the cramped terminal input."
+            )
+
+            OnboardingComposerPage(settings: settings)
 
             Spacer()
         }
@@ -498,6 +514,48 @@ private struct OnboardingTriggersPage: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Terminal Composer
+
+@MainActor
+private struct OnboardingComposerPage: View {
+    @ObservedObject var settings: SettingsStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Use Terminal Composer", isOn: $settings.terminalComposerEnabled)
+                    .font(.subheadline)
+
+                Text("Off by default. Turn it on if you write prompts or commit messages in the terminal.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.primary.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+            )
+
+            VStack(alignment: .leading, spacing: 8) {
+                TourRow(icon: "keyboard", text: "When a terminal tool asks for an editor (for example Ctrl+G in Claude Code), PopGuy opens a Markdown window.")
+                TourRow(icon: "arrow.uturn.backward", text: "Done sends your text back to the terminal. Cancel or Esc keeps the original.")
+                TourRow(icon: "command", text: "A Compose shortcut also opens an empty composer from any app; Done pastes the text into the app you were in.")
+            }
+
+            Text("After turning it on, finish the setup in Settings → Composer: install the popguy-edit command and set up your shell.")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
