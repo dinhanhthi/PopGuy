@@ -32,6 +32,8 @@ or run a **custom AI action** on it. Think PopClip, with a configurable AI backe
 - **Non-destructive** — your original text is never changed until you accept the result
 - **Menu-bar app** — no Dock icon; lives in the menu bar
 - **OCR** — capture text from any screen region
+- **Terminal Composer** — write long prompts for Claude Code, Codex, Gemini CLI, git and shell tools in a PopGuy window (via the `popguy-edit` command or a Compose shortcut) with Markdown lists and autosaved drafts; off by default
+- **Emoji picker** — press `Cmd+;` (macOS) or `Ctrl+;` (Windows) in any text field to search and insert emoji and symbols at the cursor, with Frequently Used and a default skin tone; off by default
 
 ## Install
 

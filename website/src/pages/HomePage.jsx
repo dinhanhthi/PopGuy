@@ -25,7 +25,9 @@ const features = [
   ["Translate", "DeepL, Google Translate, or any AI model."],
   ["Speech", "hear the selected text."],
   ["Dictionary", "look up any word."],
-  ["Screen text", "grab text from anywhere on screen."]
+  ["Screen text", "grab text from anywhere on screen."],
+  ["Composer", "write long prompts for Claude Code, Codex, and Gemini CLI in a real editor window."],
+  ["Emoji picker", "press Cmd+; (Ctrl+; on Windows) to search and insert emoji and symbols anywhere."]
 ];
 
 const providers = [

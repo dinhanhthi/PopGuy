@@ -35,6 +35,7 @@ const sections = [
     bullets: [
       "Accessibility — to read the selected text and paste results back.",
       "Screen Recording — only if you use screen text capture (OCR). The capture is read on your Mac and not saved or uploaded.",
+      "Emoji picker — if you turn it on, it uses Accessibility to find the text cursor and to type the emoji you pick. It never opens in password fields. Your most used emoji are saved only on your Mac.",
       "Automation — only if you set ignored websites. PopGuy reads the current browser tab address to hide the toolbar there. The address is not stored or sent."
     ]
   },
