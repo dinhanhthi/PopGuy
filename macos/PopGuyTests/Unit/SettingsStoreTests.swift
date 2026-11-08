@@ -1249,30 +1249,37 @@ struct SettingsStoreTests {
         #expect(store.customActions.last?.ttsConfig.model == "gpt-4o-mini-tts")
     }
 
-    // MARK: - Compose shortcut default
+    // MARK: - Compose and emoji picker shortcut defaults
 
-    @Test("composeShortcut defaults to ⌃⌥⌘E, and a cleared one stays cleared after reload")
+    @Test("composeShortcut defaults to ⌃⌥⌘E and emojiPickerShortcut to ⌘;, and cleared ones stay cleared after reload")
     func composeShortcutDefaultAndClear() {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
         let store1 = SettingsStore(defaults: suite)
         #expect(store1.composeShortcut == KeyboardShortcut.defaultCompose)
+        #expect(store1.emojiPickerShortcut == KeyboardShortcut.defaultEmojiPicker)
         store1.composeShortcut = nil
+        store1.emojiPickerShortcut = nil
 
         let store2 = SettingsStore(defaults: suite)
         #expect(store2.composeShortcut == nil)
+        #expect(store2.emojiPickerShortcut == nil)
     }
 
-    @Test("composeShortcut default is skipped when another action already uses that combo")
+    @Test("composeShortcut and emojiPickerShortcut defaults are skipped when another action already uses that combo")
     func composeShortcutDefaultSkippedOnCollision() throws {
         let (suite, name) = makeSuite()
         defer { removeSuite(name) }
 
-        let taken = [ShortcutBinding(actionID: .builtin(.improve), shortcut: KeyboardShortcut.defaultCompose)]
+        let taken = [
+            ShortcutBinding(actionID: .builtin(.improve), shortcut: KeyboardShortcut.defaultCompose),
+            ShortcutBinding(actionID: .builtin(.shorten), shortcut: KeyboardShortcut.defaultEmojiPicker),
+        ]
         suite.set(try JSONEncoder().encode(taken), forKey: "settings.shortcutBindings")
 
         let store = SettingsStore(defaults: suite)
         #expect(store.composeShortcut == nil)
+        #expect(store.emojiPickerShortcut == nil)
     }
 }

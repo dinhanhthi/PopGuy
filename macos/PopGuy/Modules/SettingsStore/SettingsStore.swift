@@ -202,6 +202,9 @@ final class SettingsStore: ObservableObject {
         static let ocrShortcut                = "settings.ocrShortcut"
         static let terminalComposerEnabled    = "settings.terminalComposerEnabled"
         static let composeShortcut            = "settings.composeShortcut"
+        static let emojiPickerEnabled         = "settings.emojiPickerEnabled"
+        static let emojiPickerShortcut        = "settings.emojiPickerShortcut"
+        static let emojiSkinTone              = "settings.emojiSkinTone"
         static let confirmCloseAfterResult    = "settings.confirmCloseAfterResult"
         static let enterResultAction          = "settings.enterResultAction"
         static let enterResultFallback        = "settings.enterResultFallback"
@@ -590,6 +593,23 @@ final class SettingsStore: ObservableObject {
         didSet { save(composeShortcut, key: Keys.composeShortcut) }
     }
 
+    /// Whether the Emoji Picker global hotkey is opted in (default: false).
+    @Published var emojiPickerEnabled: Bool {
+        didSet { defaults.set(emojiPickerEnabled, forKey: Keys.emojiPickerEnabled) }
+    }
+
+    /// Optional shortcut that opens the Emoji Picker (default: ⌘;, unless another shortcut
+    /// already uses it). Cleared is saved as JSON `null` so it stays cleared; only a missing
+    /// key gets the default.
+    @Published var emojiPickerShortcut: KeyboardShortcut? {
+        didSet { save(emojiPickerShortcut, key: Keys.emojiPickerShortcut) }
+    }
+
+    /// Default skin tone for the Emoji Picker's people and hand emoji (default: none).
+    @Published var emojiSkinTone: SkinTone {
+        didSet { defaults.set(emojiSkinTone.rawValue, forKey: Keys.emojiSkinTone) }
+    }
+
     /// When true, clicking outside (or pressing Escape) after a result has
     /// finished generating asks for confirmation instead of closing the toolbar,
     /// so a ready result isn't dismissed by accident (default: true).
@@ -791,14 +811,28 @@ final class SettingsStore: ObservableObject {
         terminalComposerEnabled  = defaults.object(forKey: Keys.terminalComposerEnabled) as? Bool ?? false
         // Missing key → the default, unless another shortcut already has it; a saved JSON
         // `null` (cleared) decodes to nil and stays cleared.
+        let loadedComposeShortcut: KeyboardShortcut?
         if defaults.object(forKey: Keys.composeShortcut) == nil {
             let fallback = KeyboardShortcut.defaultCompose
             let taken = loadedBindings.contains { $0.shortcut == fallback }
                 || loadedChordShortcut == fallback || loadedOCRShortcut == fallback
-            composeShortcut = taken ? nil : fallback
+            loadedComposeShortcut = taken ? nil : fallback
         } else {
-            composeShortcut = Self.load(KeyboardShortcut.self, key: Keys.composeShortcut, from: defaults)
+            loadedComposeShortcut = Self.load(KeyboardShortcut.self, key: Keys.composeShortcut, from: defaults)
         }
+        composeShortcut          = loadedComposeShortcut
+        emojiPickerEnabled       = defaults.object(forKey: Keys.emojiPickerEnabled) as? Bool ?? false
+        // Same default-unless-taken rule as the compose shortcut, also checking compose.
+        if defaults.object(forKey: Keys.emojiPickerShortcut) == nil {
+            let fallback = KeyboardShortcut.defaultEmojiPicker
+            let taken = loadedBindings.contains { $0.shortcut == fallback }
+                || loadedChordShortcut == fallback || loadedOCRShortcut == fallback
+                || loadedComposeShortcut == fallback
+            emojiPickerShortcut = taken ? nil : fallback
+        } else {
+            emojiPickerShortcut = Self.load(KeyboardShortcut.self, key: Keys.emojiPickerShortcut, from: defaults)
+        }
+        emojiSkinTone = defaults.string(forKey: Keys.emojiSkinTone).flatMap(SkinTone.init(rawValue:)) ?? .none
         confirmCloseAfterResult  = defaults.object(forKey: Keys.confirmCloseAfterResult) as? Bool ?? true
         enterResultAction        = defaults.string(forKey: Keys.enterResultAction).flatMap(EnterResultAction.init(rawValue:)) ?? .pasteBack
         enterResultFallback      = defaults.string(forKey: Keys.enterResultFallback).flatMap(EnterResultAction.init(rawValue:)) ?? .nothing

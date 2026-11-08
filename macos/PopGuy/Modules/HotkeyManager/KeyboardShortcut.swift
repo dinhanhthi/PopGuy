@@ -119,6 +119,7 @@ extension KeyboardShortcut {
         case 37: return "L"
         case 38: return "J"
         case 40: return "K"
+        case 41: return ";"
         case 45: return "N"
         case 46: return "M"
         case 36: return "↩"   // Return
@@ -212,5 +213,11 @@ extension KeyboardShortcut {
     @MainActor static var defaultCompose: KeyboardShortcut {
         let mods: UInt = (1 << 18) | (1 << 19) | (1 << 20)
         return KeyboardShortcut(keyCode: UInt32(virtualKeyCode(for: "e", fallback: 14)), modifierFlags: mods)
+    }
+
+    /// Default Emoji Picker shortcut: ⌘; (as FastMoji), the key resolved for the current
+    /// layout (fallback: US-QWERTY ; = 41).
+    @MainActor static var defaultEmojiPicker: KeyboardShortcut {
+        KeyboardShortcut(keyCode: UInt32(virtualKeyCode(for: ";", fallback: 41)), modifierFlags: 1 << 20)
     }
 }
