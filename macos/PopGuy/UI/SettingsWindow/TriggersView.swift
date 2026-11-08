@@ -345,16 +345,16 @@ struct TriggersView: View {
     /// Picker to assign a default action to the double-click trigger.
     private func doubleClickActionPicker() -> some View {
         LabeledContent {
-            Picker(selection: $settings.doubleClickAssignedAction) {
+            SettingsMenuPicker(
+                "Default action",
+                selection: $settings.doubleClickAssignedAction,
+                title: settings.doubleClickAssignedAction.map { actionLabel(for: $0) } ?? "Unassign (show toolbar)"
+            ) {
                 Text("Unassign (show toolbar)").tag(ActionIdentifier?.none)
                 ForEach(settings.actionOrder, id: \.self) { id in
                     Text(actionLabel(for: id)).tag(ActionIdentifier?.some(id))
                 }
-            } label: {
-                Text("Default action")
             }
-            .labelsHidden()
-            .fixedSize()
         } label: {
             Text("Default action")
             Text("When assigned, double-clicking a word runs this action directly instead of showing the toolbar.")

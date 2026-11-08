@@ -727,14 +727,11 @@ struct ActionsView: View {
     @ViewBuilder
     private func tonePicker(tone: Binding<TranslateTone>) -> some View {
         LabeledContent("Tone") {
-            Picker("", selection: tone) {
-                ForEach(TranslateTone.allCases) { t in
-                    Text(t.displayName).tag(t)
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .fixedSize()
+            SettingsMenuPicker(
+                "Tone",
+                selection: tone,
+                options: TranslateTone.allCases.map { ($0, $0.displayName) }
+            )
         }
     }
 
@@ -804,14 +801,11 @@ struct ActionsView: View {
 
             // Default target language picker
             LabeledContent("Default Target Language") {
-                Picker("", selection: $settings.defaultTargetLanguage) {
-                    ForEach(languages, id: \.bcp47) { lang in
-                        Text(lang.name).tag(lang.bcp47)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
+                SettingsMenuPicker(
+                    "Default Target Language",
+                    selection: $settings.defaultTargetLanguage,
+                    options: languages.map { ($0.bcp47, $0.name) }
+                )
             }
 
             // Tone picker — steers the output register. Meaningful for
@@ -1097,21 +1091,18 @@ struct ActionsView: View {
 
                 // Default Target Language picker
                 LabeledContent("Default Target Language") {
-                    Picker("", selection: Binding(
-                        get: { settings.customActions.first(where: { $0.id == id })?.targetLanguage ?? "en" },
-                        set: { newLang in
-                            guard var c = settings.customActions.first(where: { $0.id == id }) else { return }
-                            c.targetLanguage = newLang
-                            settings.updateCustomAction(c)
-                        }
-                    )) {
-                        ForEach(languages, id: \.bcp47) { lang in
-                            Text(lang.name).tag(lang.bcp47)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .fixedSize()
+                    SettingsMenuPicker(
+                        "Default Target Language",
+                        selection: Binding(
+                            get: { settings.customActions.first(where: { $0.id == id })?.targetLanguage ?? "en" },
+                            set: { newLang in
+                                guard var c = settings.customActions.first(where: { $0.id == id }) else { return }
+                                c.targetLanguage = newLang
+                                settings.updateCustomAction(c)
+                            }
+                        ),
+                        options: languages.map { ($0.bcp47, $0.name) }
+                    )
                 }
 
                 // Tone picker — for AI providers and DeepL (formality parameter).
@@ -1546,17 +1537,14 @@ struct DictionaryConfigFields: View {
                 // Bind through TargetLanguage so an off-list/legacy BCP-47 code
                 // (e.g. "en-GB") coerces to a valid selection instead of rendering
                 // a blank menu — mirrors the toolbar's TargetLanguage(bcp47:) coercion.
-                Picker("", selection: Binding(
-                    get: { TargetLanguage(bcp47: config.definitionLanguage) },
-                    set: { config.definitionLanguage = $0.bcp47 }
-                )) {
-                    ForEach(TargetLanguage.allCases) { lang in
-                        Text(lang.rawValue).tag(lang)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
+                SettingsMenuPicker(
+                    "Default target language",
+                    selection: Binding(
+                        get: { TargetLanguage(bcp47: config.definitionLanguage) },
+                        set: { config.definitionLanguage = $0.bcp47 }
+                    ),
+                    options: TargetLanguage.allCases.map { ($0, $0.rawValue) }
+                )
             }
             .hoverTooltip("Target language used by online providers (e.g. English, Vietnamese, French). The offline macOS dictionary ignores this value.")
 
@@ -1566,34 +1554,32 @@ struct DictionaryConfigFields: View {
                 .font(.headline)
 
             LabeledContent("Speech engine") {
-                Picker("", selection: engineBinding) {
+                SettingsMenuPicker(
+                    "Speech engine",
+                    selection: engineBinding,
+                    title: engineBinding.wrappedValue.displayName
+                ) {
                     Text(SpeakEngineSelection.system.displayName).tag(SpeakEngineSelection.system)
                     Divider()
                     ForEach(TTSProviderKind.implemented.map { SpeakEngineSelection.cloud($0) }) { engine in
                         Text(engine.displayName).tag(engine)
                     }
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
             }
 
             LabeledContent("Accent") {
-                Picker("", selection: Binding(
-                    get: { config.accent },
-                    set: { newAccent in
-                        if newAccent != config.accent { config.speakSettings.defaultVoiceID = nil }
-                        config.accent = newAccent
-                        config.speakSettings.defaultAccent = newAccent
-                    }
-                )) {
-                    ForEach(SpeakAccent.allCases) { accent in
-                        Text(accent.displayName).tag(accent)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
+                SettingsMenuPicker(
+                    "Accent",
+                    selection: Binding(
+                        get: { config.accent },
+                        set: { newAccent in
+                            if newAccent != config.accent { config.speakSettings.defaultVoiceID = nil }
+                            config.accent = newAccent
+                            config.speakSettings.defaultAccent = newAccent
+                        }
+                    ),
+                    options: SpeakAccent.allCases.map { ($0, $0.displayName) }
+                )
             }
 
             LabeledContent("System voice") {
@@ -1601,19 +1587,25 @@ struct DictionaryConfigFields: View {
                     Text("No voices installed")
                         .foregroundStyle(.secondary)
                 } else {
-                    Picker("", selection: Binding(
-                        get: { config.speakSettings.defaultVoiceID as String? },
-                        set: { newValue in config.speakSettings.defaultVoiceID = newValue }
-                    )) {
+                    // Closed-state title reads like the selected item ("" if the
+                    // saved voice is no longer installed, as no item is selected).
+                    let voiceTitle = config.speakSettings.defaultVoiceID.map { id in
+                        voices.first { $0.id == id }.map { "\($0.displayName) — \($0.qualityLabel)" } ?? ""
+                    } ?? "Default (best available)"
+                    SettingsMenuPicker(
+                        "System voice",
+                        selection: Binding(
+                            get: { config.speakSettings.defaultVoiceID as String? },
+                            set: { newValue in config.speakSettings.defaultVoiceID = newValue }
+                        ),
+                        title: voiceTitle
+                    ) {
                         Text("Default (best available)").tag(nil as String?)
                         ForEach(voices) { voice in
                             Text("\(voice.displayName) — \(voice.qualityLabel)")
                                 .tag(voice.id as String?)
                         }
                     }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .fixedSize()
                 }
             }
 
@@ -1728,16 +1720,17 @@ private struct SpeakCardView: View {
                 }
             )
             LabeledContent("Speech engine") {
-                Picker("", selection: engineBinding) {
+                SettingsMenuPicker(
+                    "Speech engine",
+                    selection: engineBinding,
+                    title: engineBinding.wrappedValue.displayName
+                ) {
                     Text(SpeakEngineSelection.system.displayName).tag(SpeakEngineSelection.system)
                     Divider()
                     ForEach(TTSProviderKind.implemented.map { SpeakEngineSelection.cloud($0) }) { engine in
                         Text(engine.displayName).tag(engine)
                     }
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
             }
             if case .cloud = engineBinding.wrappedValue {
                 Text("Falls back to the System voice when the cloud key is missing, offline, or the text exceeds the cloud limit.")
@@ -1796,16 +1789,17 @@ private struct SpeakCardView: View {
                                 }
                             )
                             HStack(spacing: 6) {
-                                Picker("", selection: pickerBinding) {
+                                SettingsMenuPicker(
+                                    "Model",
+                                    selection: pickerBinding,
+                                    title: pickerBinding.wrappedValue == "__custom__" ? "Custom…" : pickerBinding.wrappedValue
+                                ) {
                                     ForEach(curated, id: \.self) { id in
                                         Text(id).tag(id)
                                     }
                                     Divider()
                                     Text("Custom…").tag("__custom__")
                                 }
-                                .labelsHidden()
-                                .pickerStyle(.menu)
-                                .fixedSize()
 
                                 if isModelCustom[keyAccount] ?? false {
                                     TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
@@ -1831,19 +1825,16 @@ private struct SpeakCardView: View {
                                 settings.setTTSConfig(config, for: kind)
                             }
                         )
-                        Picker("", selection: voiceBinding) {
+                        SettingsMenuPicker(
+                            "Voice",
+                            selection: voiceBinding,
+                            title: voiceBinding.wrappedValue.map(ttsVoiceMenuLabel) ?? "Default (alloy)"
+                        ) {
                             Text("Default (alloy)").tag(nil as String?)
                             ForEach(modelVoices, id: \.self) { voice in
-                                if voice == "marin" || voice == "cedar" {
-                                    Text("\(voice) — recommended").tag(voice as String?)
-                                } else {
-                                    Text(voice).tag(voice as String?)
-                                }
+                                Text(ttsVoiceMenuLabel(voice)).tag(voice as String?)
                             }
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
                         VoiceTestButton(
                             kind: kind,
                             languageCode: settings.speakSettings.defaultAccent.bcp47,
@@ -1865,14 +1856,11 @@ private struct SpeakCardView: View {
 
                         HStack(spacing: 8) {
                             // Language dropdown
-                            Picker("", selection: $selectedVoiceLanguage) {
-                                ForEach(SpeakAccent.allCases) { accent in
-                                    Text(accent.displayName).tag(accent)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.menu)
-                            .fixedSize()
+                            SettingsMenuPicker(
+                                "Voice language",
+                                selection: $selectedVoiceLanguage,
+                                options: SpeakAccent.allCases.map { ($0, $0.displayName) }
+                            )
 
                             // Voice dropdown — reacts to selectedVoiceLanguage
                             let bcp47 = selectedVoiceLanguage.bcp47
@@ -1889,15 +1877,16 @@ private struct SpeakCardView: View {
                                     settings.setTTSConfig(config, for: kind)
                                 }
                             )
-                            Picker("", selection: langVoiceBinding) {
+                            SettingsMenuPicker(
+                                "Voice",
+                                selection: langVoiceBinding,
+                                title: langVoiceBinding.wrappedValue ?? "Default"
+                            ) {
                                 Text("Default").tag(nil as String?)
                                 ForEach(langVoices, id: \.self) { voice in
                                     Text(voice).tag(voice as String?)
                                 }
                             }
-                            .labelsHidden()
-                            .pickerStyle(.menu)
-                            .fixedSize()
 
                             VoiceTestButton(
                                 kind: kind,
@@ -1918,22 +1907,19 @@ private struct SpeakCardView: View {
             // Default accent picker
             VStack(alignment: .leading, spacing: 4) {
                 LabeledContent("Default Accent") {
-                    Picker("", selection: Binding(
-                        get: { settings.speakSettings.defaultAccent },
-                        set: { newAccent in
-                            var s = settings.speakSettings
-                            if newAccent != s.defaultAccent { s.defaultVoiceID = nil }
-                            s.defaultAccent = newAccent
-                            settings.speakSettings = s
-                        }
-                    )) {
-                        ForEach(SpeakAccent.allCases) { accent in
-                            Text(accent.displayName).tag(accent)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .fixedSize()
+                    SettingsMenuPicker(
+                        "Default Accent",
+                        selection: Binding(
+                            get: { settings.speakSettings.defaultAccent },
+                            set: { newAccent in
+                                var s = settings.speakSettings
+                                if newAccent != s.defaultAccent { s.defaultVoiceID = nil }
+                                s.defaultAccent = newAccent
+                                settings.speakSettings = s
+                            }
+                        ),
+                        options: SpeakAccent.allCases.map { ($0, $0.displayName) }
+                    )
                 }
                 Text("The accent used to read text aloud by default. Switch accents on the fly from the toolbar's accent menu.")
                     .font(.settingsCaption)
@@ -1946,23 +1932,30 @@ private struct SpeakCardView: View {
                     if voices.isEmpty {
                         EmptyView()
                     } else {
-                        Picker("", selection: Binding(
-                            get: { settings.speakSettings.defaultVoiceID as String? },
-                            set: { newID in
-                                var s = settings.speakSettings
-                                s.defaultVoiceID = newID
-                                settings.speakSettings = s
-                            }
-                        )) {
+                        // Closed-state title reads like the selected item ("" if the
+                        // saved voice is no longer installed, as no item is selected).
+                        let voiceTitle = settings.speakSettings.defaultVoiceID.map { id in
+                            voices.first { $0.id == id }
+                                .map { "\($0.displayName) — \($0.bcp47) (\($0.qualityLabel))" } ?? ""
+                        } ?? "Default (best available)"
+                        SettingsMenuPicker(
+                            "System voice",
+                            selection: Binding(
+                                get: { settings.speakSettings.defaultVoiceID as String? },
+                                set: { newID in
+                                    var s = settings.speakSettings
+                                    s.defaultVoiceID = newID
+                                    settings.speakSettings = s
+                                }
+                            ),
+                            title: voiceTitle
+                        ) {
                             Text("Default (best available)").tag(nil as String?)
                             ForEach(voices) { voice in
                                 Text("\(voice.displayName) — \(voice.bcp47) (\(voice.qualityLabel))")
                                     .tag(voice.id as String?)
                             }
                         }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .fixedSize()
                     }
                 }
                 if voices.isEmpty {
@@ -2203,6 +2196,12 @@ private func speakLevel(forPitch pitch: Float) -> Int {
     return min(max(raw, 1), 10)
 }
 
+/// Menu text of a cloud TTS voice (OpenAI's model-level list), shared by the
+/// voice item and the picker's closed-state title so they always read alike.
+private func ttsVoiceMenuLabel(_ voice: String) -> String {
+    voice == "marin" || voice == "cedar" ? "\(voice) — recommended" : voice
+}
+
 // MARK: - CustomSpeechFields
 
 /// Speech-type fields for a custom action card.
@@ -2258,16 +2257,17 @@ private struct CustomSpeechFields: View {
                 }
             )
             LabeledContent("Speech engine") {
-                Picker("", selection: engineBinding) {
+                SettingsMenuPicker(
+                    "Speech engine",
+                    selection: engineBinding,
+                    title: engineBinding.wrappedValue.displayName
+                ) {
                     Text(SpeakEngineSelection.system.displayName).tag(SpeakEngineSelection.system)
                     Divider()
                     ForEach(TTSProviderKind.implemented.map { SpeakEngineSelection.cloud($0) }) { engine in
                         Text(engine.displayName).tag(engine)
                     }
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
             }
             if case .cloud = engineBinding.wrappedValue {
                 Text("Falls back to the System voice when the cloud key is missing or offline.")
@@ -2325,16 +2325,17 @@ private struct CustomSpeechFields: View {
                                 }
                             )
                             HStack(spacing: 6) {
-                                Picker("", selection: pickerBinding) {
+                                SettingsMenuPicker(
+                                    "Model",
+                                    selection: pickerBinding,
+                                    title: pickerBinding.wrappedValue == "__custom__" ? "Custom…" : pickerBinding.wrappedValue
+                                ) {
                                     ForEach(curated, id: \.self) { id in
                                         Text(id).tag(id)
                                     }
                                     Divider()
                                     Text("Custom…").tag("__custom__")
                                 }
-                                .labelsHidden()
-                                .pickerStyle(.menu)
-                                .fixedSize()
 
                                 if isModelCustom[keyAccount] ?? false {
                                     TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
@@ -2360,19 +2361,16 @@ private struct CustomSpeechFields: View {
                                 mutate { $0.ttsConfig = config }
                             }
                         )
-                        Picker("", selection: voiceBinding) {
+                        SettingsMenuPicker(
+                            "Voice",
+                            selection: voiceBinding,
+                            title: voiceBinding.wrappedValue.map(ttsVoiceMenuLabel) ?? "Default (alloy)"
+                        ) {
                             Text("Default (alloy)").tag(nil as String?)
                             ForEach(modelVoices, id: \.self) { voice in
-                                if voice == "marin" || voice == "cedar" {
-                                    Text("\(voice) — recommended").tag(voice as String?)
-                                } else {
-                                    Text(voice).tag(voice as String?)
-                                }
+                                Text(ttsVoiceMenuLabel(voice)).tag(voice as String?)
                             }
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
                         VoiceTestButton(
                             kind: kind,
                             languageCode: speakSettings.defaultAccent.bcp47,
@@ -2388,24 +2386,21 @@ private struct CustomSpeechFields: View {
 
             // Default Accent picker.
             LabeledContent("Default Accent") {
-                Picker("", selection: Binding(
-                    get: { speakSettings.defaultAccent },
-                    set: { newAccent in
-                        mutate {
-                            if newAccent != $0.speakSettings.defaultAccent {
-                                $0.speakSettings.defaultVoiceID = nil
+                SettingsMenuPicker(
+                    "Default Accent",
+                    selection: Binding(
+                        get: { speakSettings.defaultAccent },
+                        set: { newAccent in
+                            mutate {
+                                if newAccent != $0.speakSettings.defaultAccent {
+                                    $0.speakSettings.defaultVoiceID = nil
+                                }
+                                $0.speakSettings.defaultAccent = newAccent
                             }
-                            $0.speakSettings.defaultAccent = newAccent
                         }
-                    }
-                )) {
-                    ForEach(SpeakAccent.allCases) { accent in
-                        Text(accent.displayName).tag(accent)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
+                    ),
+                    options: SpeakAccent.allCases.map { ($0, $0.displayName) }
+                )
             }
 
             // Speed slider.
@@ -2536,16 +2531,17 @@ struct DraftSpeechFields: View {
                 set: { speakSettings.selectedEngine = $0 }
             )
             LabeledContent("Speech engine") {
-                Picker("", selection: engineBinding) {
+                SettingsMenuPicker(
+                    "Speech engine",
+                    selection: engineBinding,
+                    title: engineBinding.wrappedValue.displayName
+                ) {
                     Text(SpeakEngineSelection.system.displayName).tag(SpeakEngineSelection.system)
                     Divider()
                     ForEach(TTSProviderKind.implemented.map { SpeakEngineSelection.cloud($0) }) { engine in
                         Text(engine.displayName).tag(engine)
                     }
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
             }
             if case .cloud = engineBinding.wrappedValue {
                 Text("Falls back to the System voice when the cloud key is missing or offline.")
@@ -2599,16 +2595,17 @@ struct DraftSpeechFields: View {
                                 }
                             )
                             HStack(spacing: 6) {
-                                Picker("", selection: pickerBinding) {
+                                SettingsMenuPicker(
+                                    "Model",
+                                    selection: pickerBinding,
+                                    title: pickerBinding.wrappedValue == "__custom__" ? "Custom…" : pickerBinding.wrappedValue
+                                ) {
                                     ForEach(curated, id: \.self) { id in
                                         Text(id).tag(id)
                                     }
                                     Divider()
                                     Text("Custom…").tag("__custom__")
                                 }
-                                .labelsHidden()
-                                .pickerStyle(.menu)
-                                .fixedSize()
 
                                 if isModelCustom[keyAccount] ?? false {
                                     TextField(kind.defaultModel ?? "model identifier", text: modelBinding)
@@ -2630,19 +2627,16 @@ struct DraftSpeechFields: View {
                             get: { ttsConfig.defaultVoice },
                             set: { newVoice in ttsConfig.defaultVoice = newVoice }
                         )
-                        Picker("", selection: voiceBinding) {
+                        SettingsMenuPicker(
+                            "Voice",
+                            selection: voiceBinding,
+                            title: voiceBinding.wrappedValue.map(ttsVoiceMenuLabel) ?? "Default (alloy)"
+                        ) {
                             Text("Default (alloy)").tag(nil as String?)
                             ForEach(modelVoices, id: \.self) { voice in
-                                if voice == "marin" || voice == "cedar" {
-                                    Text("\(voice) — recommended").tag(voice as String?)
-                                } else {
-                                    Text(voice).tag(voice as String?)
-                                }
+                                Text(ttsVoiceMenuLabel(voice)).tag(voice as String?)
                             }
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
                         VoiceTestButton(
                             kind: kind,
                             languageCode: speakSettings.defaultAccent.bcp47,
@@ -2658,22 +2652,19 @@ struct DraftSpeechFields: View {
 
             // Default Accent picker.
             LabeledContent("Default Accent") {
-                Picker("", selection: Binding(
-                    get: { speakSettings.defaultAccent },
-                    set: { newAccent in
-                        if newAccent != speakSettings.defaultAccent {
-                            speakSettings.defaultVoiceID = nil
+                SettingsMenuPicker(
+                    "Default Accent",
+                    selection: Binding(
+                        get: { speakSettings.defaultAccent },
+                        set: { newAccent in
+                            if newAccent != speakSettings.defaultAccent {
+                                speakSettings.defaultVoiceID = nil
+                            }
+                            speakSettings.defaultAccent = newAccent
                         }
-                        speakSettings.defaultAccent = newAccent
-                    }
-                )) {
-                    ForEach(SpeakAccent.allCases) { accent in
-                        Text(accent.displayName).tag(accent)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
+                    ),
+                    options: SpeakAccent.allCases.map { ($0, $0.displayName) }
+                )
             }
 
             // Speed slider.

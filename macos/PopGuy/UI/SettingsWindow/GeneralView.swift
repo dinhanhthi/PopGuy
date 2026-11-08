@@ -153,12 +153,11 @@ struct GeneralView: View {
                         SettingsDivider()
 
                         LabeledContent {
-                            Picker("Enter on a result", selection: $settings.enterResultAction) {
-                                ForEach(EnterResultAction.allCases) { Text($0.displayName).tag($0) }
-                            }
-                            .pickerStyle(.menu)
-                            .labelsHidden()
-                            .fixedSize()
+                            SettingsMenuPicker(
+                                "Enter on a result",
+                                selection: $settings.enterResultAction,
+                                options: EnterResultAction.allCases.map { ($0, $0.displayName) }
+                            )
                         } label: {
                             Text("Enter on a result")
                             Text("What pressing Enter does while a result shows. When a result it applies to appears while the source app is in front, the toolbar takes the keyboard, so your typing does not reach the source app until it closes.")
@@ -169,12 +168,11 @@ struct GeneralView: View {
                         SettingsDivider()
 
                         LabeledContent {
-                            Picker("If that isn't available", selection: $settings.enterResultFallback) {
-                                ForEach(EnterResultAction.allCases) { Text($0.displayName).tag($0) }
-                            }
-                            .pickerStyle(.menu)
-                            .labelsHidden()
-                            .fixedSize()
+                            SettingsMenuPicker(
+                                "If that isn't available",
+                                selection: $settings.enterResultFallback,
+                                options: EnterResultAction.allCases.map { ($0, $0.displayName) }
+                            )
                         } label: {
                             Text("If that isn't available")
                             Text("Used when the first choice does not apply to the result: Paste back needs an editable text field, and Regenerate needs an action that can run again.")

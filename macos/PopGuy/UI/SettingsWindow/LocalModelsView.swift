@@ -170,14 +170,11 @@ struct LocalModelsView: View {
                 Text("Keep models in memory for:")
                     .font(.callout)
 
-                Picker("", selection: $settings.localModelIdleSeconds) {
-                    ForEach(Self.idleOptions, id: \.seconds) { option in
-                        Text(option.label).tag(option.seconds)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .fixedSize()
+                SettingsMenuPicker(
+                    "Keep models in memory for",
+                    selection: $settings.localModelIdleSeconds,
+                    options: Self.idleOptions.map { ($0.seconds, $0.label) }
+                )
             }
 
             Text("Idle models are unloaded and the background engine quits to free memory.")

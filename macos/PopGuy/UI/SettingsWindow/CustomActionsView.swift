@@ -153,16 +153,13 @@ struct CustomActionEditSheet: View {
                         Text("Type")
                             .font(.headline)
                         Spacer()
-                        Picker("", selection: $draft.type) {
-                            ForEach(CustomActionType.allCases) { type in
-                                Text(type.displayName).tag(type)
-                            }
-                        }
-                        // .menu (not .segmented): 8 action types overflow a segmented
-                        // control at the settings width — a dropdown stays readable.
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .fixedSize()
+                        // A dropdown (not a segmented control): 8 action types overflow
+                        // a segmented control at the settings width.
+                        SettingsMenuPicker(
+                            "Type",
+                            selection: $draft.type,
+                            options: CustomActionType.allCases.map { ($0, $0.displayName) }
+                        )
                     }
                     .padding(.horizontal, SettingsMetrics.cardPadding)
                     .padding(.vertical, 6)
@@ -351,27 +348,21 @@ struct CustomActionEditSheet: View {
 
             // Default target language picker.
             LabeledContent("Default Target Language") {
-                Picker("", selection: $draft.targetLanguage) {
-                    ForEach(languages, id: \.bcp47) { lang in
-                        Text(lang.name).tag(lang.bcp47)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
+                SettingsMenuPicker(
+                    "Default Target Language",
+                    selection: $draft.targetLanguage,
+                    options: languages.map { ($0.bcp47, $0.name) }
+                )
             }
 
             // Tone picker — for AI providers and DeepL (formality parameter).
             if draft.providerKind.usesModel || draft.providerKind == .deepL {
                 LabeledContent("Tone") {
-                    Picker("", selection: $draft.tone) {
-                        ForEach(TranslateTone.allCases) { t in
-                            Text(t.displayName).tag(t)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .fixedSize()
+                    SettingsMenuPicker(
+                        "Tone",
+                        selection: $draft.tone,
+                        options: TranslateTone.allCases.map { ($0, $0.displayName) }
+                    )
                 }
             }
 
@@ -537,14 +528,11 @@ struct CustomActionEditSheet: View {
     @ViewBuilder
     private var afterRunPicker: some View {
         LabeledContent("After run") {
-            Picker("", selection: $draft.afterRun) {
-                ForEach(AfterRunBehavior.allCases) { behavior in
-                    Text(behavior.displayName).tag(behavior)
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .fixedSize()
+            SettingsMenuPicker(
+                "After run",
+                selection: $draft.afterRun,
+                options: AfterRunBehavior.allCases.map { ($0, $0.displayName) }
+            )
         }
     }
 
@@ -581,14 +569,11 @@ struct CustomActionEditSheet: View {
             // Provider — a custom Dictionary action looks up in one chosen provider,
             // unlike the built-in Look up which queries every provider.
             LabeledContent("Provider") {
-                Picker("", selection: $draft.dictionaryConfig.provider) {
-                    ForEach(DictionaryProviderKind.allCases, id: \.self) { kind in
-                        Text(kind.displayName).tag(kind)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
+                SettingsMenuPicker(
+                    "Provider",
+                    selection: $draft.dictionaryConfig.provider,
+                    options: DictionaryProviderKind.allCases.map { ($0, $0.displayName) }
+                )
             }
 
             Divider()

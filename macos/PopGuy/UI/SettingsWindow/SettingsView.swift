@@ -1873,7 +1873,7 @@ struct ProviderPicker: View {
 
     var body: some View {
         LabeledContent(label) {
-            Picker("", selection: $selection) {
+            SettingsMenuPicker(label, selection: $selection, title: selection.displayName) {
                 // Include .mlxLocal only on supported hardware (Apple Silicon + macOS 14+).
                 // Filter is applied AFTER the allowed-list so an explicit `allowed:`
                 // list cannot accidentally include mlxLocal on unsupported Macs.
@@ -1884,9 +1884,6 @@ struct ProviderPicker: View {
                     Text(kind.displayName).tag(kind)
                 }
             }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .fixedSize()
         }
     }
 }
@@ -2029,6 +2026,15 @@ struct ModelField: View {
         let reservedModel: LocalModel? = !currentIsInstalled
             && settings?.installedLocalModels.contains(model) == true
             ? LocalModelCatalog.model(for: model) : nil
+        // Closed-state title: reads exactly like the selected menu item below.
+        let selectedTitle: String = {
+            if let localModel = installedModels.first(where: { $0.id == model }) {
+                return localModel.settingsWarning == nil ? localModel.displayName : "\(localModel.displayName) ⚠️"
+            }
+            if let reservedModel { return "\(reservedModel.displayName) (Humanize only)" }
+            if !model.isEmpty { return "\(model) (not installed)" }
+            return ""
+        }()
 
         if installedModels.isEmpty && model.isEmpty {
             // Nothing installed and nothing previously selected.
@@ -2042,7 +2048,7 @@ struct ModelField: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                Picker("", selection: $model) {
+                SettingsMenuPicker(label, selection: $model, title: selectedTitle) {
                     ForEach(installedModels, id: \.id) { localModel in
                         Text(localModel.settingsWarning == nil ? localModel.displayName : "\(localModel.displayName) ⚠️")
                             .tag(localModel.id)
@@ -2059,9 +2065,6 @@ struct ModelField: View {
                         Text("\(model) (not installed)").tag(model)
                     }
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .fixedSize()
 
                 // Hint below the picker: reserved model, not installed, nothing downloaded,
                 // or the completion-only caption.
@@ -2116,16 +2119,18 @@ struct ModelField: View {
     @ViewBuilder
     private var pickerWithCustomMode: some View {
         HStack(spacing: 6) {
-            Picker("", selection: pickerSelection) {
+            let selected = pickerSelection.wrappedValue
+            SettingsMenuPicker(
+                label,
+                selection: pickerSelection,
+                title: selected == Self.customSentinel ? "Custom…" : selected
+            ) {
                 ForEach(curated, id: \.self) { id in
                     Text(id).tag(id)
                 }
                 Divider()
                 Text("Custom…").tag(Self.customSentinel)
             }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .fixedSize()
 
             if freeTextVisible {
                 TextField(placeholder, text: $model)

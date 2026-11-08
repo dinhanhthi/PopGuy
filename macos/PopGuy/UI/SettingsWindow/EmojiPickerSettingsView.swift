@@ -122,14 +122,11 @@ struct EmojiPickerSettingsView: View {
 
     private func skinToneRow() -> some View {
         LabeledContent("Default skin tone") {
-            Picker("", selection: $settings.emojiSkinTone) {
-                ForEach(SkinTone.allCases) { tone in
-                    Text("\(Self.sample(tone))  \(tone.title)").tag(tone)
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .fixedSize()
+            SettingsMenuPicker(
+                "Default skin tone",
+                selection: $settings.emojiSkinTone,
+                options: SkinTone.allCases.map { ($0, "\(Self.sample($0))  \($0.title)") }
+            )
         }
     }
 
