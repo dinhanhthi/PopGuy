@@ -272,7 +272,8 @@ struct RowIconButtonStyle: ButtonStyle {
 }
 
 /// A row of a settings sidebar: the selected row is a neutral capsule with a 1 pt edge and full-strength text, the
-/// others have dimmed text and get a hover capsule. Rows sit in a `VStack(spacing: SidebarItemStyle.spacing)` instead of a `List(.sidebar)`, whose
+/// others have dimmed text and get a hover capsule (in light mode with full-strength text, as the dimmed text is faint
+/// on the hover fill). Rows sit in a `VStack(spacing: SidebarItemStyle.spacing)` instead of a `List(.sidebar)`, whose
 /// selection fills the whole row height, so neighbors touch however much padding the rows get.
 /// PopGuy: the capsule height comes from `height` (the template's 6 pt vertical padding around a body line); a row
 /// adds its own `SettingsMetrics.sidebarItemVerticalPadding` inside it.
@@ -291,13 +292,14 @@ struct SidebarItemStyle: ButtonStyle {
         let configuration: ButtonStyleConfiguration
         let selected: Bool
         @State private var hovered = false
+        @Environment(\.colorScheme) private var colorScheme
 
         var body: some View {
             let fill: Color = selected ? Palette.selectedFill
                 : configuration.isPressed ? Palette.pressedFill
                 : hovered ? Palette.hoverFill : .clear
             configuration.label
-                .labelStyle(SidebarLabelStyle(selected: selected))
+                .labelStyle(SidebarLabelStyle(emphasized: selected || hovered && colorScheme == .light))
                 .padding(.horizontal, 10)
                 .frame(minHeight: SidebarItemStyle.height)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -310,15 +312,16 @@ struct SidebarItemStyle: ButtonStyle {
     }
 
     private struct SidebarLabelStyle: LabelStyle {
-        let selected: Bool
+        /// Full-strength text: the selected row, or a hovered one in light mode.
+        let emphasized: Bool
 
         func makeBody(configuration: Configuration) -> some View {
             HStack(spacing: 8) {
                 configuration.icon
                     .frame(width: 20)
-                    .foregroundStyle(selected ? Color.primary : Color.secondary)
+                    .foregroundStyle(emphasized ? Color.primary : Color.secondary)
                 configuration.title
-                    .foregroundStyle(selected ? Color.primary : Color.secondary)
+                    .foregroundStyle(emphasized ? Color.primary : Color.secondary)
             }
         }
     }
