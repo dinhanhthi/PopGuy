@@ -8,8 +8,8 @@ namespace PopGuy.Services;
 
 /// <summary>
 /// The tray icon and its menu (spec-3 §5.9, the macOS status item, in its order): Disable/Enable PopGuy, Show on Text
-/// Selection, Show on Double-Click, Show Logo Only, Capture Screen Text…, New Composer (while the Terminal Composer is
-/// on), Settings, History, About PopGuy, Setup Guide, Check for Updates and Quit PopGuy, with Update to vX… first while
+/// Selection, Show on Double-Click, Emoji Picker, Show Logo Only, Capture Screen Text…, New Composer (while the Terminal
+/// Composer is on), Settings, History, About PopGuy, Check for Updates and Quit PopGuy, with Update to vX… first while
 /// an update is ready; rebuilt each time it opens. The
 /// macOS Accessibility items have no Windows counterpart. Capture Screen Text… is always enabled (macOS): with Screen
 /// Text Capture off it opens Settings › Triggers at the OCR section instead of capturing. The icon is the app's colour
@@ -28,7 +28,6 @@ internal sealed class TrayIcon : IDisposable
     private readonly Action<string, bool> _openSettingsSection;
     private readonly Action _captureScreenText;
     private readonly Action<nint, bool> _newComposer;
-    private readonly Action _openSetupGuide;
     private readonly Action _quit;
     private readonly Action<string> _log;
     private readonly NotifyIcon _icon;
@@ -46,12 +45,11 @@ internal sealed class TrayIcon : IDisposable
     /// Opens an empty composer that pastes into the given window (0: none, copy only); the flag allows Done &amp; Submit's
     /// Enter (false for a Z-order guess, see <see cref="ComposeSource"/>). Runs from the dispatcher queue.
     /// </param>
-    /// <param name="openSetupGuide">Opens the first-launch wizard again. Runs from the dispatcher queue.</param>
     /// <param name="quit">Quit PopGuy. Runs from the dispatcher queue, never inside the icon's window procedure.</param>
     /// <exception cref="System.ComponentModel.Win32Exception">Windows refused the icon's window.</exception>
     public TrayIcon(
         SettingsStore settings, UpdateService updates, DispatcherQueue dispatcher, Action openSettings, Action<string, bool> openSettingsSection,
-        Action captureScreenText, Action<nint, bool> newComposer, Action openSetupGuide, Action quit, Action<string> log)
+        Action captureScreenText, Action<nint, bool> newComposer, Action quit, Action<string> log)
     {
         _settings = settings;
         _updates = updates;
@@ -60,7 +58,6 @@ internal sealed class TrayIcon : IDisposable
         _openSettingsSection = openSettingsSection;
         _captureScreenText = captureScreenText;
         _newComposer = newComposer;
-        _openSetupGuide = openSetupGuide;
         _quit = quit;
         _log = log;
         _icon = new NotifyIcon(App.IconPath, !settings.Current.PopGuyEnabled, "PopGuy", log);
@@ -108,6 +105,9 @@ internal sealed class TrayIcon : IDisposable
             new("Show on Double-Click",
                 () => Toggle("triggerDoubleClick", s => s with { TriggerDoubleClickEnabled = !s.TriggerDoubleClickEnabled }),
                 Enabled: enabled, Checked: current.TriggerDoubleClickEnabled),
+            new("Emoji Picker",
+                () => Toggle("emojiPickerEnabled", s => s with { EmojiPickerEnabled = !s.EmojiPickerEnabled }),
+                Enabled: enabled, Checked: current.EmojiPickerEnabled),
             // An appearance toggle, not a trigger: enabled while the master switch is off (macOS).
             new("Show Logo Only",
                 () => Toggle("showLogoOnly", s => s with { ShowLogoOnly = !s.ShowLogoOnly }),
@@ -128,7 +128,6 @@ internal sealed class TrayIcon : IDisposable
             new("Settings", () => _dispatcher.TryEnqueue(() => _openSettings())),
             new("History", () => _dispatcher.TryEnqueue(() => _openSettingsSection("History", false))),
             new("About PopGuy", () => _dispatcher.TryEnqueue(() => _openSettingsSection("About", false))),
-            new("Setup Guide", () => _dispatcher.TryEnqueue(() => _openSetupGuide())),
             NotifyIconMenuItem.Separator,
             // On About, where the result shows (macOS: Sparkle's window for a check the user starts).
             new("Check for Updates", () => _dispatcher.TryEnqueue(() =>

@@ -76,7 +76,7 @@ public partial class App : Application
         {
             _tray = new TrayIcon(
                 _services.Settings, _services.Updates, _dispatcher, ShowSettings, ShowSettingsSection, CaptureScreenText,
-                NewComposer, ShowOnboarding, Shutdown, _services.Log.Write);
+                NewComposer, Shutdown, _services.Log.Write);
             _tray.SessionEnding += OnSessionEnding;
         }
         catch (System.ComponentModel.Win32Exception e)
@@ -112,7 +112,7 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// The first-launch wizard, and Setup Guide (tray, Settings → General): the one wizard comes to the front, made first
+    /// The first-launch wizard, and Setup Guide (Settings → General): the one wizard comes to the front, made first
     /// when none is open. UI thread.
     /// </summary>
     private void ShowOnboarding()

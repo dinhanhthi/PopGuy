@@ -19,6 +19,7 @@ struct PopGuyApp: App {
 enum StatusMenuTrigger {
     case textSelection
     case doubleClick
+    case emojiPicker
 
     var title: String {
         switch self {
@@ -26,6 +27,8 @@ enum StatusMenuTrigger {
             "Show on Text Selection"
         case .doubleClick:
             "Show on Double-Click"
+        case .emojiPicker:
+            "Emoji Picker"
         }
     }
 
@@ -35,6 +38,8 @@ enum StatusMenuTrigger {
             ["text.cursor", "textformat"]
         case .doubleClick:
             ["cursorarrow.click.2", "cursorarrow.click"]
+        case .emojiPicker:
+            ["face.smiling"]
         }
     }
 
@@ -766,6 +771,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         doubleClickItem.isEnabled = popGuyEnabled
         menu.addItem(doubleClickItem)
 
+        // Emoji Picker hotkey — gated by the master switch like the triggers.
+        let emojiPickerItem = makeStatusTriggerMenuItem(
+            .emojiPicker,
+            isOn: settingsStore.emojiPickerEnabled,
+            action: #selector(toggleEmojiPicker)
+        )
+        emojiPickerItem.isEnabled = popGuyEnabled
+        menu.addItem(emojiPickerItem)
+
         // Show Logo Only — appearance toggle (not a trigger), so it stays enabled
         // while the master switch is off.
         let logoOnlyItem = NSMenuItem(
@@ -848,12 +862,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         )
         menu.addItem(aboutItem)
 
-        menu.addItem(NSMenuItem(
-            title: "Setup Guide",
-            action: #selector(presentOnboarding),
-            keyEquivalent: ""
-        ))
-
         menu.addItem(.separator())
 
         // Check for Updates — always present; enabled only when Sparkle allows it.
@@ -894,6 +902,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     @objc private func toggleTriggerDoubleClick() {
         settingsStore.triggerDoubleClickEnabled.toggle()
+    }
+
+    @objc private func toggleEmojiPicker() {
+        settingsStore.emojiPickerEnabled.toggle()
     }
 
     @objc private func toggleShowLogoOnly() {
