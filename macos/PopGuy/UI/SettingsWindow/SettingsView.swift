@@ -53,6 +53,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     case history
     case triggers
     case terminalComposer
+    case emojiPicker
     case appearance
     case ignoredApps
     case about
@@ -67,6 +68,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         case .history:     return "History"
         case .triggers:    return "Triggers"
         case .terminalComposer: return "Composer"
+        case .emojiPicker: return "Emoji"
         case .appearance:  return "Appearance"
         case .ignoredApps: return "Ignore"
         case .about:       return "About"
@@ -81,6 +83,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         case .history:     return "clock.arrow.circlepath"
         case .triggers:    return "cursorarrow.rays"
         case .terminalComposer: return "terminal"
+        case .emojiPicker: return "face.smiling"
         case .appearance:  return "paintbrush"
         case .ignoredApps: return "app.badge"
         case .about:       return "info.circle"
@@ -435,7 +438,7 @@ struct SettingsView: View {
         case .appearance:
             AppearanceView(settings: settings)
                 .id(section)
-        case .terminalComposer, .about:
+        case .terminalComposer, .emojiPicker, .about:
             // The page's header row sits in the titlebar band; its own
             // ScrollView scrolls in the area below it. No header controls here.
             SettingsPageLayout {
@@ -445,6 +448,8 @@ struct SettingsView: View {
                     switch section {
                     case .terminalComposer:
                         TerminalComposerView(settings: settings, shellSetupConfirmation: $shellSetupConfirmation)
+                    case .emojiPicker:
+                        EmojiPickerSettingsView(settings: settings)
                     case .about:      AboutView(updater: updater)
                     case .general, .providers, .actions, .history, .triggers, .appearance, .ignoredApps:
                         EmptyView() // built above

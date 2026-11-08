@@ -76,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var toolbarController: ToolbarController?
     private var ocrCaptureController: OCRCaptureController?
     private var composerController: ComposerController?
+    private var emojiPickerController: EmojiPickerController?
     private var permissionObserver: NSObjectProtocol?
 
     // MARK: - Shared services (created once, injected into subsystems)
@@ -135,6 +136,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     /// Combine subscription — starts/stops the Terminal Composer server and re-applies
     /// hotkey wiring when its opt-in toggle changes.
     private var terminalComposerEnabledCancellable: AnyCancellable?
+
+    /// Combine subscription — re-applies hotkey wiring when the Emoji Picker shortcut changes.
+    private var emojiPickerShortcutCancellable: AnyCancellable?
+
+    /// Combine subscription — builds/frees the emoji catalog and re-applies hotkey wiring
+    /// when the Emoji Picker opt-in toggle changes.
+    private var emojiPickerEnabledCancellable: AnyCancellable?
 
     // MARK: - Lifecycle
 
@@ -327,6 +335,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             composer.startServer()
         }
 
+        // Wire the Emoji Picker: its catalog is built only while opted in.
+        let emojiPicker = EmojiPickerController(
+            settings: settingsStore,
+            hideToolbar: { [weak controller] in controller?.hide() },
+            onOpenSettings: { [weak self] in
+                self?.settingsNavigator.section = .emojiPicker
+                self?.openSettings()
+            }
+        )
+        emojiPickerController = emojiPicker
+        if settingsStore.emojiPickerEnabled {
+            emojiPicker.preload()
+        }
+
         // Wire ActionEngine into the toolbar via the protocol seam.
         let handler = ActionEngineHandler(
             settings: settingsStore,
@@ -441,6 +463,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 }
                 self.applyShortcutBindings()
             }
+
+        // Re-apply when the Emoji Picker shortcut or its opt-in toggle changes;
+        // the toggle also builds/frees the emoji catalog.
+        emojiPickerShortcutCancellable = settingsStore.$emojiPickerShortcut
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.applyShortcutBindings() }
+
+        emojiPickerEnabledCancellable = settingsStore.$emojiPickerEnabled
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] enabled in
+                guard let self else { return }
+                if enabled {
+                    self.emojiPickerController?.preload()
+                } else {
+                    self.emojiPickerController?.unload()
+                }
+                self.applyShortcutBindings()
+            }
     }
 
     /// A fixed sentinel ActionIdentifier for the chord-replacement shortcut.
@@ -463,6 +505,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     /// Same rationale as `chordReplacementActionID` ("COMP" in the last bytes).
     private static let composeActionID: ActionIdentifier =
         .custom(UUID(uuidString: "00000000-0000-0000-0000-0000434F4D50")!)
+
+    /// A fixed sentinel ActionIdentifier for the Emoji Picker shortcut.
+    /// Same rationale as `chordReplacementActionID` ("EMOJ" in the last bytes).
+    private static let emojiPickerActionID: ActionIdentifier =
+        .custom(UUID(uuidString: "00000000-0000-0000-0000-0000454D4F4A")!)
 
     /// Build the action map from current settings and call HotkeyManager.applyBindings.
     ///
@@ -525,6 +572,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 // Read the source app before anything activates PopGuy.
                 let sourcePID = NSWorkspace.shared.frontmostApplication?.processIdentifier
                 self.composerController?.beginCompose(sourcePID: sourcePID)
+            }
+        }
+
+        // Register the Emoji Picker shortcut only while the picker is on, so the key
+        // combo is never swallowed with the feature off.
+        if settingsStore.emojiPickerEnabled, let emojiShortcut = settingsStore.emojiPickerShortcut {
+            hkm.register(
+                shortcut: emojiShortcut,
+                for: AppDelegate.emojiPickerActionID
+            ) { [weak self] in
+                guard let self, self.settingsStore.popGuyEnabled, self.settingsStore.emojiPickerEnabled else { return }
+                self.emojiPickerController?.toggle()
             }
         }
     }

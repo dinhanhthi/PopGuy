@@ -9,7 +9,8 @@
 //   3. Triggers — Cmd+C+C chord + optional replacement + show-on-select.
 //   4. Actions — pick built-in toolbar actions.
 //   5. Composer — what the Terminal Composer is, opt-in switch (off by default).
-//   6. Finish — launch at login + feature tour.
+//   6. Emoji picker — what the ⌘; picker does, opt-in switch (off by default).
+//   7. Finish — launch at login + feature tour.
 //
 // Isolation: @MainActor — all UI.
 // Plain static text only; no untrusted external content is rendered here.
@@ -51,7 +52,7 @@ struct OnboardingView: View {
     /// otherwise fire Next and skip the page).
     @State private var isRecordingChord = false
 
-    private let pageCount = 7
+    private let pageCount = 8
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,6 +66,7 @@ struct OnboardingView: View {
                     case 3: triggersPage
                     case 4: actionsPage
                     case 5: composerPage
+                    case 6: emojiPage
                     default: finishPage
                     }
                 }
@@ -252,6 +254,20 @@ struct OnboardingView: View {
             )
 
             OnboardingComposerPage(settings: settings)
+
+            Spacer()
+        }
+    }
+
+    private var emojiPage: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            OnboardingHeader(
+                systemImage: "face.smiling",
+                title: "Emoji picker",
+                subtitle: "Press ⌘; in any text field to open a small picker at the cursor. Search, pick, and the emoji or symbol is typed for you."
+            )
+
+            OnboardingEmojiPage(settings: settings)
 
             Spacer()
         }
@@ -552,6 +568,47 @@ private struct OnboardingComposerPage: View {
             }
 
             Text("After turning it on, finish the setup in Settings → Composer: install the popguy-edit command and set up your shell.")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+// MARK: - Emoji picker
+
+@MainActor
+private struct OnboardingEmojiPage: View {
+    @ObservedObject var settings: SettingsStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Enable the emoji picker", isOn: $settings.emojiPickerEnabled)
+                    .font(.subheadline)
+
+                Text("Off by default. Turn it on to pick emoji and symbols from the keyboard in any app.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.primary.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+            )
+
+            VStack(alignment: .leading, spacing: 8) {
+                TourRow(icon: "magnifyingglass", text: "Type to search, use the arrow keys to move, and press Return to insert. Esc closes the picker.")
+                TourRow(icon: "clock", text: "Emoji you use often show up first under Frequently Used.")
+            }
+
+            Text("You can change the shortcut in Settings → Emoji. In Cocoa apps, ⌘; normally runs Edit → Spelling and Grammar → Check Document Now; while the picker is on, ⌘; opens the picker instead.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
