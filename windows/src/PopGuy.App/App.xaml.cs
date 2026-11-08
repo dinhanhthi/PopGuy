@@ -57,6 +57,7 @@ public partial class App : Application
             UnhandledException += OnUnhandledException;
             _services.SettingsRequested += ShowSettings;
             _services.SetupGuideRequested += ShowOnboarding;
+            _services.EmojiSettingsRequested += ShowEmojiPickerSettings;
             _services.Updates.ExitRequested += Shutdown;
 #if DEBUG
             if (selfTestSource is not null) _services.ShowCannedToolbar(PopGuy.Debug.Probes.SelfTestText, selfTestSource);
@@ -151,6 +152,9 @@ public partial class App : Application
         _settingsWindow?.SelectSection(tag, focusOcrSection);
     }
 
+    /// <summary>The Emoji Picker's gear: Settings comes to the front on the Emoji Picker page. UI thread.</summary>
+    private void ShowEmojiPickerSettings() => ShowSettingsSection("EmojiPicker", focusOcrSection: false);
+
     /// <summary>The tray's Capture Screen Text… with OCR on. UI thread.</summary>
     private void CaptureScreenText()
     {
@@ -197,6 +201,7 @@ public partial class App : Application
         {
             _services.SettingsRequested -= ShowSettings;
             _services.SetupGuideRequested -= ShowOnboarding;
+            _services.EmojiSettingsRequested -= ShowEmojiPickerSettings;
             _services.Updates.ExitRequested -= Shutdown;
         }
         UnhandledException -= OnUnhandledException;

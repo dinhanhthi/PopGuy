@@ -165,6 +165,27 @@ public static class ToolbarWindowStyle
     public static bool SetForeground(nint window) => IsAlive(window) && PInvoke.SetForegroundWindow((HWND)window);
 
     /// <summary>
+    /// The foreground-unlock lever, for when <see cref="SetForeground"/> was refused: with this thread's input attached
+    /// to the foreground window's thread, Windows lets <c>SetForegroundWindow</c> through. Detached right after. The
+    /// window's (UI) thread. False when the window is gone or Windows still refused.
+    /// </summary>
+    public static bool ForceForeground(nint hwnd)
+    {
+        var foreground = ForegroundWindow();
+        var foregroundThread = foreground == 0 ? 0 : PInvoke.GetWindowThreadProcessId((HWND)foreground, out _);
+        var thread = PInvoke.GetCurrentThreadId();
+        var attached = foregroundThread != 0 && foregroundThread != thread && PInvoke.AttachThreadInput(thread, foregroundThread, true);
+        try
+        {
+            return SetForeground(hwnd);
+        }
+        finally
+        {
+            if (attached) PInvoke.AttachThreadInput(thread, foregroundThread, false);
+        }
+    }
+
+    /// <summary>
     /// Lets <paramref name="processId"/> take the foreground itself (it must then activate its own window). Only works
     /// while this process may set the foreground (it has it, or received the last input).
     /// </summary>

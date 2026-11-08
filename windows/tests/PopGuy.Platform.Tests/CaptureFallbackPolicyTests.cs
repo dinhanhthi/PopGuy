@@ -73,4 +73,14 @@ public sealed class CaptureFallbackPolicyTests
             Assert.Equal(PasteBack.TargetRefusal(target, windowClass, processName), reason);
         }
     }
+
+    // Security: the Emoji Picker types Unicode keys, harmless in a terminal, so it refuses only a password field and a
+    // remote session; the toolbar's paste (default flags) still refuses the console.
+    [Theory]
+    [InlineData("CASCADIA_HOSTING_WINDOW_CLASS", "WindowsTerminal", false, true, null)]
+    [InlineData("Notepad", "notepad", true, true, "passwordField")]
+    [InlineData("TscShellContainerClass", "mstsc", false, true, "remoteDesktop")]
+    [InlineData("CASCADIA_HOSTING_WINDOW_CLASS", "WindowsTerminal", false, false, "console")]
+    public void EmojiTargetRefusal(string windowClass, string processName, bool isPassword, bool forEmoji, string? reason) =>
+        Assert.Equal(reason, PasteBack.TargetRefusal(new UiaPasteTarget(null, null, isPassword), windowClass, processName, forEmoji: forEmoji));
 }

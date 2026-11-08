@@ -7,6 +7,7 @@ using PopGuy.Core.Dictionaries;
 using PopGuy.Core.Settings;
 using PopGuy.Core.Speak;
 using PopGuy.Core.Toolbar;
+using PopGuy.EmojiPicker;
 using PopGuy.Ocr;
 using PopGuy.Platform.Browser;
 using PopGuy.Platform.Capture;
@@ -34,8 +35,9 @@ namespace PopGuy.Toolbar;
 /// is presented: the gate's ignored domains and <c>{{domain}}</c> use it (macOS reads it only then, too). The OCR
 /// hotkey and the tray's Capture Screen Text… start an <see cref="OcrCaptureController"/> capture, whose text shows
 /// like a selection with no source app, copy-only, under a thumbnail of the region (macOS handleOCRCapture). The
-/// Compose hotkey opens a Terminal Composer for the foreground window. PopGuy's own windows are never a source, except
-/// the open composer: its selection shows the toolbar, and Paste back replaces it in-process.
+/// Compose hotkey opens a Terminal Composer for the foreground window, and the Emoji Picker hotkey toggles the
+/// <see cref="EmojiPickerController"/> picker for it (closing the toolbar). PopGuy's own windows are never a source,
+/// except the open composer: its selection shows the toolbar, and Paste back replaces it in-process.
 /// <para>
 /// Threading: the chord and hotkey events and the three input loops run on the thread pool; everything that touches the
 /// window, the view model or the presentation state runs on the UI thread (<see cref="DispatcherQueue"/>). Captures
@@ -56,6 +58,7 @@ internal sealed class ToolbarController : IDisposable
     private readonly ToolbarViewModel _viewModel;
     private readonly OcrCaptureController _ocr;
     private readonly ComposerController _composer;
+    private readonly EmojiPickerController _emojiPicker;
     private readonly GlobalInput _input;
     private readonly ChordMonitor _chord;
     private readonly HotkeyService _hotkeys;
@@ -147,8 +150,8 @@ internal sealed class ToolbarController : IDisposable
 
     public ToolbarController(
         SettingsStore settings, ToolbarSession session, SpeakCoordinator speak, ToolbarWindow window, OcrCaptureController ocr,
-        ComposerController composer, GlobalInput input, ChordMonitor chord, HotkeyService hotkeys, SelectionPipeline pipeline,
-        DispatcherQueue dispatcher, Action<string> log)
+        ComposerController composer, EmojiPickerController emojiPicker, GlobalInput input, ChordMonitor chord,
+        HotkeyService hotkeys, SelectionPipeline pipeline, DispatcherQueue dispatcher, Action<string> log)
     {
         _settings = settings;
         _session = session;
@@ -157,6 +160,7 @@ internal sealed class ToolbarController : IDisposable
         _viewModel = window.ViewModel;
         _ocr = ocr;
         _composer = composer;
+        _emojiPicker = emojiPicker;
         _input = input;
         _chord = chord;
         _hotkeys = hotkeys;
@@ -275,6 +279,7 @@ internal sealed class ToolbarController : IDisposable
                 ? settings with
                 {
                     ShortcutBindings = [], ChordReplacementShortcut = null, OcrShortcut = null, ComposeShortcut = null,
+                    EmojiPickerShortcut = null,
                 }
                 : settings;
             var refused = _hotkeys.Apply(hotkeys).Count(r => r.Status != HotkeyStatus.Registered);
@@ -430,6 +435,19 @@ internal sealed class ToolbarController : IDisposable
             {
                 var settings = _settings.Current;
                 if (settings.PopGuyEnabled && settings.TerminalComposerEnabled) _composer.BeginCompose(source.Hwnd, allowSubmit: true);
+            });
+            return;
+        }
+        if (id == HotkeyService.EmojiPickerId)
+        {
+            // macOS: the master switch and the opt-in at fire time; the toolbar closes as the picker opens (macOS hides
+            // it outright, not through the close confirmation).
+            _dispatcher.TryEnqueue(() =>
+            {
+                var settings = _settings.Current;
+                if (!settings.PopGuyEnabled || !settings.EmojiPickerEnabled) return;
+                if (_window.IsShown) Hide();
+                _emojiPicker.Toggle(source);
             });
             return;
         }

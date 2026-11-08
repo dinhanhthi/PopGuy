@@ -181,3 +181,7 @@ GetDC
 ReleaseDC
 GdiFlush
 ROP_CODE
+GetGUIThreadInfo
+ClientToScreen
+AttachThreadInput
+GetCurrentThreadId

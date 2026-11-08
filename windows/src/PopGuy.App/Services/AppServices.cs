@@ -14,6 +14,7 @@ using PopGuy.Core.Settings;
 using PopGuy.Core.Speak;
 using PopGuy.Core.Speak.CloudTts;
 using PopGuy.Core.Toolbar;
+using PopGuy.EmojiPicker;
 using PopGuy.LocalLLM;
 using PopGuy.Ocr;
 using PopGuy.Platform.Capture;
@@ -40,6 +41,7 @@ internal sealed class AppServices : IDisposable
     private readonly ToolbarWindow _toolbar;
     private readonly OcrCaptureController _ocr;
     private readonly ComposerController _composer;
+    private readonly EmojiPickerController _emojiPicker;
     private readonly ToolbarController _controller;
     private readonly SpeakCoordinator _speak;
     private readonly SystemTts _systemTts = new();
@@ -102,9 +104,11 @@ internal sealed class AppServices : IDisposable
             _ocr = new OcrCaptureController(log.Write);
             // Its pipe server runs only while the Terminal Composer is on (SyncComposerServer).
             _composer = new ComposerController(paths, new ComposeOutput(_input, log.Write), dispatcher, log.Write);
+            // Its catalog is built only while the Emoji Picker is on (SyncEmojiPicker).
+            _emojiPicker = new EmojiPickerController(Settings, paths, _input.IsUserKeyDown, log.Write);
             _controller = new ToolbarController(
-                Settings, session, _speak, _toolbar, _ocr, _composer, _input, chord, _hotkeys, _pipeline, dispatcher,
-                log.Write);
+                Settings, session, _speak, _toolbar, _ocr, _composer, _emojiPicker, _input, chord, _hotkeys, _pipeline,
+                dispatcher, log.Write);
         }
         catch
         {
@@ -142,6 +146,16 @@ internal sealed class AppServices : IDisposable
         add => _controller.SettingsRequested += value;
         remove => _controller.SettingsRequested -= value;
     }
+
+    /// <summary>The Emoji Picker's gear (see <see cref="EmojiPickerController.SettingsRequested"/>). UI thread.</summary>
+    public event Action? EmojiSettingsRequested
+    {
+        add => _emojiPicker.SettingsRequested += value;
+        remove => _emojiPicker.SettingsRequested -= value;
+    }
+
+    /// <summary>The Emoji Picker, for Settings (Clear Frequently Used). UI thread.</summary>
+    public EmojiPickerController EmojiPicker => _emojiPicker;
 
     /// <summary>Settings → General's Setup Guide… (see <see cref="RequestSetupGuide"/>). UI thread.</summary>
     public event Action? SetupGuideRequested;
@@ -195,6 +209,7 @@ internal sealed class AppServices : IDisposable
             var services = new AppServices(log, paths, dispatcher);
             services._controller.Start();
             services.SyncComposerServer();
+            services.SyncEmojiPicker();
             services.Settings.Changed += services.OnSettingsChanged;
             services.PrepareBabylonIndexes();
             services.Updates.Start();
@@ -239,8 +254,12 @@ internal sealed class AppServices : IDisposable
         });
     }
 
-    /// <summary>A settings change may come from any thread; the composer is UI thread only.</summary>
-    private void OnSettingsChanged(object? sender, EventArgs e) => _dispatcher.TryEnqueue(SyncComposerServer);
+    /// <summary>A settings change may come from any thread; the composer and the Emoji Picker are UI thread only.</summary>
+    private void OnSettingsChanged(object? sender, EventArgs e) => _dispatcher.TryEnqueue(() =>
+    {
+        SyncComposerServer();
+        SyncEmojiPicker();
+    });
 
     /// <summary>The composer's pipe server listens while the Terminal Composer is on (macOS). UI thread.</summary>
     private void SyncComposerServer()
@@ -249,6 +268,14 @@ internal sealed class AppServices : IDisposable
         var enabled = Settings.Current.TerminalComposerEnabled;
         if (enabled && !_composer.IsServerRunning) _composer.StartServer();
         else if (!enabled && _composer.IsServerRunning) _composer.StopServer();
+    }
+
+    /// <summary>The Emoji Picker's catalog is built while the feature is on and freed when it is turned off (macOS). UI thread.</summary>
+    private void SyncEmojiPicker()
+    {
+        if (Volatile.Read(ref _disposed) != 0) return;
+        if (Settings.Current.EmojiPickerEnabled) _emojiPicker.Preload();
+        else _emojiPicker.Unload();
     }
 
     private SpeakCoordinator CreateSpeakPreview()
@@ -301,6 +328,7 @@ internal sealed class AppServices : IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         Settings.Changed -= OnSettingsChanged;
         _composer.Shutdown();
+        _emojiPicker.Close();
         Updates.Dispose();
         _speak.Stop();
         _speakPreview?.Stop();

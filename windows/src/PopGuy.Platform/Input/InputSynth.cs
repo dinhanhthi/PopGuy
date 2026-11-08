@@ -21,8 +21,9 @@ public enum InputSendResult
 }
 
 /// <summary>
-/// Synthetic copy (Ctrl+Insert), paste (Ctrl+V) and Enter into the foreground app, through SendInput. Every event carries
-/// <see cref="Marker"/> in its extra info, so PopGuy's own low-level hooks can tell them from the user's keys.
+/// Synthetic copy (Ctrl+Insert), paste (Ctrl+V), Enter and Unicode text (the Emoji Picker) into the foreground app,
+/// through SendInput. Every event carries <see cref="Marker"/> in its extra info, so PopGuy's own low-level hooks can
+/// tell them from the user's keys.
 /// <para>
 /// The copy is Ctrl+Insert, not Ctrl+C: Ctrl+Insert is the standard Windows copy accelerator (edit controls, rich
 /// edit, Chromium/Electron, Office), while in a console or terminal Ctrl+C is an interrupt (SIGINT) that stops the
@@ -103,20 +104,53 @@ public static class InputSynth
     public static InputSendResult SendEnter(Func<uint, bool>? isUserKeyDown = null, Func<bool>? stillAllowed = null) =>
         SendKeys(VIRTUAL_KEY.VK_RETURN, withControl: false, isUserKeyDown, stillAllowed);
 
+    /// <summary>
+    /// Types <paramref name="text"/> as Unicode key events (KEYEVENTF_UNICODE, a down and an up per UTF-16 unit, so a
+    /// surrogate pair is two units in order), all in one SendInput call, with held modifiers handled as described on the
+    /// class (a held Ctrl would otherwise turn the text into shortcuts). Empty text sends nothing and returns
+    /// <see cref="InputSendResult.Sent"/>. Blocks up to 500 ms: call it off the UI thread.
+    /// </summary>
+    /// <param name="text">The text to type, e.g. one emoji.</param>
+    /// <param name="isUserKeyDown">Whether the user still holds a virtual key (PopGuy's own events ignored); null: never press modifiers again.</param>
+    /// <param name="stillAllowed">Checked after the modifier wait, right before SendInput; false: nothing is sent (<see cref="InputSendResult.Aborted"/>).</param>
+    public static InputSendResult SendUnicode(string text, Func<uint, bool>? isUserKeyDown = null, Func<bool>? stillAllowed = null)
+    {
+        if (text.Length == 0) return InputSendResult.Sent;
+        return SendWithModifiersReleased(inputs =>
+        {
+            foreach (var unit in text)
+            {
+                inputs.Add(UnicodeKey(unit, up: false));
+                inputs.Add(UnicodeKey(unit, up: true));
+            }
+        }, isUserKeyDown, stillAllowed);
+    }
+
     private static InputSendResult SendChord(VIRTUAL_KEY key, Func<uint, bool>? isUserKeyDown, Func<bool>? stillAllowed) =>
         SendKeys(key, withControl: true, isUserKeyDown, stillAllowed);
 
-    private static InputSendResult SendKeys(VIRTUAL_KEY key, bool withControl, Func<uint, bool>? isUserKeyDown, Func<bool>? stillAllowed)
+    private static InputSendResult SendKeys(VIRTUAL_KEY key, bool withControl, Func<uint, bool>? isUserKeyDown, Func<bool>? stillAllowed) =>
+        SendWithModifiersReleased(inputs =>
+        {
+            if (withControl) inputs.Add(Key(VIRTUAL_KEY.VK_LCONTROL, up: false));
+            inputs.Add(Key(key, up: false));
+            inputs.Add(Key(key, up: true));
+            if (withControl) inputs.Add(Key(VIRTUAL_KEY.VK_LCONTROL, up: true));
+        }, isUserKeyDown, stillAllowed);
+
+    /// <summary>
+    /// The modifier handling described on the class around <paramref name="addPayload"/>'s events: waits for the
+    /// modifiers, releases the ones still held, sends the payload in the same SendInput call, then presses again the
+    /// ones the user still holds.
+    /// </summary>
+    private static InputSendResult SendWithModifiersReleased(Action<List<INPUT>> addPayload, Func<uint, bool>? isUserKeyDown, Func<bool>? stillAllowed)
     {
         var held = WaitForModifierRelease();
 
         var inputs = new List<INPUT>(16);
         if (held.Any(IsAltOrWin)) AddMaskTap(inputs);
         foreach (var vk in held) inputs.Add(Key(vk, up: true));
-        if (withControl) inputs.Add(Key(VIRTUAL_KEY.VK_LCONTROL, up: false));
-        inputs.Add(Key(key, up: false));
-        inputs.Add(Key(key, up: true));
-        if (withControl) inputs.Add(Key(VIRTUAL_KEY.VK_LCONTROL, up: true));
+        addPayload(inputs);
         // Last check, after the wait: nothing has been sent yet, so an abort needs no cleanup.
         if (stillAllowed is not null && !stillAllowed()) return InputSendResult.Aborted;
         // One call: the events reach the input stream together, never interleaved with the user's.
@@ -173,6 +207,16 @@ public static class InputSynth
         }
         var input = new INPUT { type = INPUT_TYPE.INPUT_KEYBOARD };
         input.ki = new KEYBDINPUT { wVk = vk, dwFlags = flags, dwExtraInfo = Marker };
+        return input;
+    }
+
+    /// <summary>A Unicode key event: no virtual key, the UTF-16 unit in the scan code.</summary>
+    private static INPUT UnicodeKey(char unit, bool up)
+    {
+        var flags = KEYBD_EVENT_FLAGS.KEYEVENTF_UNICODE;
+        if (up) flags |= KEYBD_EVENT_FLAGS.KEYEVENTF_KEYUP;
+        var input = new INPUT { type = INPUT_TYPE.INPUT_KEYBOARD };
+        input.ki = new KEYBDINPUT { wVk = 0, wScan = unit, dwFlags = flags, dwExtraInfo = Marker };
         return input;
     }
 }

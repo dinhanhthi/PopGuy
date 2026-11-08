@@ -20,7 +20,7 @@ public enum HotkeyStatus
 /// <summary>One hotkey from the settings and how its registration went.</summary>
 /// <param name="Id">
 /// The action it runs, or <see cref="HotkeyService.ChordReplacementId"/> / <see cref="HotkeyService.OcrCaptureId"/> /
-/// <see cref="HotkeyService.ComposeId"/>.
+/// <see cref="HotkeyService.ComposeId"/> / <see cref="HotkeyService.EmojiPickerId"/>.
 /// </param>
 /// <param name="Shortcut">The keys.</param>
 /// <param name="Status">Whether it works.</param>
@@ -28,14 +28,15 @@ public sealed record HotkeyRegistration(ActionIdentifier Id, Shortcut Shortcut, 
 
 /// <summary>
 /// The settings' global hotkeys (spec-1 §1.5): every <see cref="AppSettings.ShortcutBindings"/> entry, the chord
-/// replacement (when the chord is on), the OCR shortcut (when OCR is on) and the Compose shortcut (when the Terminal
-/// Composer is on, so its keys are not swallowed while it is off), registered through
+/// replacement (when the chord is on), the OCR shortcut (when OCR is on), the Compose shortcut (when the Terminal
+/// Composer is on, so its keys are not swallowed while it is off) and the Emoji Picker shortcut (when the Emoji Picker
+/// is on, likewise), registered through
 /// <see cref="GlobalInput.Register"/> (RegisterHotKey with MOD_NOREPEAT on the input thread's message-only window,
 /// so the hotkeys' keys also reach <see cref="GlobalInput.Keys"/> with their codes). Hotkeys consume the keystroke.
 /// <para>
 /// <see cref="Apply"/> unregisters everything, then registers everything again: call it on every change of the
-/// bindings, custom actions, the chord flag or replacement, the OCR flag or shortcut, or the Terminal Composer flag or
-/// Compose shortcut. A refused hotkey is not an
+/// bindings, custom actions, the chord flag or replacement, the OCR flag or shortcut, the Terminal Composer flag or
+/// Compose shortcut, or the Emoji Picker flag or shortcut. A refused hotkey is not an
 /// error: its <see cref="HotkeyRegistration.Status"/> says why, and the others still work. Whether a fired action
 /// exists and is enabled (and whether PopGuy is on) is the App's check at fire time.
 /// </para>
@@ -61,6 +62,10 @@ public sealed class HotkeyService : IDisposable
     public static ActionIdentifier ComposeId { get; } =
         ActionIdentifier.Custom(Guid.Parse("00000000-0000-0000-0000-0000434F4D50"));
 
+    /// <summary>The Emoji Picker hotkey's sentinel id (the macOS app's UUID).</summary>
+    public static ActionIdentifier EmojiPickerId { get; } =
+        ActionIdentifier.Custom(Guid.Parse("00000000-0000-0000-0000-0000454D4F4A"));
+
     private readonly GlobalInput _input;
     private readonly Action<string>? _log;
     private readonly Lock _applyLock = new();
@@ -83,7 +88,7 @@ public sealed class HotkeyService : IDisposable
         _ = Task.Run(ReadHotKeysAsync);
     }
 
-    /// <summary>A registered hotkey was pressed: the action's id, or a sentinel (<see cref="ChordReplacementId"/>, <see cref="OcrCaptureId"/>, <see cref="ComposeId"/>).</summary>
+    /// <summary>A registered hotkey was pressed: the action's id, or a sentinel (<see cref="ChordReplacementId"/>, <see cref="OcrCaptureId"/>, <see cref="ComposeId"/>, <see cref="EmojiPickerId"/>).</summary>
     public event Action<ActionIdentifier>? Fired;
 
     /// <summary>Every hotkey of the last <see cref="Apply"/>, in order, with its status. Any thread.</summary>
@@ -99,6 +104,7 @@ public sealed class HotkeyService : IDisposable
         }
         if (settings.OcrEnabled && settings.OcrShortcut is { } ocr) wanted.Add((OcrCaptureId, ocr));
         if (settings.TerminalComposerEnabled && settings.ComposeShortcut is { } compose) wanted.Add((ComposeId, compose));
+        if (settings.EmojiPickerEnabled && settings.EmojiPickerShortcut is { } emoji) wanted.Add((EmojiPickerId, emoji));
 
         lock (_applyLock)
         {

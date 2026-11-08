@@ -6,6 +6,7 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.System.Com;
 using Windows.Win32.UI.Accessibility;
+using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace PopGuy.Platform.Capture;
 
@@ -106,6 +107,9 @@ public static class UiaSelectionReader
     /// <summary>The probe runs on every passive trigger, so it gives up sooner than a full read.</summary>
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromMilliseconds(500);
 
+    /// <summary>The caret read runs before the Emoji Picker shows, so it gives up sooner still.</summary>
+    private static readonly TimeSpan CaretTimeout = TimeSpan.FromMilliseconds(250);
+
     /// <summary>
     /// Reads the focused selection on a dedicated MTA thread and waits for it up to 1.5 s (then
     /// <see cref="UiaCaptureStatus.Unavailable"/> with <see cref="UiaSelection.ReadFailed"/>; the abandoned thread ends
@@ -142,6 +146,19 @@ public static class UiaSelectionReader
     /// </summary>
     public static UiaPasteTarget ProbePasteTarget() =>
         RunOnMtaThread("PopGuy UIA paste target", ProbeTimeout, UiaPasteTarget.Unknown, PasteTargetCore);
+
+    /// <summary>
+    /// The caret in screen pixels, for the Emoji Picker: the character after a collapsed text-pattern selection (its
+    /// left edge is the caret), else the foreground thread's Win32 caret; null when neither is known (the caller falls
+    /// back to the pointer). <c>IsPassword</c>: the focused element is a password field (no caret is read then). Reads
+    /// no text. (null, false) after 250 ms. Blocks the caller for 250 ms at most: call it off the UI thread.
+    /// </summary>
+    public static (Rectangle? Caret, bool IsPassword) ReadCaret() =>
+        RunOnMtaThread("PopGuy UIA caret", CaretTimeout, ((Rectangle?)null, false), () =>
+        {
+            var (caret, isPassword) = UiaCaretCore();
+            return isPassword ? (null, true) : (caret ?? GuiThreadCaret(), false);
+        });
 
     /// <summary>
     /// Runs <paramref name="read"/> on a dedicated MTA thread and waits up to <paramref name="timeout"/>; then
@@ -190,6 +207,68 @@ public static class UiaSelectionReader
             Release(element);
             Release(automation);
         }
+    }
+
+    private static (Rectangle? Caret, bool IsPassword) UiaCaretCore()
+    {
+        IUIAutomation? automation = null;
+        IUIAutomationElement? element = null;
+        IUIAutomationTextPattern? textPattern = null;
+        IUIAutomationTextRangeArray? ranges = null;
+        IUIAutomationTextRange? range = null;
+        IUIAutomationTextRange? character = null;
+        try
+        {
+            automation = (IUIAutomation)new CUIAutomation8();
+            element = automation.GetFocusedElement();
+            if (element is null) return (null, false);
+            if (element.CurrentIsPassword) return (null, true);
+            textPattern = element.GetCurrentPattern(UIA_PATTERN_ID.UIA_TextPatternId) as IUIAutomationTextPattern;
+            if (textPattern is null) return (null, false);
+            ranges = textPattern.GetSelection();
+            if (ranges is null || ranges.Length == 0) return (null, false);
+            range = ranges.GetElement(0);
+            if (range.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start, range, TextPatternRangeEndpoint.TextPatternRangeEndpoint_End) != 0)
+            {
+                return (null, false);
+            }
+            // A collapsed range has no rectangle in most apps: the character after it does.
+            character = range.Clone();
+            character.ExpandToEnclosingUnit(TextUnit.TextUnit_Character);
+            var rects = new List<Rectangle>();
+            ReadRects(character, rects);
+            foreach (var rect in rects)
+            {
+                if (rect.Height > 0) return (rect, false);
+            }
+            return (null, false);
+        }
+        catch (Exception)
+        {
+            // As in ReadCore: COM errors map to many exception types, and none may escape this thread.
+            return (null, false);
+        }
+        finally
+        {
+            Release(character);
+            Release(range);
+            Release(ranges);
+            Release(textPattern);
+            Release(element);
+            Release(automation);
+        }
+    }
+
+    /// <summary>The foreground thread's Win32 caret (thread 0 = the foreground thread) in screen pixels, or null.</summary>
+    private static Rectangle? GuiThreadCaret()
+    {
+        var info = new GUITHREADINFO { cbSize = (uint)Marshal.SizeOf<GUITHREADINFO>() };
+        if (!PInvoke.GetGUIThreadInfo(0, ref info) || info.hwndCaret.IsNull) return null;
+        var caret = info.rcCaret;
+        if (caret.bottom <= caret.top) return null;
+        var origin = new Point(caret.left, caret.top);
+        if (!PInvoke.ClientToScreen(info.hwndCaret, ref origin)) return null;
+        return new Rectangle(origin.X, origin.Y, caret.right - caret.left, caret.bottom - caret.top);
     }
 
     private static UiaPasteTarget PasteTargetCore()

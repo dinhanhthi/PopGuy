@@ -114,6 +114,54 @@ public static class PasteBack
         return result;
     }
 
+    /// <summary>
+    /// The Emoji Picker's insertion: gives <paramref name="source"/> (the window the picker was opened from) the
+    /// foreground back and types <paramref name="text"/> as Unicode key events (<see cref="InputSynth.SendUnicode"/>,
+    /// only while the source is still the foreground window); the clipboard is never touched. Refuses by
+    /// <see cref="TargetRefusal"/>'s emoji rules (a password field or a remote session only). Same thread rule as
+    /// <see cref="PasteAsync"/>; "pasted" means every key event was inserted.
+    /// </summary>
+    /// <param name="isUserKeyDown">As in <see cref="PasteAsync"/>.</param>
+    /// <param name="log">Gets the reason code of a typing that did not go through (never the text); called on any thread.</param>
+    public static async Task<PasteBackResult> TypeForEmojiAsync(
+        string text, ForegroundApp source, Func<uint, bool>? isUserKeyDown = null, Action<string>? log = null)
+    {
+        var result = await TypeForEmoji(text, source, isUserKeyDown).ConfigureAwait(false);
+        if (result.Status != PasteBackStatus.Pasted) log?.Invoke($"emoji typing: {result.Status} ({result.Reason})");
+        return result;
+    }
+
+    private static Task<PasteBackResult> TypeForEmoji(string text, ForegroundApp source, Func<uint, bool>? isUserKeyDown)
+    {
+        if (string.IsNullOrEmpty(text)) return Task.FromResult(Refused("empty"));
+        if (!ToolbarWindowStyle.IsAlive(source.Hwnd)) return Task.FromResult(Refused("sourceGone"));
+        var windowClass = CaptureFallbackPolicy.ClassNameOf(source.Hwnd);
+        var processName = source.Exe is null ? null : Path.GetFileNameWithoutExtension(source.Exe);
+        // Before the foreground moves: a remote session is never brought to the front for nothing. Also before the
+        // UIPI block, so an elevated remote session is refused (never copied), not blocked (copied instead).
+        if (TargetRefusal(UiaPasteTarget.Unknown, windowClass, processName, forEmoji: true) is { } early) return Task.FromResult(Refused(early));
+        if (source.IsElevated && !Environment.IsPrivilegedProcess) return Task.FromResult(new PasteBackResult(PasteBackStatus.Blocked, "uipi"));
+        var switched = !ForegroundGuard.IsStill(source.Hwnd);
+        if (switched) ToolbarWindowStyle.SetForeground(source.Hwnd);
+        return Task.Run(() => TypeForEmojiCoreAsync(text, source.Hwnd, windowClass, processName, switched, isUserKeyDown));
+    }
+
+    private static async Task<PasteBackResult> TypeForEmojiCoreAsync(
+        string text, nint source, string? windowClass, string? processName, bool switched, Func<uint, bool>? isUserKeyDown)
+    {
+        if (switched && !await WaitForForegroundAsync(source).ConfigureAwait(false)) return Refused("sourceNotForeground");
+        // Always, also when the picker's hide already handed the foreground back: the source restores its focus first.
+        await Task.Delay(ForegroundSettleDelay).ConfigureAwait(false);
+        // Only now: before the source is in front, the focused element is another window's (the picker's).
+        if (TargetRefusal(UiaSelectionReader.ProbePasteTarget(), windowClass, processName, forEmoji: true) is { } refusal) return Refused(refusal);
+        return InputSynth.SendUnicode(text, isUserKeyDown, () => ForegroundGuard.IsStill(source)) switch
+        {
+            InputSendResult.Sent => new PasteBackResult(PasteBackStatus.Pasted, "pasted"),
+            InputSendResult.Aborted => Refused("foregroundChanged"),
+            _ => Refused("notInserted"),
+        };
+    }
+
     private static Task<PasteBackResult> Paste(string text, ForegroundApp source, Func<uint, bool>? isUserKeyDown, bool forCompose)
     {
         if (source.IsElevated && !Environment.IsPrivilegedProcess) return Task.FromResult(new PasteBackResult(PasteBackStatus.Blocked, "uipi"));
@@ -186,8 +234,21 @@ public static class PasteBack
     /// "unknownFocusInEditor" do not refuse, nor does the editability of a console or integrated terminal (a terminal
     /// control has no value pattern). A password field and every other refusal still apply.
     /// </param>
-    internal static string? TargetRefusal(UiaPasteTarget target, string? windowClass, string? processName, bool forCompose = false)
+    /// <param name="forEmoji">
+    /// The Emoji Picker's Unicode typing (no clipboard, no multi-line text): only a password field ("passwordField") and
+    /// a remote session ("remoteDesktop") refuse; consoles, integrated terminals and unknown or read-only editability do
+    /// not. <paramref name="forCompose"/> is ignored.
+    /// </param>
+    internal static string? TargetRefusal(
+        UiaPasteTarget target, string? windowClass, string? processName, bool forCompose = false, bool forEmoji = false)
     {
+        if (forEmoji)
+        {
+            if (target.IsPassword) return "passwordField";
+            return CaptureFallbackPolicy.UnsafeTargetReason(windowClass, processName, target.FocusedElementHint) is "remoteDesktop"
+                ? "remoteDesktop"
+                : null;
+        }
         var unsafeReason = CaptureFallbackPolicy.UnsafeTargetReason(windowClass, processName, target.FocusedElementHint);
         var composeTerminal = forCompose && IsTerminalReason(unsafeReason);
         if (unsafeReason is not null && !composeTerminal) return unsafeReason;
