@@ -5,17 +5,19 @@
 // lightweight published state for the UI to react to.
 //
 // GentleUpdaterDriverDelegate implements the SPUStandardUserDriverDelegate
-// gentle-reminder contract: scheduled (background) updates light up custom UI
-// instead of immediately stealing focus; user-initiated updates are handled
-// entirely by Sparkle's standard UI.
+// gentle-reminder contract: while the menu bar item exists, scheduled
+// (background) updates badge its icon instead of showing Sparkle's alert;
+// user-initiated updates are handled entirely by Sparkle's standard UI.
 //
 // Strict concurrency:
 //   UpdaterController is @MainActor. SPUStandardUpdaterController is also
 //   @MainActor (NS_SWIFT_UI_ACTOR). GentleUpdaterDriverDelegate is
 //   nonisolated so its Obj-C callbacks are accepted without actor mismatch;
 //   any mutation of UpdaterController state hops back to the main actor via
-//   Task { @MainActor in … }. SUAppcastItem is NS_SWIFT_SENDABLE so it can
-//   cross actor boundaries without suppression.
+//   Task { @MainActor in … }; the one synchronous read uses
+//   MainActor.assumeIsolated (Sparkle calls the delegate on the main thread).
+//   SUAppcastItem is NS_SWIFT_SENDABLE so it can cross actor boundaries
+//   without suppression.
 
 import Combine
 import Sparkle
@@ -32,6 +34,10 @@ final class UpdaterController: ObservableObject {
     /// the `private(set)` enforces that the sanitization invariant holds — never assign a raw appcast string here.
     @Published private(set) var pendingVersion: String? = nil
     @Published private(set) var canCheckForUpdates: Bool = false
+
+    /// Set once the menu bar item exists to show the update badge. While false, a scheduled
+    /// check's update shows Sparkle's own alert instead.
+    var menuBarShowsUpdateBadge = false
 
     /// Mirrors Sparkle's NSUserDefaults-backed automatic-check preference as a
     /// published value so a SwiftUI Toggle can bind to it directly. `didSet` writes
@@ -128,13 +134,14 @@ nonisolated final class GentleUpdaterDriverDelegate: NSObject, SPUStandardUserDr
 
     var supportsGentleScheduledUpdateReminders: Bool { true }
 
-    /// Returning `immediateFocus` lets Sparkle own urgent foreground updates
-    /// while the delegate handles quiet background ones.
+    /// Sparkle shows its own alert only when no menu bar item can show the
+    /// badge. No side effects.
     func standardUserDriverShouldHandleShowingScheduledUpdate(
         _ update: SUAppcastItem,
         andInImmediateFocus immediateFocus: Bool
     ) -> Bool {
-        immediateFocus
+        let controller = controller
+        return MainActor.assumeIsolated { controller?.menuBarShowsUpdateBadge != true }
     }
 
     /// When Sparkle defers to us (`handleShowingUpdate == false`), light up

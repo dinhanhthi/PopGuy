@@ -624,6 +624,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 button.imagePosition = .imageOnly
             }
             statusItem = item
+            updater.menuBarShowsUpdateBadge = true
         }
 
         refreshStatusIcon()
@@ -644,11 +645,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         )
     }
 
-    /// Builds the status-bar icon. When an update is available, composites a
-    /// small accent-colored badge dot onto a copy of the base icon so the tint
-    /// remains visible (the composed image is not a template image). When PopGuy
-    /// is disabled, the icon is dimmed (grayscale, reduced opacity) to signal the
-    /// idle state.
+    /// Builds the status-bar icon: the full-colour logo, dimmed (grayscale, reduced
+    /// opacity) while PopGuy is disabled to signal the idle state. While an update
+    /// waits, either icon gets a download badge (`withUpdateBadge`).
     private func statusBarImage(updateAvailable: Bool, enabled: Bool) -> NSImage? {
         guard let base = NSImage(named: "MenuBarIcon") else { return nil }
         let size = NSSize(width: 18, height: 18)
@@ -669,7 +668,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             }
             dimmed.isTemplate = false
             dimmed.accessibilityDescription = "PopGuy \u{2014} disabled"
-            return dimmed
+            return updateAvailable ? withUpdateBadge(dimmed, size: size) : dimmed
         }
 
         if !updateAvailable {
@@ -679,45 +678,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             return plain
         }
 
-        // Compose badge: draw the base icon, then a filled accent dot at top-right.
-        let composed = NSImage(size: size, flipped: false) { rect in
-            base.draw(in: rect)
+        return withUpdateBadge(base, size: size)
+    }
 
-            let dotDiameter: CGFloat = 6
-            let dotOrigin = NSPoint(
-                x: rect.maxX - dotDiameter - 1,
-                y: rect.maxY - dotDiameter - 1
-            )
-            let dotRect = NSRect(origin: dotOrigin, size: NSSize(width: dotDiameter, height: dotDiameter))
-            NSColor.controlAccentColor.setFill()
-            NSBezierPath(ovalIn: dotRect).fill()
+    /// Draws `icon` with a download badge at its bottom-right corner (not a template image).
+    private func withUpdateBadge(_ icon: NSImage, size: NSSize) -> NSImage {
+        let badged = NSImage(size: size, flipped: false) { rect in
+            icon.draw(in: rect)
+            let badge = NSRect(x: rect.maxX - 9, y: rect.minY, width: 9, height: 9)
+            // A white disc, then a bold arrow in a deep green (the system green, 45 % of the way to black).
+            NSColor.white.setFill()
+            NSBezierPath(ovalIn: badge).fill()
+            let green = NSColor.systemGreen.blended(withFraction: 0.45, of: .black) ?? .systemGreen
+            let configuration = NSImage.SymbolConfiguration(pointSize: 9, weight: .black)
+                .applying(NSImage.SymbolConfiguration(paletteColors: [green]))
+            if let arrow = NSImage(systemSymbolName: "arrow.down", accessibilityDescription: nil)?
+                .withSymbolConfiguration(configuration) {
+                // Aspect-fit in the disc's inner square, centred.
+                let inner = badge.insetBy(dx: 1, dy: 1)
+                let scale = min(inner.width / arrow.size.width, inner.height / arrow.size.height)
+                let fitted = NSSize(width: arrow.size.width * scale, height: arrow.size.height * scale)
+                arrow.draw(in: NSRect(x: badge.midX - fitted.width / 2, y: badge.midY - fitted.height / 2,
+                                      width: fitted.width, height: fitted.height))
+            }
             return true
         }
-        composed.isTemplate = false
-        composed.accessibilityDescription = "PopGuy \u{2014} update available"
-        return composed
+        badged.isTemplate = false
+        badged.accessibilityDescription = "PopGuy, update available"
+        return badged
     }
 
     /// Populate (or repopulate) the menu items reflecting current trust state.
     /// Extracted so both buildStatusMenu and menuNeedsUpdate share the same logic.
     private func rebuildMenuItems(in menu: NSMenu) {
         menu.removeAllItems()
-
-        // "Update available" banner — shown at the top when an update is pending.
-        if updater.updateAvailable {
-            let versionLabel = updater.pendingVersion.map { "Update to v\($0)\u{2026}" } ?? "Update available\u{2026}"
-            let updateItem = NSMenuItem(
-                title: versionLabel,
-                action: #selector(performUpdateCheck),
-                keyEquivalent: ""
-            )
-            updateItem.image = NSImage(
-                systemSymbolName: "arrow.down.circle",
-                accessibilityDescription: nil
-            )
-            menu.addItem(updateItem)
-            menu.addItem(.separator())
-        }
 
         // Accessibility status (informational, always disabled).
         let accessibilityTitle = axPermission.isTrusted
@@ -865,8 +859,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         menu.addItem(.separator())
 
         // Check for Updates — always present; enabled only when Sparkle allows it.
+        // While a scheduled check's update waits (badge on the icon), it reads
+        // "Update to PopGuy <version>…" and brings that update into focus.
+        let checkTitle = updater.updateAvailable
+            ? updater.pendingVersion.map { "Update to PopGuy \($0)\u{2026}" } ?? "Update available\u{2026}"
+            : "Check for Updates"
         let checkItem = NSMenuItem(
-            title: "Check for Updates",
+            title: checkTitle,
             action: #selector(performUpdateCheck),
             keyEquivalent: ""
         )
