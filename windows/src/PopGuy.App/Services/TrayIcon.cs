@@ -60,10 +60,11 @@ internal sealed class TrayIcon : IDisposable
         _newComposer = newComposer;
         _quit = quit;
         _log = log;
-        _icon = new NotifyIcon(App.IconPath, !settings.Current.PopGuyEnabled, "PopGuy", log);
+        _icon = new NotifyIcon(App.IconPath, !settings.Current.PopGuyEnabled, "PopGuy", log, UpdateReady);
         _icon.MenuItems = MenuItems;
         _icon.Clicked += OnClicked;
         _settings.Changed += OnSettingsChanged;
+        _updates.Changed += Refresh;
     }
 
     /// <summary>The session ends (see <see cref="NotifyIcon.SessionEnding"/>). UI thread, inside the icon's window procedure.</summary>
@@ -77,6 +78,7 @@ internal sealed class TrayIcon : IDisposable
     public void Dispose()
     {
         _settings.Changed -= OnSettingsChanged;
+        _updates.Changed -= Refresh;
         _icon.Clicked -= OnClicked;
         _captureTimer?.Stop();
         _icon.Dispose();
@@ -190,6 +192,8 @@ internal sealed class TrayIcon : IDisposable
     /// <summary>Queued: a change may be saved from any thread, and the icon is UI thread only.</summary>
     private void OnSettingsChanged(object? sender, EventArgs e) => _dispatcher.TryEnqueue(Refresh);
 
-    /// <summary>The icon, dimmed while PopGuy is disabled. A disposed icon ignores it.</summary>
-    private void Refresh() => _icon.SetIcon(App.IconPath, !_settings.Current.PopGuyEnabled);
+    private bool UpdateReady => _updates.State == UpdateState.Ready;
+
+    /// <summary>The icon: dimmed while PopGuy is disabled, badged while an update waits. A disposed icon ignores it.</summary>
+    private void Refresh() => _icon.SetIcon(App.IconPath, !_settings.Current.PopGuyEnabled, UpdateReady);
 }

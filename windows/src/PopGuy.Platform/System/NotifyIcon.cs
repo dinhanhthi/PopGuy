@@ -70,16 +70,18 @@ public sealed class NotifyIcon : IDisposable
     /// <summary>The logo's pixels (see <see cref="DimmedPixels"/>), read on the first dim; empty if they cannot be read.</summary>
     private uint[]? _logoPixels;
 
-    /// <summary>The dimmed logo shown now, destroyed when replaced; null while the logo shows.</summary>
+    /// <summary>The dimmed and/or badged logo shown now, destroyed when replaced; null while the plain logo shows.</summary>
     private HICON _drawn;
 
     private bool _dimmed;
+    private bool _badged;
     private bool _disposed;
 
     /// <summary>Creates the window and adds the icon. Throws <see cref="System.ComponentModel.Win32Exception"/> only if the window cannot be created.</summary>
     /// <param name="iconPath">An .ico file; the frame for the small icon size is used.</param>
     /// <param name="dimmed">Show it dimmed (see <see cref="SetIcon"/>).</param>
-    public NotifyIcon(string iconPath, bool dimmed, string tooltip, Action<string>? log = null)
+    /// <param name="badged">Show the update badge (see <see cref="SetIcon"/>).</param>
+    public NotifyIcon(string iconPath, bool dimmed, string tooltip, Action<string>? log = null, bool badged = false)
     {
         _log = log;
         _tooltip = tooltip.Length > MaxTooltip ? tooltip[..MaxTooltip] : tooltip;
@@ -88,7 +90,8 @@ public sealed class NotifyIcon : IDisposable
         _size = IconSize();
         _logo = LoadIcon(iconPath);
         _dimmed = dimmed;
-        if (dimmed) _drawn = CreateDimmedIcon();
+        _badged = badged;
+        if (dimmed || badged) _drawn = CreateIcon(dimmed, badged);
         _window.AddHandler(CallbackMessage, OnCallback);
         _window.AddHandler(PInvoke.WM_QUERYENDSESSION, (_, _) => (LRESULT)1); // TRUE: never blocks the session's end
         _window.AddHandler(PInvoke.WM_ENDSESSION, OnEndSession);
@@ -136,12 +139,14 @@ public sealed class NotifyIcon : IDisposable
 
     /// <summary>
     /// Shows the .ico file <paramref name="iconPath"/>, <paramref name="dimmed"/> to its alpha times 0.4 (macOS dims the
-    /// status icon while PopGuy is disabled). A file that cannot be loaded leaves an empty icon (logged).
+    /// status icon while PopGuy is disabled), with a green download badge at its bottom-right corner while
+    /// <paramref name="badged"/> (macOS badges it while an update waits). A file that cannot be loaded leaves an empty
+    /// icon (logged).
     /// </summary>
-    public void SetIcon(string iconPath, bool dimmed)
+    public void SetIcon(string iconPath, bool dimmed, bool badged = false)
     {
         _window.CheckThread();
-        if (_disposed || (iconPath == _iconPath && dimmed == _dimmed)) return;
+        if (_disposed || (iconPath == _iconPath && dimmed == _dimmed && badged == _badged)) return;
         var previousLogo = default(HICON);
         if (iconPath != _iconPath)
         {
@@ -151,8 +156,9 @@ public sealed class NotifyIcon : IDisposable
             _logoPixels = null;
         }
         _dimmed = dimmed;
+        _badged = badged;
         var previous = _drawn;
-        _drawn = dimmed ? CreateDimmedIcon() : default;
+        _drawn = dimmed || badged ? CreateIcon(dimmed, badged) : default;
         if (IsAdded && !Notify(NOTIFY_ICON_MESSAGE.NIM_MODIFY)) Log("Shell_NotifyIcon(NIM_MODIFY)");
         // After the modify: the shell may still draw the icon it had until then.
         if (!previous.IsNull) PInvoke.DestroyIcon(previous);
@@ -190,6 +196,58 @@ public sealed class NotifyIcon : IDisposable
             pixels[i] = alpha << 24 | logo[i] & 0xFFFFFF;
         }
         return pixels;
+    }
+
+    /// <summary>
+    /// Draws the update badge into <paramref name="pixels"/> (<paramref name="size"/> x <paramref name="size"/>,
+    /// 0xAARRGGBB straight alpha): a white disc, half the icon wide, at the bottom-right corner, holding a bold deep-green
+    /// down arrow (macOS's badge). Edges are anti-aliased by 4 x 4 sampling.
+    /// </summary>
+    internal static void BadgedPixels(uint[] pixels, int size)
+    {
+        const int samples = 4;
+        const int green = 0x1D6D31;
+        var diameter = Math.Max(8, size / 2);
+        var left = size - diameter;
+        var top = size - diameter;
+        for (var y = top; y < size; y++)
+        {
+            for (var x = left; x < size; x++)
+            {
+                int disc = 0, arrow = 0;
+                for (var sy = 0; sy < samples; sy++)
+                {
+                    for (var sx = 0; sx < samples; sx++)
+                    {
+                        // The sample's position in the disc's unit square, v downwards.
+                        var u = (x - left + (sx + 0.5) / samples) / diameter;
+                        var v = (y - top + (sy + 0.5) / samples) / diameter;
+                        if ((u - 0.5) * (u - 0.5) + (v - 0.5) * (v - 0.5) > 0.25) continue;
+                        disc++;
+                        var stem = u is >= 0.4 and <= 0.6 && v is >= 0.2 and <= 0.55;
+                        var head = v is >= 0.5 and <= 0.8 && Math.Abs(u - 0.5) <= (0.8 - v) / 0.3 * 0.28;
+                        if (stem || head) arrow++;
+                    }
+                }
+                if (disc == 0) continue;
+                var coverage = disc / (double)(samples * samples);
+                var mix = arrow / (double)disc;
+                // The disc's colour: white, to green by the arrow's share of the pixel.
+                uint Channel(int shift) => (uint)Math.Round(255 * (1 - mix) + ((green >> shift) & 0xFF) * mix);
+                var color = Channel(16) << 16 | Channel(8) << 8 | Channel(0);
+                // The disc over the icon pixel, straight alpha.
+                var below = pixels[y * size + x];
+                var belowAlpha = (below >> 24) / 255.0;
+                var alpha = coverage + belowAlpha * (1 - coverage);
+                uint Over(int shift)
+                {
+                    var above = ((color >> shift) & 0xFF) * coverage;
+                    var beneath = ((below >> shift) & 0xFF) * belowAlpha * (1 - coverage);
+                    return (uint)Math.Round((above + beneath) / alpha);
+                }
+                pixels[y * size + x] = (uint)Math.Round(alpha * 255) << 24 | Over(16) << 16 | Over(8) << 8 | Over(0);
+            }
+        }
     }
 
     /// <summary>The small icon size, which the notification area shows.</summary>
@@ -270,8 +328,11 @@ public sealed class NotifyIcon : IDisposable
         return pixels;
     }
 
-    /// <summary>A 32 bpp icon from <see cref="DimmedPixels"/>; null (the logo shows undimmed) if GDI refuses.</summary>
-    private unsafe HICON CreateDimmedIcon()
+    /// <summary>
+    /// A 32 bpp icon from <see cref="DimmedPixels"/> (when <paramref name="dimmed"/>) and <see cref="BadgedPixels"/>
+    /// (when <paramref name="badged"/>, drawn over the dimming); null (the plain logo shows) if GDI refuses.
+    /// </summary>
+    private unsafe HICON CreateIcon(bool dimmed, bool badged)
     {
         var size = _size;
         var info = DibInfo();
@@ -294,7 +355,9 @@ public sealed class NotifyIcon : IDisposable
             }
             _logoPixels ??= ReadLogoPixels();
             if (_logoPixels.Length != size * size) return default;
-            DimmedPixels(_logoPixels, DimmedOpacity).AsSpan().CopyTo(new Span<uint>(bits, size * size));
+            var pixels = dimmed ? DimmedPixels(_logoPixels, DimmedOpacity) : [.. _logoPixels];
+            if (badged) BadgedPixels(pixels, size);
+            pixels.AsSpan().CopyTo(new Span<uint>(bits, size * size));
             var iconInfo = new ICONINFO { fIcon = true, hbmMask = mask, hbmColor = color };
             var icon = PInvoke.CreateIconIndirect(&iconInfo);
             if (icon.IsNull) Log("CreateIconIndirect");
