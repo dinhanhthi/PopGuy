@@ -95,6 +95,9 @@ Then grant **Accessibility** (above) and add your provider API keys in **PopGuy 
 
 ### Keep the Accessibility grant across rebuilds
 
+Debug is signed with the maintainer's Developer ID, like Release, so a Debug build shares the
+grants of the installed PopGuy. Without that certificate, follow the steps below.
+
 macOS ties the Accessibility grant to the app's **code signature**. With Xcode's default
 *Sign to Run Locally*, the signature changes every rebuild and the grant is revoked each
 time. To make it stick, sign with a stable local certificate:
