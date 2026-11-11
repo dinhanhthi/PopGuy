@@ -9,6 +9,11 @@ Before 1.4.0 Windows had its own versions (0.1.0).
 
 ## [Unreleased]
 
+## [1.4.11] - 2026-11-11
+
+### Added
+- When a new version is ready, the tray icon gets a small green download badge, as on macOS.
+
 ## [1.4.10] - 2026-11-08
 
 ### Added

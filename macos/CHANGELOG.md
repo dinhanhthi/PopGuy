@@ -15,8 +15,11 @@ heading, which the release body shows under `## Windows`.
 <!-- Add entries here as you work. On release, rename this to `## [X.Y.Z] - YYYY-MM-DD`
      and start a fresh [Unreleased] section above it. -->
 
+## [1.4.11] - 2026-11-11
+
 ### Changed
 - When a new version is available, the menu bar icon gets a small green download badge (instead of a dot) and "Check for Updates" in its menu reads "Update to PopGuy <version>…", instead of an alert popping up.
+- Settings: the sidebar and the content panels are now aligned at the top.
 
 ## [1.4.10] - 2026-11-08
 
