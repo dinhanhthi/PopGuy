@@ -46,16 +46,15 @@ enum SettingsMetrics {
     /// the top safe-area inset: AppKit reports a taller inset (66 pt on macOS 27)
     /// than the band the traffic lights are centered in.
     static let headerRowHeight: CGFloat = 52
-    /// Where the sidebar card starts, from the window's top. About 8 pt under
-    /// the header row's controls: they are centered on the traffic lights
-    /// (y = 26) and at most 28–34 pt tall, so they end around y = 41–43. The
-    /// detail column's content starts lower, at `contentTopInset`.
-    static let bodyTopInset: CGFloat = 48
-    /// Where the detail column's content starts, from the window's top: 12 pt
-    /// lower than `bodyTopInset` (the sidebar card's top), to leave about 16 pt
-    /// under the header row's tabs and buttons. A page's first section or card
-    /// lands here, and the detail column's titlebar band is this tall.
-    static let contentTopInset: CGFloat = 60
+    /// Where the sidebar card starts, from the window's top: level with the
+    /// detail column's content (`contentTopInset`), so both tops line up.
+    static let bodyTopInset: CGFloat = 54
+    /// Where the detail column's content starts, from the window's top: about
+    /// 11 pt under the header row's controls (centered on the traffic lights at
+    /// y = 26, at most 28–34 pt tall, so they end around y = 41–43). A page's
+    /// first section or card lands here, and the detail column's titlebar band
+    /// is this tall.
+    static let contentTopInset: CGFloat = 54
     /// How far a page is pulled toward the sidebar card. Pages pad their
     /// content by `pagePadding` (20 pt); pulling them 8 pt left leaves 12 pt to
     /// the card, like the card's own 12 pt inset from the window edge.
