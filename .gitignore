@@ -42,12 +42,11 @@ dist/
 sparkle_private_key.txt
 # exported Developer ID / signing certs
 *.p12
-# archive export config (RELEASING.md §2)
+# archive export config
 ExportOptions.plist
 
 ## Local-only — kept out of the public repo (maintainer notes, AI tooling)
 docs/*
-!docs/RELEASING.md
 CLAUDE.md
 AGENTS.md
 .claude/

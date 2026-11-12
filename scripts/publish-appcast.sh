@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# publish-appcast.sh — Generate + commit + push the Sparkle appcast (RELEASING.md §5).
+# publish-appcast.sh — Generate + commit + push the Sparkle appcast.
 #
 # Finds generate_appcast in DerivedData, runs it over the release zip, copies appcast.xml
 # to the repo root, commits, and pushes. The zip must already be notarized + stapled

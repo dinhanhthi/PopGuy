@@ -5,7 +5,7 @@
 # enrollment / notarization.
 #
 # This is the DEV / personal-test distribution path. For the official
-# Developer ID + notarized + Sparkle release path, see docs/RELEASING.md.
+# Developer ID + notarized + Sparkle release path.
 # Full explanation: docs/DEV_DISTRIBUTION.md
 #
 # Usage:

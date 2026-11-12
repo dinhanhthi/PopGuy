@@ -16,7 +16,7 @@
 #      (publish-release.sh --windows), then the Sparkle appcast (publish-appcast.sh).
 # Any failure after step 2 prints how to undo the tag (and the release, once made).
 #
-# Prereqs (one-time — RELEASING.md §0):
+# Prereqs (one-time):
 #   - "Developer ID Application" cert in the login Keychain
 #   - notarytool credential profile (default "apple-notary")
 #   - Xcode 26+ selected (required for Icon Composer .icon)

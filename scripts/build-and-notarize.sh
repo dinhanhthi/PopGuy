@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# build-and-notarize.sh — Build → sign → notarize → staple a release locally (RELEASING.md §2).
+# build-and-notarize.sh — Build → sign → notarize → staple a release locally.
 #
 # Releases are built locally only (there is no CI release workflow). On your Mac the SPM +
 # DerivedData cache persists, so the MLX/Metal compile is only slow the FIRST time — far
@@ -11,7 +11,7 @@
 #   - PopGuy-<version>.dmg    notarized + stapled  → manual-download asset
 # Then hand the .zip to scripts/publish-release.sh (§4) to tag + create the GitHub Release.
 #
-# Prereqs (one-time — see RELEASING.md §0):
+# Prereqs (one-time):
 #   - "Developer ID Application" cert in the login Keychain                  (§0.1)
 #   - notarytool credential profile (default "apple-notary")               (§0.1 step 6)
 #   - Xcode 26+ selected — REQUIRED to compile the Icon Composer .icon icon  (blank-icon guard, §5)
@@ -65,7 +65,7 @@ case "$XCODE_VER" in
 esac
 
 security find-identity -v -p codesigning | grep -q "Developer ID Application" \
-  || { echo "error: no 'Developer ID Application' identity in the keychain (RELEASING.md §0.1)." >&2; exit 1; }
+  || { echo "error: no 'Developer ID Application' identity in the keychain." >&2; exit 1; }
 
 # --- 1. Derive the version from the working tree ---------------------------
 # The built app's CFBundleShortVersionString comes from MARKETING_VERSION on disk, so name
@@ -125,7 +125,7 @@ xcodebuild -project macos/PopGuy.xcodeproj -scheme PopGuy \
 
 # --- 4. Extract the Developer-ID-signed app from the archive ---------------
 # The Release archive already signs PopGuy.app with Developer ID + hardened runtime + a secure
-# timestamp (the project's Release config signs directly — RELEASING.md §0.1), so it is already
+# timestamp (the project's Release config signs directly), so it is already
 # distribution-ready. We deliberately do NOT run `xcodebuild -exportArchive`: on Xcode 26 it
 # fails for this app because IDEDistribution cannot enumerate a distribution method for a bundle
 # with an embedded helper executable (the MLX helper) and errors `expected one {}` (empty set).
@@ -214,6 +214,6 @@ echo "Done. Notarized + stapled artifacts:"
 echo "  zip : $EXPORT_DIR/PopGuy-$VERSION.zip"
 echo "  dmg : $EXPORT_DIR/PopGuy-$VERSION.dmg"
 echo
-echo "Next: publish the GitHub Release (RELEASING.md §4):"
+echo "Next: publish the GitHub Release:"
 echo "  scripts/publish-release.sh $EXPORT_DIR/PopGuy-$VERSION.zip"
-echo "Then regenerate + commit the appcast (RELEASING.md §5)."
+echo "Then regenerate + commit the appcast."

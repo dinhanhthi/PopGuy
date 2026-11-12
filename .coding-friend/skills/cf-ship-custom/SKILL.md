@@ -3,8 +3,7 @@
 This is a **version bump + changelog + ship** workflow for PopGuy. macOS and Windows share
 **one version and one GitHub release**: tag `vX.Y.Z`, marked *Latest*, holding the macOS zip +
 DMG and the Windows packages (Setup.exe, Portable.zip, full nupkg and Velopack feed, for **x64
-and ARM64**). The release is driven **from this machine** by `scripts/ship.sh`
-(`docs/RELEASING.md`): the macOS app is built, signed and notarized here (the local archive uses
+and ARM64**). The release is driven **from this machine** by `scripts/ship.sh`: the macOS app is built, signed and notarized here (the local archive uses
 a warm SPM/Metal cache, far faster than an always-clean CI runner), while the Windows app is
 built by GitHub Actions (`windows-release.yml`, started by the tag push), never on this Mac.
 `deploy-pages.yml` then publishes the website and `appcast.xml` to Pages.
@@ -229,7 +228,7 @@ Use `release: vX.Y.Z` as the commit message.
 ## After
 
 Run the release **after** the `release: vX.Y.Z` commit is on `main` (Step B5 pushed it).
-Prereqs (one-time, `docs/RELEASING.md §0`): Developer ID cert in the login Keychain, the
+Prereqs (one-time): Developer ID cert in the login Keychain, the
 `apple-notary` notarytool profile, Xcode 26+, Metal Toolchain, `gh` CLI authenticated.
 
 ### Step A0: Check the notary profile (before the tag push)
@@ -290,8 +289,7 @@ On a failure after the tag push, what to do depends on whether the release is al
   already public. The only automatic action is **one** re-run of
   `scripts/publish-appcast.sh build/export/PopGuy-X.Y.Z.zip`; if it fails again, stop and
   report. **Never delete a published release or its tag**, even though `ship.sh` also prints
-  the full undo: that one is for a human deciding to pull a bad release (`docs/RELEASING.md`,
-  Rollback).
+  the full undo: that one is for a human deciding to pull a bad release.
 
 ### Step A2: Print summary
 

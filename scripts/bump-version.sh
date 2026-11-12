@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# bump-version.sh — Bump PopGuy's version for a release (RELEASING.md §1).
+# bump-version.sh — Bump PopGuy's version for a release.
 #
 # macOS and Windows share one product version. Edits the two version build
 # settings directly in project.pbxproj:

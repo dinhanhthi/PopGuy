@@ -100,7 +100,7 @@ macOS and Windows ship as one version and one GitHub release (`vX.Y.Z`, Latest);
 
 1. `../scripts/bump-version.sh X.Y.Z` sets `<Version>` in `src/PopGuy.App/PopGuy.App.csproj` and the macOS version together. Add a `## [X.Y.Z] - YYYY-MM-DD` section to `CHANGELOG.md` and the same one to `../macos/CHANGELOG.md` (a platform without changes gets "No changes on <platform>; this version ships with the <other> update."), commit them as `release: vX.Y.Z` and push `main`.
 2. Run `../scripts/ship.sh` on the Mac: it pushes the tag `vX.Y.Z` first, so `windows-release.yml` builds both architectures while the Mac builds and notarizes macOS, then `scripts/fetch-release.sh` waits for that run and downloads and checks both architectures' Setup.exe, Portable.zip, full nupkg and feed, and `../scripts/publish-release.sh --windows` creates the release as a draft (both changelog sections plus `scripts/install-notes.md`), uploads the macOS and Windows files and publishes it as Latest.
-3. Installed copies find the release within a day (or at once with Check for Updates): the update check reads the published releases that carry a `releases.win-<arch>.json` feed. Installs of `windows-v0.1.0` (before the shared version) do not update by themselves; reinstall once. See `docs/RELEASING.md` for rollback.
+3. Installed copies find the release within a day (or at once with Check for Updates): the update check reads the published releases that carry a `releases.win-<arch>.json` feed. Installs of `windows-v0.1.0` (before the shared version) do not update by themselves; reinstall once.
 
 ## Constraints
 

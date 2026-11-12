@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# publish-release.sh — Tag + publish a PopGuy release (RELEASING.md §5).
+# publish-release.sh — Tag + publish a PopGuy release.
 #
 # Runs at the END of a release, after the notarized + stapled .zip exists (§2).
 # Ties four things to ONE source of truth so they can never drift:
